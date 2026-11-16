@@ -1,6 +1,7 @@
 """The company page's Overview tab, its left column (the company page's design, 8.1 to 8.3): the
 Company block, the Fairband value block and the Key statistics block, and the tab's function that
-draws them. company.js and company_overview.js run in node after the bundle and app.js
+draws them, with the price chart first in its right column (``test_company_chart``).
+company.js, company_overview.js and company_chart.js run in node after the bundle and app.js
 (``support.page``), and the tests read the trees their builders return.
 
 The company is ``page_answers``' LFOX: valued at $196.50 against a price of $182.40, its levels
@@ -17,14 +18,14 @@ from support.web import _static_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
-SCRIPTS = (STATIC / "company.js", STATIC / "company_overview.js")
+SCRIPTS = (STATIC / "company.js", STATIC / "company_overview.js", STATIC / "company_chart.js")
 COMPANY = answers.OVERVIEW["company"]
 STATISTICS = answers.OVERVIEW["statistics"]
 
 
 def _page(helper: str, *args: Any) -> Any:
-    """What ``companyPage.<helper>`` returns on ``args``, company.js and company_overview.js
-    loaded after app.js."""
+    """What ``companyPage.<helper>`` returns on ``args``, company.js, company_overview.js and
+    company_chart.js loaded after app.js, as the page loads them."""
     return node("companyPage." + helper, list(args), *SCRIPTS)
 
 
@@ -561,7 +562,9 @@ def test_interest_cover_at_zero_is_the_dash() -> None:
 
 def test_the_overview_draws_two_columns_with_the_three_blocks_at_the_left() -> None:
     """``draw.overview``: the grid of two columns; at the left, in order, Company on the answer's
-    company, Fairband value on the detail and Key statistics on the answer."""
+    company, Fairband value on the detail and Key statistics on the answer; at the right first
+    the price chart on the answer's prices, keyed on the company, so each company's chart opens
+    at the past year with no day picked."""
     tree = _page("draw.overview", answers.OVERVIEW, answers.DETAIL)
     assert tree["props"]["className"] == "app-company__grid"
     left, right = tree["props"]["children"]
@@ -571,6 +574,12 @@ def test_the_overview_draws_two_columns_with_the_three_blocks_at_the_left() -> N
     assert company["props"]["company"] == answers.OVERVIEW["company"]
     assert value == _page("value", answers.DETAIL)
     assert statistics == _page("statistics", answers.OVERVIEW)
+    chart = right["props"]["children"][0]
+    assert chart["props"]["prices"] == answers.OVERVIEW["prices"]
+    assert chart["props"]["key"] == "price " + answers.SYMBOL
+    script = _static_file("company_overview.js")
+    start = script.index("  function overview(")
+    assert "h(P.companyChart.Chart, {" in script[start : script.index("\n  }\n", start)]
 
 
 def test_the_script_and_the_columns_inside_a_block() -> None:

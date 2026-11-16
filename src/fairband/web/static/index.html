@@ -655,6 +655,43 @@
     margin: var(--space-3) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--hairline);
   }
   .app-company__research p { margin: 0; color: var(--ink-muted); }
+  /* The Overview's price chart (the company page's design, 8.4), as its mockup draws it: the
+     ranges one row of buttons on a hairline in the block's head, the chosen one on accent-quiet;
+     above the plot the newest close and the change over the range in ink-muted, the text's own
+     colour; the plot as wide as the block, its ticks bare and monospaced in ink-faint, the plots'
+     names in the sans, the tag's figure in on-accent; the plot's focus ringed; the box of the
+     picked day over the plot, on the side with room. Nothing moves. */
+  .app-price__ranges {
+    display: inline-flex; border: 1px solid var(--hairline); border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .app-price__range {
+    appearance: none; padding: 4px 9px; background: none; border: 0;
+    border-right: 1px solid var(--hairline); color: var(--ink-muted); cursor: pointer;
+  }
+  .app-price__range:last-child { border-right: 0; }
+  .app-price__range:hover { background: var(--surface-hover); color: var(--ink); }
+  .app-price__range[aria-pressed="true"] { background: var(--accent-quiet); color: var(--ink); }
+  .app-price__range:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-price__lead {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3);
+    margin: 0 0 var(--space-2);
+  }
+  .app-price__lead p { margin: 0; }
+  .app-price__move { color: var(--ink-muted); }
+  .app-price__plot { position: relative; }
+  .app-price__plot:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-price__plot svg { display: block; width: 100%; }
+  .app-price__plot text { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-faint); }
+  .app-price__plot .app-price__name { font-family: var(--font-sans); }
+  .app-price__plot .app-price__tag { fill: var(--on-accent); font-weight: 500; }
+  .app-price__tip {
+    position: absolute; top: 4px; padding: 6px 8px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    box-shadow: var(--shadow-popover); white-space: nowrap; pointer-events: none;
+  }
+  .app-price__tip p { margin: 0; }
+  .app-price__tipname { margin-right: var(--space-2); color: var(--ink-muted); }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
      menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
@@ -715,5 +752,6 @@
 <script src="/static/charts.js"></script>
 <script src="/static/company.js"></script>
 <script src="/static/company_overview.js"></script>
+<script src="/static/company_chart.js"></script>
 </body>
 </html>

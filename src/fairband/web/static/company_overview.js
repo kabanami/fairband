@@ -3,10 +3,11 @@
    less over the company's eight facts; Fairband value (8.2), the one block of Fairband's own
    figures, with the basis chip in its head, the meter as the drawer draws it, the four levels
    under it and, where the company has a published report, the report's line; and Key statistics
-   (8.3), eight groups in three columns. The blocks are built from company.js's parts and
-   formatters (FairbandPage.companyPage) and hang on it with the tab's function, draw.overview,
-   which the page draws under the tabs once the tab's answer and the company's detail are in. A
-   vendor's address is a link only where it is a web address (safeHref, 10.6). */
+   (8.3), eight groups in three columns; at the right Price (8.4), the chart company_chart.js
+   draws. The blocks are built from company.js's parts and formatters (FairbandPage.companyPage)
+   and hang on it with the tab's function, draw.overview, which the page draws under the tabs
+   once the tab's answer and the company's detail are in. A vendor's address is a link only
+   where it is a web address (safeHref, 10.6). */
 (function () {
   'use strict';
 
@@ -16,15 +17,18 @@
   var C = P.companyPage;
 
   /* The Overview (8): the grid's two columns. At the left Company on the answer's company,
-     Fairband value on the company's detail and Key statistics on the answer; the right column's
-     blocks, Price, Price facts and News, join it as they are built. */
+     Fairband value on the company's detail and Key statistics on the answer. At the right first
+     Price, company_chart.js's chart (FairbandPage.companyChart, loaded after this script and read
+     as the tab draws) on the answer's prices, keyed on the company so each company's chart opens
+     at 1Y with no day picked; Price facts and News join it as they are built. */
   function overview(answer, detail) {
     return h('div', { className: 'app-company__grid' },
       h('div', { className: 'app-company__col' },
         h(Company, { key: 'company', company: answer.company }),
         value(detail),
         statistics(answer)),
-      h('div', { className: 'app-company__col' }));
+      h('div', { className: 'app-company__col' },
+        h(P.companyChart.Chart, { key: 'price ' + answer.symbol, prices: answer.prices })));
   }
 
   /* -------------------------------------------------------------------- links */
