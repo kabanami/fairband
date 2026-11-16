@@ -44,9 +44,13 @@ stored item's symbol in its title and the app's port and the launch's id among i
 list of words, no shell, and no word from the request. The item's check, the in-flight check and
 the insert are one ``BEGIN IMMEDIATE`` transaction, which commits before the window command runs,
 so a launcher that reports at once finds its launch. The command's result is a second write:
-``opened``, or ``failed`` at the ``window`` stage with the sentence of ``WindowFailed``; a launch
-the launcher has already moved on is answered as it is. It answers 201 with the launch. Its
-refusals, the first that applies in this order, each with nothing stored and nothing run:
+``opened``, or ``failed`` at the ``window`` stage with the sentence of ``WindowFailed``. Any other
+error raised while the words are built or run is a failure at the same stage, "the window command
+could not start: <the error's text>" (the error's kind where it has no text), logged once with its
+traceback under the launch's id, so no launch is left ``opening`` to hold its item; an error of the
+second write itself is not caught, and the app's next start marks the launch. A launch the
+launcher has already moved on is answered as it is. It answers 201 with the launch. Its refusals,
+the first that applies in this order, each with nothing stored and nothing run:
 
 - a request with the agent's principal header: 403, "a launch is the owner's";
 - an app given no opener or no port: 503, "this server opens no window";
@@ -74,14 +78,15 @@ answers it: ``started``; ``ended``, keeping ``exitCode``; ``failed`` at the ``ag
 keeping ``detail``. A report's ``detail`` is kept for ``failed`` alone and its ``exitCode`` for
 ``ended`` alone. Its refusals, in this order: 403, "a launch is the owner's", for the agent's
 principal; 400, "a launcher reports started, ended or failed", for another state; 400, "a failed
-report gives its reason", for a failure with no detail or a blank one; 404, "no launch <id>";
-409 with the record's sentence, "a launch that is <from> does not become <to>", for a move the
-record refuses.
+report gives its reason", for a failure with no detail or a blank one; 400, "an ended report gives
+its exit code", for an end with no ``exitCode``; 404, "no launch <id>"; 409 with the record's
+sentence, "a launch that is <from> does not become <to>", for a move the record refuses.
 
 The two reads are GETs and need no ``X-Fairband-Request`` header; the two posts need it, as every
 write does.
 """
 
+import logging
 import shlex
 import sqlite3
 from collections.abc import Callable, Mapping
@@ -127,6 +132,8 @@ from fairband.store.launches import (
 from fairband.store.ledger import Writer
 from fairband.web.identity import writer_of
 
+logger = logging.getLogger("fairband.web")
+
 OWNERS = "the Agents section is the owner's"
 LAUNCH_OWNERS = "a launch is the owner's"
 NO_WINDOW = "this server opens no window"
@@ -134,6 +141,7 @@ NOT_SET_UP = "launching is not set up: see Settings, Agents"
 NAMES_NOTHING = "a launch names an item or a test"
 REPORTS = "a launcher reports started, ended or failed"
 NO_REASON = "a failed report gives its reason"
+NO_EXIT_CODE = "an ended report gives its exit code"
 AGENT = "claude"  # the agent a launch starts
 _TAKEN = ("opening", "opened")  # the states in which the command read is taken
 _DEFAULT_HELP = "Empty for Claude Code's own default."
@@ -342,6 +350,8 @@ def add_launch_routes(
             raise HTTPException(400, REPORTS)
         if body.state == "failed" and not (body.detail or "").strip():
             raise HTTPException(400, NO_REASON)
+        if body.state == "ended" and body.exit_code is None:
+            raise HTTPException(400, NO_EXIT_CODE)
         at = clock()
         with closing(conn_factory()) as conn:
             try:
@@ -371,18 +381,25 @@ def _open(
     clock: Callable[[], datetime],
 ) -> LaunchRow:
     """Run the window command for the launch ``made`` of ``item`` (``None`` for a test), with no
-    transaction open, and write its result: ``opened``, or ``failed`` at the window stage with the
-    sentence; the launch as it then is. A launch the launcher has already moved on stays as it
-    is, the record refusing the failure, and is answered as it is."""
+    transaction open, and write its result: ``opened``, or ``failed`` at the window stage with
+    ``WindowFailed``'s sentence, or, for any other error the words' building or run raises, with
+    "the window command could not start: <its text>", the error logged; the launch as it then is.
+    A launch the launcher has already moved on stays as it is, the record refusing the failure,
+    and is answered as it is. An error of the write itself goes to the caller."""
     try:
         words = window_words(window_command, title_of(item), opener, port, made.id)
         open_window(words, opener)
     except WindowFailed as exc:
-        try:
-            return move_launch(conn, made.id, "failed", clock(), stage="window", detail=str(exc))
-        except WrongMove:
-            return launch(conn, made.id)
-    return opened(conn, made.id, clock())
+        sentence = str(exc)
+    except Exception as exc:  # any: a launch left opening would hold its item
+        logger.warning("launch %d: the window step raised an error", made.id, exc_info=True)
+        sentence = f"the window command could not start: {str(exc) or type(exc).__name__}"
+    else:
+        return opened(conn, made.id, clock())
+    try:
+        return move_launch(conn, made.id, "failed", clock(), stage="window", detail=sentence)
+    except WrongMove:
+        return launch(conn, made.id)
 
 
 def _pending(conn: sqlite3.Connection, item_id: int) -> WorkItem:

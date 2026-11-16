@@ -48,35 +48,44 @@ NOT_SET_UP = "launching is not set up: see Settings, Agents"
 NAMES_NOTHING = "a launch names an item or a test"
 REPORTS = "a launcher reports started, ended or failed"
 NO_REASON = "a failed report gives its reason"
+NO_EXIT_CODE = "an ended report gives its exit code"
 # The agent's words for the launch file of ``served``, the prompt's {item} left to fill.
 ARGV = ["claude", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "auto"]
 
 
 class Runner:
-    """The window command's runner: it records each list of words, calls ``during`` with them (a
-    launcher that reports while the command runs), and answers ``returncode`` with ``stderr``."""
+    """The window command's runner: it records each list of words, raises ``raises`` where a test
+    sets it, calls ``during`` with them (a launcher that reports while the command runs), and
+    answers ``returncode`` with ``stderr``."""
 
     def __init__(self) -> None:
         self.ran: list[list[str]] = []
         self.returncode = 0
         self.stderr = b""
         self.during: Callable[[list[str]], None] | None = None
+        self.raises: Exception | None = None
 
     def __call__(self, words: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
         assert isinstance(words, list), "the window command runs as a list of words"
         self.ran.append(list(words))
+        if self.raises is not None:
+            raise self.raises
         if self.during is not None:
             self.during(list(words))
         return subprocess.CompletedProcess(list(words), self.returncode, None, self.stderr)
 
 
 class Finder:
-    """The program finder: a path for every program but those in ``missing``."""
+    """The program finder: a path for every program but those in ``missing``; it raises
+    ``raises`` where a test sets it."""
 
     def __init__(self) -> None:
         self.missing: set[str] = set()
+        self.raises: Exception | None = None
 
     def __call__(self, program: str) -> str | None:
+        if self.raises is not None:
+            raise self.raises
         return None if program in self.missing else f"/found/{program}"
 
 
@@ -316,6 +325,47 @@ def test_a_word_that_cannot_cross_the_window_fails_the_launch_before_anything_ru
     )
     assert (made["state"], made["stage"], made["detail"]) == ("failed", "window", sentence)
     assert runner.ran == []
+
+
+@pytest.mark.parametrize(
+    ("where", "error", "text"),
+    [
+        # a NUL byte in a word of the window command after the first, as subprocess.run raises it
+        ("run", ValueError("embedded null byte"), "embedded null byte"),
+        ("which", RuntimeError("the finder broke"), "the finder broke"),
+        ("which", RuntimeError(), "RuntimeError"),  # an error with no text names its kind
+    ],
+)
+def test_an_unexpected_error_in_the_window_step_fails_the_launch_and_frees_its_item(
+    served: TestClient,
+    runner: Runner,
+    finder: Finder,
+    db_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    where: str,
+    error: Exception,
+    text: str,
+) -> None:
+    """The launch is ``failed`` at the window stage with a sentence, not left ``opening``, which
+    would hold its item until the server restarted; the traceback is logged once, under the
+    launch's id and no setting's value."""
+    item_id = _item(served)
+    if where == "run":
+        runner.raises = error
+    else:
+        finder.raises = error
+    with caplog.at_level(logging.WARNING, logger="fairband.web"):
+        made = _made(served, {"itemId": item_id})
+    sentence = f"the window command could not start: {text}"
+    assert made == _answer(made["id"], item_id, state="failed", stage="window", detail=sentence)
+    assert _rows(db_path) == [(made["id"], item_id, "failed")]
+    (warning,) = [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert warning.levelno == logging.WARNING and warning.exc_info is not None
+    assert f"launch {made['id']}" in warning.getMessage()
+    assert "wt.exe" not in warning.getMessage()
+    runner.raises = finder.raises = None
+    second = _made(served, {"itemId": item_id})
+    assert second["state"] == "opened"
 
 
 def test_a_test_launch_has_no_item_and_its_window_is_titled_fairband_test(
@@ -831,6 +881,18 @@ def test_a_failed_report_with_no_reason_is_a_400(
     made = _made(served, {"test": True})
     _refused(_status(served, made["id"], {"state": "failed"} | report), 400, NO_REASON)
     assert served.get(f"/api/launches/{made['id']}").json()["state"] == "opened"
+
+
+@pytest.mark.parametrize("report", [{}, {"exitCode": None}])
+def test_an_ended_report_with_no_exit_code_is_a_400(
+    served: TestClient, report: dict[str, Any]
+) -> None:
+    """Checked before the launch is looked up, and nothing is stored."""
+    made = _made(served, {"test": True})
+    assert _status(served, made["id"], {"state": "started"}).status_code == 200
+    _refused(_status(served, made["id"], {"state": "ended"} | report), 400, NO_EXIT_CODE)
+    assert served.get(f"/api/launches/{made['id']}").json()["state"] == "started"
+    _refused(_status(served, 999, {"state": "ended"} | report), 400, NO_EXIT_CODE)
 
 
 def test_an_agents_report_is_a_403(served: TestClient) -> None:
