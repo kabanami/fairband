@@ -5,10 +5,10 @@ the latest stored profile names (``inputs_statements.logo_for``: FMP's image hos
 logo where FMP sends its placeholder), kept in the data folder's ``logos`` and fetched at the
 first request (``vendors.logos``: a file of ninety days or older is fetched again, and kept where
 that fetch fails). A company without such an address, one whose first fetch failed and a symbol
-the store holds no profile for are a 404, "no logo for <symbol>"; a failed fetch stores nothing,
-so the next request asks again. A name that is not a symbol is a 400. The detail read's ``logo``
-(``logo_route``) names this route where the profile names a logo, so the page asks for no file
-it cannot have.
+the store holds no profile for are a 404, "no logo for <symbol>"; a failed first fetch stores
+nothing, and the read asks FMP again ten minutes later. A name that is not a symbol is a 400. The
+detail read's ``logo`` (``logo_route``) names this route where the profile names a logo, so the page
+asks for no file it cannot have.
 
 The route may call FMP and asks for no ``X-Fairband-Request`` header (``app``, D11): the page
 reads it from an ``<img>``, which cannot send one. It reads what the browser says of the request
@@ -17,10 +17,11 @@ one on another port of this host, is a 403 before anything is read, "the logo is
 Fairband's own page"; the page's own image says ``same-origin``, an address typed in the browser
 ``none``, and a client that is no browser sends no such header. What a browser too old to send
 it could be made to do is bounded: the fetch sends no key and spends no quota, its address is one
-a stored profile names on FMP's image host, one file a symbol at most every ninety days (a day,
-where the fetch fails), each at most ``logos.MAX_BYTES``. The answer says ``nosniff`` and
-``private, max-age=86400``: the browser keeps the file a day, and reads the body as an image
-alone.
+a stored profile names on FMP's image host, and for each symbol the store fetches at most once
+in ninety days, once a day where the fetch of an old file fails and once in ten minutes where
+the fetch of a missing file fails, each file at most ``logos.MAX_BYTES``. The answer says
+``nosniff`` and ``private, max-age=86400``: the browser keeps the file a day, and reads the body as
+an image alone.
 
 The route is a sync one: FastAPI runs it on its thread pool, where a fetch waits on FMP's host.
 """

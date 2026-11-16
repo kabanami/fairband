@@ -235,9 +235,9 @@ def profile_brief(payload: Any) -> str | None:
 
 def profile_logo(payload: Any) -> str | None:
     """The company logo's address (B-203): the profile object's ``image`` where it is an https
-    address on FMP's image host, a path of letters, digits, dots, dashes and slashes and nothing
-    else, so no user, port or query; ``None`` otherwise, and where ``defaultImage`` is true:
-    FMP holds no logo there and sends a placeholder. The logo read fetches the file from it,
+    address on FMP's image host, a path of letters, digits, dots, dashes, underscores and slashes
+    and nothing else, so no user, port or query; ``None`` otherwise, and where ``defaultImage`` is
+    true: FMP holds no logo there and sends a placeholder. The logo read fetches the file from it,
     with no key (``vendors.logos``)."""
     row = _profile(payload)
     if row is None or row.get("defaultImage") is True:

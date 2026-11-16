@@ -55,6 +55,16 @@ def test_an_image_that_does_not_load_hides_itself() -> None:
     assert "onError: function (event) { event.target.hidden = true; }" in logo
 
 
+def test_the_tile_shows_only_once_its_image_has_loaded() -> None:
+    """The first read of a logo waits on the server's fetch, and a white tile with no image in
+    it would flash on the dark theme meanwhile. The tile keeps its place, so nothing moves when
+    the image lands."""
+    logo = _function(_static_file("app.js"), "logo")
+    assert "onLoad: function (event) { event.target.classList.add('is-loaded'); }" in logo
+    assert "visibility: hidden;" in _rule(".app-logo")
+    assert _rule(".app-logo.is-loaded") == "visibility: visible;"
+
+
 def test_each_head_draws_the_logo_before_the_ticker() -> None:
     sections = _function(_static_file("app.js"), "sections")
     head = sections[sections.index("className: 'app-drawer__head'") :]

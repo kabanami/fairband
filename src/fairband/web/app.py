@@ -7,8 +7,8 @@ Methodology section read and the report routes (``reports_api``), the drawer's r
 (``research_api``), the multiples history read (``multiples_api``), the band's history read
 (``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
 (``filings_api``), the company logo's read (``logo_api``), and the policy values and growth
-deciles the Methodology page cites (spec 2026-11-04 7.4). The company detail carries the agents' records the drawer leads with
-(``research_api.agent_records``).
+deciles the Methodology page cites (spec 2026-11-04 7.4). The company detail carries the agents'
+records the drawer leads with (``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -317,14 +317,15 @@ def create_app(
         the drawer's head reads a line of, the report page and Details show whole, and the MCP
         ``company`` tool carries; and ``logo`` (B-203), the address of the company's logo read
         where the latest stored profile names a logo, which the drawer's head and the report
-        page's draw, ``None`` without one (``logo_api.logo_route``). And what the figures are in (spec 2026-11-10 7.4), which the
-        drawer's head, Details and the report page name: ``currency``, the reporting currency the
-        snapshot was valued or refused in (``types.money_of``: USD for a USD row, the code for a
-        row refused for its currency); ``isAdr``, the ADR flag as assembly reads it, the latest
-        stored profile's, else the universe row's, ``None`` with neither (``inputs.adr_flag``);
-        ``adrRatio``, the ADR ratio the share count was read by, the result's ``adr_ratio``
-        input, ``None`` without one; ``fxRate`` and ``fxDate``, the rate the value was translated
-        at and its close's date, ``None`` on a row with no rate (``types.rated``)."""
+        page's draw, ``None`` without one (``logo_api.logo_route``). And what the figures are in
+        (spec 2026-11-10 7.4), which the drawer's head, Details and the report page name:
+        ``currency``, the reporting currency the snapshot was valued or refused in
+        (``types.money_of``: USD for a USD row, the code for a row refused for its currency);
+        ``isAdr``, the ADR flag as assembly reads it, the latest stored profile's, else the universe
+        row's, ``None`` with neither (``inputs.adr_flag``); ``adrRatio``, the ADR ratio the share
+        count was read by, the result's ``adr_ratio`` input, ``None`` without one; ``fxRate`` and
+        ``fxDate``, the rate the value was translated at and its close's date, ``None`` on a row
+        with no rate (``types.rated``)."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)

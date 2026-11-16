@@ -1620,13 +1620,17 @@
   /* The company's logo before its ticker (B-203), in the drawer's head and the report page's:
      an image of the detail read's `logo`, the address of the logo read, which the server names
      where the stored profile names a logo and fetches once; nothing without one. The ticker and
-     the name stand beside it, so its alt is empty. An image that does not load hides itself.
-     Its key is the address: the drawer's next company draws a new element, not the hidden one.
-     `className` is the head's own class, which sets the size. */
+     the name stand beside it, so its alt is empty. The tile holds its place unseen until the
+     image loads (is-loaded), since the first read waits on the server's fetch and an empty white
+     tile would flash meanwhile; an image that does not load hides itself and gives its place
+     up. Its key is the address: the drawer's next company draws a new element, not one an
+     earlier load marked. `className` is the head's own class; the report page's sets a larger
+     size. */
   function logo(body, className) {
     if (!body.logo) return null;
     return h('img', {
       key: body.logo, className: 'app-logo ' + className, src: body.logo, alt: '',
+      onLoad: function (event) { event.target.classList.add('is-loaded'); },
       onError: function (event) { event.target.hidden = true; }
     });
   }

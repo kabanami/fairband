@@ -5,6 +5,7 @@ the file is synthetic, the PNG signature and made-up bytes."""
 
 from collections.abc import Iterator
 from contextlib import closing
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -52,19 +53,36 @@ def stored(db_path: Path) -> None:
         store_payloads(conn, "HGCO", _profile(placeholder, default=True), CREATED)
 
 
+class Clock:
+    """The app's clock, which a test moves."""
+
+    def __init__(self) -> None:
+        self.now = NOW
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
 @pytest.fixture
 def source() -> Source:
     return Source()
 
 
 @pytest.fixture
-def served(tmp_path: Path, db_path: Path, policy: Policy, source: Source) -> Iterator[TestClient]:
-    """A client of an app that fetches a logo from ``source``."""
+def clock() -> Clock:
+    return Clock()
+
+
+@pytest.fixture
+def served(
+    tmp_path: Path, db_path: Path, policy: Policy, source: Source, clock: Clock
+) -> Iterator[TestClient]:
+    """A client of an app that fetches a logo from ``source`` and reads the time from ``clock``."""
     app = create_app(
         _settings(tmp_path, db_path),
         policy,
         lambda: connect(db_path),
-        clock=lambda: NOW,
+        clock=clock,
         fetch_logo=source,
     )
     client = TestClient(app, base_url=HOST)
@@ -124,19 +142,38 @@ def test_no_logo_is_a_404_and_asks_nobody(served: TestClient, source: Source) ->
 def test_an_address_on_another_host_is_never_fetched(
     served: TestClient, source: Source, db_path: Path
 ) -> None:
+    """Nor does the detail read name the route for it."""
     with closing(connect(db_path)) as conn:
         store_payloads(conn, "AAPL", _profile("https://example.com/symbol/AAPL.png"), NOW)
     assert served.get("/api/companies/AAPL/logo").status_code == 404
+    assert served.get("/api/companies/AAPL").json()["logo"] is None
     assert source.asked == []
 
 
-def test_a_failed_fetch_is_a_404_and_the_next_request_asks_again(
-    served: TestClient, source: Source, db_path: Path
+def test_a_stored_logo_is_not_served_once_the_profile_names_none(
+    served: TestClient, db_path: Path
 ) -> None:
+    """A later profile with FMP's placeholder ends the logo, though its file is still stored."""
+    assert served.get("/api/companies/AAPL/logo").status_code == 200
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, "AAPL", _profile(URL, default=True), NOW)
+    assert served.get("/api/companies/AAPL/logo").status_code == 404
+    assert served.get("/api/companies/AAPL").json()["logo"] is None
+    assert (db_path.parent / "logos" / "AAPL.png").exists()
+
+
+def test_a_failed_fetch_is_a_404_and_is_tried_again_ten_minutes_later(
+    served: TestClient, source: Source, clock: Clock, db_path: Path
+) -> None:
+    """Nothing is stored, and a request inside the ten minutes asks nobody."""
     source.fails = True
     assert served.get("/api/companies/AAPL/logo").status_code == 404
     assert not (db_path.parent / "logos" / "AAPL.png").exists()
     source.fails = False
+    clock.now += timedelta(minutes=9)
+    assert served.get("/api/companies/AAPL/logo").status_code == 404
+    assert source.asked == [URL]
+    clock.now += timedelta(minutes=1)
     assert served.get("/api/companies/AAPL/logo").content == PNG
     assert source.asked == [URL, URL]
 

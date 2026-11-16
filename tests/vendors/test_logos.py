@@ -1,6 +1,8 @@
 """The company logo's fetch against ``httpx.MockTransport`` (never the network) and its file store
 in a temporary directory (B-203). The files are synthetic: the PNG signature and made-up bytes."""
 
+import gzip
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -8,7 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from fairband.vendors.logos import MAX_BYTES, LogoError, Logos, fetch_logo
+from fairband.vendors.logos import MAX_BYTES, LogoError, Logos, fetch_logo, logo_client
 
 URL = "https://images.financialmodelingprep.com/symbol/ACME.png"
 PNG = b"\x89PNG\r\n\x1a\n" + b"a synthetic logo"
@@ -60,6 +62,28 @@ def test_the_fetch_answers_the_file_and_sends_no_key() -> None:
 def test_the_fetch_refuses_what_is_not_a_logo(answer: httpx.Response | Exception) -> None:
     with pytest.raises(LogoError):
         fetch_logo(URL, Host(answer).transport)
+
+
+def test_the_fetch_asks_for_the_file_as_it_is_and_refuses_an_encoded_answer() -> None:
+    """A PNG is compressed already, so the fetch asks for no content encoding and refuses an
+    answer that has one: an encoded body could unpack past the size limit before the limit is
+    checked."""
+    host = Host(_png())
+    fetch_logo(URL, host.transport)
+    assert host.requests[0].headers["accept-encoding"] == "identity"
+    packed = httpx.Response(200, content=gzip.compress(PNG), headers={"content-encoding": "gzip"})
+    with pytest.raises(LogoError):
+        fetch_logo(URL, Host(packed).transport)
+
+
+def test_the_fetch_ignores_a_proxy_in_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """As the vendor client does (``vendors.http``): the request goes to FMP's image host and
+    through nothing the environment names. httpx reads the environment's proxies only for a
+    client given no transport, so the test reads the client the fetch builds and sends nothing."""
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    with logo_client(None) as client:
+        assert client.trust_env is False
+        assert client.follow_redirects is False
 
 
 def test_the_fetch_follows_no_redirect() -> None:
@@ -148,16 +172,45 @@ def test_an_old_file_is_kept_when_its_fetch_fails_and_tried_again_a_day_later(
     assert source.asked == [URL, URL, URL]
 
 
-def test_a_failed_first_fetch_stores_nothing(tmp_path: Path) -> None:
-    """No file and no answer; the next read asks again."""
+def test_a_failed_first_fetch_stores_nothing_and_is_tried_again_ten_minutes_later(
+    tmp_path: Path,
+) -> None:
+    """No file and no answer. The store remembers the failure, in memory alone, and asks again
+    ten minutes later, not at each read: every read would otherwise wait for a fetch to fail,
+    and nothing would bound how often the host is asked."""
     source, clock = Source(LogoError("status 404"), PNG), Clock()
     logos = _logos(tmp_path, source, clock)
     assert logos.file("ACME", URL) is None
     directory = tmp_path / "data" / "logos"
     assert not directory.exists() or list(directory.iterdir()) == []
+    clock.now += timedelta(minutes=9, seconds=59)
+    assert logos.file("ACME", URL) is None
+    assert source.asked == [URL]
+    clock.now += timedelta(seconds=1)
     path = logos.file("ACME", URL)
     assert path is not None and path.read_bytes() == PNG
+    assert source.asked == [URL, URL]
     assert [p.name for p in directory.iterdir()] == ["ACME.png"]  # no temporary file is left
+
+
+def test_one_symbols_failure_holds_no_other_symbol(tmp_path: Path) -> None:
+    other = "https://images.financialmodelingprep.com/symbol/BOLT.png"
+    source = Source(LogoError("status 404"), PNG)
+    logos = _logos(tmp_path, source, Clock())
+    assert logos.file("ACME", URL) is None
+    assert logos.file("BOLT", other) is not None
+    assert source.asked == [URL, other]
+
+
+def test_a_failed_fetch_is_logged_by_its_symbol_and_reason(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """One line a failure, so "why does no company have a logo" has an answer in the server's
+    log; the line names the symbol and the reason, and no address."""
+    logos = _logos(tmp_path, Source(LogoError("status 404")), Clock())
+    with caplog.at_level(logging.INFO, logger="fairband.vendors.logos"):
+        logos.file("ACME", URL)
+    assert [r.getMessage() for r in caplog.records] == ["no logo for ACME: status 404"]
 
 
 def test_each_symbol_has_its_own_file(tmp_path: Path) -> None:

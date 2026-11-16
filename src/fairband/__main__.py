@@ -147,9 +147,9 @@ def _serve(args: argparse.Namespace) -> int:
     Without an FMP key the worker runs a revalue only and refuses the other kinds, and the
     pass-through route answers 503. With or without one the app fetches a company's logo
     (``vendors.logos.fetch_logo``): FMP's image host takes no key, and the fetch goes through
-    no limiter, since it counts against no quota. The app reads the policy file as its base. When it starts, the
-    app marks every ``running`` refresh interrupted; with no process lock in this cut, that
-    includes one a command in another process is running at that moment."""
+    no limiter, since it counts against no quota. The app reads the policy file as its base. When it
+    starts, the app marks every ``running`` refresh interrupted; with no process lock in this cut,
+    that includes one a command in another process is running at that moment."""
     settings = load_settings()
     policy, tax = load_policy(), load_tax_table()
     with closing(connect(settings.db_path)) as conn:
