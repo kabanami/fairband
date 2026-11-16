@@ -4,10 +4,12 @@
    figures, with the basis chip in its head, the meter as the drawer draws it, the four levels
    under it and, where the company has a published report, the report's line; and Key statistics
    (8.3), eight groups in three columns; at the right Price (8.4), the chart company_chart.js
-   draws. The blocks are built from company.js's parts and formatters (FairbandPage.companyPage)
-   and hang on it with the tab's function, draw.overview, which the page draws under the tabs
-   once the tab's answer and the company's detail are in. A vendor's address is a link only
-   where it is a web address (safeHref, 10.6). */
+   draws; Price facts (8.5), three groups of the trading rows and the price changes; and News
+   (8.6), the stories with their count, which fills what the column leaves so the two columns end
+   on one line (8.7). The blocks are built from company.js's parts and formatters
+   (FairbandPage.companyPage) and hang on it with the tab's function, draw.overview, which the
+   page draws under the tabs once the tab's answer and the company's detail are in. A vendor's
+   address is a link only where it is a web address (safeHref, 10.6). */
 (function () {
   'use strict';
 
@@ -18,18 +20,22 @@
 
   /* The Overview (8): the grid's two columns. At the left Company on the answer's company, keyed
      on the company so each company's brief opens closed, Fairband value on the company's detail
-     and Key statistics on the answer. At the right first Price, company_chart.js's chart
-     (FairbandPage.companyChart, loaded after this script and read as the tab draws) on the
+     and Key statistics on the answer. At the right, the column that adds no height of its own, so
+     the left one sets the row and both end on one line (8.7): first Price, company_chart.js's
+     chart (FairbandPage.companyChart, loaded after this script and read as the tab draws) on the
      answer's prices, keyed on the company so each company's chart opens at 1Y with no day picked;
-     Price facts and News join it as they are built. */
+     then Price facts on the answer; then News, which fills what is left, on the answer's stories
+     and the note the page sets on them where newer news did not load (company.js, newer). */
   function overview(answer, detail) {
     return h('div', { className: 'app-company__grid' },
       h('div', { className: 'app-company__col' },
         h(Company, { key: 'company ' + answer.symbol, company: answer.company }),
         value(detail),
         statistics(answer)),
-      h('div', { className: 'app-company__col' },
-        h(P.companyChart.Chart, { key: 'price ' + answer.symbol, prices: answer.prices })));
+      h('div', { className: 'app-company__col app-company__col--match' },
+        h(P.companyChart.Chart, { key: 'price ' + answer.symbol, prices: answer.prices }),
+        priceFacts(answer),
+        news({ stories: answer.news.stories, note: answer.news.note || null })));
   }
 
   /* -------------------------------------------------------------------- links */
@@ -237,12 +243,97 @@
       })));
   }
 
-  /* What the page and the tests use: the tab's function, and its blocks and the link rule, which
-     the right column's blocks use too. */
+  /* ------------------------------------------------------------- Price facts */
+
+  /* The Price facts block (8.5) of the overview answer: three groups side by side. Trading, from
+     the stored quote's row: the money rows to cents, the day's and the year's range from low to
+     high, the volumes compact as bare counts and the next earnings date. Price change and Price
+     change, years: each a change, a percent as given to one decimal with its sign, in the text's
+     own colour (14.1). */
+  function priceFacts(answer) {
+    var t = answer.trading;
+    var c = answer.priceChange;
+    return C.panel('Price facts', null,
+      h('div', { className: 'app-company__three' },
+        C.group('Trading', [
+          ['Open', C.money(t.open)],
+          ['Previous close', C.money(t.previousClose)],
+          ['Day range', range(t.dayLow, t.dayHigh)],
+          ['52 weeks', range(t.yearLow, t.yearHigh)],
+          ['50-day average', C.money(t.average50)],
+          ['200-day average', C.money(t.average200)],
+          ['Volume', C.big(t.volume)],
+          ['Average volume', C.big(t.averageVolume)],
+          ['Next earnings', C.day(t.nextEarnings)]
+        ]),
+        C.group('Price change', [
+          ['1 day', moved(c.d1)],
+          ['5 days', moved(c.d5)],
+          ['1 month', moved(c.m1)],
+          ['3 months', moved(c.m3)],
+          ['6 months', moved(c.m6)],
+          ['Year to date', moved(c.ytd)]
+        ]),
+        C.group('Price change, years', [
+          ['1 year', moved(c.y1)],
+          ['3 years', moved(c.y3)],
+          ['5 years', moved(c.y5)],
+          ['10 years', moved(c.y10)]
+        ])));
+  }
+
+  /* A range of two money figures, low to high: $355.75 – $360.83; the dash where either end is
+     missing. */
+  function range(low, high) {
+    var from = C.money(low);
+    var to = C.money(high);
+    return from === '—' || to === '—' ? '—' : from + ' – ' + to;
+  }
+
+  /* A price change, a percent as given, with its sign: +1.2%, −0.7%; none at 0.0%. */
+  function moved(x) { return C.signed(C.points(x == null ? x : Math.abs(x)), x); }
+
+  /* -------------------------------------------------------------------- News */
+
+  /* The News block (8.6) of `newsState`, { stories, note }: the stories newest first, as the
+     overview read gives them or the second read put in their place (10.5), each its day, its
+     title, a link that opens in a new tab only where its address is a web address (10.6), and its
+     publisher under it; the count of stories in the block's head, and after it, where `note`, the
+     server's sentence why newer news did not load, is set, that sentence. The block fills what
+     its column leaves and its list scrolls inside it, a region the keyboard reaches (8.7). */
+  function news(newsState) {
+    var stories = newsState.stories || [];
+    return C.panel('News',
+      h('div', { className: 'app-news__head' },
+        h('p', { className: 'caption app-company__note' },
+          stories.length + (stories.length === 1 ? ' story' : ' stories')),
+        newsState.note ? h('p', { className: 'caption app-company__note' },
+          'newer news did not load: ' + newsState.note) : null),
+      h('ul', { className: 'app-news', tabIndex: 0 }, stories.map(story)),
+      'app-company__panel--fill');
+  }
+
+  /* One story: its day, then its title and, where it has one, its publisher. */
+  function story(s, i) {
+    var href = safeHref(s.url);
+    var title = s.title || '—';
+    return h('li', { key: i },
+      h('span', { className: 'figure-sm app-news__day' }, C.day(s.day)),
+      h('div', null,
+        href ? h('a', {
+          className: 'body app-news__title', href: href, target: '_blank',
+          rel: 'noopener noreferrer'
+        }, title) : h('span', { className: 'body app-news__title' }, title),
+        s.publisher ? h('p', { className: 'caption app-news__by' }, s.publisher) : null));
+  }
+
+  /* What the page and the tests use: the tab's function, its blocks, and the link rule. */
   C.safeHref = safeHref;
   C.Company = Company;
   C.companyBlock = companyBlock;
   C.value = value;
   C.statistics = statistics;
+  C.priceFacts = priceFacts;
+  C.news = news;
   C.draw.overview = overview;
 })();

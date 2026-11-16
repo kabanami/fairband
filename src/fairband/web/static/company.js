@@ -8,10 +8,12 @@
    link to the report page, the data date of the open tab at the row's right end. Under the row the
    open tab's blocks, which the later scripts hang on companyPage.draw by tab; nothing is drawn
    there while a tab's function is missing. The head reads the company's detail, as the drawer and
-   the report page do; each tab its own read of the store, which carries the head's quote too. The
-   parts the blocks are built from, a panel, a list of names and figures, a group, a small table,
-   and the formatters of their figures (14.1), are on FairbandPage.companyPage with the head and
-   the tabs' row, for those scripts and for the tests, which read them in node. */
+   the report page do; each tab its own read of the store, which carries the head's quote too; and
+   the Overview, where its stored news is stale, one read of the news pass-through after it draws
+   them, the page's one read that may call a vendor (10.5). The parts the blocks are built from,
+   a panel, a list of names and figures, a group, a small table, and the formatters of their
+   figures (14.1), are on FairbandPage.companyPage with the head and the tabs' row, for those
+   scripts and for the tests, which read them in node. */
 (function () {
   'use strict';
 
@@ -47,7 +49,9 @@
      after the reader moved to another company or tab is dropped. A read of another company stops
      the following of the request of the company shown before it starts, and every landing
      follows the open item's launch again (shown). A tab's read that fails draws its sentence
-     under the tabs; the detail's draws its own (failure) and the link back. */
+     under the tabs; the detail's draws its own (failure) and the link back. An Overview's read
+     that lands draws its stored news, then asks for newer news where they are stale (newer); a
+     tab held is shown with what it holds and asks nothing. */
   function load() {
     var want = P.company;
     var request = ++latest;
@@ -85,6 +89,7 @@
         state.error = null;
         state.loading = false;
         shown();
+        if (want.tab === 'overview' && found.answer) newer(want.symbol, found.answer);
       })
       .catch(function (err) {
         if (request !== latest) return;
@@ -111,6 +116,28 @@
     }
     P.followItem(state.request, state.detail.item, render, load);
     render();
+  }
+
+  /* Newer news (10.5), once for each read of the Overview that lands: where the stored news of
+     its `answer` is stale, older than the refresh's reuse window or none, the page has drawn them
+     at once, and now asks the pass-through (freshNews) at the answer's limit. Its stories take the
+     stored ones' place in the answer the page holds; a refusal keeps the stored ones and sets the
+     news' note, the server's sentence, which News draws in its head. An answer that lands when
+     the page no longer holds the answer it was asked for, the reader gone to another company or
+     the company read anew, is dropped; on another tab of the company the answer is still held,
+     and the stories land in it. */
+  function newer(symbol, answer) {
+    var news = answer.news;
+    if (!news.stale) return;
+    freshNews(symbol, news.limit).then(function (stories) {
+      return { stories: stories, note: null };
+    }, function (err) {
+      return { stories: news.stories, note: err.message };
+    }).then(function (got) {
+      if (state.answers.overview !== answer) return;
+      state.answers.overview = Object.assign({}, answer, { news: Object.assign({}, news, got) });
+      render();
+    });
   }
 
   /* What a failed read draws (7.5): the Words table's sentence with the read's message, which
@@ -259,9 +286,11 @@
   /* ---------------------------------------------------------- the blocks' parts */
 
   /* A block: its title in its head, with `right`, a caption or a control, at the head's right
-     end, then `children`. */
-  function panel(title, right, children) {
-    return h('section', { key: title, className: 'app-company__panel' },
+     end, then `children`; `modifier`, where given, a class of its own beside the block's. */
+  function panel(title, right, children, modifier) {
+    return h('section', {
+      key: title, className: 'app-company__panel' + (modifier ? ' ' + modifier : '')
+    },
       h('header', { className: 'app-company__panelhead' },
         h('h2', { className: 'heading app-company__paneltitle' }, title), right || null),
       children);
@@ -402,16 +431,57 @@
     });
   }
 
+  /* Newer news (10.5): the news pass-through's stories (GET /api/vendor/news/{symbol}), the
+     symbol encoded as the page's reads encode it, at `limit`. The page's one read that may call a
+     vendor, so it carries the header a write carries, as the report page's reads do, without
+     which the server refuses it. Its payload's stories in the overview read's shape
+     (newsStories); a refusal is the server's sentence (refused), and a payload that is not a
+     list, FMP's error body, which the pass-through answers and stores as unusable, a sentence of
+     its own. */
+  function freshNews(symbol, limit) {
+    var url = '/api/vendor/news/' + encodeURIComponent(symbol) + '?limit=' + limit;
+    return fetch(url, { headers: { 'X-Fairband-Request': '1' } }).then(function (response) {
+      return response.ok ? response.json() : refused(response);
+    }).then(function (body) {
+      if (!body || !Array.isArray(body.payload)) throw new Error('the answer held no stories');
+      return newsStories(body.payload);
+    });
+  }
+
+  /* A news payload's stories as the overview read shapes them (vendors/page_fmp.py, stories):
+     each object row in its order, newest first as FMP gives them; its day, the first ten
+     characters of publishedDate where they are an ISO date; its title; its publisher, else its
+     site; its address, kept whatever its scheme (News makes a link only of a web address). Each
+     text stripped, and null where it is empty or not a text. */
+  function newsStories(payload) {
+    return payload.filter(function (row) {
+      return row !== null && typeof row === 'object' && !Array.isArray(row);
+    }).map(function (row) {
+      var published = words(row.publishedDate);
+      return {
+        day: published && /^\d{4}-\d{2}-\d{2}/.test(published) ? published.slice(0, 10) : null,
+        title: words(row.title),
+        publisher: words(row.publisher) || words(row.site),
+        url: words(row.url)
+      };
+    });
+  }
+
+  /* A text, stripped; null where it is empty or not a text. */
+  function words(raw) {
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  }
+
   /* What the tabs' scripts and the tests use: the head, the tabs' row, a panel, a list of names
      and figures, a group, a small table and the formatters; and draw, which each tab's script
      fills with its tab's function, draw.overview(answer, detail) and draw.estimates(answer,
-     detail), each returning the tab's element. The row the watchlists popup opens on and a
-     failed read's sentence are here for the tests, which read them in node. */
+     detail), each returning the tab's element. The read of newer news (freshNews), the row the
+     watchlists popup opens on and a failed read's sentence are here for the tests. */
   P.companyPage = {
     head: head, tabs: tabs, panel: panel, kv: kv, group: group, table: table,
     money: money, big: big, percent: percent, points: points, signed: signed,
     multiple: multiple, decimal: decimal, day: day, count: count,
-    watchRow: watchRow, failure: failure,
+    watchRow: watchRow, failure: failure, freshNews: freshNews,
     draw: {}
   };
   P.onShow.company = load;

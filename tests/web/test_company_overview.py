@@ -1,20 +1,28 @@
-"""The company page's Overview tab, its left column (the company page's design, 8.1 to 8.3): the
-Company block, the Fairband value block and the Key statistics block, and the tab's function that
-draws them, with the price chart first in its right column (``test_company_chart``).
+"""The company page's Overview tab (the company page's design, 8): at the left the Company block,
+the Fairband value block and the Key statistics block; at the right the price chart
+(``test_company_chart``), Price facts and News; the tab's function that draws them, the rule
+that ends the two columns on one line, and the second read that brings newer news (10.5).
 company.js, company_overview.js and company_chart.js run in node after the bundle and app.js
-(``support.page``), and the tests read the trees their builders return.
+(``support.page``), and the tests read the trees their builders return; the second read's
+functions run in node on their own, with a fetch and a state the test gives them.
 
 The company is ``page_answers``' LFOX: valued at $196.50 against a price of $182.40, its levels
 $147.38, $176.85 to $216.15 and $294.75; reporting in New Taiwan dollars, so its enterprise value,
-its revenue and its dividend a share carry the code TWD."""
+its revenue and its dividend a share carry the code TWD; three stories on file, the third at an
+address that is not a web address."""
 
+import json
 import re
+import subprocess
 from typing import Any
 
 import pytest
 from support import page_answers as answers
+from support import page_payloads as payloads
 from support.page import NODE, STATIC, classed, elements, node, text
 from support.web import _static_file
+
+from fairband.vendors import page_fmp
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
@@ -575,13 +583,19 @@ def test_every_figure_missing_draws_the_dash() -> None:
     assert len(figures) == 7 + 5 + 4 + 10 + 7 + 4 + 12 + 5
     assert set(figures) == {"—"}
     assert list(_groups(tree))[5] == "Growth, last fiscal year"
+    facts = _page("priceFacts", empty)
+    assert [figure for rows in _lists(facts) for _, figure in rows] == ["—"] * (9 + 6 + 4)
     drawn = _page("draw.overview", empty, answers.DETAIL)
     assert drawn["props"]["className"] == "app-company__grid"
+    [news] = [e for e in elements(drawn) if e.get("type") == "section" and _title(e) == "News"]
+    assert _stories(news) == []
+    assert "0 stories" in _head_texts(news)
 
 
 def test_a_company_with_a_profile_and_nothing_else() -> None:
     """Review Focus 2: the profile's facts and the brief are drawn; every statistic the profile
-    does not give is the dash."""
+    does not give is the dash, every price fact but the profile's average volume too, and News
+    draws its empty list and its count."""
     answer = answers.profile_only_overview()
     company = _page("Company", {"company": answer["company"]})
     assert text(classed(company, "app-company__brief")[0]) == COMPANY["brief"]
@@ -593,6 +607,11 @@ def test_a_company_with_a_profile_and_nothing_else() -> None:
             assert figure == (given or "—"), (title, name)
     rates = _table(groups["Growth a year, per share"])[1:]
     assert {cell for row in rates for cell in row[1:]} == {"—"}
+    for name, figure in [row for rows in _lists(_page("priceFacts", answer)) for row in rows]:
+        assert figure == ("9.4M" if name == "Average volume" else "—"), name
+    news = _page("news", {"stories": answer["news"]["stories"], "note": None})
+    assert _stories(news) == []
+    assert "0 stories" in _head_texts(news)
 
 
 def test_interest_cover_at_zero_is_the_dash() -> None:
@@ -612,26 +631,499 @@ def test_interest_cover_at_zero_is_the_dash() -> None:
 # --------------------------------------------------------------------------------- the tab
 
 
-def test_the_overview_draws_two_columns_with_the_three_blocks_at_the_left() -> None:
+def test_the_overview_draws_two_columns_with_three_blocks_in_each() -> None:
     """``draw.overview``: the grid of two columns; at the left, in order, Company on the answer's
-    company, Fairband value on the detail and Key statistics on the answer; at the right first
-    the price chart on the answer's prices, keyed on the company, so each company's chart opens
-    at the past year with no day picked."""
+    company, Fairband value on the detail and Key statistics on the answer; at the right, the
+    column that adds no height of its own (8.7), the price chart on the answer's prices, keyed on
+    the company, so each company's chart opens at the past year with no day picked, then Price
+    facts on the answer and News on the answer's stories and the note the page sets on them."""
     tree = _page("draw.overview", answers.OVERVIEW, answers.DETAIL)
     assert tree["props"]["className"] == "app-company__grid"
     left, right = tree["props"]["children"]
     assert left["props"]["className"] == "app-company__col"
-    assert right["props"]["className"].split()[0] == "app-company__col"
+    assert right["props"]["className"] == "app-company__col app-company__col--match"
     company, value, statistics = left["props"]["children"]
     assert company["props"]["company"] == answers.OVERVIEW["company"]
     assert value == _page("value", answers.DETAIL)
     assert statistics == _page("statistics", answers.OVERVIEW)
-    chart = right["props"]["children"][0]
+    chart, facts, news = right["props"]["children"]
     assert chart["props"]["prices"] == answers.OVERVIEW["prices"]
     assert chart["props"]["key"] == "price " + answers.SYMBOL
+    assert facts == _page("priceFacts", answers.OVERVIEW)
+    assert news == _page("news", {"stories": STORIES, "note": None})
     script = _static_file("company_overview.js")
     start = script.index("  function overview(")
     assert "h(P.companyChart.Chart, {" in script[start : script.index("\n  }\n", start)]
+    noted = answers.OVERVIEW | {"news": answers.OVERVIEW["news"] | {"note": "no FMP key"}}
+    drawn = _page("draw.overview", noted, answers.DETAIL)["props"]["children"][1]
+    assert drawn["props"]["children"][2] == _page(
+        "news", {"stories": STORIES, "note": "no FMP key"}
+    )
+
+
+# ----------------------------------------------------------------------------- price facts
+
+
+TRADING = answers.OVERVIEW["trading"] | {
+    "dayLow": {"value": 355.75, "currency": "USD"},
+    "dayHigh": {"value": 360.83, "currency": "USD"},
+    "nextEarnings": "2027-02-04",
+}
+CHANGE = answers.OVERVIEW["priceChange"] | {"d1": 1.2, "d5": -0.7, "y10": 1186.6}
+
+
+def test_the_three_groups_of_price_facts() -> None:
+    """Three groups side by side (8.5), in the Words table's order: Trading, from the quote's row,
+    its money to cents, a range's two ends, the volumes compact as bare counts and the next
+    earnings date; Price change and Price change, years, each a percent as given to one decimal
+    with its sign, in the text's own colour. No chip, no cite, no vendor named."""
+    tree = _page("priceFacts", answers.OVERVIEW | {"trading": TRADING, "priceChange": CHANGE})
+    assert tree.get("type") == "section"
+    assert _title(tree) == "Price facts"
+    [three] = classed(tree, "app-company__three")
+    groups = _groups(three)
+    assert list(groups) == ["Trading", "Price change", "Price change, years"]
+    assert _lists(groups["Trading"]) == [
+        [
+            ("Open", "$180.10"),
+            ("Previous close", "$180.25"),
+            ("Day range", "$355.75 – $360.83"),
+            ("52 weeks", "$121.75 – $201.30"),
+            ("50-day average", "$176.88"),
+            ("200-day average", "$158.42"),
+            ("Volume", "8.1M"),
+            ("Average volume", "9.4M"),
+            ("Next earnings", "4 Feb 2027"),
+        ]
+    ]
+    assert _lists(groups["Price change"]) == [
+        [
+            ("1 day", "+1.2%"),
+            ("5 days", "−0.7%"),
+            ("1 month", "+6.4%"),
+            ("3 months", "+12.9%"),
+            ("6 months", "+21.3%"),
+            ("Year to date", "+32.3%"),
+        ]
+    ]
+    assert _lists(groups["Price change, years"]) == [
+        [
+            ("1 year", "+41.9%"),
+            ("3 years", "+168.2%"),
+            ("5 years", "+244.9%"),
+            ("10 years", "+1,186.6%"),
+        ]
+    ]
+    # every figure in figure and nothing else: no class colours a change by its sign
+    assert {e["props"]["className"] for e in classed(tree, "app-kv__v")} == {"figure app-kv__v"}
+    assert [e for e in elements(tree) if "basis" in e["props"] or "principal" in e["props"]] == []
+
+
+def test_a_range_with_an_end_missing_and_a_change_of_nothing() -> None:
+    """A range is the dash where either end is missing; a change that is zero at one decimal
+    carries no sign; a missing change or date is the dash."""
+    trading = TRADING | {"dayHigh": None, "yearLow": {"value": None, "currency": "USD"}}
+    change = CHANGE | {"d1": 0, "d5": -0.04, "m1": None}
+    groups = _groups(
+        _page(
+            "priceFacts",
+            answers.OVERVIEW | {"trading": trading | {"nextEarnings": None}, "priceChange": change},
+        )
+    )
+    assert text(_fact(groups["Trading"], "Day range")) == "—"
+    assert text(_fact(groups["Trading"], "52 weeks")) == "—"
+    assert text(_fact(groups["Trading"], "Next earnings")) == "—"
+    assert text(_fact(groups["Price change"], "1 day")) == "0.0%"
+    assert text(_fact(groups["Price change"], "5 days")) == "0.0%"
+    assert text(_fact(groups["Price change"], "1 month")) == "—"
+
+
+# -------------------------------------------------------------------------------------- news
+
+
+STORIES = answers.OVERVIEW["news"]["stories"]
+
+
+def _title(tree: Any) -> str:
+    """The text of the block's title, its head's ``h2``."""
+    [title] = [e for e in elements(tree) if e.get("type") == "h2"]
+    return text(title)
+
+
+def _head_texts(tree: Any) -> list[str]:
+    """The text of each paragraph in the block's head."""
+    [head] = [e for e in elements(tree) if e.get("type") == "header"]
+    return [text(e) for e in elements(head) if e.get("type") == "p"]
+
+
+def _stories(tree: Any) -> list[tuple[str, str, str | None]]:
+    """Each story of the news list: its day, its title and its publisher, None for none."""
+    [found] = classed(tree, "app-news")
+    return [
+        (
+            text(classed(item, "app-news__day")[0]),
+            text(classed(item, "app-news__title")[0]),
+            text(by[0]) if (by := classed(item, "app-news__by")) else None,
+        )
+        for item in elements(found)
+        if item.get("type") == "li"
+    ]
+
+
+def test_the_news_list_and_its_count() -> None:
+    """News (8.6): the block that fills what its column leaves (8.7), the count in its head; every
+    story, newest first: its day, its title, its publisher under it, the site where FMP names no
+    publisher. The list is a region the keyboard can reach and scroll."""
+    tree = _page("news", {"stories": STORIES, "note": None})
+    assert tree.get("type") == "section"
+    assert tree["props"]["className"] == "app-company__panel app-company__panel--fill"
+    assert _title(tree) == "News"
+    assert _head_texts(tree) == ["3 stories"]
+    [count] = [e for e in classed(tree, "caption") if text(e) == "3 stories"]
+    assert count["props"]["className"] == "caption app-company__note"
+    [found] = classed(tree, "app-news")
+    assert (found["type"], found["props"]["tabIndex"]) == ("ul", 0)
+    assert _stories(tree) == [
+        (
+            "13 Nov 2026",
+            "Lanternfield Optics lifts its lens output for car makers",
+            "Harbor Street Journal",
+        ),
+        ("12 Nov 2026", "Three lens makers to watch", "lensdaily.example"),
+        ("10 Nov 2026", "Lanternfield Optics' October sales", "Quayside Markets"),
+    ]
+    [day] = classed(tree, "app-news__day")[:1]
+    assert day["props"]["className"] == "figure-sm app-news__day"
+    [by] = classed(tree, "app-news__by")[:1]
+    assert by["props"]["className"] == "caption app-news__by"
+    one = _page("news", {"stories": STORIES[:1], "note": None})
+    assert _head_texts(one) == ["1 story"]
+    # a story with no day, title or publisher: the dash for the day and the title, no line under
+    bare = _page(
+        "news", {"stories": [{"day": None, "title": None, "publisher": None, "url": None}]}
+    )
+    assert _stories(bare) == [("—", "—", None)]
+
+
+def test_a_story_is_a_link_only_when_its_address_is_a_web_address() -> None:
+    """10.6 and Review Focus 4: a title is a link that opens in a new tab with no opener and no
+    referrer only where its address is http or https; any other address, empty or missing, and
+    its title is text."""
+    for url in ("https://harborstreet.example/a", "http://lensdaily.example/b?c=1"):
+        tree = _page("news", {"stories": [STORIES[0] | {"url": url}], "note": None})
+        [link] = _links(tree)
+        assert link["props"]["className"] == "body app-news__title"
+        assert link["props"]["href"] == url
+        assert link["props"]["target"] == "_blank"
+        assert link["props"]["rel"] == "noopener noreferrer"
+        assert text(link) == STORIES[0]["title"]
+    for url in ("javascript:alert(1)", " javascript:alert(1)", "data:text/html,<b>x</b>", "", None):
+        tree = _page("news", {"stories": [STORIES[0] | {"url": url}], "note": None})
+        assert _links(tree) == []
+        [title] = classed(tree, "app-news__title")
+        assert (title["type"], title["props"]["className"]) == ("span", "body app-news__title")
+        assert "href" not in title["props"]
+        assert text(title) == STORIES[0]["title"]
+    # the stored third story's address is javascript:
+    assert len(_links(_page("news", {"stories": STORIES, "note": None}))) == 2
+
+
+def test_the_news_note_is_drawn_when_given() -> None:
+    """10.5: where the second read failed, one caption in the block's head, after the count, says
+    so with the server's sentence; the stored stories stay. None without a note."""
+    tree = _page("news", {"stories": STORIES, "note": "no FMP key"})
+    assert _head_texts(tree) == ["3 stories", "newer news did not load: no FMP key"]
+    [note] = [e for e in classed(tree, "caption") if text(e).startswith("newer news")]
+    assert note["props"]["className"] == "caption app-company__note"
+    assert len(_stories(tree)) == 3
+    assert "newer news" not in text(_page("news", {"stories": STORIES, "note": None}))
+
+
+def test_no_news_draws_an_empty_list_and_its_count() -> None:
+    tree = _page("news", {"stories": [], "note": None})
+    assert _head_texts(tree) == ["0 stories"]
+    assert _stories(tree) == []
+    [found] = classed(tree, "app-news")
+    assert found["type"] == "ul"
+
+
+# ---------------------------------------------------------------------------- the second read
+
+
+def _function_source(script: str, name: str) -> str:
+    """The whole text of the script's ``function <name>(``, its braces matched."""
+    start = script.index(f"  function {name}(")
+    depth = 0
+    for at in range(script.index("{", start), len(script)):
+        depth += {"{": 1, "}": -1}.get(script[at], 0)
+        if depth == 0:
+            return script[start : at + 1]
+    raise AssertionError(name)
+
+
+def _run(source: str, *args: Any) -> Any:
+    """What a node script writes as JSON, given ``args`` as JSON in its argv."""
+    assert NODE is not None
+    done = subprocess.run(
+        [NODE, "-e", source] + [json.dumps(arg) for arg in args],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+    )
+    return json.loads(done.stdout)
+
+
+# A fetch that answers each call with the next of the given answers and keeps the calls: an
+# answer is {status, body}, its body JSON or absent (a body that is not JSON), or {fails}, a
+# request that never reached the server.
+FETCH = """
+var calls = [];
+var given = JSON.parse(process.argv[1]);
+function fetch(url, init) {
+  var a = given[calls.length];
+  calls.push({ url: url, init: init });
+  if (a.fails) return Promise.reject(new TypeError(a.fails));
+  return Promise.resolve({
+    ok: a.status >= 200 && a.status < 300, status: a.status,
+    json: function () {
+      return 'body' in a ? Promise.resolve(a.body) : Promise.reject(new SyntaxError('not JSON'));
+    }
+  });
+}
+"""
+
+
+def _fresh(answer: dict[str, Any], symbol: str = answers.SYMBOL, limit: int = 60) -> Any:
+    """``freshNews(symbol, limit)`` of company.js on one answer of the pass-through: its stories
+    or its error's message, and the fetch's calls."""
+    script = _static_file("company.js")
+    names = ("freshNews", "refused", "newsStories", "words")
+    source = "\n".join(
+        [FETCH]
+        + [_function_source(script, name) for name in names]
+        + [
+            "freshNews.apply(null, JSON.parse(process.argv[2])).then(",
+            "  function (stories) { return { stories: stories }; },",
+            "  function (err) { return { error: err.message }; }",
+            ").then(function (got) {",
+            "  got.calls = calls;",
+            "  process.stdout.write(JSON.stringify(got));",
+            "});",
+        ]
+    )
+    return _run(source, [answer], [symbol, limit])
+
+
+NEWS_PAYLOAD: list[Any] = [
+    *payloads.NEWS,
+    {"publishedDate": "2026-11-09T07:00:00.000Z", "site": "  quayside.example ", "title": " "},
+    {"publishedDate": "9 Nov 2026", "publisher": None, "url": 42},
+    {},
+    "a row that is not an object",
+    None,
+    ["neither is this"],
+]
+
+
+def test_fresh_news_reads_the_pass_through_and_shapes_its_stories_as_the_read_does() -> None:
+    """``freshNews`` asks the news pass-through with the header a write carries, the symbol
+    encoded and the limit given, and answers its payload's stories in the overview read's shape:
+    each object row in its order, the same as ``page_fmp.stories`` gives on that payload."""
+    got = _fresh(
+        {"status": 200, "body": {"responseId": 9, "reused": False, "payload": NEWS_PAYLOAD}}
+    )
+    assert got["stories"] == page_fmp.stories(NEWS_PAYLOAD)
+    assert got["stories"][:3] == STORIES
+    assert got["calls"] == [
+        {
+            "url": "/api/vendor/news/LFOX?limit=60",
+            "init": {"headers": {"X-Fairband-Request": "1"}},
+        }
+    ]
+    for symbol, path in (("BRK.B", "BRK.B"), ("A&B", "A%26B")):
+        got = _fresh({"status": 200, "body": {"payload": []}}, symbol, 25)
+        assert got["stories"] == []
+        assert got["calls"][0]["url"] == f"/api/vendor/news/{path}?limit=25"
+
+
+@pytest.mark.parametrize(
+    ("answer", "error"),
+    [
+        ({"status": 503, "body": {"detail": "no FMP key"}}, "no FMP key"),
+        (
+            {
+                "status": 503,
+                "body": {
+                    "detail": "the pass-throughs are busy: four calls are in flight, try again"
+                },
+            },
+            "the pass-throughs are busy: four calls are in flight, try again",
+        ),
+        ({"status": 502, "body": {"detail": "FMP answered 500"}}, "FMP answered 500"),
+        ({"status": 500}, "the server answered 500"),
+        ({"fails": "Failed to fetch"}, "Failed to fetch"),
+        # FMP's error body, which the pass-through answers with a 200 and stores as unusable
+        (
+            {"status": 200, "body": {"payload": {"Error Message": "Limit Reach ."}}},
+            "the answer held no stories",
+        ),
+        ({"status": 200, "body": {"payload": None}}, "the answer held no stories"),
+        ({"status": 200, "body": None}, "the answer held no stories"),
+    ],
+)
+def test_fresh_news_refused_is_the_server_s_sentence(answer: dict[str, Any], error: str) -> None:
+    assert _fresh(answer)["error"] == error
+
+
+# The second read's shell, run on a state the test gives it: freshNews answers what the plan
+# says once the plan's move is made, and the script writes what the page holds after.
+NEWER = """
+var plan = JSON.parse(process.argv[1]);
+var state = { answers: { overview: plan.answer } };
+var renders = 0;
+function render() { renders++; }
+var asked = [];
+var settle = null;
+function freshNews(symbol, limit) {
+  asked.push([symbol, limit]);
+  return new Promise(function (resolve, reject) { settle = { resolve: resolve, reject: reject }; });
+}
+"""
+
+NEWER_RUN = """
+newer(plan.symbol, plan.answer);
+if (plan.move === 'company') state.answers = { overview: plan.other };
+if (plan.move === 'reread') state.answers = { overview: JSON.parse(JSON.stringify(plan.answer)) };
+if (plan.move === 'tab') state.answers.estimates = { symbol: plan.symbol };
+if (settle && plan.error) settle.reject(new Error(plan.error));
+else if (settle) settle.resolve(plan.stories);
+setTimeout(function () {
+  process.stdout.write(JSON.stringify({
+    asked: asked, renders: renders, answers: state.answers
+  }));
+}, 0);
+"""
+
+
+def _newer(answer: dict[str, Any], **plan: Any) -> Any:
+    script = _static_file("company.js")
+    source = "\n".join([NEWER, _function_source(script, "newer"), NEWER_RUN])
+    return _run(source, {"symbol": answer["symbol"], "answer": answer} | plan)
+
+
+STALE = answers.OVERVIEW | {"news": answers.OVERVIEW["news"] | {"stale": True}}
+FRESH = [
+    {
+        "day": "2026-11-17",
+        "title": "Lanternfield Optics opens a lens plant",
+        "publisher": "Harbor Street Journal",
+        "url": "https://harborstreet.example/plant",
+    }
+]
+
+
+def test_stale_news_is_asked_for_once_and_drawn_in_the_stored_ones_place() -> None:
+    """10.5: where the stored news is stale, the page asks the pass-through once, at the answer's
+    limit, and draws its stories in the stored ones' place: the answer it holds gets them and no
+    note, every other part as the read gave it."""
+    got = _newer(STALE, stories=FRESH)
+    assert got["asked"] == [[answers.SYMBOL, 60]]
+    assert got["renders"] == 1
+    held = got["answers"]["overview"]
+    assert held["news"] == STALE["news"] | {"stories": FRESH, "note": None}
+    assert {k: v for k, v in held.items() if k != "news"} == {
+        k: v for k, v in STALE.items() if k != "news"
+    }
+    # the reader went to another tab of the company: the answer is held, and the stories land
+    moved = _newer(STALE, stories=FRESH, move="tab")
+    assert moved["answers"]["overview"]["news"]["stories"] == FRESH
+    assert moved["renders"] == 1
+
+
+def test_a_refused_second_read_keeps_the_stored_stories_and_sets_the_note() -> None:
+    got = _newer(STALE, error="no FMP key")
+    assert got["asked"] == [[answers.SYMBOL, 60]]
+    assert got["answers"]["overview"]["news"] == STALE["news"] | {"note": "no FMP key"}
+    assert got["renders"] == 1
+
+
+def test_news_not_stale_is_not_asked_for() -> None:
+    got = _newer(answers.OVERVIEW, stories=FRESH)
+    assert got["asked"] == []
+    assert got["renders"] == 0
+    assert got["answers"]["overview"] == answers.OVERVIEW
+
+
+def test_a_second_read_that_lands_after_the_page_moved_on_is_dropped() -> None:
+    """The reader went to another company, or the page read the company anew: the answer the read
+    was asked for is no longer held, so its stories and its note are dropped and nothing draws."""
+    other = answers.OVERVIEW | {"symbol": "BRK.B"}
+    # the read anew holds another answer of the company, its stored stories and no note
+    for move, held in (("company", other), ("reread", STALE)):
+        for outcome in ({"stories": FRESH}, {"error": "no FMP key"}):
+            got = _newer(STALE, move=move, other=other, **outcome)
+            assert got["answers"] == {"overview": held}
+            assert got["renders"] == 0
+
+
+def test_the_second_read_runs_once_for_each_read_of_the_overview() -> None:
+    """The page asks for newer news as an Overview's read lands, after it draws the stored stories,
+    and not when it shows a tab it holds; so not again on a return to the Overview, and again after
+    the page reads anew."""
+    script = _static_file("company.js")
+    start = script.index("  function load(")
+    load = script[start : script.index("\n  }\n", start)]
+    assert load.count("newer(") == 1
+    shortcut = load[: load.index("var whole =")]
+    assert "newer(" not in shortcut
+    landed = load[load.index(".then(function (found) {") : load.index(".catch(")]
+    assert landed.index("shown();") < landed.index(
+        "if (want.tab === 'overview' && found.answer) newer(want.symbol, found.answer);"
+    )
+
+
+# ---------------------------------------------------------------------------- the columns
+
+
+def _top_rule(selector: str) -> str:
+    """The declarations of the page's one rule outside an at-rule whose line opens with
+    ``selector``, on one line."""
+    css = _static_file("index.html")
+    ends = [m.end() for m in re.finditer(r"(?m)^  " + re.escape(selector), css)]
+    assert len(ends) == 1, selector
+    return " ".join(css[ends[0] : css.index("}", ends[0])].split())
+
+
+def test_the_columns_rule_is_in_the_page_s_css() -> None:
+    """8.7 and 9: the grid stretches both columns to the row's height; on the Overview the right
+    column adds none of its own, so the left sets the row, and News fills what is left, over a
+    floor of 260px, its list scrolling inside it; on every other tab the last block of each
+    column grows to the row. Under 1180px one column, the right column's blocks after the
+    left's, the news list scrolling under 520px."""
+    grid = _top_rule(".app-company__grid {")
+    assert "align-items: stretch;" in grid and "align-items: start" not in grid
+    assert _top_rule(".app-company__col--match {") == "height: 0; min-height: 100%;"
+    fill = _top_rule(".app-company__panel--fill {")
+    for part in ("display: flex;", "flex-direction: column;", "flex: 1 1 0;", "min-height: 260px;"):
+        assert part in fill
+    news = _top_rule(".app-news {")
+    for part in ("flex: 1 1 0;", "min-height: 0;", "overflow-y: auto;"):
+        assert part in news
+    grows = ".app-company__col > .app-company__panel:last-child:not(.app-company__panel--fill) {"
+    assert _top_rule(grows) == "flex: 1 1 auto;"
+    html = _static_file("index.html")
+    narrow = re.search(r"\n  @media \(width < 1180px\) \{\n(.*?)\n  \}\n", html, re.DOTALL)
+    assert narrow is not None
+    rules = [" ".join(line.split()) for line in narrow[1].splitlines()]
+    assert rules == [
+        ".app-company__grid { grid-template-columns: minmax(0, 1fr); }",
+        ".app-company__col--match { height: auto; min-height: 0; }",
+        ".app-company__panel--fill { flex: none; }",
+        ".app-news { flex: none; max-height: 520px; }",
+    ]
+    assert html.count("@media (width < 1180px)") == 1
+    assert ".app-news:focus-visible {" in html
 
 
 def test_the_script_and_the_columns_inside_a_block() -> None:
