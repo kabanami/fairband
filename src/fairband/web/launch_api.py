@@ -175,7 +175,10 @@ _FIELDS: dict[str, tuple[str, str]] = {
     ),
     "claude.model": ("Model", _DEFAULT_HELP),
     "claude.effort": ("Effort", _DEFAULT_HELP),
-    "claude.permission_mode": ("Permission mode", _DEFAULT_HELP),
+    "claude.permission_mode": (
+        "Permission mode",
+        _DEFAULT_HELP + " bypassPermissions skips every permission check.",
+    ),
     "claude.folder": ("Folder", "Where the session starts. Fairband makes it."),
 }
 _CHOICES = {"claude.effort": EFFORTS, "claude.permission_mode": MODES}

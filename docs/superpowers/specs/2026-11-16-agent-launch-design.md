@@ -210,16 +210,18 @@ launcher starts the program with a list of arguments, and no shell reads them.
 | First prompt | `claude.prompt` | `/fairband-research work item {item}` | One line of at most 500 characters. Holds `{item}`. No other name in braces than `item`, `symbol` and `mode`. |
 | Model | `claude.model` | empty | No white space, no leading `-`, at most 100 characters. Free text, because model names change: `opus`, `claude-opus-5-5`. |
 | Effort | `claude.effort` | empty | One of `low`, `medium`, `high`, `xhigh`, `max`. |
-| Permission mode | `claude.permission_mode` | empty | One of `acceptEdits`, `auto`, `dontAsk`, `manual`, `plan`. |
+| Permission mode | `claude.permission_mode` | empty | One of `acceptEdits`, `auto`, `bypassPermissions`, `dontAsk`, `manual`, `plan`. |
 | Folder | `claude.folder` | `~/fairband-research` | An absolute path once `~` is the user's home. The launcher makes it. |
 
 - A value that holds a NUL byte, or that is not text the server can send as UTF-8, is refused for
   every name.
 - An empty model, effort or mode adds no option, so Claude Code uses its own default.
 - The lists of efforts and modes are Claude Code 2.1.325's, kept in one place in the code.
-- **`bypassPermissions` is not offered** (*my call*). Claude Code has it; it skips every
-  permission check, and a research session reads web pages a stranger wrote. A founder who wants
-  it can still add an option to the Claude Code command, and then has typed it on purpose.
+- **`bypassPermissions` is offered**, on the founder's word (2026-11-16, the first day live: "add
+  bypassPermissions"). It skips every permission check, and a research session reads web pages a
+  stranger wrote, so the field's line of help says so: `Empty for Claude Code's own default.
+  bypassPermissions skips every permission check.` The first design left the mode out (*my
+  call*).
 - **The folder is not the repository** (*my call*). In the repository a session loads the
   developer's instructions and memory, which are not for research. The skill and the Fairband
   tools are set up for the user, so they load in any folder. Claude Code asks once to trust a new
@@ -601,4 +603,7 @@ launch route.
   sentence; the valuation settings read the same before and after. Steps 2 to 5 are the live
   steps. Not tested: a launch with Windows Terminal closed. Filed: B-209 (the reviews' items),
   B-210 (the Inbox page and another terminal); Codex is B-208.
-
+- 2026-11-16, the founder, on the first day live, after he asked what an empty permission mode
+  means ("I want to give it full permission"): "add bypassPermissions". The mode is a choice of
+  the field (7.1) and its line of help says what it does. This reverses Claude's call of the same
+  day. B-211.

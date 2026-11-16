@@ -37,10 +37,10 @@ from typing import Any, TypeGuard
 from fairband.launch.command import is_plain
 
 FILE_NAME = "launch.json"
-# The efforts and permission modes of Claude Code 2.1.325. ``bypassPermissions`` is not offered:
-# it skips every permission check, and a research session reads web pages a stranger wrote.
+# The efforts and permission modes of Claude Code 2.1.325. ``bypassPermissions`` skips every
+# permission check; the founder asked for it, and the form's line of help says what it does.
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
-MODES = ("acceptEdits", "auto", "dontAsk", "manual", "plan")
+MODES = ("acceptEdits", "auto", "bypassPermissions", "dontAsk", "manual", "plan")
 # The file's order and the form's.
 NAMES = (
     "window_command",

@@ -122,7 +122,7 @@ value is a string.
 | `claude.prompt` | The session's first message; `{item}`, `{symbol}` and `{mode}` are the request's | `/fairband-research work item {item}` | One line of at most 500 characters. Holds `{item}`. No other name in braces than `item`, `symbol` and `mode`. |
 | `claude.model` | Claude Code's `--model` | empty | No white space, no leading `-`, at most 100 characters. Free text, because model names change: `opus`, `claude-opus-5-5`. |
 | `claude.effort` | Claude Code's `--effort` | empty | One of `low`, `medium`, `high`, `xhigh`, `max`. |
-| `claude.permission_mode` | Claude Code's `--permission-mode` | empty | One of `acceptEdits`, `auto`, `dontAsk`, `manual`, `plan`. |
+| `claude.permission_mode` | Claude Code's `--permission-mode` | empty | One of `acceptEdits`, `auto`, `bypassPermissions`, `dontAsk`, `manual`, `plan`. `bypassPermissions` skips every permission check. |
 | `claude.folder` | Where the session starts | `~/fairband-research` | An absolute path once `~` is the user's home. The launcher makes it. |
 
 An empty model, effort or permission mode adds no option, so Claude Code uses its own default. A

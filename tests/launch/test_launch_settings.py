@@ -97,8 +97,7 @@ def test_the_names_and_their_defaults() -> None:
         "claude.folder": "~/fairband-research",
     }
     assert EFFORTS == ("low", "medium", "high", "xhigh", "max")
-    assert MODES == ("acceptEdits", "auto", "dontAsk", "manual", "plan")
-    assert "bypassPermissions" not in MODES
+    assert MODES == ("acceptEdits", "auto", "bypassPermissions", "dontAsk", "manual", "plan")
 
 
 def test_no_file_is_every_default_and_not_ready(tmp_path: Path) -> None:
@@ -174,8 +173,8 @@ BROKEN = [
     ("claude.effort", "XHIGH", "is `XHIGH`; it is one of low, medium, high, xhigh, max"),
     (
         "claude.permission_mode",
-        "bypassPermissions",
-        "is `bypassPermissions`; it is one of acceptEdits, auto, dontAsk, manual, plan",
+        "bypass",
+        "is `bypass`; it is one of acceptEdits, auto, bypassPermissions, dontAsk, manual, plan",
     ),
     ("claude.folder", "fairband-research", "is not an absolute path"),
     ("claude.folder", "", "is not an absolute path"),

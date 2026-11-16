@@ -73,8 +73,10 @@ FIELDS = [
         "label": "Permission mode",
         "value": "",
         "default": "",
-        "help": "Empty for Claude Code's own default.",
-        "choices": ["acceptEdits", "auto", "dontAsk", "manual", "plan"],
+        "help": (
+            "Empty for Claude Code's own default. bypassPermissions skips every permission check."
+        ),
+        "choices": ["acceptEdits", "auto", "bypassPermissions", "dontAsk", "manual", "plan"],
     },
     {
         "name": "claude.folder",
@@ -214,10 +216,10 @@ def test_a_saved_window_command_sets_launching_up(served: TestClient, finder: Fi
         ({"claude.folder": "research"}, "claude.folder: is not an absolute path"),
         # every change or none: the good model is not written either
         (
-            {"claude.model": "opus", "claude.permission_mode": "bypassPermissions"},
+            {"claude.model": "opus", "claude.permission_mode": "bypass"},
             (
-                "claude.permission_mode: is `bypassPermissions`; it is one of acceptEdits, auto, "
-                "dontAsk, manual, plan"
+                "claude.permission_mode: is `bypass`; it is one of acceptEdits, auto, "
+                "bypassPermissions, dontAsk, manual, plan"
             ),
         ),
         (
