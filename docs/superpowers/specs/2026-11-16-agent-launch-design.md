@@ -208,7 +208,7 @@ launcher starts the program with a list of arguments, and no shell reads them.
 | Window command | `window_command` | empty | Splits into words by the shell's rules. Its first word is a program the server finds. Empty turns launching off. |
 | Claude Code command | `claude.command` | `claude` | Splits into words by the shell's rules. At least one word; the first does not start with `-`. |
 | First prompt | `claude.prompt` | `/fairband-research work item {item}` | One line of at most 500 characters. Holds `{item}`. No other name in braces than `item`, `symbol` and `mode`. |
-| Model | `claude.model` | empty | No white space, no leading `-`, at most 100 characters. Free text, because model names change: `opus`, `claude-opus-5-5`. |
+| Model | `claude.model` | empty | No white space, no leading `-`, at most 100 characters. Free text, because model names change: an alias (`fable`, `opus`, `sonnet`), which means the newest model of its family, or a full name such as `claude-opus-5-5`. |
 | Effort | `claude.effort` | empty | One of `low`, `medium`, `high`, `xhigh`, `max`. |
 | Permission mode | `claude.permission_mode` | empty | One of `acceptEdits`, `auto`, `bypassPermissions`, `dontAsk`, `manual`, `plan`. |
 | Folder | `claude.folder` | `~/fairband-research` | An absolute path once `~` is the user's home. The launcher makes it. |
@@ -280,6 +280,11 @@ The Settings page gains an **Agents** section under the valuation groups, with a
 the valuation save asks for a reason and warns of a revalue, and neither fits here.
 
 - Each field has one line of help under it. The window command's says what Fairband adds.
+- The model is a text field that offers the aliases `claude --help` names (`fable`, `opus`,
+  `sonnet`) as a list of suggestions, and takes any other text. Its help says what it takes: "An
+  alias (fable, opus, sonnet) for the newest model of that family, or a full model name. Empty
+  for Claude Code's own default." The server sends the suggestions with the field; no list of
+  models is read from anywhere, since an alias follows the newest model by itself.
 - A file the server cannot use (7.2) shows its sentence at the section's head, and under it
   "Correct the file, or save here to write it again with the values shown." The fields then show
   the defaults, and Save writes them, with any change, whole.
@@ -607,3 +612,9 @@ launch route.
   means ("I want to give it full permission"): "add bypassPermissions". The mode is a choice of
   the field (7.1) and its line of help says what it does. This reverses Claude's call of the same
   day. B-211.
+- 2026-11-16, the founder, on the model field: "its not clear what the model field accepts
+  exactly, should it be a drop down? is their a way for it to read the latest models and populate
+  the drop down?" Claude's advice, which he approved ("yes proceed"): a text field with a list of
+  suggestions and a help line that says what it takes (7.3). No list of models is read: Claude
+  Code has no command that lists them, and Anthropic's model list needs an API key, which
+  Fairband does not hold; an alias means the newest model of its family. B-212.

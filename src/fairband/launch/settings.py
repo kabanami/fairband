@@ -41,6 +41,10 @@ FILE_NAME = "launch.json"
 # permission check; the founder asked for it, and the form's line of help says what it does.
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 MODES = ("acceptEdits", "auto", "bypassPermissions", "dontAsk", "manual", "plan")
+# The model aliases that ``claude --help`` names, which the form suggests. An alias means the
+# newest model of its family, so the list needs no reading of a model list. The model stays free
+# text: a full model name is as good.
+MODEL_ALIASES = ("fable", "opus", "sonnet")
 # The file's order and the form's.
 NAMES = (
     "window_command",

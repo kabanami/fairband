@@ -214,7 +214,10 @@
 
   /* A field's control, with its label's id and its help tied to it, and the refused save's
      sentence when there is one: a select whose first choice is empty for a field with choices,
-     else a text field, wide enough for the window command's one line. */
+     else a text field, wide enough for the window command's one line. A text field with
+     suggestions (the model's aliases) names a list of them: the browser offers each and still
+     takes any other text. Only a field without them turns the browser's own offers off, since in
+     some browsers that setting hides a list too. */
   function control(field, id, error, redraw) {
     var props = {
       id: id, className: 'control app-field app-agents__' + (field.choices ? 'choice' : 'text'),
@@ -233,9 +236,17 @@
           return h('option', { key: choice, value: choice }, choice);
         }));
     }
-    return h('input', Object.assign({
-      type: 'text', autoComplete: 'off', spellCheck: false
-    }, props));
+    var text = Object.assign({ type: 'text', spellCheck: false }, props);
+    if (!field.suggestions) {
+      text.autoComplete = 'off';
+      return h('input', text);
+    }
+    return h(React.Fragment, null,
+      h('input', Object.assign({ list: id + '-list' }, text)),
+      h('datalist', { id: id + '-list' },
+        field.suggestions.map(function (suggestion) {
+          return h('option', { key: suggestion, value: suggestion });
+        })));
   }
 
   /* A field's row, laid out as a valuation setting's: the label and its line of help at the

@@ -13,6 +13,7 @@ from fairband.launch.settings import (
     DEFAULTS,
     EFFORTS,
     FILE_NAME,
+    MODEL_ALIASES,
     MODES,
     NAMES,
     LaunchFile,
@@ -98,6 +99,7 @@ def test_the_names_and_their_defaults() -> None:
     }
     assert EFFORTS == ("low", "medium", "high", "xhigh", "max")
     assert MODES == ("acceptEdits", "auto", "bypassPermissions", "dontAsk", "manual", "plan")
+    assert MODEL_ALIASES == ("fable", "opus", "sonnet")
 
 
 def test_no_file_is_every_default_and_not_ready(tmp_path: Path) -> None:
@@ -240,6 +242,12 @@ def test_every_effort_and_none_is_kept(effort: str) -> None:
 @pytest.mark.parametrize("mode", ["", *MODES])
 def test_every_mode_and_none_is_kept(mode: str) -> None:
     assert check_value("claude.permission_mode", mode) is None
+
+
+@pytest.mark.parametrize("model", ["", *MODEL_ALIASES, "claude-opus-5-5"])
+def test_every_alias_a_full_name_and_none_is_kept(model: str) -> None:
+    """The aliases are what the form suggests; the model stays free text."""
+    assert check_value("claude.model", model) is None
 
 
 def test_every_default_breaks_no_rule() -> None:

@@ -120,7 +120,7 @@ value is a string.
 | `window_command` | How to open a terminal window | empty | Splits into words by the shell's rules. Its first word is a program the server finds. Empty turns launching off. |
 | `claude.command` | The program that starts Claude Code, found on the path of a login shell | `claude` | Splits into words by the shell's rules. At least one word; the first does not start with `-`. |
 | `claude.prompt` | The session's first message; `{item}`, `{symbol}` and `{mode}` are the request's | `/fairband-research work item {item}` | One line of at most 500 characters. Holds `{item}`. No other name in braces than `item`, `symbol` and `mode`. |
-| `claude.model` | Claude Code's `--model` | empty | No white space, no leading `-`, at most 100 characters. Free text, because model names change: `opus`, `claude-opus-5-5`. |
+| `claude.model` | Claude Code's `--model` | empty | No white space, no leading `-`, at most 100 characters. Free text, because model names change: an alias (`fable`, `opus`, `sonnet`), which means the newest model of its family, or a full name such as `claude-opus-5-5`. |
 | `claude.effort` | Claude Code's `--effort` | empty | One of `low`, `medium`, `high`, `xhigh`, `max`. |
 | `claude.permission_mode` | Claude Code's `--permission-mode` | empty | One of `acceptEdits`, `auto`, `bypassPermissions`, `dontAsk`, `manual`, `plan`. `bypassPermissions` skips every permission check. |
 | `claude.folder` | Where the session starts | `~/fairband-research` | An absolute path once `~` is the user's home. The launcher makes it. |

@@ -54,6 +54,7 @@ def _field(name: str, value: str) -> dict[str, Any]:
         "default": "",
         "help": "",
         "choices": None,
+        "suggestions": None,
     }
 
 
@@ -190,8 +191,10 @@ def test_the_section_draws_the_form_as_the_server_serves_it() -> None:
     """A heading, the file's fault at the head with what to do, and a row for each field: its
     label tied to its control, its help under the label and tied to the control, a select whose
     first choice is empty and reads Default for a field with choices, a text field for the rest,
-    and a refused save's sentence under the field it names. No help line is kept in the script:
-    the server sends each."""
+    and a refused save's sentence under the field it names. A text field with suggestions, the
+    model's, names a list of them, so the browser offers each and still takes any other text; it
+    does not turn the browser's offers off, which in some browsers hides the list too. No help
+    line and no suggestion is kept in the script: the server sends each."""
     script = _static_file("agents.js")
     section = _function(script, "section")
     _in_order(
@@ -222,8 +225,22 @@ def test_the_section_draws_the_form_as_the_server_serves_it() -> None:
         "field.choices.map(function (choice) {",
         "type: 'text',",
         "value: held(field),",
+        "text.autoComplete = 'off';",
+        "return h('input', text);",
+        "return h(React.Fragment, null,",
+        "h('input', Object.assign({ list: id + '-list' }, text)),",
+        "h('datalist', { id: id + '-list' },",
+        "field.suggestions.map(function (suggestion) {",
+        "return h('option', { key: suggestion, value: suggestion });",
     ):
         assert part in control, part
+    _in_order(
+        control,
+        "if (field.choices) {",
+        "var text = Object.assign({ type: 'text', spellCheck: false }, props);",
+        "if (!field.suggestions) {",
+    )
+    assert "'opus'" not in script
     assert "Empty for Claude Code's own default." not in script
     assert "Fairband adds the launcher's words at the end." not in script
 

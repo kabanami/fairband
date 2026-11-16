@@ -35,6 +35,7 @@ FIELDS = [
         "default": "",
         "help": "How to open a terminal window. Fairband adds the launcher's words at the end.",
         "choices": None,
+        "suggestions": None,
     },
     {
         "name": "claude.command",
@@ -43,6 +44,7 @@ FIELDS = [
         "default": "claude",
         "help": "The program that starts Claude Code, found on the path of a login shell.",
         "choices": None,
+        "suggestions": None,
     },
     {
         "name": "claude.prompt",
@@ -51,14 +53,19 @@ FIELDS = [
         "default": "/fairband-research work item {item}",
         "help": "The session's first message. {item}, {symbol} and {mode} are the request's.",
         "choices": None,
+        "suggestions": None,
     },
     {
         "name": "claude.model",
         "label": "Model",
         "value": "",
         "default": "",
-        "help": "Empty for Claude Code's own default.",
+        "help": (
+            "An alias (fable, opus, sonnet) for the newest model of that family, or a full model "
+            "name. Empty for Claude Code's own default."
+        ),
         "choices": None,
+        "suggestions": ["fable", "opus", "sonnet"],
     },
     {
         "name": "claude.effort",
@@ -67,6 +74,7 @@ FIELDS = [
         "default": "",
         "help": "Empty for Claude Code's own default.",
         "choices": ["low", "medium", "high", "xhigh", "max"],
+        "suggestions": None,
     },
     {
         "name": "claude.permission_mode",
@@ -77,6 +85,7 @@ FIELDS = [
             "Empty for Claude Code's own default. bypassPermissions skips every permission check."
         ),
         "choices": ["acceptEdits", "auto", "bypassPermissions", "dontAsk", "manual", "plan"],
+        "suggestions": None,
     },
     {
         "name": "claude.folder",
@@ -85,6 +94,7 @@ FIELDS = [
         "default": "~/fairband-research",
         "help": "Where the session starts. Fairband makes it.",
         "choices": None,
+        "suggestions": None,
     },
 ]
 SAVED_EFFORT = """{

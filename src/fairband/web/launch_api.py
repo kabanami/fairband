@@ -10,8 +10,10 @@ whether launching is set up (the file can be used and its window command holds a
 or ``None``; ``suggested``, the Windows Terminal line for the WSL distribution the server runs in
 (``launch.settings.suggested_window_command``), ``None`` with no opener, where the opener's
 environment names no distribution in one plain word, or where its finder finds no ``wt.exe``; and
-``fields``, one for each name in the file's order, with its label, value, default, line of help
-and choices (a list for the effort and the permission mode, ``None`` for the rest). The read is a
+``fields``, one for each name in the file's order, with its label, value, default, line of help,
+choices (a list for the effort and the permission mode, ``None`` for the rest) and suggestions (the
+model's aliases, which a text field offers and does not hold the value to; ``None`` for the rest).
+The read is a
 GET and needs no ``X-Fairband-Request`` header; a bad file is a 200 with ``fileError``, never a
 500.
 
@@ -122,6 +124,7 @@ from fairband.launch.command import (
 from fairband.launch.settings import (
     DEFAULTS,
     EFFORTS,
+    MODEL_ALIASES,
     MODES,
     NAMES,
     LaunchFile,
@@ -159,6 +162,10 @@ NO_EXIT_CODE = "an ended report gives its exit code"
 AGENT = "claude"  # the agent a launch starts
 _TAKEN = ("opening", "opened")  # the states in which the command read is taken
 _DEFAULT_HELP = "Empty for Claude Code's own default."
+_MODEL_HELP = (
+    f"An alias ({', '.join(MODEL_ALIASES)}) for the newest model of that family, or a full model "
+    f"name. {_DEFAULT_HELP}"
+)
 # Each name's label and line of help, in the order of ``NAMES``.
 _FIELDS: dict[str, tuple[str, str]] = {
     "window_command": (
@@ -173,7 +180,7 @@ _FIELDS: dict[str, tuple[str, str]] = {
         "First prompt",
         "The session's first message. {item}, {symbol} and {mode} are the request's.",
     ),
-    "claude.model": ("Model", _DEFAULT_HELP),
+    "claude.model": ("Model", _MODEL_HELP),
     "claude.effort": ("Effort", _DEFAULT_HELP),
     "claude.permission_mode": (
         "Permission mode",
@@ -182,6 +189,7 @@ _FIELDS: dict[str, tuple[str, str]] = {
     "claude.folder": ("Folder", "Where the session starts. Fairband makes it."),
 }
 _CHOICES = {"claude.effort": EFFORTS, "claude.permission_mode": MODES}
+_SUGGESTIONS = {"claude.model": MODEL_ALIASES}
 
 WriterOf = Annotated[Writer, Depends(writer_of)]
 
@@ -246,6 +254,7 @@ def form_json(found: LaunchFile, opener: Opener | None) -> dict[str, Any]:
                 "default": DEFAULTS[name],
                 "help": _FIELDS[name][1],
                 "choices": list(_CHOICES[name]) if name in _CHOICES else None,
+                "suggestions": list(_SUGGESTIONS[name]) if name in _SUGGESTIONS else None,
             }
             for name in NAMES
         ],
