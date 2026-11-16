@@ -8,7 +8,7 @@ where it is more than a reading of those requests, and can be overturned as any 
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema goes from
-008 to 009 with two new tables and no change to a stored row. The changes are in
+008 to 009 with one new table and no change to a stored row. The changes are in
 `src/fairband/web/`, `src/fairband/store/`, a new `src/fairband/launch/`, the command line and the
 playbook.
 
@@ -35,6 +35,8 @@ which of the two failed and why.
   did not open; the window opened but Claude Code did not start; Claude Code started but no agent
   claimed the request in 90 seconds.
 - With the Agents section empty, the button does exactly what it does today.
+- The section's values are one small file. The founder, or an agent the founder tells to, can set
+  them by writing that file, and the Settings page shows what the file holds.
 - Codex can be added later as a second entry of the same section and its first prompt, not as a
   second design (B-208).
 
@@ -61,7 +63,10 @@ Each of these would make the work a failure even if the window opens.
 
 - Text from a request reaches a command line. Every word of a command comes from the Agents
   section, from the server's own files, or from a stored item's id.
-- An agent starts a session, or changes the Agents section. Both are the owner's alone.
+- An agent's request starts a session, or changes the Agents section, through the server or
+  through a Fairband tool. Both routes are the owner's, and no tool does either. (The section's
+  file is the founder's own, and an agent the founder directs may write it as it may write any
+  file of his: 7.2.)
 - A launch setting moves the settings hash, so that every valuation reads as made under other
   settings.
 - A failure with no sentence, or a sentence that does not say what to do.
@@ -213,13 +218,48 @@ launcher starts the program with a list of arguments, and no shell reads them.
 - The Claude Code command cannot be checked at save: it is found on the path of a login shell in
   the new window, not on the server's. The test (7.4) checks it.
 
-### 7.2 Storage
+### 7.2 Storage: one file
 
-A new table `launch_settings` (name, value, changed at), one row for a field that differs from
-its default. It is not the `settings` table: every row of that table overlays the policy and
-feeds the settings hash each valuation cites. A launch setting is no policy value, moves no hash
-and is in no change log (*my call*: no log; these are a machine's details, not a decision about
-value).
+The values are a file, `launch.json`, in the config folder beside `keys.toml`
+(`~/.config/fairband/launch.json`). It is not the `settings` table: every row of that table
+overlays the policy and feeds the settings hash each valuation cites, and a launch setting is no
+policy value. It is not a table at all (the founder's question of 2026-11-16, in the decision
+log): these are one machine's details, and a file is what a person or an agent can read and
+write without the server.
+
+```json
+{
+  "window_command": "wt.exe -w 0 new-tab --title {title} wsl.exe -d Ubuntu -e",
+  "claude": {
+    "command": "claude",
+    "prompt": "/fairband-research work item {item}",
+    "model": "claude-opus-5-5",
+    "effort": "xhigh",
+    "permission_mode": "auto",
+    "folder": "~/fairband-research"
+  }
+}
+```
+
+- The names are 7.1's: `window_command`, and under `claude` the six names after the dot. A name
+  left out has its default; no file is every default, so launching is off.
+- **The server reads the file at each use and keeps no copy**: at the settings read, at a launch,
+  and for the detail read's `launchReady`. A change made by hand or by an agent shows at the next
+  read, with no restart.
+- **Save on the page writes the whole file**, every name in the order above, through a temporary
+  file that replaces the old one whole (*my call*: every name is written, defaults too, so a
+  reader of the file sees all there is to set).
+- **A file the server cannot use turns launching off and says why.** Not JSON, not an object, a
+  name it does not know, a value of the wrong kind, or a value that breaks a rule of 7.1: the
+  settings read answers the defaults with `fileError`, one sentence that names the file and the
+  fault ("launch.json: `claude.effort` is `extreme`; it is one of low, medium, high, xhigh, max").
+  The Agents section shows the sentence at its head, with "Correct the file, or save here to
+  write it again". A launch asked meanwhile is refused with the same sentence.
+- The rule that the window command's first word is a program the server finds is checked at Save
+  and when a launch runs, not at each read: a file written by hand that names a missing program
+  fails its launch at the window stage, with the sentence of 6.1.
+- There is no change log (*my call*) and no Fairband tool that writes the file. The README names
+  the file and its fields, so an agent asked to set it up knows what to write.
 
 ### 7.3 The page
 
@@ -257,9 +297,9 @@ in which nothing reports, and that is the failure a first setup most often meets
 
 ## 8. The launch record
 
-A new table `launches`: the launch's id, its item (none for a test), its agent (`claude`), its
-state, the stage and the sentence of a failure, the exit code of an agent that ended, and when it
-was made and last changed.
+The one new table, `launches`: the launch's id, its item (none for a test), its agent (`claude`),
+its state, the stage and the sentence of a failure, the exit code of an agent that ended, and when
+it was made and last changed.
 
 | State | Set by | Means |
 |---|---|---|
@@ -378,15 +418,24 @@ This is the first route that starts a program on the founder's machine.
   the title and the prompt take a stored item's symbol, mode and id, which the inbox route
   checked when it stored them (a symbol is letters, digits, a dot or a dash; a mode is one of
   two).
-- **The owner alone** launches and writes the Agents section. No MCP tool does either. The check
-  is on the principal header, as the claim route checks that only an agent claims.
+- **Through the server, the owner alone** launches and writes the Agents section. No MCP tool
+  does either. The check is on the principal header, as the claim route checks that only an agent
+  claims.
+- **The file is as safe as the founder's other files, and no safer.** Whatever can write
+  `~/.config/fairband/launch.json` decides what the button runs: the founder, an agent he tells
+  to set it up, and any program that runs as him. Such a program can already run a command as
+  him, so the file opens no new door. What it adds is that a change waits there until the next
+  click. Two things limit that: the Settings page shows exactly what the file holds, and a
+  research session works in its own folder, where Claude Code asks before it writes a file
+  outside it unless the founder chose a mode that does not ask.
 - **D11 holds.** The server listens on 127.0.0.1, refuses another host name, and wants the
   request header on every write, so a page on another site can neither launch nor change the
   section.
 - **Bounded.** One launch in flight for an item; the window command has 15 seconds.
 
 What this does not stop: a program on the founder's own machine that calls the routes without
-the agent's header. Such a program can already run any command as the founder.
+the agent's header, or writes the file. Such a program can already run any command as the
+founder.
 
 ## 13. The documents
 
@@ -394,6 +443,8 @@ the agent's header. Such a program can already run any command as the founder.
   the universe or the policy moves.
 - The module docstring of `web/app.py` names the launch routes under D11, as it names the logo's
   read.
+- `README.md` gains a short part on `launch.json`: where it is, its names and their rules, with
+  the example of 7.2, written so that a person or an agent can make the file from it.
 - `README.md` registers the Fairband tools with `claude mcp add fairband` and names no scope,
   which registers them for one folder. The line gains `--scope user`, as the founder's machine
   has it: a launched session runs outside the repository.
@@ -405,9 +456,13 @@ the agent's header. Such a program can already run any command as the founder.
 Test-first, with no network, no real window and no real agent: the window command's runner and
 the launcher's program start are doubles.
 
-- **Settings:** each rule of 7.1 with its sentence; a save applies all or none; a value at its
-  default leaves no row; no launch setting moves the settings hash or reaches `read_overlay`; an
-  agent's write is refused; the suggested line appears only under WSL with `wt.exe` found.
+- **Settings:** each rule of 7.1 with its sentence; a save applies all or none and writes every
+  name, whole, with no temporary file left; no file is every default; a name left out has its
+  default; a change to the file shows at the next read, with no restart; each kind of file the
+  server cannot use, with its sentence, turns launching off and refuses a launch; a save writes a
+  good file over a bad one; nothing here writes the `settings` table or moves the settings hash;
+  an agent's write through the server is refused; the suggested line appears only under WSL with
+  `wt.exe` found.
 - **The window command:** the words run are the setting's words, the title replaced, and the five
   added words, in that order; no shell; a word that is not plain fails the launch and runs
   nothing; each failure of 6.1 with its sentence; exit 0 leaves `opened`.
@@ -455,8 +510,8 @@ launch route.
 
 ## 17. Order of work
 
-1. The two tables, migration 009 and their store.
-2. The launch settings: the rules, the routes, the suggested line.
+1. The `launches` table, migration 009 and its store.
+2. The launch settings: the file, the rules, the routes, the suggested line.
 3. The launch: the record, the window command, `POST /api/launches`, the read.
 4. The launcher: the script, the `launch` subcommand, its two routes.
 5. The detail read's `launchReady` and `item.launch`.
@@ -479,14 +534,20 @@ launch route.
   all three fields and write the spec."
 - 2026-11-16, Claude's calls, each marked in its section: the launcher asks the server over HTTP
   (6.2); `bypassPermissions` is not offered and the folder is not the repository (7.1); no change
-  log for a launch setting (7.2); a launch is not in the ledger (8); the Inbox and Watchlists
-  pages are left out (3); the menu's checkbox (10). And unmarked, as readings of "a clear failure
-  message": the launch record that the launcher reports to, the 90 seconds, and the test button.
-- 2026-11-16, the builder check (a fresh reader asked to plan from this document). Its four
-  questions were settled without the founder, each a reading of "a failure is never silent" or a
-  fact: a test is overdue while nothing in its window has reported (7.4, 8); a launched session
-  does not take over a claimed item, and the command read refuses once the item is not pending
-  (9, 11); only Windows Terminal is promised (3), and the launcher's calls are taken while the
-  window command still runs (6.1, 8); Claude Code's options and the user scope of the Fairband
-  tools were read on the machine (5). Its three contradictions were corrected: a launch left
-  `opening` (8), the test's own lines (7.4), and B-207's row (13).
+  log for a launch setting, and a save writes every name (7.2); a launch is not in the ledger (8);
+  the Inbox and Watchlists pages are left out (3); the menu's checkbox (10). And unmarked, as
+  readings of "a clear failure message": the launch record that the launcher reports to, the 90
+  seconds, and the test button. - 2026-11-16, the builder check (a fresh reader asked to plan from
+  this document). Its four questions were settled without the founder, each a reading of "a failure
+  is never silent" or a fact: a test is overdue while nothing in its window has reported (7.4, 8); a
+  launched session does not take over a claimed item, and the command read refuses once the item is
+  not pending (9, 11); only Windows Terminal is promised (3), and the launcher's calls are taken
+  while the window command still runs (6.1, 8); Claude Code's options and the user scope of the
+  Fairband tools were read on the machine (5). Its three contradictions were corrected: a launch
+  left `opening` (8), the test's own lines (7.4), and B-207's row (13). - 2026-11-16, the founder,
+  on reading this design: "should we provide a way for the user's own agent to update these values
+  so that the user does not have to do it manually via the settings? so is there something like a
+  settings.json that an agent can update and it would show in the settings?" Yes: the section's
+  values are the file `launch.json` and nothing else (7.2), in place of the table this design first
+  gave them. The server's two owner-only routes stay, and section 12 says what the file does and
+  does not change about safety.
