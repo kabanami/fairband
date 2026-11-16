@@ -608,17 +608,17 @@ launch route.
   sentence; the valuation settings read the same before and after. Steps 2 to 5 are the live
   steps. Not tested: a launch with Windows Terminal closed. Filed: B-209 (the reviews' items),
   B-210 (the Inbox page and another terminal); Codex is B-208.
-- 2026-11-16, the founder, on the first day live, after he asked what an empty permission mode
+- 2026-11-16, the founder, on the first day live, after asking what an empty permission mode
   means ("I want to give it full permission"): "add bypassPermissions". The mode is a choice of
   the field (7.1) and its line of help says what it does. This reverses Claude's call of the same
   day. B-211.
 - 2026-11-16, the founder, on the model field: "its not clear what the model field accepts
   exactly, should it be a drop down? is their a way for it to read the latest models and populate
-  the drop down?" Claude's advice, which he approved ("yes proceed"): a text field with a list of
+  the drop down?" Claude's advice, approved with "yes proceed": a text field with a list of
   suggestions and a help line that says what it takes (7.3). No list of models is read: Claude
   Code has no command that lists them, and Anthropic's model list needs an API key, which
   Fairband does not hold; an alias means the newest model of its family. B-212.
-- 2026-11-16, the founder did not see the Agents section on the first day live: his browser drew
+- 2026-11-16, the founder did not see the Agents section on the first day live: the browser drew
   the new page with the `settings.js` it had kept from the build before. The page and its static
   files now answer `Cache-Control: no-cache`, so a browser asks at each load whether a file
   changed (`web/app.py`). B-213.
