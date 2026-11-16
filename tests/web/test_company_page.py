@@ -326,7 +326,10 @@ def test_a_tab_replaces_the_hash_and_research_adds_an_entry() -> None:
     ("helper", "args", "shown"),
     [
         ("money", [{"value": 356.27, "currency": "USD"}], "$356.27"),
-        ("money", [{"value": 1507.85, "currency": "USD"}], "$1,507.85"),
+        # the design system's amount, as the meter writes it: no thousands separator
+        ("money", [{"value": 1495.16, "currency": "USD"}], "$1495.16"),
+        ("money", [{"value": 1495.16, "currency": "TWD"}], "TWD 1495.16"),
+        ("money", [{"value": -1495.16, "currency": "TWD"}], "−TWD 1495.16"),
         ("money", [{"value": 120, "currency": "TWD"}], "TWD 120.00"),
         ("money", [{"value": -1.2, "currency": "USD"}], "−$1.20"),
         ("money", [{"value": -0.001, "currency": "USD"}], "$0.00"),
@@ -380,11 +383,26 @@ def test_a_tab_replaces_the_hash_and_research_adds_an_entry() -> None:
     ],
 )
 def test_the_formatters(helper: str, args: list[Any], shown: str) -> None:
-    """Money to cents, a currency other than the US dollar by its code; large amounts compact; a
-    fraction or a percent as given to one decimal unless told; a sign on a change that is not
-    zero at its precision; a multiple's x, and a dash at 0; a plain number to the decimals told,
-    its zero a zero; a date in words; a count grouped. A missing figure is the dash."""
+    """Money to cents with no thousands separator, as the design system writes it, a currency
+    other than the US dollar by its code; large amounts compact; a fraction or a percent as given
+    to one decimal unless told; a sign on a change that is not zero at its precision; a
+    multiple's x, and a dash at 0; a plain number to the decimals told, its zero a zero; a date
+    in words; a count grouped. A missing figure is the dash."""
     assert _page(helper, *args) == shown
+
+
+def test_a_price_above_a_thousand_reads_as_the_meter_reads_it() -> None:
+    """One rule for money on the page: the head's price and the Fairband value block's meter and
+    levels write an amount above a thousand alike, with no thousands separator."""
+    dear = answers.detail()
+    dear["result"] |= {
+        "price": 1495.16,
+        "value": 1612.4,
+        "levels": {"buy": 1209.3, "fair_low": 1451.16, "fair_high": 1773.64, "trim": 2418.6},
+    }
+    [price] = classed(_head(dear), "figure-lg")
+    assert text(price) == "$1495.16" == node("Fairband.formatMoney", [1495.16])
+    assert node("levelRows", [dear])[2] == ["Fair band", "$1451.16 – $1773.64"]
 
 
 # ------------------------------------------------------------------------ the blocks' helpers

@@ -293,8 +293,9 @@
   /* ------------------------------------------------------------- the figures */
 
   /* The figures' words (14.1). A money figure is { value, currency } as the reads give it, in US
-     dollars with `$` and in another currency with its code in `$`'s place; a missing figure is an
-     em dash, and so is a multiple at exactly 0. */
+     dollars with `$` and in another currency with its code in `$`'s place, its amount written as
+     the design system writes it, so the page's money reads as the meter's beside it; a missing
+     figure is an em dash, and so is a multiple at exactly 0. */
   function ok(v) { return typeof v === 'number' && isFinite(v); }
 
   /* `v` to `dp` decimals, grouped in threes. */
@@ -311,10 +312,12 @@
   /* The mark before a money figure's number: `$`, or another currency's code and a space. */
   function unit(m) { return m.currency && m.currency !== 'USD' ? m.currency + ' ' : '$'; }
 
-  /* Money to cents: $356.27, TWD 120.00, −$1.20. */
+  /* Money to cents with no thousands separator, the design system's amount (Fairband.formatMoney,
+     which the meter, the drawer and the screen write), its `$` the currency's mark: $356.27,
+     $1495.16, TWD 1495.16, −$1.20. */
   function money(m) {
     if (!m || !ok(m.value)) return '—';
-    return minus(unit(m) + fixed(Math.abs(m.value), 2), m.value);
+    return minus(unit(m) + F.formatMoney(Math.abs(m.value)).slice(1), m.value);
   }
 
   /* The compact scales, largest first: the least amount each draws, its divisor, its decimals and
