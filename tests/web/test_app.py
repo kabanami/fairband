@@ -722,7 +722,11 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         "adrRatio",
         "fxRate",
         "fxDate",
+        # whether launching is set up (spec 2026-11-16 agent launch, 9): no launch file here;
+        # tests/web/test_launch_settings_api.py
+        "launchReady",
     }
+    assert body["launchReady"] is False
     # The company brief (B-149) is the stored profile's description; none is stored here.
     assert body["brief"] is None
     # The logo's address (B-203) is the stored profile's too: tests/web/test_logo_api.py.

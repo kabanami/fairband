@@ -7,8 +7,10 @@ Methodology section read and the report routes (``reports_api``), the drawer's r
 (``research_api``), the multiples history read (``multiples_api``), the band's history read
 (``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
 (``filings_api``), the company logo's read (``logo_api``), and the policy values and growth
-deciles the Methodology page cites (spec 2026-11-04 7.4). The company detail carries the agents'
-records the drawer leads with (``research_api.agent_records``).
+deciles the Methodology page cites (spec 2026-11-04 7.4). The Agents section's settings routes
+(``launch_api``) read and write ``launch.json`` in the config folder, not the ``settings`` table.
+The company detail carries the agents' records the drawer leads with
+(``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -93,6 +95,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from fairband.config import Settings, utcnow
 from fairband.engine.types import ValuationResult, money_of, rated, result_to_json
+from fairband.launch.command import Opener
+from fairband.launch.settings import read_launch_file
 from fairband.policy import Policy
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs import adr_flag
@@ -124,6 +128,7 @@ from fairband.web.agents_api import add_agent_routes
 from fairband.web.filings_api import add_filing_routes
 from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.history_api import add_history_routes
+from fairband.web.launch_api import add_launch_settings_routes
 from fairband.web.logo_api import add_logo_routes, logo_route
 from fairband.web.multiples_api import add_multiples_routes
 from fairband.web.policy_rows import deciles_json, policy_json
@@ -183,6 +188,8 @@ def create_app(
     tax: TaxTable | None = None,
     passthrough: Passthrough | None = None,
     fetch_logo: Callable[[str], bytes] | None = None,
+    opener: Opener | None = None,
+    port: int | None = None,
 ) -> FastAPI:
     """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
     day the validity states are judged on and the time a refresh left running is marked
@@ -191,7 +198,11 @@ def create_app(
     with, the packaged one when ``None``; ``passthrough`` fetches the vendor pass-throughs, which
     answer 503 without one; ``fetch_logo`` fetches a logo's file from its address
     (``vendors.logos.fetch_logo``), and without one the logo read answers the files already in
-    the data folder's ``logos`` and fetches none."""
+    the data folder's ``logos`` and fetches none. ``opener`` is what opening a window reaches
+    outside the server (``launch.command.Opener``): the Agents section's save checks a changed
+    window command's program with its finder, and its read suggests the Windows Terminal line
+    from its environment; without one the save checks no program and the read suggests none.
+    ``port`` is the port the server listens on, for the launch routes; nothing reads it yet."""
     taxed = load_tax_table() if tax is None else tax
     logos = Logos(settings.data_dir / "logos", fetch_logo or _no_fetch, clock)
 
@@ -325,7 +336,9 @@ def create_app(
         row's, ``None`` with neither (``inputs.adr_flag``); ``adrRatio``, the ADR ratio the share
         count was read by, the result's ``adr_ratio`` input, ``None`` without one; ``fxRate`` and
         ``fxDate``, the rate the value was translated at and its close's date, ``None`` on a row
-        with no rate (``types.rated``)."""
+        with no rate (``types.rated``). And ``launchReady`` (spec 2026-11-16 agent launch, 9),
+        whether launching is set up: the launch file in the config folder, read at each request,
+        can be used and its window command holds a word (``launch.settings``)."""
         today = clock().date()
         with closing(conn_factory()) as conn:
             snapshot = latest_snapshot(conn, symbol)
@@ -348,6 +361,7 @@ def create_app(
             "designationEdges": list(read_under.designation_edges),
             "agingFraction": read_under.aging_fraction,
             **records,
+            "launchReady": read_launch_file(settings.config_dir).ready,
         }
 
     @app.get("/api/policy")
@@ -418,6 +432,7 @@ def create_app(
     add_vendor_routes(app, passthrough)
     add_filing_routes(app, passthrough, clock)
     add_logo_routes(app, conn_factory, logos)
+    add_launch_settings_routes(app, settings.config_dir, opener)
     return app
 
 
