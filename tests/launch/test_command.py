@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from importlib import resources
@@ -324,18 +325,35 @@ def test_the_system_opener() -> None:
     assert Path(opener.launcher).is_file()
 
 
-def test_the_system_runner_answers_the_exit_code_and_captures_the_output() -> None:
+def test_the_system_runner_answers_the_exit_code_and_the_error_output() -> None:
     script = "import sys; sys.stdout.write('out'); sys.stderr.write('fault'); sys.exit(3)"
     result = system_opener().run([sys.executable, "-c", script])
-    assert (result.returncode, result.stdout, result.stderr) == (3, b"out", b"fault")
+    # The standard output is not kept.
+    assert (result.returncode, result.stdout, result.stderr) == (3, None, b"fault")
+
+
+def test_the_system_runner_answers_at_the_commands_exit_not_its_outputs_end() -> None:
+    # The child starts a grandchild that inherits its output and sleeps 5 seconds, writes one line
+    # and exits at once, as a window command may leave a program running. The run answers at the
+    # child's exit, not when the grandchild lets go of the output; the grandchild ends by itself.
+    sleeper = "import time; time.sleep(5)"
+    script = (
+        "import os, subprocess, sys; "
+        f"subprocess.Popen([sys.executable, '-c', {sleeper!r}]); "
+        "sys.stderr.write('the window opened\\n'); sys.stderr.flush(); os._exit(0)"
+    )
+    started = time.monotonic()
+    result = system_opener().run([sys.executable, "-c", script])
+    assert time.monotonic() - started < 3
+    assert (result.returncode, result.stderr) == (0, b"the window opened\n")
 
 
 def test_the_system_runner_passes_each_word_whole_with_no_shell() -> None:
-    script = "import sys; print(repr(sys.argv[1:]))"
+    script = "import sys; sys.stderr.write(repr(sys.argv[1:]))"
     words = (sys.executable, "-c", script, "$HOME; echo x", "two words", "'q'")
     result = system_opener().run(words)
     assert result.returncode == 0
-    assert result.stdout.decode().strip() == repr(["$HOME; echo x", "two words", "'q'"])
+    assert result.stderr.decode() == repr(["$HOME; echo x", "two words", "'q'"])
 
 
 def test_the_system_runner_closes_the_input() -> None:

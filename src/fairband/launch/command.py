@@ -12,7 +12,10 @@ as a list of arguments, with no shell.
 
 ``Opener`` holds what opening a window reaches outside the server: the runner of the window
 command, the program finder, the server's Python, the launcher script's path and the server's
-environment. ``system_opener`` answers the real ones; the tests pass doubles.
+environment. ``system_opener`` answers the real ones; the tests pass doubles. Its runner waits for
+the window command to exit, not for its output to close: the command's error output goes to a
+temporary file, not a pipe, so a program the command leaves running, as ``wt.exe`` may when it
+starts Windows Terminal, does not hold the run until the limit.
 """
 
 import os
@@ -21,6 +24,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib import resources
@@ -59,8 +63,9 @@ class Opener:
 
 
 def system_opener() -> Opener:
-    """The opener of a running server: ``subprocess`` with no shell, ``shutil.which``, this
-    Python, the packaged ``launcher.sh`` and ``os.environ``."""
+    """The opener of a running server: ``subprocess`` with no shell and no pipe, waiting for the
+    window command's exit, ``shutil.which``, this Python, the packaged ``launcher.sh`` and
+    ``os.environ``."""
     return Opener(
         run=_run,
         which=shutil.which,
@@ -144,17 +149,23 @@ def title_of(item: WorkItem | None) -> str:
 
 
 def _run(words: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
-    """Run ``words`` as a list of arguments, with no shell, the input closed and the output
-    captured, in the server's folder and environment; after ``WINDOW_LIMIT_S`` seconds the program
-    is killed and ``subprocess.TimeoutExpired`` raised."""
-    return subprocess.run(
-        list(words),
-        shell=False,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        timeout=WINDOW_LIMIT_S,
-        check=False,
-    )
+    """Run ``words`` as a list of arguments, with no shell, in the server's folder and environment,
+    and wait for the program's exit; after ``WINDOW_LIMIT_S`` seconds the program is killed and
+    ``subprocess.TimeoutExpired`` raised. Its input and standard output are ``/dev/null``, and its
+    error output a temporary file, not a pipe: a program it leaves running holds no pipe the run
+    waits on. The answer's ``stderr`` is the file's bytes at the exit; ``stdout`` is ``None``."""
+    with tempfile.TemporaryFile() as error_output:
+        ended = subprocess.run(
+            list(words),
+            shell=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=error_output,
+            timeout=WINDOW_LIMIT_S,
+            check=False,
+        )
+        error_output.seek(0)
+        return subprocess.CompletedProcess(ended.args, ended.returncode, None, error_output.read())
 
 
 def _first_line(error_output: bytes) -> str:
