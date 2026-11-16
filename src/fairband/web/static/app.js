@@ -200,7 +200,8 @@
      section, running and countInbox, the Inbox view onInbox, agents.js adds agents, the Settings
      view's Agents section, and methodology.js adds methodologySection, which the drawer's link
      reads; a view drawn from the rows or the lists sets onRender, which runs after each draw of the
-     screen, so it draws again as they load and change. The report page (report.js, 18.4) draws with
+     screen, so it draws again as they load and change (the company page's runs the Watchlists
+     view's, set before it, then its own). The report page (report.js, 18.4) draws with
      the drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
      figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
      evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the line
@@ -209,7 +210,8 @@
      starts to read another company (stopLaunch) and starts as its read lands (followItem). The
      company page (company.js; the company page's design, 7) draws its head with the logo, the
      phase numbers, the moat stamp (moatStamp) and Request research as the report page keeps it,
-     and opens the watchlists popup under its head's button (watch). The
+     and opens the watchlists popup under its head's button (watch) on the company's row or, the
+     lists loaded, on the company alone (rows, watchlists). The
      Inbox view's row (inbox.js, B-210) keeps a request for each pending item too, posts its launch
      (openLaunch) and draws the line's words (launchWords) from the item the line is drawn from
      (lineItem). The open item's line (launchLine), the drawer's route sections, the charge's

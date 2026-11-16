@@ -206,6 +206,8 @@ def test_the_head_s_controls() -> None:
     assert watch is _button(actions, "Watchlists ▾")
     # in the look of Request research's button: the default variant and size
     assert "variant" not in watch["props"] and "size" not in watch["props"]
+    # the harness loads no rows and no lists: the control waits for them, disabled
+    assert watch["props"]["disabled"] is True
     ask = node("asking", [answers.SYMBOL])
     assert request == node("requestResearch", [ask, item, None, None, True])
     assert _button(request, "Request research")["props"]["disabled"] is True  # an item is open
@@ -216,12 +218,58 @@ def test_the_head_s_controls() -> None:
 
 def test_the_watchlists_button_opens_the_screen_s_popup_under_itself() -> None:
     """The popup the screen's mark opens, for this company, under the button: ``watch`` takes
-    the element to open it under, else the mark a click landed on."""
+    the element to open it under, else the mark a click landed on. The button hands it the row
+    ``watchRow`` gives from the screen's rows and the lists, and is disabled without one."""
     head = _function(_static_file("company.js"), "head")
-    assert "P.watch({ ticker: r.symbol }, event.currentTarget);" in head
+    _in_order(
+        head,
+        "var row = watchRow(r.symbol, P.rows(), P.watchlists());",
+        "disabled: !row,",
+        "onClick: function (event) { P.watch(row, event.currentTarget); }",
+    )
     watch = _function(_static_file("app.js"), "watch")
     assert watch.startswith("  function watch(row, mark) {")
     assert "var anchor = mark || pressedMark;" in watch
+
+
+LISTS = [{"id": 1, "name": "Optics", "symbols": [{"symbol": "LFOX"}]}]
+ROWS = [
+    {"ticker": "AAPL", "watchlists": []},
+    {"ticker": "LFOX", "watchlists": [1, 4], "watched": True, "price": 182.4},
+]
+
+
+def test_the_popup_opens_only_on_the_company_s_true_memberships() -> None:
+    """A box ticked or a list added writes the company's whole set of lists, so the popup never
+    opens on a guess: on the screen's row of the company, which carries the lists it is on, where
+    the rows hold it, whether or not the lists are in; on the company alone where only the lists
+    are in, which the popup then reads its memberships from; on nothing, and the control
+    disabled, while neither has landed or where both failed."""
+    row = {"ticker": "LFOX", "watchlists": [1, 4]}
+    assert _page("watchRow", "LFOX", None, None) is None
+    assert _page("watchRow", "LFOX", ROWS[:1], None) is None
+    assert _page("watchRow", "LFOX", None, LISTS) == {"ticker": "LFOX"}
+    assert _page("watchRow", "LFOX", ROWS[:1], LISTS) == {"ticker": "LFOX"}
+    assert _page("watchRow", "LFOX", ROWS, None) == row
+    assert _page("watchRow", "LFOX", ROWS, LISTS) == row
+    assert _page("watchRow", "LFOX", [], []) == {"ticker": "LFOX"}
+
+
+def test_the_page_draws_again_as_the_rows_and_the_lists_land() -> None:
+    """The screen draws as its rows and the lists land, and the page draws again after each of
+    its draws while the page shows, so the watchlists control comes alive; the Watchlists view's
+    own redraw, set before, still runs."""
+    script = _static_file("company.js")
+    _in_order(
+        script,
+        "var before = P.onRender;",
+        "P.onRender = function () {",
+        "if (before) before();",
+        "if (!mount.hidden && P.company) render();",
+    )
+    html = _static_file("index.html")
+    scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
+    assert scripts.index("watchlists.js") < scripts.index("company.js")
 
 
 def test_the_menus_of_the_head_open_inside_the_page() -> None:
@@ -290,6 +338,18 @@ def test_a_tab_replaces_the_hash_and_research_adds_an_entry() -> None:
         ("big", [39.1e6], "39.1M"),
         ("big", [167000], "167,000"),
         ("big", [{"value": -2.5e9, "currency": "TWD"}], "−TWD 2.50B"),
+        # rounded first, then the unit picked: none reads as a thousand of the unit below
+        ("big", [{"value": 999.96e9, "currency": "USD"}], "$1.00T"),
+        ("big", [99.996e9], "100.0B"),
+        ("big", [999.96e6], "1.00B"),
+        ("big", [999999.6], "1.0M"),
+        ("big", [{"value": -999.96e9, "currency": "TWD"}], "−TWD 1.00T"),
+        # and one just under each stays on its own scale
+        ("big", [{"value": 999.94e9, "currency": "USD"}], "$999.9B"),
+        ("big", [99.994e9], "99.99B"),
+        ("big", [999.94e6], "999.9M"),
+        ("big", [999999.4], "999,999"),
+        ("big", [{"value": 1e12, "currency": "USD"}], "$1.00T"),
         ("big", [None], "—"),
         ("big", [{"value": None, "currency": "USD"}], "—"),
         ("percent", [0.4879], "48.8%"),
@@ -386,13 +446,13 @@ def test_the_reads_and_their_failures() -> None:
         "state.loading = true;",
         "(whole ? read(company) : Promise.resolve(state.detail))",
         "read(company + '/page/' + want.tab)",
+        "return { detail: detail, answer: null, failed: failure(err, false) };",
         ".then(function (found) {\n        if (request !== latest) return;",
-        "P.followItem(asked(want.symbol), found.detail.item, render, load);",
+        "state.loading = false;\n        shown();",
         ".catch(function (err) {\n        if (request !== latest) return;",
-        "state.error = err.message;",
+        "state.error = failure(err, true);",
     )
-    assert "'The company\\'s data did not load: ' + err.message +" in load
-    assert "'. Open the page again to retry.'" in load
+    assert "error.status = response.status;" in _function(script, "refused")
     page = _function(script, "page")
     assert "state.loading ? 'app-company is-loading' : 'app-company'" in page
     _in_order(page, "if (state.error) {", "back(), note(state.error)")
@@ -400,6 +460,57 @@ def test_the_reads_and_their_failures() -> None:
     assert "P.show('screen');" in back and "'Back to the screen'" in back
     assert "P.onShow.company = load;" in script
     assert _rule(".app-company.is-loading {") == "opacity: 0.5;"
+
+
+RETRY = "The company's data did not load: {}. Open the page again to retry."
+
+
+@pytest.mark.parametrize(
+    ("err", "detail", "shown"),
+    [
+        # the detail's 404, a company with no snapshot: the server's own sentence
+        ({"message": "no snapshot for LFOX", "status": 404}, True, "no snapshot for LFOX"),
+        # any other failure of the detail's read: the Words table's sentence, which says to retry
+        (
+            {"message": "the server answered 500", "status": 500},
+            True,
+            RETRY.format("the server answered 500"),
+        ),
+        ({"message": "Failed to fetch"}, True, RETRY.format("Failed to fetch")),
+        # a tab's read, its 404 among them
+        (
+            {"message": "no page data for LFOX", "status": 404},
+            False,
+            RETRY.format("no page data for LFOX"),
+        ),
+        ({"message": "Failed to fetch"}, False, RETRY.format("Failed to fetch")),
+    ],
+)
+def test_a_failed_read_s_sentence(err: dict[str, Any], detail: bool, shown: str) -> None:
+    assert _page("failure", err, detail) == shown
+
+
+def test_the_request_is_made_where_the_read_lands_and_follows_at_every_landing() -> None:
+    """The page's request for its company is made as the company's read lands, as the report
+    page's is, and kept until the page shows another; every landing, a tab read before or a tab
+    read alone among them, hands the open item to ``followItem``, so a following that a read of
+    another company stopped starts again when the reader comes back first. The head reads the
+    request and writes nothing."""
+    script = _static_file("company.js")
+    landed = _function(script, "shown")
+    _in_order(
+        landed,
+        "if (!state.request || state.request.symbol !== state.symbol) {",
+        "state.request = P.asking(state.symbol);",
+        "P.followItem(state.request, state.detail.item, render, load);",
+        "render();",
+    )
+    load = _function(script, "load")
+    assert load.count("shown();") == 2
+    _in_order(load, "if (held && want.tab !== state.tab && state.answers[want.tab]) {", "shown();")
+    head = _function(script, "head")
+    assert "state.request =" not in head and "asked(" not in script
+    assert "P.requestResearch(ask, d.item, render, load, d.launchReady)" in head
 
 
 # ------------------------------------------------------------------------------ the address
