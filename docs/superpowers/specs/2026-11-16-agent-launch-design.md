@@ -309,7 +309,7 @@ follows the launch as section 10 follows one, and shows a line of its own for ea
 A test waits for no claim, so it is never overdue once it has started. It is overdue while it is
 still `opened` after 90 seconds: a wrong distribution name or a `bash` that fails leaves a window
 in which nothing reports, and that is the failure a first setup most often meets. The test is
-followed for its first 60 seconds after it starts, so that an agent that ends at once shows; an
+followed until its launch is 60 seconds old, so that an agent that ends at once shows; an
 end with another exit code than 0 is in the error style, and the window, held by the launcher
 (6.2), shows why.
 
@@ -573,3 +573,32 @@ launch route.
   Yes: the section's values are the file `launch.json` and nothing else (7.2), in place of the table
   this design first gave them. The server's two owner-only routes stay, and section 12 says what the
   file does and does not change about safety.
+- 2026-11-16, the readout of the build (branch `agent-launch`, 33c00ff to 08deb8a; 4,012 tests).
+  Built as designed, with these changes, each a ruling of the controller during the build and now
+  in the sections it touches: the window command gains six words, not five (6.1); the server
+  keeps no pipe on the window command, since Windows Terminal can hold a pipe open after `wt.exe`
+  exits (6.1); a Claude Code that ends with a code other than 0 keeps its window until Enter, and
+  the launcher's script starts Python with `-P` (6.2); a value with a NUL byte, or one that is
+  not UTF-8 text, is refused for every name, and a Claude Code command must split into words
+  (7.1); the section's Save is on while the file is unusable, and its notice says what Save
+  writes (7.2, 7.3); a test is followed until its launch is 60 seconds old, so an agent that ends
+  at once shows (7.4); a launched session stops on an item that is claimed, closed or missing
+  (11). Sentences the build added, which no table above lists: `launch.json cannot be read: …`;
+  `a failed report gives its reason` and `an ended report gives its exit code` (the launcher's
+  reports); `this server opens no window` (an app with no opener); on the page `The launch could
+  not be read: … Trying again.`, then `… Reload the page.` after 30 failed reads, `The window was
+  not opened: …`, `Not saved: …` and `The test's launch could not be read: …`. On the request
+  button any 409 from a launch's post shows no error: the page reads the company again and the
+  line says what is true.
+- 2026-11-16, the acceptance of section 15 step 1, on a scratch server with real Windows
+  Terminal tabs and a stand-in for Claude Code: a window command whose program does not exist is
+  refused at Save; with `claude-nope` the drawer read "The window opened, but Claude Code did not
+  start: `claude-nope` was not found on the path of a login shell. Check Settings, Agents."; the
+  line went from the window opened to started (3 s), to no claim after 90 seconds (91 s), to
+  ended (103 s); a claim by the item's id turned it to claimed; an agent that ended at once with
+  exit code 3 kept its window and the Test read "Claude Code ended (exit code 3). Check the
+  window."; a hand edit of `launch.json` showed at the next read and a file cut short showed its
+  sentence; the valuation settings read the same before and after. Steps 2 to 5 are the live
+  steps. Not tested: a launch with Windows Terminal closed. Filed: B-209 (the reviews' items),
+  B-210 (the Inbox page and another terminal); Codex is B-208.
+
