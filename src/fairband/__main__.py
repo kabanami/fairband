@@ -1,5 +1,5 @@
-"""Command line: ``python -m fairband serve | refresh | migrate | mcp``, or ``fairband`` (the console
-script)."""
+"""Command line: ``python -m fairband serve | refresh | migrate | mcp | launch``, or ``fairband``
+(the console script)."""
 
 import argparse
 import logging
@@ -29,6 +29,7 @@ from fairband.config import (
 )
 from fairband.engine.types import PHASE_NUMBER
 from fairband.launch.command import system_opener
+from fairband.launch.run import run_launcher
 from fairband.mcp.server import main as run_mcp
 from fairband.policy import load_policy
 from fairband.policy.tax import TaxTable, load_tax_table
@@ -92,6 +93,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "mcp", help="serve the agent's tools over stdio, calling the server on 127.0.0.1"
     )
     mcp.add_argument("--port", type=int, default=DEFAULT_PORT, help="the server's port")
+
+    launch = commands.add_parser(
+        "launch", help="start an agent in a window Fairband opened; the launcher's script calls it"
+    )
+    launch.add_argument("port", type=int, help="the server's port")
+    launch.add_argument("launch_id", type=int, help="the launch's id")
     return parser
 
 
@@ -415,11 +422,22 @@ def _mcp(args: argparse.Namespace) -> int:
     return 0
 
 
+def _launch(args: argparse.Namespace) -> int:
+    """Run the launch ``launch_id`` of the server on ``port`` in this window
+    (``fairband.launch.run``): start the agent, and report how it went. Opens no database and reads
+    no key. httpx's and httpcore's loggers are set to WARNING first, so the window shows the
+    launcher's own sentences and no request's log line."""
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    return run_launcher(args.port, args.launch_id)
+
+
 _COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "serve": _serve,
     "refresh": _refresh,
     "migrate": _migrate,
     "mcp": _mcp,
+    "launch": _launch,
 }
 
 
