@@ -38,8 +38,8 @@ Beside them it gives ``priceNeeds`` (``method.md`` 4.11): the sentences on what 
 when it is well above the value the meter draws, the review's when the review counts and has a
 value, else the snapshot's; ``None`` otherwise. And ``moat`` (the company page's design, 7.2), the
 moat class in force (method 4.9), ``"Wide"``, ``"Narrow"`` or ``"None"``: the review's when it
-counts and has a value, else the snapshot's when the snapshot has one, as the screen's row reads
-it (``rows.screen_row``); ``None`` otherwise, so a refused row has no moat.
+counts and has a value, else the snapshot's when the snapshot has a value, else ``None``. So a
+refused snapshot with a counted review that values the company has that review's moat.
 
 ``GET /api/companies/{symbol}/research`` answers what Details lists (18.3), each record as its own
 read serves it: ``overrides``, ``guidance``, ``killCriteria``, ``newsItems``, ``notes`` and

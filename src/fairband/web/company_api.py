@@ -1,15 +1,18 @@
-"""The company page's two reads (the company page's design, 7.4, 10.3, 10.4 and 10.5), each from
-the store alone: neither calls a vendor, so each is a plain GET that needs no request header.
+"""The company page's two reads (the company page's design, 7.2, 7.4, 10.3, 10.4 and 10.5), each
+from the store alone: neither calls a vendor, so each is a plain GET that needs no request header.
 
-- ``GET /api/companies/{symbol}/page/overview`` answers ``{symbol, dataDate, company, statistics,
-  trading, priceChange, prices, news}``: the Company block (``page_fmp.company``), the Key
-  statistics (``page_fmp.statistics``), the Trading group with the head's price and change
-  (``page_fmp.trading``), the price changes (``page_fmp.price_change``), the prices
-  (``page_fmp.prices``), and ``news``, ``{stories, observedAt, stale, limit}``: the stored
-  stories (``page_fmp.stories``), the time their answer was observed, ``null`` without one,
-  whether a refresh would fetch them again, and ``limit``, the depth the refresh stores them at
-  (``fetch.NEWS_STORIES``), at which the page asks the pass-through for newer ones.
-- ``GET /api/companies/{symbol}/page/estimates`` answers ``{symbol, dataDate, earnings,
+Both answer ``quote``, the head's figures on every tab (``page_fmp.head_quote``: ``{price,
+change, changePercent, day}``, each ``null`` without a quote's row).
+
+- ``GET /api/companies/{symbol}/page/overview`` answers ``{symbol, dataDate, quote, company,
+  statistics, trading, priceChange, prices, news}``: the Company block (``page_fmp.company``),
+  the Key statistics (``page_fmp.statistics``), the Trading group (``page_fmp.trading``), the
+  price changes (``page_fmp.price_change``), the prices (``page_fmp.prices``), and ``news``,
+  ``{stories, observedAt, stale, limit}``: the stored stories (``page_fmp.stories``), the time
+  their answer was observed, ``null`` without one, whether a refresh would fetch them again, and
+  ``limit``, the depth the refresh stores them at (``fetch.NEWS_STORIES``), at which the page
+  asks the pass-through for newer ones.
+- ``GET /api/companies/{symbol}/page/estimates`` answers ``{symbol, dataDate, quote, earnings,
   consensus, target, ratings}``: the Earnings block (``page_fmp.earnings``), the Consensus
   estimates (``page_fmp.consensus``), the price target (``page_fmp.target``) and the ratings
   (``page_fmp.ratings``).
@@ -26,7 +29,8 @@ Rules for both:
 - The overview draws the profile, the quote's row, the price history, the earnings (for the next
   date), the six answers of the Key statistics (``ratios-ttm``, ``key-metrics-ttm``,
   ``financial-growth``, ``financial-scores``, ``dividends``, ``shares-float``), the price changes
-  and the news; the estimates the earnings, the annual consensus, the price target and the grades.
+  and the news; the estimates the quote's row, the earnings, the annual consensus, the price
+  target and the grades.
 - ``dataDate`` (7.4) is the day of the oldest observation among the answers the read drew, as ISO
   text, the news left out, since its stories carry their own days; ``null`` when it drew none.
 - ``news.stale`` (10.5) is true without a stored answer, or when it was observed at or before the
@@ -124,6 +128,7 @@ def add_company_page_routes(
         return {
             "symbol": symbol,
             "dataDate": _data_date(drawn),
+            "quote": page_fmp.head_quote(row),
             "company": page_fmp.company(profile.payload),
             "statistics": page_fmp.statistics(answers, profile.payload, row, reporting, today),
             "trading": page_fmp.trading(
@@ -145,6 +150,7 @@ def add_company_page_routes(
         today = clock().date()
         with closing(conn_factory()) as conn:
             _profile(conn, symbol)
+            quote = _quote(conn, symbol)
             earnings = _stored(conn, "earnings", symbol)
             consensus = _stored(conn, "estimates-annual", symbol)
             target = _stored(conn, "price-target", symbol)
@@ -154,7 +160,8 @@ def add_company_page_routes(
         after = years[-1].period_end + YEAR_END_DRIFT if years else None
         return {
             "symbol": symbol,
-            "dataDate": _data_date([earnings, consensus, target, grades]),
+            "dataDate": _data_date([quote, earnings, consensus, target, grades]),
+            "quote": page_fmp.head_quote(_payload(quote)),
             "earnings": page_fmp.earnings(_payload(earnings), today),
             "consensus": page_fmp.consensus(_payload(consensus), after, reporting),
             "target": page_fmp.target(_payload(target)),

@@ -20,7 +20,12 @@ import httpx
 from fastapi.testclient import TestClient
 from refresh.vendor_double import FMP_KEY, Router
 from support import page_payloads as pages
-from support.engine_companies import fx_inputs, mature_growth_inputs, universe_deciles
+from support.engine_companies import (
+    fx_inputs,
+    mature_growth_inputs,
+    universe_deciles,
+    young_growth_inputs,
+)
 from support.payloads import store_payloads
 from support.vendor import Vendor, passthrough_client
 from support.web import HEADER, NOW, TODAY
@@ -149,6 +154,7 @@ def test_the_overview_whole(client: TestClient, db_path: Path, policy: Policy) -
     assert body == {
         "symbol": SYMBOL,
         "dataDate": "2026-11-01",
+        "quote": page_fmp.head_quote(quote),
         "company": page_fmp.company(pages.PROFILE),
         "statistics": page_fmp.statistics(answers, pages.PROFILE, quote, "SEK", today),
         "trading": page_fmp.trading(quote, pages.PROFILE, "2027-01-14"),
@@ -167,6 +173,13 @@ def test_the_overview_whole(client: TestClient, db_path: Path, policy: Policy) -
     assert size["enterpriseValue"] == {"value": 12480000000000, "currency": "SEK"}
     assert size["marketCap"] == {"value": 412600000000, "currency": "USD"}
     assert body["trading"]["nextEarnings"] == "2027-01-14"
+    # The head's figures, which both reads carry (the design's 7.2).
+    assert body["quote"] == {
+        "price": 182.4,
+        "change": 2.15,
+        "changePercent": 1.1928,
+        "day": "2026-11-16",
+    }
     # The quote's day (16 Nov) is later than the history's newest (13 Nov): it closes the prices.
     assert body["prices"][-2:] == [
         ["2026-11-13", 180.25, 7650200],
@@ -180,6 +193,7 @@ def test_the_estimates_whole(client: TestClient, db_path: Path, policy: Policy) 
     assert body == {
         "symbol": SYMBOL,
         "dataDate": "2026-11-01",
+        "quote": _get(client, OVERVIEW)["quote"],
         "earnings": page_fmp.earnings(pages.EARNINGS, NOW.date()),
         "consensus": page_fmp.consensus(pages.ESTIMATES, date(2025, 12, 31), "SEK"),
         "target": page_fmp.target(pages.TARGET),
@@ -189,6 +203,7 @@ def test_the_estimates_whole(client: TestClient, db_path: Path, policy: Policy) 
     assert [row["fiscalYear"] for row in body["consensus"]] == [2026, 2027, 2028, 2029]
     assert body["consensus"][0]["eps"] == {"value": 61.2, "currency": "SEK"}
     assert body["target"]["consensus"] == {"value": 205.6, "currency": "USD"}
+    assert body["quote"]["price"] == 182.4
 
 
 def test_an_estimate_dated_within_the_drift_of_the_newest_year_is_that_year(
@@ -224,7 +239,9 @@ def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: 
     assert overview["statistics"] == page_fmp.statistics({}, pages.PROFILE, None, "USD", NOW.date())
     assert overview["statistics"]["size"]["marketCap"] is None
     assert overview["trading"] == page_fmp.trading(None, pages.PROFILE, None)
-    assert overview["trading"]["price"] is None
+    assert overview["trading"]["open"] is None
+    no_quote = {"price": None, "change": None, "changePercent": None, "day": None}
+    assert overview["quote"] == no_quote
     assert set(overview["priceChange"].values()) == {None}
     assert overview["prices"] == []
     assert overview["news"] == {"stories": [], "observedAt": None, "stale": True, "limit": 60}
@@ -232,6 +249,7 @@ def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: 
     assert estimates == {
         "symbol": SYMBOL,
         "dataDate": None,  # the estimates tab draws no profile
+        "quote": no_quote,
         "earnings": {"next": None, "rows": []},
         "consensus": [],
         "target": {"consensus": None, "median": None, "low": None, "high": None},
@@ -253,7 +271,8 @@ def test_a_bad_symbol_is_a_400_and_no_profile_a_404(client: TestClient) -> None:
 
 def test_the_data_date_is_the_oldest_answer_s_day(client: TestClient, db_path: Path) -> None:
     """The oldest day among the answers the tab draws, the news left out (the design's 7.4): the
-    overview draws no price target and no grades, and the estimates no profile."""
+    overview draws no price target and no grades, and the estimates no profile; both draw the
+    quote, the head's."""
 
     def on(day: int) -> datetime:
         return datetime(2026, 10, day, 12, 0, tzinfo=UTC)
@@ -278,6 +297,10 @@ def test_the_data_date_is_the_oldest_answer_s_day(client: TestClient, db_path: P
     # The quote read is the one the newest observation cites, the last stored, whatever its day.
     _quote(db_path, pages.QUOTE, on(26), [SYMBOL])
     assert _get(client, OVERVIEW)["dataDate"] == "2026-10-26"
+    assert _get(client, ESTIMATES)["dataDate"] == "2026-10-24"
+    _quote(db_path, pages.QUOTE, on(22), [SYMBOL])
+    assert _get(client, OVERVIEW)["dataDate"] == "2026-10-22"
+    assert _get(client, ESTIMATES)["dataDate"] == "2026-10-22"
 
 
 def test_the_news_is_stale_on_the_far_side_of_the_window(
@@ -327,8 +350,8 @@ def test_the_quote_row_comes_through_the_observation(client: TestClient, db_path
     _store(db_path, "profile", pages.PROFILE, AT)
     _store(db_path, "price-history", pages.HISTORY, AT)
     _quote(db_path, pages.QUOTE, AT, [SYMBOL])
-    trading = _get(client, OVERVIEW)["trading"]
-    assert (trading["price"], trading["change"], trading["day"]) == (182.4, 2.15, "2026-11-16")
+    head = _get(client, OVERVIEW)["quote"]
+    assert (head["price"], head["change"], head["day"]) == (182.4, 2.15, "2026-11-16")
     # A later batch, its row on the history's newest day: no day is added to the prices.
     on_the_13th = 1794600000  # 13 Nov 2026, 20:00 UTC
     row = pages.QUOTE[0] | {"price": 185.0, "change": 4.75, "timestamp": on_the_13th}
@@ -336,14 +359,19 @@ def test_the_quote_row_comes_through_the_observation(client: TestClient, db_path
     later = AT + timedelta(minutes=30)
     _quote(db_path, batch, later, ["BRK.B", SYMBOL])
     body = _get(client, OVERVIEW)
+    assert body["quote"] == page_fmp.head_quote(row)
+    assert (body["quote"]["price"], body["quote"]["day"]) == (185.0, "2026-11-13")
     assert body["trading"] == page_fmp.trading(row, pages.PROFILE, None)
-    assert (body["trading"]["price"], body["trading"]["day"]) == (185.0, "2026-11-13")
     assert body["prices"] == page_fmp.prices(pages.HISTORY, row)
     assert body["prices"][-1] == ["2026-11-13", 180.25, 7650200]
     assert body["statistics"]["size"]["marketCap"] == {"value": 412600000000, "currency": "USD"}
+    # The estimates read carries the same row's head figures, and the date of its response.
+    estimates = _get(client, ESTIMATES)
+    assert (estimates["quote"], estimates["dataDate"]) == (body["quote"], "2026-11-01")
     _store(db_path, "profile", pages.PROFILE, AT, symbol="BRK.B")
     brk = _get(client, "/api/companies/brk.b/page/overview")
-    assert (brk["symbol"], brk["trading"]["price"]) == ("BRK.B", 512.3)
+    assert (brk["symbol"], brk["quote"]["price"]) == ("BRK.B", 512.3)
+    assert _get(client, "/api/companies/brk.b/page/estimates")["quote"] == brk["quote"]
 
 
 def test_the_reads_call_no_vendor(
@@ -385,7 +413,7 @@ def test_the_reads_find_what_the_fetch_stores(
     statistics = overview["statistics"]
     one_of_each = {
         "profile": overview["company"]["sector"],
-        "quote": overview["trading"]["price"],
+        "quote": overview["quote"]["price"],
         "price-history": overview["prices"][0],
         "earnings": overview["trading"]["nextEarnings"],
         "ratios-ttm": statistics["margins"]["gross"],
@@ -402,6 +430,7 @@ def test_the_reads_find_what_the_fetch_stores(
     }
     assert {name for name, figure in one_of_each.items() if figure is None} == set()
     assert (overview["dataDate"], estimates["dataDate"]) == ("2026-11-01", "2026-11-01")
+    assert estimates["quote"] == overview["quote"]
     assert overview["news"]["stale"] is False
 
 
@@ -457,3 +486,42 @@ def test_the_detail_carries_the_moat_in_force_and_the_note_count(
     aapl = _get(client, "/api/companies/AAPL")
     assert aapl["review"]["value"] == reviewed.result.value  # it counts on the latest snapshot
     assert (aapl["moat"], aapl["noteCount"]) == ("Narrow", 2)
+
+
+def test_a_refused_row_with_a_counted_valued_review_has_the_review_s_moat(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """AAL's snapshot is refused for its target margin and has no moat; an applied margin.target
+    override gives a counted review that values it, and the detail's moat is that review's."""
+    with closing(connect(db_path)) as conn:
+        snapshot = latest_snapshot(conn, "AAL")
+        assert snapshot is not None and snapshot.value is None
+        found = insert_override(
+            conn,
+            "AAL",
+            "margin.target",
+            None,
+            0.2,
+            "ratio",
+            "the peers by hand",
+            [{"kind": "filing", "ref": "10-K 2025", "note": None}],
+            "lasting",
+            None,
+            None,
+            snapshot.id,
+            AGENT,
+            NOW,
+            "applied",
+            "",
+        )
+        target = Override(found, "margin.target", 0.2, "agent", AGENT.actor, NOW, "peers")
+        inputs = replace(young_growth_inputs(), symbol="AAL", peers=())
+        reviewed = review_company(
+            inputs, universe_deciles(), policy, TODAY, [target], results["AAL"]
+        )
+        insert_review(conn, reviewed, "AAL", snapshot.id, None, clock=lambda: NOW)
+    moat = reviewed.result.intermediates["moat"]
+    assert reviewed.result.value is not None and isinstance(moat, str)
+    detail = _get(client, "/api/companies/AAL")
+    assert detail["review"]["value"] == reviewed.result.value
+    assert detail["moat"] == moat

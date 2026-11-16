@@ -15,6 +15,7 @@ from fairband.vendors.page_fmp import (
     company,
     consensus,
     earnings,
+    head_quote,
     money,
     next_earnings,
     number,
@@ -333,17 +334,29 @@ def test_trading() -> None:
         "volume": 8123400,
         "averageVolume": 9412300,
         "nextEarnings": "2027-01-14",
+    }
+
+
+def test_head_quote() -> None:
+    assert head_quote(ROW) == {
         "price": 182.4,
         "change": 2.15,
         "changePercent": 1.1928,
         "day": "2026-11-16",
     }
+    unread = {**ROW, "price": "182.4", "change": float("nan"), "changePercentage": None}
+    assert head_quote(unread) == {
+        "price": None,
+        "change": None,
+        "changePercent": None,
+        "day": "2026-11-16",
+    }
 
 
-def test_trading_without_a_timestamp_has_no_day() -> None:
+def test_head_quote_without_a_timestamp_has_no_day() -> None:
     row = {key: value for key, value in ROW.items() if key != "timestamp"}
-    assert trading(row, p.PROFILE, None)["day"] is None
-    assert trading({**ROW, "timestamp": 1e300}, p.PROFILE, None)["day"] is None
+    assert head_quote(row)["day"] is None
+    assert head_quote({**ROW, "timestamp": 1e300})["day"] is None
 
 
 def test_price_change() -> None:
@@ -565,6 +578,7 @@ def test_every_reader_answers_on_a_payload_of_the_wrong_shape(payload: Any) -> N
             statistics(ANSWERS, p.PROFILE, ROW, "TWD", TODAY),
         ),
         (trading(payload, payload, None), trading(ROW, p.PROFILE, "2027-01-14")),
+        (head_quote(payload), head_quote(ROW)),
         (price_change(payload), price_change(p.PRICE_CHANGE)),
         (target(payload), target(p.TARGET)),
         (ratings(payload), ratings(p.GRADES)),

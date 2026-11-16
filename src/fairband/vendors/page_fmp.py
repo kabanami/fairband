@@ -1,5 +1,5 @@
-"""The company page's figures from FMP's stored answers (the company page's design, 8.3, 8.5, 9,
-10.3, 10.4, 14.2 and 14.3): pure readers, a parsed payload in and plain data out, with no store,
+"""The company page's figures from FMP's stored answers (the company page's design, 7.2, 8.3, 8.5,
+9, 10.3, 10.4, 14.2 and 14.3): pure readers, a parsed payload in and plain data out, with no store,
 network or clock. The page's two reads hand them the newest stored answers.
 
 The rule: every figure is the answer's own field, shaped and never recomputed, but for ``yearly``,
@@ -16,7 +16,7 @@ name is the page's own (camelCase), not FMP's.
 - A money figure is ``{"value", "currency"}`` (``money``), as the design's 14.2 states it: in the
   reporting currency, the enterprise value, the revenue, the dividend a share and the consensus;
   in US dollars, every other (the quote, the price history, the earnings, the price target). The
-  quote's price and change stay plain numbers in US dollars. Nothing is converted.
+  head's price and change (``head_quote``) stay plain numbers in US dollars. Nothing is converted.
 - Days are ISO dates. The newest row of an answer is found by its date, not by its place in the
   answer: the growth's by ``date``, the dividends' by ``paymentDate``, else ``date``; the prices,
   the earnings and the consensus are put in order by date. The last payment is the latest
@@ -234,16 +234,25 @@ def statistics(
 
 
 def trading(quote: Mapping[str, Any] | None, profile: Any, next_day: str | None) -> dict[str, Any]:
-    """The Trading group (the design's 8.5) from the quote row, with the profile's average volume
-    and ``next_day``, the day of ``next_earnings``. ``price``, ``change`` and ``changePercent``
-    (FMP's ``changePercentage``, a percent as given) are the head's; ``day`` is the UTC date of
-    the row's ``timestamp``."""
+    """The Trading group (the design's 8.5) from the quote row: its eight money rows and its
+    volume, with the profile's average volume and ``next_day``, the day of ``next_earnings``."""
     row = _row(quote)
     figures: dict[str, Any] = {name: money(row.get(key), _USD) for name, key in _TRADING}
     return figures | {
         "volume": number(row.get("volume")),
         "averageVolume": number(_first(profile).get("averageVolume")),
         "nextEarnings": next_day,
+    }
+
+
+def head_quote(quote: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The head's figures from the quote row (the design's 7.2 and 10.4), which every tab draws:
+    ``price``, ``change`` and ``changePercent`` (FMP's ``changePercentage``, a percent as given),
+    plain numbers in US dollars, and ``day``, the UTC date of the row's ``timestamp``. Each is
+    ``None`` where the row lacks it, and every one without a row or with a row of the wrong
+    shape."""
+    row = _row(quote)
+    return {
         "price": number(row.get("price")),
         "change": number(row.get("change")),
         "changePercent": number(row.get("changePercentage")),
