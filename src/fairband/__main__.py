@@ -41,6 +41,7 @@ from fairband.store.settings import effective_policy
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 from fairband.vendors.http import VendorError
 from fairband.vendors.limiter import RateLimiter
+from fairband.vendors.logos import fetch_logo
 from fairband.web.app import create_app
 
 logger = logging.getLogger("fairband")
@@ -144,7 +145,9 @@ def _serve(args: argparse.Namespace) -> int:
     a stored setting no longer applies, which the worker then refuses), paced again by each run to
     the policy it runs under, and read by the pass-through, whose reuse window is the start's.
     Without an FMP key the worker runs a revalue only and refuses the other kinds, and the
-    pass-through route answers 503. The app reads the policy file as its base. When it starts, the
+    pass-through route answers 503. With or without one the app fetches a company's logo
+    (``vendors.logos.fetch_logo``): FMP's image host takes no key, and the fetch goes through
+    no limiter, since it counts against no quota. The app reads the policy file as its base. When it starts, the
     app marks every ``running`` refresh interrupted; with no process lock in this cut, that
     includes one a command in another process is running at that moment."""
     settings = load_settings()
@@ -174,7 +177,15 @@ def _serve(args: argparse.Namespace) -> int:
             conn_factory, keys, tax, cancel, on_progress, limiter
         )
     )
-    app = create_app(settings, policy, conn_factory, worker, tax=tax, passthrough=passthrough)
+    app = create_app(
+        settings,
+        policy,
+        conn_factory,
+        worker,
+        tax=tax,
+        passthrough=passthrough,
+        fetch_logo=fetch_logo,
+    )
     try:
         uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
     finally:

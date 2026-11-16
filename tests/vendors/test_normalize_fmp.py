@@ -23,6 +23,7 @@ from fairband.vendors.normalize_fmp import (
     price_closes,
     profile_brief,
     profile_country,
+    profile_logo,
     profile_observations,
     quote_observations,
     screener_rows,
@@ -515,6 +516,37 @@ def test_profile_brief() -> None:
         "Acme",
     ):
         assert profile_brief(missing) is None
+
+
+def test_profile_logo() -> None:
+    """The company logo (B-203): the profile object's ``image``, from a list or a bare object,
+    where it is an https address on FMP's image host and ``defaultImage`` is not true: FMP sends
+    a placeholder there. ``None`` for a placeholder, another host, a host that only starts or
+    ends as FMP's, another scheme, a user, a port, a query, or no string."""
+    url = "https://images.financialmodelingprep.com/symbol/ACME.png"
+    assert profile_logo([{"image": url, "defaultImage": False}]) == url
+    assert profile_logo({"image": url}) == url
+    assert profile_logo([{"image": "https://images.financialmodelingprep.com/symbol/BF-B.png"}])
+    for missing in (
+        [{"image": url, "defaultImage": True}],
+        [{"image": "http://images.financialmodelingprep.com/symbol/ACME.png"}],
+        [{"image": "https://example.com/symbol/ACME.png"}],
+        [{"image": "https://images.financialmodelingprep.com.example.com/symbol/ACME.png"}],
+        [{"image": "https://example.com/images.financialmodelingprep.com/symbol/ACME.png"}],
+        [{"image": "https://user@images.financialmodelingprep.com/symbol/ACME.png"}],
+        [{"image": "https://images.financialmodelingprep.com:8443/symbol/ACME.png"}],
+        [{"image": "https://images.financialmodelingprep.com/symbol/ACME.png?apikey=x"}],
+        [{"image": "https://images.financialmodelingprep.com/"}],
+        [{"image": url + "\n"}],
+        [{"image": ""}],
+        [{"image": None}],
+        [{"image": 7}],
+        [{}],
+        [],
+        None,
+        url,
+    ):
+        assert profile_logo(missing) is None, missing
 
 
 def test_price_closes() -> None:

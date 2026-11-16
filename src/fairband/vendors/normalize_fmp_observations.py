@@ -26,9 +26,9 @@ label or a date:
 - ``profile``: ``is_adr`` (1 or 0 from the boolean ``isAdr``; no value when the flag is absent or
   not a boolean; unit ``None``) and ``market_cap`` (``marketCap``) from the profile object, which
   arrives as a one-item list or a bare object; ``period`` ``None``, ``as_of`` the observed date.
-  The screener carries no ``isAdr``, so the ADR flag is read from here. The country and the
-  company brief are not observations: ``profile_country`` and ``profile_brief`` read them from
-  the stored payload.
+  The screener carries no ``isAdr``, so the ADR flag is read from here. The country, the
+  company brief and the logo's address are not observations: ``profile_country``,
+  ``profile_brief`` and ``profile_logo`` read them from the stored payload.
 - ``split``: ``numerator`` and ``denominator`` (unit ``shares``) for each ``splits`` row with a
   parseable ``date`` and two numbers above zero; ``period`` and ``as_of`` the split date. The two
   stay apart so a sentence can say 2-for-1 or 1-for-10; ``inputs_splits.splits_for`` reads them
@@ -67,6 +67,9 @@ from fairband.vendors._fmp_parse import (
     text,
 )
 from fairband.vendors.fmp import to_fmp_symbol
+
+LOGO_HOST = "images.financialmodelingprep.com"  # FMP's image host, which answers without a key
+_LOGO = re.compile(rf"https://{re.escape(LOGO_HOST)}/[A-Za-z0-9._/-]+")
 
 _ESTIMATES = (  # (field, FMP field, unit)
     ("eps_avg", "epsAvg", PER_SHARE),
@@ -228,6 +231,19 @@ def profile_brief(payload: Any) -> str | None:
     the drawer, the report page and the MCP ``company`` tool from the stored payload."""
     row = _profile(payload)
     return None if row is None else text(row.get("description"))
+
+
+def profile_logo(payload: Any) -> str | None:
+    """The company logo's address (B-203): the profile object's ``image`` where it is an https
+    address on FMP's image host, a path of letters, digits, dots, dashes and slashes and nothing
+    else, so no user, port or query; ``None`` otherwise, and where ``defaultImage`` is true:
+    FMP holds no logo there and sends a placeholder. The logo read fetches the file from it,
+    with no key (``vendors.logos``)."""
+    row = _profile(payload)
+    if row is None or row.get("defaultImage") is True:
+        return None
+    image = row.get("image")
+    return image if isinstance(image, str) and _LOGO.fullmatch(image) else None
 
 
 def _profile(payload: Any) -> dict[str, Any] | None:

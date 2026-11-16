@@ -712,6 +712,7 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         "report",
         "item",
         "brief",
+        "logo",
         # what the price needs when it is well above the value (method 4.11): none here, the
         # price being above the value only; tests/web/test_price_needs_api.py
         "priceNeeds",
@@ -724,6 +725,8 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
     }
     # The company brief (B-149) is the stored profile's description; none is stored here.
     assert body["brief"] is None
+    # The logo's address (B-203) is the stored profile's too: tests/web/test_logo_api.py.
+    assert body["logo"] is None
     # The agents' records the drawer's main view leads with (spec 2026-11-06 Tier 2, 18.2): none
     # here; tests/web/test_research_api.py writes each and reads its shape.
     assert (body["review"], body["secondary"], body["report"], body["item"]) == (None,) * 4

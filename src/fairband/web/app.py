@@ -6,8 +6,8 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 Methodology section read and the report routes (``reports_api``), the drawer's research read
 (``research_api``), the multiples history read (``multiples_api``), the band's history read
 (``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
-(``filings_api``), and the policy values and growth deciles the Methodology page cites (spec
-2026-11-04 7.4). The company detail carries the agents' records the drawer leads with
+(``filings_api``), the company logo's read (``logo_api``), and the policy values and growth
+deciles the Methodology page cites (spec 2026-11-04 7.4). The company detail carries the agents' records the drawer leads with
 (``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
@@ -22,8 +22,11 @@ call FMP, or GuruFocus for the trailing P/E series, on FastAPI's sync-route thre
 share, and answer the stored payload scrubbed, so no answer carries a key; without a pass-through
 (no FMP key) the route and the filing reads answer 503 and the read's trailing series is ``null``.
 What is bounded: four vendor calls in flight; a request that finds them all taken waits at most
-ten seconds for a slot, holding its pool thread meanwhile, and past that answers 503. FastAPI's
-own documentation routes are off; they would load their scripts from a CDN.
+ten seconds for a slot, holding its pool thread meanwhile, and past that answers 503. The logo's
+read fetches a company's logo from FMP's image host with ``fetch_logo``, which ``serve`` passes;
+that host takes no key, so the read needs no pass-through, and an app given no fetch reads the
+stored files alone. FastAPI's own documentation routes are off; they would load their scripts
+from a CDN.
 
 The screen's rows are the latest universe's admitted companies, each with its latest snapshot,
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
@@ -64,7 +67,11 @@ pass-through route (``/api/vendor/{kind}/{symbol}``), the multiples history read
 spends a vendor's quota and stores its answer, and an image tag or a link on any other site passes
 the host check. The page's read and the MCP server's client send the header on every call. A
 cross-site form cannot send that header, and a cross-origin script cannot without a CORS
-preflight, which the app never answers.
+preflight, which the app never answers. The logo's read (``/api/companies/{symbol}/logo``) may
+fetch a file from FMP's image host and is not among them (B-203): the page reads it from an
+``<img>``, which cannot send the header. It refuses a request the browser marks as another
+site's (``Sec-Fetch-Site``), and its fetch sends no key, spends no quota and is bounded as
+``logo_api`` says.
 """
 
 import json
@@ -112,10 +119,12 @@ from fairband.store.snapshots import (
     snapshot_rows,
 )
 from fairband.store.watchlists import memberships
+from fairband.vendors.logos import LogoError, Logos
 from fairband.web.agents_api import add_agent_routes
 from fairband.web.filings_api import add_filing_routes
 from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.history_api import add_history_routes
+from fairband.web.logo_api import add_logo_routes, logo_route
 from fairband.web.multiples_api import add_multiples_routes
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.reports_api import add_report_routes
@@ -173,14 +182,18 @@ def create_app(
     clock: Callable[[], datetime] = utcnow,
     tax: TaxTable | None = None,
     passthrough: Passthrough | None = None,
+    fetch_logo: Callable[[str], bytes] | None = None,
 ) -> FastAPI:
     """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
     day the validity states are judged on and the time a refresh left running is marked
     interrupted, a setting changed, a watchlist entry added and an agent route's record
     written; ``tax`` is the table a review's inputs and the company reads' statements are built
     with, the packaged one when ``None``; ``passthrough`` fetches the vendor pass-throughs, which
-    answer 503 without one."""
+    answer 503 without one; ``fetch_logo`` fetches a logo's file from its address
+    (``vendors.logos.fetch_logo``), and without one the logo read answers the files already in
+    the data folder's ``logos`` and fetches none."""
     taxed = load_tax_table() if tax is None else tax
+    logos = Logos(settings.data_dir / "logos", fetch_logo or _no_fetch, clock)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -302,7 +315,9 @@ def create_app(
         leads with (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
         ``item``); and the company brief (B-149), the latest stored profile's description, which
         the drawer's head reads a line of, the report page and Details show whole, and the MCP
-        ``company`` tool carries. And what the figures are in (spec 2026-11-10 7.4), which the
+        ``company`` tool carries; and ``logo`` (B-203), the address of the company's logo read
+        where the latest stored profile names a logo, which the drawer's head and the report
+        page's draw, ``None`` without one (``logo_api.logo_route``). And what the figures are in (spec 2026-11-10 7.4), which the
         drawer's head, Details and the report page name: ``currency``, the reporting currency the
         snapshot was valued or refused in (``types.money_of``: USD for a USD row, the code for a
         row refused for its currency); ``isAdr``, the ADR flag as assembly reads it, the latest
@@ -319,10 +334,12 @@ def create_app(
                 raise HTTPException(404, f"no snapshot for {symbol}")
             records = agent_records(conn, snapshot, today, read_under, taxed)
             brief = brief_for(conn, symbol)
+            logo = logo_route(conn, snapshot.symbol)
             adr = adr_flag(conn, symbol, listed)
         return {
             "company": None if listed is None else company_json(listed),
             "brief": brief,
+            "logo": logo,
             **_money_json(snapshot.result, adr),
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
@@ -399,7 +416,13 @@ def create_app(
     add_multiples_routes(app, conn_factory, passthrough)
     add_vendor_routes(app, passthrough)
     add_filing_routes(app, passthrough, clock)
+    add_logo_routes(app, conn_factory, logos)
     return app
+
+
+def _no_fetch(url: str) -> bytes:
+    """The logo fetch of an app given none: it fetches nothing."""
+    raise LogoError("this app fetches no logo")
 
 
 def _money_json(result: ValuationResult, adr: bool | None) -> dict[str, Any]:
