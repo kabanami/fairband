@@ -111,7 +111,7 @@ launcher  POST /api/launches/{id}/status     started
 launcher  runs Claude Code as its child, in the folder, on the window's terminal
 agent     /fairband-research work item 12    identify, then inbox_claim(12)
 launcher  POST /api/launches/{id}/status     ended, with the exit code; or failed, with the reason
-page      GET  /api/launches/{id}            every 2 s, until claimed, failed or ended, or ten minutes
+page      GET  /api/launches/{id}            every 2 s until claimed, failed or ended, or 10 min
 ```
 
 ### 6.1 The window command
