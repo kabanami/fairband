@@ -323,15 +323,18 @@
   .app-drawer__body.is-loading { opacity: 0.5; }
   .app-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
   .app-drawer__ticker { margin: 0; }
-  /* The company's logo (B-203). FMP's logos are drawn for a white ground, many dark on a clear
-     one, so the tile is white under either theme and reads no theme token. It holds its place
-     unseen until its image has loaded, so no empty tile shows while the server fetches. */
+  /* The company's logo (B-203). Most of FMP's logos are drawn for a white ground, many dark on
+     a clear one, so the tile is white under either theme and reads no theme token; a logo whose
+     marks are light where they meet its clear ground stands on a dark tile, one colour under
+     either theme too (B-206; app.js, logoGround). The tile holds its place unseen until its
+     image has loaded, so no empty tile shows while the server fetches. */
   .app-logo {
     flex: none; box-sizing: border-box; width: 24px; height: 24px; padding: 2px;
     background: #ffffff; border-radius: var(--radius-sm); object-fit: contain;
     visibility: hidden;
   }
   .app-logo.is-loaded { visibility: visible; }
+  .app-logo.is-on-dark { background: #121417; }
   .app-drawer__name { margin: 0; flex-basis: 100%; color: var(--ink-muted); }
   .app-drawer__brief, .app-drawer__currency { margin: 0; flex-basis: 100%; }
   .app-section { margin: var(--space-6) 0 0; }

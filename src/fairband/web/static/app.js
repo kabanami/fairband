@@ -206,7 +206,7 @@
     chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
     declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
     briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
-    logo: logo,
+    logo: logo, logoGround: logoGround,
     drawerFlags: drawerFlags, findingsList: findingsList
   };
 
@@ -1621,18 +1621,83 @@
      an image of the detail read's `logo`, the address of the logo read, which the server names
      where the stored profile names a logo and fetches once; nothing without one. The ticker and
      the name stand beside it, so its alt is empty. The tile holds its place unseen until the
-     image loads (is-loaded), since the first read waits on the server's fetch and an empty white
-     tile would flash meanwhile; an image that does not load hides itself and gives its place
-     up. Its key is the address: the drawer's next company draws a new element, not one an
+     image loads (logoLoaded), since the first read waits on the server's fetch and an empty
+     white tile would flash meanwhile; an image that does not load hides itself and gives its
+     place up. Its key is the address: the drawer's next company draws a new element, not one an
      earlier load marked. `className` is the head's own class; the report page's sets a larger
      size. */
   function logo(body, className) {
     if (!body.logo) return null;
     return h('img', {
       key: body.logo, className: 'app-logo ' + className, src: body.logo, alt: '',
-      onLoad: function (event) { event.target.classList.add('is-loaded'); },
+      onLoad: logoLoaded,
       onError: function (event) { event.target.hidden = true; }
     });
+  }
+
+  var LOGO_SAMPLE = 64;
+
+  /* A logo's image has loaded: the tile takes the ground the image needs, then shows
+     (is-loaded). The tile is white unless the logo's marks are light where they meet its clear
+     ground (logoGround), when it is dark (is-on-dark). A blank image is hidden like one that did
+     not load. Where the browser gives no pixels the tile stays white. */
+  function logoLoaded(event) {
+    var image = event.target;
+    var pixels = logoPixels(image);
+    var ground = pixels ? logoGround(pixels, LOGO_SAMPLE) : 'white';
+    if (ground === 'blank') { image.hidden = true; return; }
+    if (ground === 'dark') image.classList.add('is-on-dark');
+    image.classList.add('is-loaded');
+  }
+
+  /* The image's pixels, drawn LOGO_SAMPLE a side on a canvas: red, green, blue and alpha a
+     pixel, row by row. The logo read is this page's own origin, so the canvas may be read. Null
+     where the browser draws or gives none. */
+  function logoPixels(image) {
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = LOGO_SAMPLE;
+      canvas.height = LOGO_SAMPLE;
+      var context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0, LOGO_SAMPLE, LOGO_SAMPLE);
+      return context.getImageData(0, 0, LOGO_SAMPLE, LOGO_SAMPLE).data;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /* The ground a logo needs (B-206), from its pixels (`data`, `size` a side). Many of FMP's
+     logos are white marks on a clear ground, drawn for a dark page: on a white tile they are a
+     plain white square. So the ground is read where the marks meet the clear pixels. A pixel at
+     least half opaque is a mark's, any other is clear; a mark's pixel beside a clear one, left,
+     right, above or below, is an edge pixel; one is light at a luma of 0.85 or more. 'dark'
+     where more than half of the edge is light; 'white' otherwise, and for an image with no
+     clear pixel beside a mark, which brings its own ground; 'blank' for an image with no mark,
+     clear all over or light all over, as FMP holds for some companies. White lettering inside a
+     coloured shape meets no clear pixel, so the shape's edge decides. */
+  function logoGround(data, size) {
+    function clear(x, y) {
+      return x >= 0 && y >= 0 && x < size && y < size && data[4 * (y * size + x) + 3] < 128;
+    }
+    var marks = 0;
+    var light = 0;
+    var edge = 0;
+    var lightEdge = 0;
+    for (var y = 0; y < size; y += 1) {
+      for (var x = 0; x < size; x += 1) {
+        var i = 4 * (y * size + x);
+        if (data[i + 3] < 128) continue;
+        var luma = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+        var isLight = luma >= 0.85;
+        var isEdge = clear(x - 1, y) || clear(x + 1, y) || clear(x, y - 1) || clear(x, y + 1);
+        marks += 1;
+        if (isLight) light += 1;
+        if (isEdge) edge += 1;
+        if (isEdge && isLight) lightEdge += 1;
+      }
+    }
+    if (marks === 0 || (edge === 0 && light === marks)) return 'blank';
+    return lightEdge > edge / 2 ? 'dark' : 'white';
   }
 
   /* The head's one line on the company (B-149): the universe row's sector and industry, then
