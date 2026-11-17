@@ -274,8 +274,14 @@ def prices(history: Any, quote: Mapping[str, Any] | None) -> list[list[Any]]:
     older ``{"historical": [...]}`` object, a close given as a number or as numeric text), oldest
     first, the volume read by ``number``, ``None`` where the row has none; then the quote row's
     price and volume on its day where that day is later than the history's newest (the design's
-    8.4). Without a history the quote adds nothing."""
-    days = [(when, close, number(row.get("volume"))) for row, when, close in close_rows(history)]
+    8.4). Without a history the quote adds nothing. A close beyond a float's range (``"1e400"``,
+    a JSON integer of 400 digits), which the engine's reader gives as an infinity, is left out as
+    a row with no close is, since an answer's JSON holds no infinity."""
+    days = [
+        (when, close, number(row.get("volume")))
+        for row, when, close in close_rows(history)
+        if math.isfinite(close)
+    ]
     days.sort(key=lambda day: day[0])
     out: list[list[Any]] = [[when.isoformat(), close, volume] for when, close, volume in days]
     latest = _row(quote)

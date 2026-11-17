@@ -1183,9 +1183,9 @@ def test_the_columns_rule_is_in_the_page_s_css() -> None:
     fill = _top_rule(".app-company__panel--fill {")
     for part in ("display: flex;", "flex-direction: column;", "flex: 1 1 0;", "min-height: 260px;"):
         assert part in fill
-    news = _top_rule(".app-company__news {")
-    for part in ("flex: 1 1 0;", "height: 0;", "min-height: 0;", "overflow-y: auto;"):
-        assert part in news
+    # each declaration whole, so `height: 0` is not found inside `min-height: 0`
+    news = {part.strip() for part in _top_rule(".app-company__news {").split(";")}
+    assert {"flex: 1 1 0", "height: 0", "min-height: 0", "overflow-y: auto"} <= news
     grows = ".app-company__col > .app-company__panel:last-child:not(.app-company__panel--fill) {"
     assert _top_rule(grows) == "flex: 1 1 auto;"
     html = _static_file("index.html")

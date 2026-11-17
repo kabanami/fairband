@@ -40,24 +40,24 @@
   var latest = 0;
 
   /* The page FairbandPage.company names (7.1, 7.5). Another company, or the tab shown asked for
-     again (the view opened again, a request's post ended, a note was taken in the head's Notes
-     box, or a refresh ended while the page shows, controls.js), or the tab whose read is out,
-     not yet shown, asked for again, reads the detail, then the tab's read, and drops what the
-     page held of the other tab, so the head and the tab draw the run's figures; another tab of
-     the company shown reads only that tab, and one it read already is shown at once, but while a
-     read of the detail is out, which that tab may be older than, it reads the detail and the
-     tab, so a reread a refresh's end started is never dropped for the figures of before the run.
-     The page shown stays, faded, until the new one lands, and the latest read wins, so a read
-     that lands after the reader moved to another company or tab is dropped. A read of another
-     company stops the following of the request of the company shown before it starts, and drops
-     a note drafted on another company (FairbandPage.notesShown), and again as it lands or fails
-     while the page shows, so a Notes box opened from the faded head of the company before it
-     closes as the page turns; one that lands after the reader left the view leaves the notes
-     alone, so a Notes box open in the drawer keeps its draft; a read of the company shown keeps
-     its draft; every landing follows the open item's launch again (shown). A tab's read that
-     fails draws its sentence under the tabs; the detail's draws its own (failure) and the link
-     back. An Overview's read that lands draws its stored news, then asks for newer news where
-     they are stale (newer); a tab held is shown with what it holds and asks nothing. */
+     again (the view opened again, a request's post ended, a note was taken in the head's Notes box,
+     or a refresh ended while the page shows, controls.js), or the tab whose read is out, not yet
+     shown, asked for again, reads the detail, then the tab's read, and drops what the page held of
+     the other tab, so the head and the tab draw the run's figures; another tab of the company shown
+     reads only that tab, and one it read already is shown at once, but while a read of the detail
+     is out, which that tab may be older than, it reads the detail and the tab, so a reread a
+     refresh's end started is never dropped for the figures of before the run. The page shown stays,
+     faded, until the new one lands, and the latest read wins, so a read that lands after the reader
+     moved to another company or tab is dropped. A read of another company stops the following of
+     the request of the company shown before it starts, and drops a note drafted on another company
+     (FairbandPage.notesShown), and again as it lands or fails while the page shows, so a Notes box
+     opened from the faded head of the company before it closes as the page turns; one that lands
+     after the reader left the view leaves the notes alone, so a Notes box open in the drawer keeps
+     its draft; a read of the company shown keeps its draft; every landing follows the open item's
+     launch again (shown). A tab's read that fails draws its sentence under the tabs; the detail's
+     draws its own (failure) and the link back. An Overview's read that lands draws its stored news,
+     then asks for newer news where they are stale (newer); a tab held is shown with what it holds
+     and asks nothing. */
   function load() {
     var want = P.company;
     var request = ++latest;

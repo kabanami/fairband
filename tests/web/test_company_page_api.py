@@ -252,6 +252,24 @@ def test_the_consensus_cut_s_exact_boundary(
     assert consensus == (page_fmp.consensus([row], None, "USD") if drawn else [])
 
 
+def test_a_close_too_large_for_a_float_is_left_out_of_the_read(
+    client: TestClient, db_path: Path
+) -> None:
+    """Review Focus 1: a stored close beyond a float's range, as text or as a JSON integer, is
+    left out of the prices as a row with no close is, so the read answers and its JSON holds no
+    infinity."""
+    _store(db_path, "profile", pages.PROFILE, AT)
+    huge = [
+        pages.HISTORY[0] | {"close": "1e400"},
+        pages.HISTORY[1] | {"close": 10**400},
+        *pages.HISTORY[2:],
+    ]
+    _store(db_path, "price-history", huge, AT)
+    prices = _get(client, OVERVIEW)["prices"]
+    assert prices == page_fmp.prices(pages.HISTORY[2:], None)
+    assert len(prices) == len(pages.HISTORY) - 2
+
+
 def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: Path) -> None:
     """Review Focus 2: a company fetched before the page's calls, or whose ten calls all failed,
     opens with every figure ``None``, no price and no story."""

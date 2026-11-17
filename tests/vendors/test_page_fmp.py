@@ -422,6 +422,20 @@ def test_the_prices_are_the_rows_the_engine_reads_its_closes_from() -> None:
         assert prices(unusable, ROW) == []
 
 
+@pytest.mark.parametrize("close", ["1e400", 10**400, "nan", "-1e400"])
+def test_a_close_that_is_not_finite_is_left_out(close: Any) -> None:
+    """A close too large for a float, as text or as a JSON integer, or one that is not a number,
+    is left out of the prices as a row with no close is, so the read never answers an infinity,
+    which JSON cannot hold; the rows around it stay."""
+    history = [
+        {"date": "2026-11-13", "close": close, "volume": 7650200},
+        {"date": "2026-11-12", "close": 178.9, "volume": 8012300},
+    ]
+    assert prices(history, None) == [["2026-11-12", 178.9, 8012300]]
+    assert prices({"historical": history}, None) == [["2026-11-12", 178.9, 8012300]]
+    json.dumps(prices(history, ROW), allow_nan=False)
+
+
 def test_the_quote_s_day_is_added_when_it_is_the_later_and_only_then() -> None:
     assert prices(p.HISTORY, ROW)[-1] == ["2026-11-16", 182.4, 8123400]
     for timestamp in (1794603600, 1794517200):  # 13 Nov, the newest day, and 12 Nov
