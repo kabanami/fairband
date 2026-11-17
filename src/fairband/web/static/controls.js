@@ -13,8 +13,9 @@
    rows (and the groups, the report page or the company page, when that view is open) load again.
    The group view is one plain table from /api/groups (spec 6.3), with no chart. The report page
    (report.js) is a panel no header view names: #report/<symbol> and #report/<symbol>/<id> open
-   it (18.4). So is the company page (company.js): #company/<symbol> opens its Overview and
-   #company/<symbol>/estimates its Estimates tab (the company page's design, 7.1). */
+   it (18.4). So is the company page (company.js): #company/<symbol> opens its Overview,
+   #company/<symbol>/financials its Financials tab and #company/<symbol>/estimates its Estimates
+   tab (the company page's design, 7.1; the Financials tab's design, 7.1). */
 (function () {
   'use strict';
 
@@ -42,9 +43,9 @@
      report opens the first, the drawer's Company page the second. */
   var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox', 'report',
     'company'];
-  /* The company page's tabs, the Overview first: the tab of a hash that names none, or one the page
-     does not know. */
-  var COMPANY_TABS = ['overview', 'estimates'];
+  /* The company page's tabs in the row's order, the Overview first: the tab of a hash that names
+     none, or one the page does not know. */
+  var COMPANY_TABS = ['overview', 'financials', 'estimates'];
   var panels = {};
   VIEWS.forEach(function (id) { panels[id] = document.getElementById(id); });
   var header = ReactDOM.createRoot(document.getElementById('header'));
@@ -291,7 +292,8 @@
   /* The view a hash names, on load and when a link changes it: #watchlists, #methodology,
      #settings, #methodology/<section-id>, the Methodology view at that section, #report/<symbol>,
      the company's report page, or #report/<symbol>/<id>, an earlier revision; #company/<symbol>,
-     the company page's Overview, or #company/<symbol>/estimates, its Estimates tab. */
+     the company page's Overview, #company/<symbol>/financials, its Financials tab, or
+     #company/<symbol>/estimates, its Estimates tab. */
   function fromHash() {
     var parts = location.hash.slice(1).split('/');
     show(parts[0], parts[1], parts[2]);

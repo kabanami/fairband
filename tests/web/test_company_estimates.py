@@ -328,7 +328,13 @@ def test_the_estimates_classes_are_the_company_page_s_alone() -> None:
     tab = {"__subtitle", "__grades", "__grade", "__gradename"}
     assert {"app-company" + part for part in tab} <= own
     assert KV <= own
-    page = {"company.js", "company_overview.js", "company_chart.js", "company_estimates.js"}
+    page = {
+        "company.js",
+        "company_overview.js",
+        "company_chart.js",
+        "company_estimates.js",
+        "company_financials.js",
+    }
     scripts = {p.name: p.read_text() for p in STATIC.rglob("*.js") if p.name not in page}
     assert {"app.js", "report.js", "inbox.js", "charts.js", "bundle.js"} <= set(scripts)
     for name in sorted(own):

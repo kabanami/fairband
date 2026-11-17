@@ -34,6 +34,7 @@ SCRIPTS = (
 LFOX = "/api/companies/LFOX"
 OVERVIEW = LFOX + "/page/overview"
 ESTIMATES = LFOX + "/page/estimates"
+FINANCIALS = LFOX + "/page/financials"
 NOTES = LFOX + "/notes"
 BRK = "/api/companies/BRK.B"
 RETRY = "The company's data did not load: {}. Open the page again to retry."
@@ -164,6 +165,33 @@ def test_a_tab_held_is_shown_at_once_with_no_read() -> None:
     assert overview["hash"] == "#company/LFOX"
     assert estimates["page"] == landed["page"]
     assert estimates["hash"] == "#company/LFOX/estimates"
+
+
+def test_the_financials_tab_is_read_where_its_hash_names_it() -> None:
+    """#company/LFOX/financials (a link, the browser's Back) opens the Financials tab: the detail,
+    then /page/financials, drawn by the tab's function; once held, the tab's button shows it again
+    with no read, and the hash names it."""
+    trace = _drive(
+        [
+            {"do": "hash", "hash": "#company/LFOX/financials"},
+            _answer(LFOX, _detail(182.4)),
+            _answer(FINANCIALS, _tab("financials 1")),
+            _show("LFOX", "estimates"),
+            _answer(ESTIMATES, _tab("estimates 1")),
+            _show("LFOX", "financials"),
+        ]
+    )
+    hashed, detail, landed, estimates, _, again = trace
+    assert hashed["fetched"] == _get(LFOX)
+    assert hashed["shows"] is True
+    assert detail["fetched"] == _get(FINANCIALS)
+    shown = OPENED | {"tab": "Financials", "drawn": _drawn("financials", "financials 1", 182.4)}
+    assert landed["page"] == shown
+    assert landed["hash"] == "#company/LFOX/financials"
+    assert estimates["fetched"] == _get(ESTIMATES)
+    assert again["fetched"] == [] and again["inFlight"] == []
+    assert again["page"] == shown
+    assert again["hash"] == "#company/LFOX/financials"
 
 
 def test_a_tab_whose_read_is_out_asked_for_again_is_read_whole() -> None:

@@ -1,12 +1,13 @@
 /* The company page (the company page's design, 7), loaded after charts.js: a view at
-   #company/<symbol>, its Overview, and #company/<symbol>/estimates, its Estimates tab. No link
+   #company/<symbol>, its Overview, #company/<symbol>/financials, its Financials tab (the
+   Financials tab's design, 7.1), and #company/<symbol>/estimates, its Estimates tab. No link
    leads back to the screen: the header's Screen view does (the decision log of 2026-11-17). The
    head stands on every tab: at its left the logo, the name, the ticker, the phase badge, the
    moat stamp and one caption line, the exchange, the sector and the industry; at its right the
    latest snapshot's price, the day's change where the stored quote is that price's, the day of
    the close, then Notes, the watchlists control and Request research. Under it the tabs' row:
-   Overview and Estimates, and Research, a link to the report page, the data date of the open tab
-   at the row's right end.
+   Overview, Financials and Estimates, and Research, a link to the report page, the data date of
+   the open tab at the row's right end.
    Under the row the open tab's blocks, which the later scripts hang on companyPage.draw by tab;
    nothing is drawn there while a tab's function is missing. The head reads the company's
    detail, as the drawer and the report page do; each tab its own read of the store, which
@@ -21,8 +22,8 @@
   var h = React.createElement;
   var F = Fairband;
   var P = FairbandPage;
-  /* The two tabs the page reads, each its read's path and its name; Research is a link. */
-  var TABS = [['overview', 'Overview'], ['estimates', 'Estimates']];
+  /* The three tabs the page reads, each its read's path and its name; Research is a link. */
+  var TABS = [['overview', 'Overview'], ['financials', 'Financials'], ['estimates', 'Estimates']];
 
   var mount = document.getElementById('company');
   var root = ReactDOM.createRoot(mount);
@@ -273,10 +274,10 @@
 
   /* ------------------------------------------------------------------ the tabs */
 
-  /* The tabs' row (7.3, 7.4): Overview and Estimates, the open one selected, each opening through
-     FairbandPage.show, which replaces the hash; Research, a link to the report page, the symbol
-     encoded as the report page's links encode it; and at the row's right end the data date of
-     the open tab's read, none without one. */
+  /* The tabs' row (7.3, 7.4): Overview, Financials and Estimates, the open one selected, each
+     opening through FairbandPage.show, which replaces the hash; Research, a link to the report
+     page, the symbol encoded as the report page's links encode it; and at the row's right end the
+     data date of the open tab's read, none without one. */
   function tabs(symbol, tab, dataDate) {
     return h('nav', { className: 'app-company__tabs' },
       h('div', { className: 'app-company__tablist', role: 'tablist' },
@@ -489,9 +490,10 @@
 
   /* What the tabs' scripts and the tests use: the head, the tabs' row, a panel, a list of names
      and figures, a group, a small table and the formatters; and draw, which each tab's script
-     fills with its tab's function, draw.overview(answer, detail) and draw.estimates(answer,
-     detail), each returning the tab's element. The read of newer news (freshNews), the row the
-     watchlists popup opens on and a failed read's sentence are here for the tests. */
+     fills with its tab's function, draw.overview(answer, detail), draw.financials(answer, detail)
+     and draw.estimates(answer, detail), each returning the tab's element. The read of newer news
+     (freshNews), the row the watchlists popup opens on and a failed read's sentence are here for
+     the tests. */
   P.companyPage = {
     head: head, tabs: tabs, panel: panel, kv: kv, group: group, table: table,
     money: money, big: big, percent: percent, points: points, signed: signed,

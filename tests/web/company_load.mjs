@@ -103,7 +103,7 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
 inFlight = []; fetched = []; // the header's and the screen's own reads, which no step answers
 
 // The tabs' functions: each draws what it was handed.
-for (const tab of ['overview', 'estimates']) {
+for (const tab of ['overview', 'financials', 'estimates']) {
   P.companyPage.draw[tab] = (answer, detail) => (
     { type: 'drawn', props: { tab, mark: answer.mark, price: detail.result.price } });
 }

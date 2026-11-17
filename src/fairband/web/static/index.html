@@ -831,6 +831,79 @@
     .app-company__panel--fill { flex: none; }
     .app-company__news { flex: none; height: auto; max-height: 520px; }
   }
+  /* The Financials tab (the Financials tab's design, 7.2, 7.3 and 7.8), as its mockup draws it:
+     one block the page's width under the tabs' row. Its row of controls wraps, the sub-tabs at its
+     left, the two switches at its right, each a segmented control on a hairline, the chosen
+     button on surface-selected and the focus ringed. The two captions on one line in ink-faint,
+     wrapping. Each table in a box of its own that scrolls sideways, never the page: a column a
+     period, its figures monospaced, its head the period over the day and month and a column's
+     currency code in ink-faint; the first column the lines' names in ink-muted, in place as the
+     table scrolls, on the block's own ground so the figures pass under it, and under 700px
+     narrowed to 168px, a long name wrapping. A total in ink and bold, a sub-line indented, a
+     section head in label over a line of border, its name in place too; a dash in ink-faint; the
+     row under the pointer on surface-hover. A table with no line its sentence in ink-faint.
+     Nothing moves. */
+  .app-fin { margin-top: var(--space-4); }
+  .app-fin__bar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+  }
+  .app-fin__opts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .app-fin__seg {
+    display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hairline);
+    border-radius: var(--radius-md); overflow: hidden;
+  }
+  .app-fin__seg button {
+    appearance: none; margin: 0; padding: 6px 12px; color: var(--ink-muted); background: none;
+    border: 0; border-right: 1px solid var(--hairline); cursor: pointer;
+  }
+  .app-fin__seg button:last-child { border-right: 0; }
+  .app-fin__seg button:hover { color: var(--ink); background: var(--surface-hover); }
+  .app-fin__seg button[aria-selected="true"], .app-fin__seg button[aria-pressed="true"] {
+    color: var(--ink); background: var(--surface-selected);
+  }
+  .app-fin__seg button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-fin__notes {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    gap: var(--space-1) var(--space-4); margin: var(--space-4) 0 var(--space-1);
+    color: var(--ink-faint);
+  }
+  .app-fin__note { margin: 0; }
+  .app-fin__title { margin: var(--space-5) 0 var(--space-1); }
+  .app-fin__scroll { overflow-x: auto; }
+  .app-fin__table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+  .app-fin__table th, .app-fin__table td {
+    padding: 5px 0 5px var(--space-4); text-align: right; border-bottom: 1px solid var(--hairline);
+  }
+  .app-fin__table thead th { vertical-align: bottom; font-weight: 500; color: var(--ink-muted); }
+  .app-fin__table thead th > span { display: block; color: var(--ink-faint); font-weight: 400; }
+  .app-fin__table th:first-child, .app-fin__table td:first-child {
+    position: sticky; left: 0; z-index: 1; min-width: 232px;
+    padding-right: var(--space-2); padding-left: var(--space-2);
+    text-align: left; font-family: var(--font-sans); font-weight: 400;
+    background: var(--surface-raised); color: var(--ink-muted);
+  }
+  .app-fin__table thead th:first-child { color: var(--ink-faint); }
+  .app-fin__table tbody tr:hover th, .app-fin__table tbody tr:hover td {
+    background: var(--surface-hover);
+  }
+  .app-fin__table tr.is-total th, .app-fin__table tr.is-total td {
+    color: var(--ink); font-weight: 600;
+  }
+  .app-fin__table tr.is-sub th { padding-left: var(--space-6); }
+  .app-fin__table tr.is-head th {
+    padding-top: var(--space-4); color: var(--ink-faint); font-weight: 500;
+    border-bottom-color: var(--border);
+  }
+  .app-fin__table tr.is-head th > span { position: sticky; left: var(--space-2); }
+  .app-fin__table tbody tr.is-head:hover th { background: var(--surface-raised); }
+  .app-fin__table td.is-nil { color: var(--ink-faint); }
+  .app-fin__none { margin: var(--space-2) 0 0; color: var(--ink-faint); }
+  @media (width < 700px) {
+    .app-fin__table th:first-child, .app-fin__table td:first-child {
+      min-width: 168px; white-space: normal;
+    }
+  }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
      menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
@@ -894,5 +967,6 @@
 <script src="/static/company_overview.js"></script>
 <script src="/static/company_chart.js"></script>
 <script src="/static/company_estimates.js"></script>
+<script src="/static/company_financials.js"></script>
 </body>
 </html>

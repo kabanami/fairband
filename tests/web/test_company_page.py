@@ -285,13 +285,13 @@ def test_the_menus_of_the_head_open_inside_the_page() -> None:
 
 
 def test_the_tabs_and_the_data_date() -> None:
-    """Overview and Estimates are tabs, the open one selected; Research is a plain link to the
-    report page, its symbol encoded; the data date stands at the row's right end."""
+    """Overview, Financials and Estimates are tabs, the open one selected; Research is a plain
+    link to the report page, its symbol encoded; the data date stands at the row's right end."""
     tree = _page("tabs", "BRK.B", "estimates", "2026-11-14")
     tabs = classed(tree, "app-company__tab")
-    assert [text(t) for t in tabs] == ["Overview", "Estimates", "Research"]
-    overview, estimates, research = tabs
-    for tab, selected in ((overview, "false"), (estimates, "true")):
+    assert [text(t) for t in tabs] == ["Overview", "Financials", "Estimates", "Research"]
+    overview, financials, estimates, research = tabs
+    for tab, selected in ((overview, "false"), (financials, "false"), (estimates, "true")):
         assert tab["type"] == "button"
         assert tab["props"]["role"] == "tab"
         assert tab["props"]["aria-selected"] == selected
@@ -300,15 +300,16 @@ def test_the_tabs_and_the_data_date() -> None:
     assert "role" not in research["props"]
     [asof] = classed(tree, "app-company__asof")
     assert text(asof) == "data 14 Nov 2026"
-    _texts_in_order(tree, "Overview", "Estimates", "Research", "data 14 Nov 2026")
+    _texts_in_order(tree, "Overview", "Financials", "Estimates", "Research", "data 14 Nov 2026")
 
     other = _page("tabs", "A&B", "overview", None)
     assert [t["props"].get("aria-selected") for t in classed(other, "app-company__tab")] == [
         "true",
         "false",
+        "false",
         None,
     ]
-    assert classed(other, "app-company__tab")[2]["props"]["href"] == "#report/A%26B"
+    assert classed(other, "app-company__tab")[3]["props"]["href"] == "#report/A%26B"
     assert classed(other, "app-company__asof") == []
 
 
@@ -657,6 +658,7 @@ def test_the_hash_both_ways() -> None:
         ["brk.b", "estimates"],
         ["BRK.B", "estimates"],
         ["BRK%2EB", None],
+        ["BRK.B", "chart"],
         ["BRK.B", "financials"],
         ["A%26B", "overview"],
         ["%E0%A4%A", "estimates"],
@@ -674,6 +676,7 @@ def test_the_hash_both_ways() -> None:
         [False, {"symbol": "BRK.B", "tab": "estimates"}, "/BRK.B/estimates"],
         [True, {"symbol": "BRK.B", "tab": "overview"}, "/BRK.B"],
         [False, {"symbol": "BRK.B", "tab": "overview"}, "/BRK.B"],
+        [True, {"symbol": "BRK.B", "tab": "financials"}, "/BRK.B/financials"],
         [True, {"symbol": "A&B", "tab": "overview"}, "/A%26B"],
         [True, {"symbol": "%E0%A4%A", "tab": "estimates"}, "/%25E0%25A4%25A/estimates"],
     ]
