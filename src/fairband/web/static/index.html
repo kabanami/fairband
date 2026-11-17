@@ -951,14 +951,14 @@
   .app-fin__plot text { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-faint); }
   .app-fin__grid { stroke: var(--chart-grid); stroke-width: 1; }
   .app-fin__zero, .app-fin__cross { stroke: var(--border); stroke-width: 1; }
-  .app-fin__bar, .app-fin__dot, .app-fin__end, .app-fin__mark { fill: var(--fin-series); }
+  .app-fin__col, .app-fin__dot, .app-fin__end, .app-fin__mark { fill: var(--fin-series); }
   .app-fin__line {
     fill: none; stroke: var(--fin-series); stroke-width: 2; stroke-linejoin: round;
     stroke-linecap: round;
   }
   .app-fin__end, .app-fin__mark { stroke: var(--surface-raised); stroke-width: 2; }
-  .app-fin__bar.is-neg { fill: var(--chart-neg-3); }
-  .app-fin__bar.is-dim { opacity: 0.45; }
+  .app-fin__col.is-neg { fill: var(--chart-neg-3); }
+  .app-fin__col.is-dim { opacity: 0.45; }
   .app-fin__tip {
     position: absolute; z-index: 2; padding: 4px 8px; transform: translateY(-100%);
     color: var(--ink); background: var(--surface-raised); border: 1px solid var(--border);

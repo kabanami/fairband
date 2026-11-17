@@ -586,9 +586,9 @@ def test_a_figure_below_zero_hangs_from_the_baseline_in_the_negative_colour() ->
     )
     assert _ticks(plot) == ["−50B", "0B", "50B", "100B", "150B"]
     tree = _block([_pick("income", "netIncome")])
-    marks = classed(tree, "app-fin__bar")
-    assert [_classes(m) for m in marks].count({"app-fin__bar", "is-s0", "is-neg"}) == 1
-    assert [_classes(m) for m in marks].count({"app-fin__bar", "is-s0"}) == 10
+    marks = classed(tree, "app-fin__col")
+    assert [_classes(m) for m in marks].count({"app-fin__col", "is-s0", "is-neg"}) == 1
+    assert [_classes(m) for m in marks].count({"app-fin__col", "is-s0"}) == 10
     repurchased = _geometry([_pick("cashflow", "commonStockRepurchased")])["plots"][0]
     assert all(bar["neg"] for bar in repurchased["series"][0]["bars"])
     assert _ticks(repurchased) == ["−100B", "−50B", "0B"]
@@ -765,7 +765,7 @@ def test_the_hover_box_and_the_keys() -> None:
     [tip] = classed(tree, "app-fin__tip")
     assert text(tip) == "2024 · 391,035"
     assert "figure-sm" in _classes(tip)
-    bars = classed(tree, "app-fin__bar")
+    bars = classed(tree, "app-fin__col")
     assert ["is-dim" in _classes(bar) for bar in bars] == [True] * 8 + [False] + [True] * 2
     assert classed(tree, "app-fin__cross") == []
     assert classed(_block([REVENUE_PICK]), "app-fin__tip") == []
@@ -872,7 +872,7 @@ def test_a_pick_that_is_off_draws_no_plot() -> None:
     assert line["name"] == "Other income"
     tree = _block([_pick("income", "otherIncome")], answer=late)
     assert [text(e) for e in classed(tree, "app-fin__chead")[0]["props"]["children"]][1] == DASH
-    assert classed(tree, "app-fin__bar") == [] and len(classed(tree, "app-fin__zero")) == 1
+    assert classed(tree, "app-fin__col") == [] and len(classed(tree, "app-fin__zero")) == 1
     for pick in (MARGIN_PICK, _pick("income", "grossProfit")):
         assert _block([pick], period="quarter") is None
         assert (
@@ -900,10 +900,10 @@ def test_the_marks_follow_the_design_system() -> None:
     the grid solid; the ticks and the labels in text that wears no colour of a series. Nothing
     is a table."""
     bars = _block([REVENUE_PICK])
-    assert {frozenset(_classes(bar)) for bar in classed(bars, "app-fin__bar")} == {
-        frozenset({"app-fin__bar", "is-s0"})
+    assert {frozenset(_classes(bar)) for bar in classed(bars, "app-fin__col")} == {
+        frozenset({"app-fin__col", "is-s0"})
     }
-    assert all(bar["type"] == "path" for bar in classed(bars, "app-fin__bar"))
+    assert all(bar["type"] == "path" for bar in classed(bars, "app-fin__col"))
     line = _block([MARGIN_PICK])
     [path] = classed(line, "app-fin__line")
     assert _classes(path) == {"app-fin__line", "is-s0"}
@@ -931,11 +931,14 @@ def test_the_marks_follow_the_design_system() -> None:
     assert "--fin-series: var(--chart-1);" in rules[".app-fin .is-s0"]
     assert (
         "fill: var(--fin-series);"
-        in rules[".app-fin__bar, .app-fin__dot, .app-fin__end, .app-fin__mark"]
+        in rules[".app-fin__col, .app-fin__dot, .app-fin__end, .app-fin__mark"]
     )
     assert "stroke: var(--fin-series);" in rules[".app-fin__line"]
     assert "stroke-width: 2;" in rules[".app-fin__line"]
-    assert "fill: var(--chart-neg-3);" in rules[".app-fin__bar.is-neg"]
+    assert "fill: var(--chart-neg-3);" in rules[".app-fin__col.is-neg"]
+    assert "opacity: 0.45;" in rules[".app-fin__col.is-dim"]
+    assert "display: flex;" in rules[".app-fin__bar"]  # the controls row's, and none of the marks'
+    assert not [s for s in rules if "app-fin__bar" in s and s != ".app-fin__bar"]
     assert "stroke: var(--surface-raised);" in rules[".app-fin__end, .app-fin__mark"]
     assert "stroke: var(--chart-grid);" in rules[".app-fin__grid"]
     assert "stroke: var(--border);" in rules[".app-fin__zero, .app-fin__cross"]
@@ -967,6 +970,42 @@ def test_the_marks_follow_the_design_system() -> None:
     assert all("transition" not in body and "animation" not in body for body in rules.values())
     colours = re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", " ".join(rules.values()))
     assert colours == []
+
+
+MARKS = {"app-fin__col", "app-fin__line", "app-fin__dot", "app-fin__end", "app-fin__mark"}
+SHARED = {"is-s0", "heading", "caption", "figure-sm"}  # the line's slot and the type styles
+
+
+def test_the_chart_s_classes_are_its_own() -> None:
+    """No element of a drawn tab, its chart in its place, carries both the controls row's class
+    and a mark's, so no rule of one can reach the other; no element the tab's own builders draw
+    outside the chart carries a mark's class or any other of the chart's own. The two share only
+    the line's colour slot, which the row on the chart and its marks both wear, and the design
+    system's type styles; neither script names a class of the other's own."""
+    view = {"kind": "income", "period": "annual", "scale": "m"}
+    for change, picks in (
+        ({}, [REVENUE_PICK]),
+        ({}, [_pick("income", "netIncome")]),
+        ({"kind": "ratios"}, [MARGIN_PICK]),
+        ({"kind": "segments"}, [_pick("segments", "Anvils", "product")]),
+    ):
+        tab = _tab("block", ANSWER, view | change, picks, None)
+        own = {name for e in elements(tab) for name in _classes(e)}
+        chart = _block(picks, at=3)
+        drawn = {name for e in elements(chart) for name in _classes(e)}
+        assert drawn & MARKS, picks
+        assert own & MARKS == set(), picks
+        assert own & drawn <= SHARED, (picks, own & drawn)
+        [place] = classed(tab, "app-fin__chart")
+        place["props"]["children"] = [chart]  # the chart drawn in its place
+        [row] = classed(tab, "app-fin__bar")
+        assert row["type"] == "div" and _classes(row) == {"app-fin__bar"}
+        assert all("app-fin__bar" not in _classes(e) for e in elements(tab) if _classes(e) & MARKS)
+    names = re.compile(r"'(app-fin__[a-z]+)")
+    tab_names = set(names.findall(_static_file("company_financials.js")))
+    chart_names = set(names.findall(_static_file("company_financials_chart.js")))
+    assert MARKS <= chart_names
+    assert tab_names & chart_names == set(), tab_names & chart_names
 
 
 def test_the_chart_s_script_follows_the_tab_s() -> None:

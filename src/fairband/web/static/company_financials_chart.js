@@ -474,7 +474,7 @@
         return s.bars.map(function (b) {
           return h('path', {
             key: 'bar' + k + '-' + b.i, d: b.d,
-            className: 'app-fin__bar' + slot + (b.neg ? ' is-neg' : '') +
+            className: 'app-fin__col' + slot + (b.neg ? ' is-neg' : '') +
               (boxed && b.i !== at ? ' is-dim' : '')
           });
         });
