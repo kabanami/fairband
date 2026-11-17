@@ -814,3 +814,36 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
   - A company with no dividend (AMZN): Yield `0.00%`, Payout `0.0%`, Dividend a share `$0.00`,
     Paid and Last payment a dash. A company with no report (VLTO): the mechanical band and the
     four levels, and no report line.
+- 2026-11-17, after the founder's look at the live page ("it looks very good, a couple of small
+  edits"), four rulings of his, built the same day:
+  - The line of the last refresh and its Details ▾, under the header (7.1 drew the page under
+    it): "why not remove the text below the header on the engine run along with its details
+    button? we already have info in the header on the right hand side, having this distracts".
+    The company page and the report page, each a page of one company, draw neither: both
+    describe the whole universe, and the header's stamp says when the engine ran. The Screen and
+    the other views of many companies keep them. *My call*: a refresh that runs still draws its
+    bar on those two pages, and a notice its sentence, since the header has neither; the status
+    region stays, empty, so a run that starts is announced; a bar that draws nothing takes no
+    room.
+  - The link back to the screen (7.2, 7.5; the report page's own, at its foot): "why do we have a
+    back to the screen link? we already have the screen link in the header". Neither page draws
+    it. The header's Screen view is the way back, and the browser's Back returns to the view
+    left. A failed read of the detail draws its sentence alone.
+  - A finder in the header: "why not have the search bar again in this page, Let's say I am on a
+    company page now, and wanted to go to another company page?". *My call* on its form: a field
+    in the header's right slot, before the refresh controls, on every view but the Screen, whose
+    table has a field of its own (two fields with the same words on one view would confuse). It
+    matches as the Screen's field does, a ticker that starts with the text or a name that holds
+    it, on the rows the page already holds, so it asks the server nothing, and lists eight at
+    most: the ticker that is the text, then the tickers that start with it, the names that start
+    with it and the names that hold it, the larger company first within each. The arrow keys
+    move the mark, Enter opens the marked company's page, Escape empties the field, and a pick
+    sets the hash, so the browser's Back returns to the view left. The field is 220px and alone
+    gives way, down to 96px, where the one-line header is tight; under 1,100px of window, where
+    the header has no room for it beside the six views, the refresh controls and the stamp, it
+    is not drawn (B-235).
+  - The moat stamp keeps its form, an outlined label with no colour (7.2). The founder asked
+    whether it should carry a colour code, as a strip does in a deck of his; a mockup showed four
+    forms (as now; one blue in three strengths; the same in grey; teal, yellow and terracotta),
+    and Claude advised against the three colours, which on these pages already mean the buy zone,
+    phase 4 and the trim zone. The founder: "keep as is, no strip".

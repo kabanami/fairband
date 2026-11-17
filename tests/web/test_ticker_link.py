@@ -240,7 +240,7 @@ def test_the_report_page_links_to_the_company_page() -> None:
     assert "h(F.Button, { href: '#company/' + encodeURIComponent(r.symbol) }, 'Company page')" in (
         " ".join(_function(_static_file("report.js"), "head").split())
     )
-    assert "'Back to the screen')" in _function(_static_file("report.js"), "back")
+    assert "function back(" not in _static_file("report.js")
     assert "align-items: baseline;" in _rule(".app-report__side {")
 
 

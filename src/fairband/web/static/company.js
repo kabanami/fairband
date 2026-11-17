@@ -1,11 +1,12 @@
 /* The company page (the company page's design, 7), loaded after charts.js: a view at
-   #company/<symbol>, its Overview, and #company/<symbol>/estimates, its Estimates tab. Above the
-   head, the link back to the screen, as on the report page. The head stands on every tab: at its
-   left the logo, the name, the ticker, the phase badge, the moat stamp and one caption line, the
-   exchange, the sector and the industry; at its right the latest snapshot's price, the day's
-   change where the stored quote is that price's, the day of the close, then Notes, the
-   watchlists control and Request research. Under it the tabs' row: Overview and Estimates, and
-   Research, a link to the report page, the data date of the open tab at the row's right end.
+   #company/<symbol>, its Overview, and #company/<symbol>/estimates, its Estimates tab. No link
+   leads back to the screen: the header's Screen view does (the decision log of 2026-11-17). The
+   head stands on every tab: at its left the logo, the name, the ticker, the phase badge, the
+   moat stamp and one caption line, the exchange, the sector and the industry; at its right the
+   latest snapshot's price, the day's change where the stored quote is that price's, the day of
+   the close, then Notes, the watchlists control and Request research. Under it the tabs' row:
+   Overview and Estimates, and Research, a link to the report page, the data date of the open tab
+   at the row's right end.
    Under the row the open tab's blocks, which the later scripts hang on companyPage.draw by tab;
    nothing is drawn there while a tab's function is missing. The head reads the company's
    detail, as the drawer and the report page do; each tab its own read of the store, which
@@ -55,7 +56,7 @@
      after the reader left the view leaves the notes alone, so a Notes box open in the drawer keeps
      its draft; a read of the company shown keeps its draft; every landing follows the open item's
      launch again (shown). A tab's read that fails draws its sentence under the tabs; the detail's
-     draws its own (failure) and the link back. An Overview's read that lands draws its stored news,
+     draws its own (failure) alone. An Overview's read that lands draws its stored news,
      then asks for newer news where they are stale (newer); a tab held is shown with what it holds
      and asks nothing. */
   function load() {
@@ -167,33 +168,23 @@
     root.render(page());
   }
 
-  /* The link back, then the head, the tabs' row and the open tab; the detail's failure in the
-     head's place; while the first read is out, the ticker as the hash names it. */
+  /* The head, the tabs' row and the open tab; the detail's failure in the head's place; while
+     the first read is out, the ticker as the hash names it. */
   function page() {
     var d = state.detail;
     var className = state.loading ? 'app-company is-loading' : 'app-company';
     if (state.error) {
-      return h('div', { className: className }, back(), note(state.error));
+      return h('div', { className: className }, note(state.error));
     }
     if (!d) {
-      return h('div', { className: className }, back(),
+      return h('div', { className: className },
         h('h2', { className: 'ticker' }, P.company.symbol));
     }
     var answer = state.answers[state.tab] || null;
     return h('div', { className: className },
-      back(),
       head(d, answer && answer.quote),
       tabs(state.symbol, state.tab, answer && answer.dataDate),
       tabBody(answer, d));
-  }
-
-  /* The way back: the Screen, as the report page's link opens it. */
-  function back() {
-    return h('p', { className: 'app-company__back' },
-      h('a', {
-        className: 'app-link', href: '#',
-        onClick: function (event) { event.preventDefault(); P.show('screen'); }
-      }, 'Back to the screen'));
   }
 
   /* Under the tabs' row: the tab's failed read in one sentence (7.5), else its blocks, drawn by

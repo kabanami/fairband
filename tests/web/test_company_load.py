@@ -24,7 +24,13 @@ from support.page import BUNDLE, NODE, STATIC
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 DRIVER = Path(__file__).parent / "company_load.mjs"
-SCRIPTS = (BUNDLE, STATIC / "app.js", STATIC / "controls.js", STATIC / "company.js")
+SCRIPTS = (
+    BUNDLE,
+    STATIC / "app.js",
+    STATIC / "finder.js",
+    STATIC / "controls.js",
+    STATIC / "company.js",
+)
 LFOX = "/api/companies/LFOX"
 OVERVIEW = LFOX + "/page/overview"
 ESTIMATES = LFOX + "/page/estimates"

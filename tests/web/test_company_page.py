@@ -495,9 +495,8 @@ def test_the_reads_and_their_failures() -> None:
     assert "error.status = response.status;" in _function(script, "refused")
     page = _function(script, "page")
     assert "state.loading ? 'app-company is-loading' : 'app-company'" in page
-    _in_order(page, "if (state.error) {", "back(), note(state.error)")
-    back = _function(script, "back")
-    assert "P.show('screen');" in back and "'Back to the screen'" in back
+    _in_order(page, "if (state.error) {", "note(state.error)")
+    assert "function back(" not in script  # the header's Screen view is the way back
     assert "P.onShow.company = load;" in script
     assert _rule(".app-company.is-loading {") == "opacity: 0.5;"
 

@@ -23,8 +23,45 @@
   }
   #groups, #watchlists, #methodology, #settings, #inbox { overflow: auto; }
 
+  /* The header's finder (finder.js), first in the header's right slot on every view but the
+     Screen: a field in the look of the Screen's own, 220px wide, that alone gives way, down to
+     96px, where the one-line header is tight (the refresh controls keep their words on one
+     line), and is not drawn under 1100px of window, where the header has no room for it beside
+     the six views, the refresh controls and the stamp; its list in the bundle's menu frame,
+     under the field's left edge, as wide as its longest row to 420px, a row's name cut with an
+     ellipsis; the marked row and the row under the pointer on surface-hover. */
+  .app-finder { position: relative; flex: 0 1 auto; width: 220px; min-width: 96px; }
+  .fb-hdr__right { min-width: 0; } /* the slot may shrink, and in it the finder alone gives way */
+  @media (width < 1100px) {
+    .app-finder { display: none; }
+  }
+  .app-finder__q {
+    box-sizing: border-box; width: 100%; padding: var(--space-1) var(--space-2);
+    font-family: var(--font-mono); font-size: 13px; line-height: 16px; color: var(--ink);
+    background: var(--surface-sunken); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .app-finder__q::placeholder { color: var(--ink-faint); font-family: var(--font-sans); }
+  .app-finder__q:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .app-finder__list {
+    left: 0; right: auto; box-sizing: border-box; min-width: 100%; width: max-content;
+    max-width: min(420px, calc(100vw - 2 * var(--space-6))); margin: 0; padding: var(--space-1);
+    list-style: none;
+  }
+  .app-finder__opt {
+    display: flex; align-items: baseline; gap: var(--space-2); padding: 3px var(--space-2);
+    border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .app-finder__opt[aria-selected="true"], .app-finder__opt:hover {
+    background: var(--surface-hover);
+  }
+  .app-finder__name {
+    min-width: 0; overflow: hidden; color: var(--ink-muted); text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-finder__none { padding: 3px var(--space-2); color: var(--ink-faint); }
   /* The refresh controls, in the header's right slot beside the engine stamp. */
-  .app-actions { display: flex; align-items: center; gap: var(--space-2); }
+  .app-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); }
   /* At phone width the refresh controls stay beside the lockup, so the header grows by the
      views' line alone (B-82): below 560px the engine stamp gives way (the status line under the
      header still says when the last refresh ended), and below 400px the buttons read Prices and
@@ -42,9 +79,12 @@
     .fb-hdr__nav { flex-wrap: wrap; height: auto; min-height: var(--header-height); row-gap: 0; }
     .fb-hdr__view { height: var(--header-height); }
   }
-  /* The status line under the header, with the notice line under it when there is one. */
+  /* The status line under the header, with the notice line under it when there is one. A bar
+     that draws nothing, on a page of one company with no run and no notice, takes no room. */
   .app-bar { margin-bottom: var(--space-3); }
   .app-status { margin: var(--space-2) 0 0; color: var(--ink-muted); }
+  .app-bar--bare { margin: 0; }
+  .app-bar--bare .app-status { margin: 0; }
   .app-status--caution { color: var(--caution); }
   /* The last refresh's line, with its Details ▾ beside it; the menu opens under the control,
      from its left edge, since the line starts at the page's left margin. */
@@ -521,7 +561,6 @@
   .app-report__glossary dd { margin: var(--space-1) 0 var(--space-3); }
   .app-report__none { margin-top: var(--space-6); }
   .app-report__none > .app-note { margin-bottom: var(--space-3); }
-  .app-report__back { margin: var(--space-8) 0 0; }
   /* The report's charts (spec 18.4, CompanyReport.md): inside the reader, under a section's
      heading and above its sentences, each on a raised panel with a hairline border and no shadow,
      two to a row as small multiples, one to a row below 840px; the price against the band the
@@ -558,7 +597,6 @@
   #company { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
   .app-company { max-width: 1760px; padding: var(--space-2) 0 var(--space-8); }
   .app-company.is-loading { opacity: 0.5; }
-  .app-company__back { margin: 0 0 var(--space-3); }
   .app-company__head {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
     gap: var(--space-3) var(--space-8);
@@ -800,7 +838,7 @@
      window's. */
   @media print {
     #header, #controls, .fb-btn, .fb-menu, .app-dialog, .app-report__figures, .app-report__band,
-    .app-report__revisions, .app-report__back, .app-request, .app-requested,
+    .app-report__revisions, .app-request, .app-requested,
     .app-request__error { display: none !important; }
     html, body, .app-page { height: auto; }
     .app-page { display: block; }
@@ -842,6 +880,7 @@
 <script src="/static/vendor/react-dom.production.min.js"></script>
 <script src="/static/design-system/components/bundle.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/finder.js"></script>
 <script src="/static/controls.js"></script>
 <script src="/static/watchlists.js"></script>
 <script src="/static/inbox.js"></script>

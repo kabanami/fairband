@@ -1,12 +1,12 @@
 // The company page's loader driven in node (the company page's design, 7.1 and 7.5), for
-// tests/web/test_company_load.py: the bundle, app.js, controls.js and company.js are loaded in the
-// page's order, with a stub React, a stub ReactDOM whose roots keep what they last drew, the few
-// browser objects the four scripts touch (each view's panel one object whose `hidden` controls.js
-// sets, the hash, the history the views replace) and a fetch of the driver's own, answered only
-// when a step answers it, so the steps say exactly when each read lands. The reads the header and
-// the screen start as the scripts load are dropped: no step answers them. The tabs' functions are
-// the driver's own, so the trace reads what the page holds: each draws { tab, mark, price }, the
-// mark of the tab's answer it was handed and the price of the detail.
+// tests/web/test_company_load.py: the bundle, app.js, finder.js, controls.js and company.js are
+// loaded in the page's order, with a stub React, a stub ReactDOM whose roots keep what they last
+// drew, the few browser objects the scripts touch (each view's panel one object whose `hidden`
+// controls.js sets, the hash, the history the views replace) and a fetch of the driver's own,
+// answered only when a step answers it, so the steps say exactly when each read lands. The reads
+// the header and the screen start as the scripts load are dropped: no step answers them. The
+// tabs' functions are the driver's own, so the trace reads what the page holds: each draws
+// { tab, mark, price }, the mark of the tab's answer it was handed and the price of the detail.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "symbol", "tab"}         a link or a tab's button opens the company page there
@@ -28,10 +28,11 @@
 // or not, the sentence of a failed read, the head's ticker and price, the tab selected and what
 // the open tab's function drew.
 //
-//   node company_load.mjs <bundle.js> <app.js> <controls.js> <company.js>  < steps.json  > trace.json
+//   node company_load.mjs <bundle.js> <app.js> <finder.js> <controls.js> <company.js>
+//     < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
 
-const [bundle, app, controls, company] = process.argv.slice(2, 6)
+const [bundle, app, finder, controls, company] = process.argv.slice(2, 7)
   .map((path) => readFileSync(path, 'utf8'));
 const steps = JSON.parse(readFileSync(0, 'utf8'));
 const later = globalThis.setTimeout; // the driver's own wait for the work a step sets off
@@ -90,6 +91,8 @@ new Function('window', 'React', bundle)(window, React);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app)(
   window, React, ReactDOM, window.Fairband, document, fetch);
 const P = window.FairbandPage;
+new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
+  finder)(window, React, ReactDOM, window.Fairband, P, document, fetch);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   'history', 'location', controls)(
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location);

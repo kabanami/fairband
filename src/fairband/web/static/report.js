@@ -9,12 +9,13 @@
    by its footnote number (13.1) and the charts of the sections that have them above their
    sentences (18.4), no chart with a table (spec 2026-11-16 company page, 8.4 and 13), the
    references those numbers name, Appendix A, the audit of the records the report rests on, and
-   Appendix B, the glossary, both as the server generates them; a link back to the screen. The
-   page shows Request research with or without a report, as the drawer has it: under the
-   revisions line, or under the head, the meter and "No report yet." for a company with none.
-   app.js's parts come through window.FairbandPage; the head and the meter read the company's
-   detail, as the drawer does, and the rest the report. The charts read the series the sections
-   cite once the report is in, and charts.js draws them. */
+   Appendix B, the glossary, both as the server generates them. No link leads back to the
+   screen: the header's Screen view does (the company page's design, the decision log of
+   2026-11-17). The page shows Request research with or without a report, as the drawer has it:
+   under the revisions line, or under the head, the meter and "No report yet." for a company with
+   none. app.js's parts come through window.FairbandPage; the head and the meter read the
+   company's detail, as the drawer does, and the rest the report. The charts read the series the
+   sections cite once the report is in, and charts.js draws them. */
 (function () {
   'use strict';
 
@@ -144,7 +145,7 @@
 
   /* CompanyReport's order: the head, the company brief (B-149), the meter, then the report with
      the line above it and Request research under that line (plan 4), its references and its
-     appendixes; without a report, a note and Request research. The link back closes it. */
+     appendixes; without a report, a note and Request research. */
   function page() {
     var d = state.detail;
     var report = state.report;
@@ -157,7 +158,7 @@
       ] : [noReport(d)]);
     }
     return h('div', { className: state.loading ? 'app-report is-loading' : 'app-report' },
-      shown, back());
+      shown);
   }
 
   /* ----------------------------------------------------------------- the head */
@@ -559,15 +560,6 @@
           h('dt', { className: 'heading' }, t.term),
           h('dd', { className: 'body' }, t.meaning));
       })) : none('No terms used.'));
-  }
-
-  /* The way back: the Screen, as its header view opens it. */
-  function back() {
-    return h('p', { className: 'app-report__back' },
-      h('a', {
-        className: 'app-link', href: '#',
-        onClick: function (event) { event.preventDefault(); P.show('screen'); }
-      }, 'Back to the screen'));
   }
 
   /* -------------------------------------------------------------- without a report */

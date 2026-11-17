@@ -1,10 +1,13 @@
-/* The page's header, its status line and the group view, loaded after app.js. The header is the
-   design system's AppHeader: the six views (Screen, Groups, Watchlists, Methodology, Settings,
-   Inbox), the engine stamp and the refresh controls; the URL hash names the open view. Inbox
+/* The page's header, its status line and the group view, loaded after app.js and finder.js. The
+   header is the design system's AppHeader: the six views (Screen, Groups, Watchlists,
+   Methodology, Settings, Inbox), then in its right slot the finder (finder.js) on every view but
+   the Screen, the refresh controls and the engine stamp; the URL hash names the open view. Inbox
    carries the count of the open work items, read every thirty seconds while the page is shown
    (spec 2026-11-06 Tier 2, 18.5). Under the header, the status line: the running refresh's one
    run bar (the design system's RunProgress), or how the last one ended in one line, its
-   calibration's breakdown behind Details ▾ (growth-routes spec 6.1). While a refresh runs, the
+   calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the report page and the
+   company page draw the run bar and a notice alone, not the last refresh's line or Details ▾
+   (the company page's design, the decision log of 2026-11-17). While a refresh runs, the
    page asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons
    were, the stamp is gone and the tables keep their old figures at ink-faint; when it ends, the
    rows (and the groups, the report page or the company page, when that view is open) load again.
@@ -426,19 +429,31 @@
       view: state.tab === 'report' || state.tab === 'company' ? '' : state.tab,
       onViewChange: show,
       engineRanAt: ran ? P.localIso(ran) : null,
-      children: actions(alive)
+      /* the right slot: the finder (finder.js) on every view but the Screen, whose table has a
+         field of its own, then the refresh controls */
+      children: [
+        state.tab === 'screen' ? null : h(P.finder.view, { key: 'finder' }),
+        actions(alive)
+      ]
     }));
     /* The status line: during a run, the run bar, or the stage word alone while the stage reports
        a total of 0 (the component draws nothing for it); else how the last refresh ended. A div,
        since the bar is a block a p cannot hold. Details ▾ stands beside the line, outside the
-       status region, when the calibration has a breakdown; the run bar keeps the full width. */
+       status region, when the calibration has a breakdown; the run bar keeps the full width.
+       A page of one company, the company page or the report page, draws neither the last
+       refresh's line nor Details ▾: both describe the universe, and the header's stamp says when
+       the engine ran (the founder, 2026-11-17). A run's bar and a notice still draw there, since
+       the header has neither, and the status region stays, empty, so a run that starts is
+       announced from a region the page already had. A bar that draws nothing takes no room. */
+    var one = state.tab === 'report' || state.tab === 'company';
     var run = alive ? runProps(state.running) : null;
-    var status = !run ? lastLine(state.last)
-      : [run.total > 0 ? h(F.RunProgress, runProps(state.running)) : run.stage];
-    var c = !run && state.last ? state.last.calibration : null;
+    var status = run ? [run.total > 0 ? h(F.RunProgress, runProps(state.running)) : run.stage]
+      : one ? [] : lastLine(state.last);
+    var c = !run && !one && state.last ? state.last.calibration : null;
     var details = c && c.phases ? detailsMenu(c) : null;
     var notice = state.notice;
-    bar.render(h('div', { className: 'app-bar' },
+    var bare = !status.length && !notice;
+    bar.render(h('div', { className: 'app-bar' + (bare ? ' app-bar--bare' : '') },
       h('div', { className: details ? 'app-statusline' : null },
         h.apply(null, ['div', { className: 'caption app-status', role: 'status' }].concat(status)),
         details),
@@ -475,7 +490,7 @@
         onClick: function () { start('full'); }
       }, label('Refresh all', 'Full'))
     ];
-    return h('div', { className: 'app-actions' }, buttons);
+    return h('div', { key: 'actions', className: 'app-actions' }, buttons);
   }
 
   /* The table of the groups last loaded; while others load, it stays, faded. Its figures read

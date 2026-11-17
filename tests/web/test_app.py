@@ -839,6 +839,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/vendor/react-dom.production.min.js",
         "/static/design-system/components/bundle.js",
         "/static/app.js",
+        "/static/finder.js",
         "/static/controls.js",
         "/static/watchlists.js",
         "/static/inbox.js",
@@ -2358,7 +2359,8 @@ def test_the_report_page_order_is_pinned() -> None:
     draws it, its price under the head's figure-lg; above the reader the stance, mode, date,
     writer, revision, Download .md, the other revisions and Request research (plan 4);
     ReportReader with every section, its cites and its footnote numbers; the references; Appendix
-    A with the bridge; Appendix B; the link back to the screen."""
+    A with the bridge; Appendix B. No link leads back to the screen: the header's Screen view
+    does (spec 2026-11-16 company page, the decision log of 2026-11-17)."""
     script = _code(_static_file("report.js"))
     _in_order(
         script,
@@ -2372,7 +2374,6 @@ def test_the_report_page_order_is_pinned() -> None:
         "'Appendix A')",
         "h(F.ValueBridge, {",
         "'Appendix B')",
-        "'Back to the screen')",
     )
     page = _function(script, "page")
     _in_order(
@@ -2384,7 +2385,6 @@ def test_the_report_page_order_is_pinned() -> None:
         "references(report)",
         "appendixA(report)",
         "appendixB(report)",
-        "back()",
     )
     head = _function(script, "head")
     assert "value: value.value, basis: value.basis, emphasis: 'strong', align: 'left'" in head
@@ -2446,8 +2446,7 @@ def test_the_report_page_order_is_pinned() -> None:
         "link.download = report.symbol + '-revision-' + report.revision + '.md';",
         "link.click();",
     )
-    back = _function(script, "back")
-    assert "P.show('screen');" in back and "href: '#'" in back
+    assert "function back(" not in script
 
 
 def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
@@ -2850,7 +2849,6 @@ def test_the_print_stylesheet() -> None:
         ".app-report__figures",
         ".app-report__band",
         ".app-report__revisions",
-        ".app-report__back",
         ".app-request,",
         ".app-requested,",
         ".app-request__error",
