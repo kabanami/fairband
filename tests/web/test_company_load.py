@@ -35,6 +35,7 @@ LFOX = "/api/companies/LFOX"
 OVERVIEW = LFOX + "/page/overview"
 ESTIMATES = LFOX + "/page/estimates"
 FINANCIALS = LFOX + "/page/financials"
+RESEARCH = LFOX + "/page/research"
 NOTES = LFOX + "/notes"
 BRK = "/api/companies/BRK.B"
 RETRY = "The company's data did not load: {}. Open the page again to retry."
@@ -76,8 +77,8 @@ def _tab(mark: str, symbol: str = "LFOX") -> dict[str, Any]:
     }
 
 
-def _show(symbol: str, tab: str) -> dict[str, Any]:
-    return {"do": "show", "symbol": symbol, "tab": tab}
+def _show(symbol: str, tab: str, report: int | None = None) -> dict[str, Any]:
+    return {"do": "show", "symbol": symbol, "tab": tab, "id": report}
 
 
 def _answer(url: str, body: Any, status: int = 200) -> dict[str, Any]:
@@ -192,6 +193,98 @@ def test_the_financials_tab_is_read_where_its_hash_names_it() -> None:
     assert again["fetched"] == [] and again["inFlight"] == []
     assert again["page"] == shown
     assert again["hash"] == "#company/LFOX/financials"
+
+
+def test_research_is_a_tab_that_reads_the_report_its_address_names() -> None:
+    """Research is the fourth tab (the Research tab's design, 7.1): ``show('company', 'AAPL',
+    'research', 12)`` names the report in the hash, #company/AAPL/research/12, and reads the tab
+    with its id, ?report=12; the tab without an id is the company's latest report, read with no
+    query, the detail kept."""
+    aapl = "/api/companies/AAPL"
+    trace = _drive(
+        [
+            _show("AAPL", "research", 12),
+            _answer(aapl, _detail(182.4, "AAPL")),
+            _answer(aapl + "/page/research?report=12", _tab("report 12", "AAPL")),
+            _show("AAPL", "research"),
+            _answer(aapl + "/page/research", _tab("the latest report", "AAPL")),
+        ]
+    )
+    shown, detail, landed, latest, again = trace
+    assert shown["hash"] == "#company/AAPL/research/12"
+    assert shown["fetched"] == _get(aapl)
+    assert detail["fetched"] == _get(aapl + "/page/research?report=12")
+    shown_page = OPENED | {"ticker": "AAPL", "tab": "Research"}
+    assert landed["page"] == shown_page | {"drawn": _drawn("research", "report 12", 182.4)}
+    assert latest["hash"] == "#company/AAPL/research"
+    assert latest["fetched"] == _get(aapl + "/page/research")
+    assert again["page"] == shown_page | {"drawn": _drawn("research", "the latest report", 182.4)}
+
+
+def test_an_id_that_is_not_a_whole_number_names_no_report() -> None:
+    """#company/LFOX/research/x keeps no id: the hash is written back without it and the tab
+    reads the latest report."""
+    hashed, detail = _drive(
+        [{"do": "hash", "hash": "#company/LFOX/research/x"}, _answer(LFOX, _detail(182.4))]
+    )
+    assert hashed["hash"] == "#company/LFOX/research"
+    assert detail["fetched"] == _get(RESEARCH)
+
+
+def test_another_report_of_the_tab_shown_drops_the_first_s_late_answer() -> None:
+    """Another id of the tab reads the tab again, the detail kept; the answer of the report asked
+    for first, landing after the second was asked for, is dropped, and the page stays faded on
+    what it showed until the second lands. A report read before is held by its id: shown again at
+    once, with no read."""
+    trace = _drive(
+        OPEN
+        + [
+            _show("LFOX", "research", 31),
+            _show("LFOX", "research", 19),
+            _answer(RESEARCH + "?report=31", _tab("report 31")),
+            _answer(RESEARCH + "?report=19", _tab("report 19")),
+            _show("LFOX", "overview"),
+            _show("LFOX", "research", 19),
+            _show("LFOX", "research", 31),
+        ]
+    )
+    first, second, late, landed, overview, held, dropped = trace[3:]
+    assert first["fetched"] == _get(RESEARCH + "?report=31")
+    assert second["fetched"] == _get(RESEARCH + "?report=19")
+    assert second["hash"] == "#company/LFOX/research/19"
+    assert late["page"] == OPENED | {"faded": True}
+    shown = OPENED | {"tab": "Research", "drawn": _drawn("research", "report 19", 182.4)}
+    assert landed["page"] == shown
+    assert overview["page"] == OPENED and overview["fetched"] == []
+    assert held["fetched"] == [] and held["page"] == shown
+    assert dropped["fetched"] == _get(RESEARCH + "?report=31")
+
+
+def test_a_404_of_the_research_read_is_the_server_s_sentence() -> None:
+    """An id of another company's report, or of none, or a company with no page data: the
+    tab's 404 draws the server's sentence under the tabs as it arrives, since opening the page
+    again would not help; any other failure of the read, the page's sentence."""
+    trace = _drive(
+        [
+            _show("LFOX", "research", 9),
+            _answer(LFOX, _detail(182.4)),
+            _answer(RESEARCH + "?report=9", {"detail": "report 9 is NVDA's, not LFOX's"}, 404),
+            _show("LFOX", "research", 7),
+            _answer(RESEARCH + "?report=7", {"detail": "no report 7"}, 404),
+            _show("LFOX", "research"),
+            _answer(RESEARCH, {"detail": "no page data for LFOX"}, 404),
+            _show("LFOX", "research", 8),
+            _answer(RESEARCH + "?report=8", None, 500),
+            _show("LFOX", "research", 6),
+            _fail(RESEARCH + "?report=6"),
+        ]
+    )
+    failed = OPENED | {"tab": "Research", "drawn": None}
+    assert trace[2]["page"] == failed | {"sentence": "report 9 is NVDA's, not LFOX's"}
+    assert trace[4]["page"] == failed | {"sentence": "no report 7"}
+    assert trace[6]["page"] == failed | {"sentence": "no page data for LFOX"}
+    assert trace[8]["page"] == failed | {"sentence": RETRY.format("the server answered 500")}
+    assert trace[10]["page"] == failed | {"sentence": RETRY.format("Failed to fetch")}
 
 
 def test_a_tab_whose_read_is_out_asked_for_again_is_read_whole() -> None:

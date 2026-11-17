@@ -1,13 +1,15 @@
 /* The company page (the company page's design, 7), loaded after charts.js: a view at
    #company/<symbol>, its Overview, #company/<symbol>/financials, its Financials tab (the
-   Financials tab's design, 7.1), and #company/<symbol>/estimates, its Estimates tab. No link
-   leads back to the screen: the header's Screen view does (the decision log of 2026-11-17). The
-   head stands on every tab: at its left the logo, the name, the ticker, the phase badge, the
-   moat stamp and one caption line, the exchange, the sector and the industry; at its right the
-   latest snapshot's price, the day's change where the stored quote is that price's, the day of
-   the close, then Notes, the watchlists control and Request research. Under it the tabs' row:
-   Overview, Financials and Estimates, and Research, a link to the report page, the data date of
-   the open tab at the row's right end.
+   Financials tab's design, 7.1), #company/<symbol>/estimates, its Estimates tab, and
+   #company/<symbol>/research, its Research tab on the company's latest report, or
+   #company/<symbol>/research/<id> on the report with that id (the Research tab's design, 7.1).
+   No link leads back to the screen: the header's Screen view does (the decision log of
+   2026-11-17). The head stands on every tab: at its left the logo, the name, the ticker, the
+   phase badge, the moat stamp and one caption line, the exchange, the sector and the industry;
+   at its right the latest snapshot's price, the day's change where the stored quote is that
+   price's, the day of the close, then Notes, the watchlists control and Request research. Under
+   it the tabs' row: Overview, Financials, Estimates and Research, the data date of the open tab
+   at the row's right end.
    Under the row the open tab's blocks, which the later scripts hang on companyPage.draw by tab;
    nothing is drawn there while a tab's function is missing. The head reads the company's
    detail, as the drawer and the report page do; each tab its own read of the store, which
@@ -22,24 +24,30 @@
   var h = React.createElement;
   var F = Fairband;
   var P = FairbandPage;
-  /* The three tabs the page reads, each its read's path and its name; Research is a link. */
-  var TABS = [['overview', 'Overview'], ['financials', 'Financials'], ['estimates', 'Estimates']];
+  /* The four tabs the page reads, each its read's path and its name. */
+  var TABS = [['overview', 'Overview'], ['financials', 'Financials'], ['estimates', 'Estimates'],
+    ['research', 'Research']];
 
   var mount = document.getElementById('company');
   var root = ReactDOM.createRoot(mount);
   var state = {
     symbol: null, /* the company whose page is shown */
     tab: 'overview', /* the tab shown */
+    id: null, /* the report the Research tab shows, by its id; null for the latest and elsewhere */
     detail: null, /* GET /api/companies/{symbol}: the head */
-    answers: {}, /* the shown company's tab reads, by tab, as they landed */
+    answers: {}, /* the shown company's tab reads, by tab and report (keyOf), as they landed */
     failed: null, /* the shown tab's read failed: the sentence drawn under the tabs */
     error: null, /* the detail's read failed: the server's sentence, drawn in the head's place */
     loading: false,
     whole: false, /* the read out reads the detail too: the tabs held may be older than it */
-    reading: null, /* the tab the read out reads, before it is shown */
+    reading: null, /* the tab and report the read out reads (keyOf), before it is shown */
     request: null /* Request research for the page's company (FairbandPage.asking) */
   };
   var latest = 0;
+
+  /* The key a tab's answer is held under, of `at`, { tab, id }: the tab, and for a report the
+     Research tab names by its id, research/<id>, so each report read is a tab of its own. */
+  function keyOf(at) { return at.id == null ? at.tab : at.tab + '/' + at.id; }
 
   /* The page FairbandPage.company names (7.1, 7.5). Another company, or the tab shown asked for
      again (the view opened again, a request's post ended, a note was taken in the head's Notes box,
@@ -48,9 +56,11 @@
      the other tab, so the head and the tab draw the run's figures; another tab of the company shown
      reads only that tab, and one it read already is shown at once, but while a read of the detail
      is out, which that tab may be older than, it reads the detail and the tab, so a reread a
-     refresh's end started is never dropped for the figures of before the run. The page shown stays,
-     faded, until the new one lands, and the latest read wins, so a read that lands after the reader
-     moved to another company or tab is dropped. A read of another company stops the following of
+     refresh's end started is never dropped for the figures of before the run. A report of the
+     Research tab is a tab of its own (keyOf): another report reads the tab with that report's id,
+     ?report=<id>, and one read already is shown at once. The page shown stays, faded, until the
+     new one lands, and the latest read wins, so a read that lands after the reader moved to
+     another company, tab or report is dropped. A read of another company stops the following of
      the request of the company shown before it starts, and drops a note drafted on another company
      (FairbandPage.notesShown), and again as it lands or fails while the page shows, so a Notes box
      opened from the faded head of the company before it closes as the page turns; one that lands
@@ -62,18 +72,19 @@
      and asks nothing. */
   function load() {
     var want = P.company;
+    var key = keyOf(want);
     var request = ++latest;
     var held = !!state.detail && !state.error && state.symbol === want.symbol;
-    if (held && want.tab !== state.tab && state.answers[want.tab] && !state.whole) {
+    if (held && key !== keyOf(state) && state.answers[key] && !state.whole) {
       state.tab = want.tab;
+      state.id = want.id;
       state.failed = null;
       state.loading = false;
       state.reading = null;
       shown();
       return;
     }
-    var whole = !held || want.tab === state.tab || want.tab === state.reading ||
-      state.whole;
+    var whole = !held || key === keyOf(state) || key === state.reading || state.whole;
     var company = '/api/companies/' + encodeURIComponent(want.symbol);
     if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);
     if (state.symbol !== want.symbol) P.notesShown(want.symbol);
@@ -81,26 +92,28 @@
        Back): the next page opens at its head, not at the depth the reader left. */
     if (state.symbol !== want.symbol) mount.scrollTop = 0;
     state.whole = whole;
-    state.reading = want.tab;
+    state.reading = key;
     state.loading = true;
     render();
     (whole ? read(company) : Promise.resolve(state.detail))
       .then(function (detail) {
-        return read(company + '/page/' + want.tab).then(function (answer) {
-          return { detail: detail, answer: answer, failed: null };
-        }, function (err) {
-          return { detail: detail, answer: null, failed: failure(err, false) };
-        });
+        return read(company + '/page/' + want.tab + (want.id == null ? '' : '?report=' + want.id))
+          .then(function (answer) {
+            return { detail: detail, answer: answer, failed: null };
+          }, function (err) {
+            return { detail: detail, answer: null, failed: failure(err, want.tab === 'research') };
+          });
       })
       .then(function (found) {
         if (request !== latest) return;
         state.whole = false;
         state.reading = null;
         if (whole) state.answers = {};
-        if (found.answer) state.answers[want.tab] = found.answer;
+        if (found.answer) state.answers[key] = found.answer;
         if (state.symbol !== want.symbol && !mount.hidden) P.notesShown(want.symbol);
         state.symbol = want.symbol;
         state.tab = want.tab;
+        state.id = want.id;
         state.detail = found.detail;
         state.failed = found.failed;
         state.error = null;
@@ -115,6 +128,7 @@
         if (state.symbol !== want.symbol && !mount.hidden) P.notesShown(want.symbol);
         state.symbol = want.symbol;
         state.tab = want.tab;
+        state.id = want.id;
         state.detail = null;
         state.answers = {};
         state.failed = null;
@@ -160,11 +174,13 @@
   }
 
   /* What a failed read draws (7.5): the Words table's sentence with the read's message, which
-     says to open the page again; but for the detail's 404, `detail` true, a company with no
-     snapshot, the server's own sentence as it arrives (no snapshot for <symbol>). A tab's 404 is
-     no page data for <symbol> in the Words table's sentence. */
-  function failure(err, detail) {
-    if (detail && err.status === 404) return err.message;
+     says to open the page again; but for a 404 of a read whose refusal is final, `asIs` true, the
+     server's own sentence as it arrives, since opening the page again would not help: the
+     detail's, a company with no snapshot (no snapshot for <symbol>), and the Research tab's, a
+     report of another company or of none, or no page data (the Research tab's design, 7.1). Any
+     other tab's 404 is no page data for <symbol> in the Words table's sentence. */
+  function failure(err, asIs) {
+    if (asIs && err.status === 404) return err.message;
     return 'The company\'s data did not load: ' + err.message + '. Open the page again to retry.';
   }
 
@@ -184,7 +200,7 @@
       return h('div', { className: className },
         h('h2', { className: 'ticker' }, P.company.symbol));
     }
-    var answer = state.answers[state.tab] || null;
+    var answer = state.answers[keyOf(state)] || null;
     return h('div', { className: className },
       head(d, answer && answer.quote),
       tabs(state.symbol, state.tab, answer && answer.dataDate),
@@ -274,10 +290,10 @@
 
   /* ------------------------------------------------------------------ the tabs */
 
-  /* The tabs' row (7.3, 7.4): Overview, Financials and Estimates, the open one selected, each
-     opening through FairbandPage.show, which replaces the hash; Research, a link to the report
-     page, the symbol encoded as the report page's links encode it; and at the row's right end the
-     data date of the open tab's read, none without one. */
+  /* The tabs' row (7.3, 7.4; the Research tab's design, 7.1): Overview, Financials, Estimates
+     and Research, the open one selected, each opening through FairbandPage.show, which replaces
+     the hash, Research on the company's latest report; and at the row's right end the data date
+     of the open tab's read, none without one. */
   function tabs(symbol, tab, dataDate) {
     return h('nav', { className: 'app-company__tabs' },
       h('div', { className: 'app-company__tablist', role: 'tablist' },
@@ -288,11 +304,15 @@
             onClick: function () { P.show('company', symbol, t[0]); }
           }, t[1]);
         })),
-      h('a', {
-        className: 'control app-company__tab', href: '#report/' + encodeURIComponent(symbol)
-      }, 'Research'),
       dataDate ? h('p', { className: 'caption app-company__asof' }, 'data ' + day(dataDate))
         : null);
+  }
+
+  /* The Research tab's address on the report `id`, the symbol encoded as the hash encodes it
+     (controls.js, companyPath): #company/AAPL/research/12, or #company/AAPL/research, the
+     company's latest report, where no id is given. */
+  function researchHref(symbol, id) {
+    return '#company/' + encodeURIComponent(symbol) + '/research' + (id == null ? '' : '/' + id);
   }
 
   /* ---------------------------------------------------------- the blocks' parts */
@@ -489,16 +509,19 @@
   }
 
   /* What the tabs' scripts and the tests use: the head, the tabs' row, a panel, a list of names
-     and figures, a group, a small table and the formatters; and draw, which each tab's script
-     fills with its tab's function, draw.overview(answer, detail), draw.financials(answer, detail)
-     and draw.estimates(answer, detail), each returning the tab's element. The read of newer news
-     (freshNews), the row the watchlists popup opens on and a failed read's sentence are here for
-     the tests. */
+     and figures, a group, a small table and the formatters; the Research tab's address on a
+     report (researchHref); redraw(), which draws the page again with what it holds, for a tab
+     whose own reads land after its answer; and draw, which each tab's script fills with its tab's
+     function, draw.overview(answer, detail), draw.financials(answer, detail),
+     draw.estimates(answer, detail) and draw.research(answer, detail), each returning the tab's
+     element. The read of newer news (freshNews), the row the watchlists popup opens on and a
+     failed read's sentence are here for the tests. */
   P.companyPage = {
     head: head, tabs: tabs, panel: panel, kv: kv, group: group, table: table,
     money: money, big: big, percent: percent, points: points, signed: signed,
     multiple: multiple, decimal: decimal, day: day, count: count,
     watchRow: watchRow, failure: failure, freshNews: freshNews,
+    researchHref: researchHref, redraw: render,
     draw: {}
   };
   P.onShow.company = load;

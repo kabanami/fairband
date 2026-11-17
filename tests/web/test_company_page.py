@@ -285,40 +285,68 @@ def test_the_menus_of_the_head_open_inside_the_page() -> None:
 
 
 def test_the_tabs_and_the_data_date() -> None:
-    """Overview, Financials and Estimates are tabs, the open one selected; Research is a plain
-    link to the report page, its symbol encoded; the data date stands at the row's right end."""
+    """Overview, Financials, Estimates and Research are the four tabs, each a button, the open
+    one selected (the Research tab's design, 7.1); the data date stands at the row's right end."""
     tree = _page("tabs", "BRK.B", "estimates", "2026-11-14")
     tabs = classed(tree, "app-company__tab")
     assert [text(t) for t in tabs] == ["Overview", "Financials", "Estimates", "Research"]
-    overview, financials, estimates, research = tabs
-    for tab, selected in ((overview, "false"), (financials, "false"), (estimates, "true")):
+    for tab, selected in zip(tabs, ("false", "false", "true", "false"), strict=True):
         assert tab["type"] == "button"
         assert tab["props"]["role"] == "tab"
         assert tab["props"]["aria-selected"] == selected
-    assert research["type"] == "a"
-    assert research["props"]["href"] == "#report/BRK.B"
-    assert "role" not in research["props"]
+        assert "href" not in tab["props"]
     [asof] = classed(tree, "app-company__asof")
     assert text(asof) == "data 14 Nov 2026"
     _texts_in_order(tree, "Overview", "Financials", "Estimates", "Research", "data 14 Nov 2026")
 
-    other = _page("tabs", "A&B", "overview", None)
+    other = _page("tabs", "A&B", "research", None)
     assert [t["props"].get("aria-selected") for t in classed(other, "app-company__tab")] == [
+        "false",
+        "false",
+        "false",
         "true",
-        "false",
-        "false",
-        None,
     ]
-    assert classed(other, "app-company__tab")[3]["props"]["href"] == "#report/A%26B"
     assert classed(other, "app-company__asof") == []
 
 
-def test_a_tab_replaces_the_hash_and_research_adds_an_entry() -> None:
-    """A tab opens through ``show``, which replaces the hash, so the browser's Back never steps
-    through the tabs; Research is a link, which adds an entry."""
-    tabs = _function(_static_file("company.js"), "tabs")
+def test_a_tab_replaces_the_hash() -> None:
+    """A tab, Research among them, opens through ``show``, which replaces the hash, so the
+    browser's Back never steps through the tabs; the row links to no other page."""
+    script = _static_file("company.js")
+    tabs = _function(script, "tabs")
     assert "onClick: function () { P.show('company', symbol, t[0]); }" in tabs
-    assert "href: '#report/' + encodeURIComponent(symbol)" in tabs
+    assert "#report/" not in script
+    found = re.search(r"\n  var TABS = (\[.*?\]);\n", script, re.DOTALL)
+    assert found is not None
+    assert json.loads(found.group(1).replace("'", '"')) == [
+        ["overview", "Overview"],
+        ["financials", "Financials"],
+        ["estimates", "Estimates"],
+        ["research", "Research"],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("symbol", "report", "href"),
+    [
+        ("AAPL", 12, "#company/AAPL/research/12"),
+        ("AAPL", None, "#company/AAPL/research"),
+        ("A&B", 9, "#company/A%26B/research/9"),
+        ("BRK.B", None, "#company/BRK.B/research"),
+    ],
+)
+def test_a_report_s_address_on_the_tab(symbol: str, report: int | None, href: str) -> None:
+    """``researchHref`` names the tab on a report, the symbol encoded as the hash encodes it; on
+    the company's latest report where no id is given."""
+    assert _page("researchHref", symbol, report) == href
+
+
+def test_the_page_draws_again_on_asking() -> None:
+    """``redraw`` draws the page again with what it holds, for a tab whose own reads land after
+    its answer (the Research tab's charts)."""
+    script = _static_file("company.js")
+    exposed = script[script.index("P.companyPage = {") :]
+    assert "redraw: render" in exposed[: exposed.index("};")]
 
 
 # ------------------------------------------------------------------------------ the formatters
@@ -486,8 +514,8 @@ def test_the_reads_and_their_failures() -> None:
         "if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);",
         "state.loading = true;",
         "(whole ? read(company) : Promise.resolve(state.detail))",
-        "read(company + '/page/' + want.tab)",
-        "return { detail: detail, answer: null, failed: failure(err, false) };",
+        "read(company + '/page/' + want.tab + (want.id == null ? '' : '?report=' + want.id))",
+        "return { detail: detail, answer: null, failed: failure(err, want.tab === 'research') };",
         ".then(function (found) {\n        if (request !== latest) return;",
         "state.loading = false;\n        shown();",
         ".catch(function (err) {\n        if (request !== latest) return;",
@@ -524,6 +552,14 @@ RETRY = "The company's data did not load: {}. Open the page again to retry."
             RETRY.format("no page data for LFOX"),
         ),
         ({"message": "Failed to fetch"}, False, RETRY.format("Failed to fetch")),
+        # the Research tab's read, `as is` true: its 404 is the server's sentence, any other
+        # failure the Words table's
+        (
+            {"message": "report 9 is NVDA's, not LFOX's", "status": 404},
+            True,
+            "report 9 is NVDA's, not LFOX's",
+        ),
+        ({"message": "no report 9", "status": 404}, True, "no report 9"),
     ],
 )
 def test_a_failed_read_s_sentence(err: dict[str, Any], detail: bool, shown: str) -> None:
@@ -547,7 +583,7 @@ def test_the_request_is_made_where_the_read_lands_and_follows_at_every_landing()
     )
     load = _function(script, "load")
     assert load.count("shown();") == 2
-    _in_order(load, "if (held && want.tab !== state.tab && state.answers[want.tab] &&", "shown();")
+    _in_order(load, "if (held && key !== keyOf(state) && state.answers[key] &&", "shown();")
     head = _function(script, "head")
     assert "state.request =" not in head and "asked(" not in script
     assert "P.requestResearch(ask, d.item, render, load, d.launchReady)" in head
@@ -558,21 +594,22 @@ def test_the_request_is_made_where_the_read_lands_and_follows_at_every_landing()
 
 def test_the_view_is_one_of_controls_js_s() -> None:
     """``company`` joins the views, with its panel and its script after charts.js; no header view
-    names it. Its hash takes a symbol and a tab, which ``fromHash`` hands ``show``; without a
-    symbol it is the Screen."""
+    names it. Its hash takes a symbol, a tab and, on Research, a report's id, which ``fromHash``
+    hands ``show``; without a symbol it is the Screen."""
     js = _static_file("controls.js")
     views = re.search(r"\n  var VIEWS = \[(.*?)\];", js, re.DOTALL)
     assert views is not None and "company" in re.findall(r"'(\w+)'", views.group(1))
     show = _function(js, "show")
+    assert show.startswith("  function show(tab, section, id, report) {")
     _in_order(
         show,
         "if (VIEWS.indexOf(tab) === -1 || ((tab === 'report' || tab === 'company') && !section)) {",
         "tab = 'screen';",
-        "(tab === 'company' && keepCompany(section, id));",
+        "(tab === 'company' && keepCompany(section, id, report));",
         "(tab === 'company' ? companyPath() : '')",
         "if (P.onShow[tab]) P.onShow[tab]();",
     )
-    assert "show(parts[0], parts[1], parts[2]);" in _function(js, "fromHash")
+    assert "show(parts[0], parts[1], parts[2], parts[3]);" in _function(js, "fromHash")
     assert "view: state.tab === 'report' || state.tab === 'company' ? '' : state.tab," in js
     assert "P.company = null;" in js
     html = _static_file("index.html")
@@ -605,11 +642,10 @@ def test_the_page_reads_again_when_a_refresh_ends() -> None:
     landed, failed = load.split(".catch(function (err) {")
     _in_order(
         landed,
-        "if (held && want.tab !== state.tab && state.answers[want.tab] && !state.whole) {",
+        "if (held && key !== keyOf(state) && state.answers[key] && !state.whole) {",
         "state.reading = null;\n      shown();\n      return;",
-        "var whole = !held || want.tab === state.tab || want.tab === state.reading ||\n"
-        "      state.whole;",
-        "state.whole = whole;\n    state.reading = want.tab;",
+        "var whole = !held || key === keyOf(state) || key === state.reading || state.whole;",
+        "state.whole = whole;\n    state.reading = key;",
         "state.loading = true;",
         "(whole ? read(company) : Promise.resolve(state.detail))",
         ".then(function (found) {\n        if (request !== latest) return;",
@@ -635,11 +671,15 @@ def test_the_symbol_is_coded_as_the_report_page_codes_it() -> None:
 
 def test_the_hash_both_ways() -> None:
     """keepCompany and companyPath run in node on hashes as a link writes them: the symbol
-    decoded and upper-cased, an unknown tab the Overview, and the hash written back with the
-    symbol encoded and no tab for the Overview. True when the company or the tab moved."""
+    decoded and upper-cased, an unknown tab the Overview, a report's id a whole number on the
+    Research tab alone, and the hash written back with the symbol encoded, no tab for the
+    Overview and the id after Research. True when the company, the tab or the report moved."""
     js = _static_file("controls.js")
     tabs = re.search(r"\n  (var COMPANY_TABS = .*?;)\n", js)
     assert tabs is not None
+    assert tabs.group(1) == (
+        "var COMPANY_TABS = ['overview', 'financials', 'estimates', 'research'];"
+    )
     source = "\n".join(
         [
             "var P = {};",
@@ -647,21 +687,28 @@ def test_the_hash_both_ways() -> None:
             _function(js, "keepCompany") + "\n  }",
             _function(js, "companyPath") + "\n  }",
             "var out = [];",
-            "for (const [symbol, tab] of JSON.parse(process.argv[1])) {",
-            "  const moved = keepCompany(symbol, tab);",
+            "for (const [symbol, tab, id] of JSON.parse(process.argv[1])) {",
+            "  const moved = keepCompany(symbol, tab, id);",
             "  out.push([moved, P.company, companyPath()]);",
             "}",
             "process.stdout.write(JSON.stringify(out));",
         ]
     )
     hashes = [
-        ["brk.b", "estimates"],
-        ["BRK.B", "estimates"],
-        ["BRK%2EB", None],
-        ["BRK.B", "chart"],
-        ["BRK.B", "financials"],
-        ["A%26B", "overview"],
-        ["%E0%A4%A", "estimates"],
+        ["brk.b", "estimates", None],
+        ["BRK.B", "estimates", None],
+        ["BRK%2EB", None, None],
+        ["BRK.B", "chart", None],
+        ["BRK.B", "financials", None],
+        ["A%26B", "overview", None],
+        ["%E0%A4%A", "estimates", None],
+        ["AAPL", "research", "12"],
+        ["AAPL", "research", 12],
+        ["AAPL", "research", "9"],
+        ["AAPL", "research", None],
+        ["AAPL", "research", "x"],
+        ["AAPL", "research", "1.5"],
+        ["AAPL", "estimates", "12"],
     ]
     assert NODE is not None
     done = subprocess.run(
@@ -671,12 +718,24 @@ def test_the_hash_both_ways() -> None:
         check=True,
         timeout=60,
     )
+    research = {"symbol": "AAPL", "tab": "research"}
     assert json.loads(done.stdout) == [
-        [True, {"symbol": "BRK.B", "tab": "estimates"}, "/BRK.B/estimates"],
-        [False, {"symbol": "BRK.B", "tab": "estimates"}, "/BRK.B/estimates"],
-        [True, {"symbol": "BRK.B", "tab": "overview"}, "/BRK.B"],
-        [False, {"symbol": "BRK.B", "tab": "overview"}, "/BRK.B"],
-        [True, {"symbol": "BRK.B", "tab": "financials"}, "/BRK.B/financials"],
-        [True, {"symbol": "A&B", "tab": "overview"}, "/A%26B"],
-        [True, {"symbol": "%E0%A4%A", "tab": "estimates"}, "/%25E0%25A4%25A/estimates"],
+        [True, {"symbol": "BRK.B", "tab": "estimates", "id": None}, "/BRK.B/estimates"],
+        [False, {"symbol": "BRK.B", "tab": "estimates", "id": None}, "/BRK.B/estimates"],
+        [True, {"symbol": "BRK.B", "tab": "overview", "id": None}, "/BRK.B"],
+        [False, {"symbol": "BRK.B", "tab": "overview", "id": None}, "/BRK.B"],
+        [True, {"symbol": "BRK.B", "tab": "financials", "id": None}, "/BRK.B/financials"],
+        [True, {"symbol": "A&B", "tab": "overview", "id": None}, "/A%26B"],
+        [
+            True,
+            {"symbol": "%E0%A4%A", "tab": "estimates", "id": None},
+            "/%25E0%25A4%25A/estimates",
+        ],
+        [True, research | {"id": 12}, "/AAPL/research/12"],
+        [False, research | {"id": 12}, "/AAPL/research/12"],
+        [True, research | {"id": 9}, "/AAPL/research/9"],
+        [True, research | {"id": None}, "/AAPL/research"],
+        [False, research | {"id": None}, "/AAPL/research"],
+        [False, research | {"id": None}, "/AAPL/research"],
+        [True, {"symbol": "AAPL", "tab": "estimates", "id": None}, "/AAPL/estimates"],
     ]

@@ -203,18 +203,18 @@ def _view(view: dict[str, Any] | None) -> tuple[Any, Any, Any] | None:
 
 
 def test_the_tab_stands_second_and_its_hash_reads_both_ways() -> None:
-    """The tabs' row reads Overview, Financials, Estimates, then the Research link; Financials is
-    a tab, selected where it is open. controls.js knows its name, so #company/ACME/financials
+    """The tabs' row reads Overview, Financials, Estimates and Research; Financials is a tab,
+    selected where it is open. controls.js knows its name, so #company/ACME/financials
     opens it (tests/web/test_company_load.py drives the loader there); the tab's function hangs
     on the page's draw, keyed on the company of its answer, so another company's tab is a new
     one."""
     tree = node("companyPage.tabs", ["ACME", "financials", "2026-11-14"], *SCRIPTS)
     tabs = classed(tree, "app-company__tab")
     assert [text(t) for t in tabs] == ["Overview", "Financials", "Estimates", "Research"]
-    assert [t["props"].get("aria-selected") for t in tabs] == ["false", "true", "false", None]
+    assert [t["props"].get("aria-selected") for t in tabs] == ["false", "true", "false", "false"]
     assert tabs[1]["props"]["role"] == "tab"
     js = _static_file("controls.js")
-    assert "\n  var COMPANY_TABS = ['overview', 'financials', 'estimates'];\n" in js
+    assert "\n  var COMPANY_TABS = ['overview', 'financials', 'estimates', 'research'];\n" in js
     drawn = node("companyPage.draw.financials", [ANSWER, answers.DETAIL], *SCRIPTS)
     assert drawn["props"]["key"] == "ACME"
     assert drawn["props"]["symbol"] == "ACME"

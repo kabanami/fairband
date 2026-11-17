@@ -1014,7 +1014,7 @@ def test_page_opens_the_view_the_hash_names() -> None:
         "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox',"
         " 'report',\n    'company'];"
     ) in js
-    show = js[js.index("function show(tab, section, id) {") :]
+    show = js[js.index("function show(tab, section, id, report) {") :]
     show = show[: show.index("\n  }\n")]
     assert (
         "if (VIEWS.indexOf(tab) === -1 || ((tab === 'report' || tab === 'company') && !section)) {\n"
@@ -1028,7 +1028,7 @@ def test_page_opens_the_view_the_hash_names() -> None:
     assert "VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });" in show
     assert "if (P.onShow[tab]) P.onShow[tab]();" in show
     assert "var parts = location.hash.slice(1).split('/');" in js
-    assert "show(parts[0], parts[1], parts[2]);" in js
+    assert "show(parts[0], parts[1], parts[2], parts[3]);" in js
     assert "window.addEventListener('hashchange', fromHash);" in js
     # the first view opens once the later scripts have registered their loaders
     assert "document.addEventListener('DOMContentLoaded', fromHash);" in js
@@ -2324,7 +2324,8 @@ def test_the_report_view_opens_from_the_hash() -> None:
     assert "return '/' + encodeURIComponent(P.report.symbol) + (id == null ? '' : '/' + id);" in (
         path
     )
-    assert "show(parts[0], parts[1], parts[2]);" in js  # #report/AAPL/12: the id is parts[2]
+    # #report/AAPL/12: the id is parts[2]; parts[3] is a company page's report on its Research tab
+    assert "show(parts[0], parts[1], parts[2], parts[3]);" in js
     assert "view: state.tab === 'report' || state.tab === 'company' ? '' : state.tab," in js
     # the report panel takes the fade as every panel but the Methodology view's does; its CSS
     # fades only today's figures, never its appendixes' tables

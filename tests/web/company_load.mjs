@@ -9,7 +9,8 @@
 // { tab, mark, price }, the mark of the tab's answer it was handed and the price of the detail.
 //
 // The steps, a JSON list on stdin, each one object:
-//   {"do": "show", "symbol", "tab"}         a link or a tab's button opens the company page there
+//   {"do": "show", "symbol", "tab", "id"?}  a link or a tab's button opens the company page there,
+//                                           on the Research tab at the report `id` where given
 //                                           (FairbandPage.show, controls.js)
 //   {"do": "hash", "hash"}                  the browser's Back or Forward moves the hash to `hash`
 //                                           (#company/LFOX, # for the screen): controls.js reads it
@@ -103,7 +104,7 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
 inFlight = []; fetched = []; // the header's and the screen's own reads, which no step answers
 
 // The tabs' functions: each draws what it was handed.
-for (const tab of ['overview', 'financials', 'estimates']) {
+for (const tab of ['overview', 'financials', 'estimates', 'research']) {
   P.companyPage.draw[tab] = (answer, detail) => (
     { type: 'drawn', props: { tab, mark: answer.mark, price: detail.result.price } });
 }
@@ -180,7 +181,7 @@ const trace = [];
 for (const step of steps) {
   fetched = [];
   shown = [];
-  if (step.do === 'show') P.show('company', step.symbol, step.tab);
+  if (step.do === 'show') P.show('company', step.symbol, step.tab, step.id);
   else if (step.do === 'hash') {
     location.hash = step.hash;
     for (const listener of listeners.hashchange || []) listener();
