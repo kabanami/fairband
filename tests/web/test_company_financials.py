@@ -134,8 +134,8 @@ def _tab(helper: str, *args: Any) -> Any:
 
 def _block(answer: dict[str, Any] = ANSWER, **view: str) -> Any:
     """The tab's block on ``answer`` at the view ``VIEW`` with ``view`` laid over it, with no
-    handlers (none is called while it is drawn)."""
-    return _tab("block", answer, VIEW | view, None)
+    line on the chart and no handlers (none is called while it is drawn)."""
+    return _tab("block", answer, VIEW | view, [], None)
 
 
 def _drive(store: Any, steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -197,7 +197,6 @@ def test_the_tab_stands_second_and_its_hash_reads_both_ways() -> None:
     assert drawn["props"]["answer"] == ANSWER
     html = _static_file("index.html")
     scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
-    assert scripts[-1] == "company_financials.js"
     assert scripts.index("company_financials.js") == scripts.index("company_estimates.js") + 1
 
 
@@ -235,6 +234,12 @@ def test_the_controls_by_sub_tab() -> None:
     periods = classed(tree, "app-fin__period")
     assert [text(b) for b in periods] == ["Annual", "Quarterly"]
     assert [b["props"]["aria-pressed"] for b in periods] == ["true", "false"]
+    groups = classed(tree, "app-fin__seg")
+    assert [(g["props"]["role"], g["props"]["aria-label"]) for g in groups] == [
+        ("tablist", "Statement"),
+        ("group", "Unit of the amounts"),
+        ("group", "Period"),
+    ]
     buttons = _typed(tree, "button")
     assert len(buttons) == 9
     assert {b["props"]["type"] for b in buttons} == {"button"}
@@ -445,7 +450,10 @@ def test_the_captions() -> None:
         (("cashflow", "quarter", "quarterly", 8), "the last 8 quarters"),
         (("balance", "quarter", "half-yearly", 6), "the last 6 half-years"),
         (("balance", "annual", "half-yearly", 9), "the last 9 fiscal years"),
-        (("income", "quarter", "quarterly", 0), None),  # no column: the table's sentence says it
+        (("income", "quarter", "quarterly", 0), None),  # no row: the table's sentence says it
+        (("income", "annual", "quarterly", 1), "the last fiscal year"),
+        (("cashflow", "quarter", "quarterly", 1), "the last quarter"),
+        (("balance", "quarter", "half-yearly", 1), "the last half-year"),
         (
             ("segments", "annual", "quarterly", 11),
             "by fiscal year, as the company reports its segments",
@@ -459,6 +467,11 @@ def test_the_captions() -> None:
 
     notes = classed(_block(), "app-fin__note")
     assert [text(n) for n in notes] == ["the last 2 fiscal years", RIGHT]
+    lineless = copy.deepcopy(ANSWER)
+    lineless["statements"]["income"]["annual"] = {"columns": _years(), "rows": []}
+    tree = _block(lineless)
+    assert [text(n) for n in classed(tree, "app-fin__note")] == ["", RIGHT]
+    assert [text(n) for n in classed(tree, "app-fin__none")] == ["No figures on file."]
     assert {n["props"]["className"].split()[0] for n in notes} == {"caption"}
     quarters = classed(
         _block(ANSWER | {"cadence": "half-yearly"}, period="quarter"), "app-fin__note"
@@ -619,7 +632,7 @@ def test_the_unit_is_millions_where_storage_fails() -> None:
 def _rules(css: str, indent: int = 2) -> dict[str, str]:
     """Each tab's rule of ``css`` at ``indent``, the page's or a media rule's, by its selector,
     its declarations on one line."""
-    found = re.findall("\n" + " " * indent + r"(\.app-fin[^{]*)\{([^}]*)\}", css)
+    found = re.findall("\n" + " " * indent + r"(\.app-fin(?![a-z])[^{]*)\{([^}]*)\}", css)
     return {selector.strip(): " ".join(body.split()) for selector, body in found}
 
 

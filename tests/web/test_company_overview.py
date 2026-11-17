@@ -912,6 +912,7 @@ def test_the_news_classes_are_the_company_page_s_alone() -> None:
         "company_chart.js",
         "company_estimates.js",
         "company_financials.js",
+        "company_financials_chart.js",
     }
     scripts = {p.name: p.read_text() for p in STATIC.rglob("*.js") if p.name not in page}
     assert {"app.js", "report.js", "inbox.js", "charts.js", "bundle.js"} <= set(scripts)

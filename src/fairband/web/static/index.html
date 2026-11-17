@@ -899,6 +899,72 @@
   .app-fin__table tbody tr.is-head:hover th { background: var(--surface-raised); }
   .app-fin__table td.is-nil { color: var(--ink-faint); }
   .app-fin__none { margin: var(--space-2) 0 0; color: var(--ink-faint); }
+  /* A line's row takes a press (7.3 and 7.4): the pointer's hand; a section head none. A row on
+     the chart on surface-selected, its name in ink, with a 2px bar of its line's colour at its
+     left edge. A line's colour is its slot's: is-s0 sets chart-1 as the series colour its row
+     and its marks wear. The focus ringed by the row's own cells, since the names' sticky column
+     would cover a ring on the row; on a row on the chart the ring's left edge takes the bar's
+     place while it has the focus. */
+  .app-fin__table tbody tr { cursor: pointer; }
+  .app-fin__table tbody tr.is-head { cursor: default; }
+  .app-fin__table tbody tr.is-on th, .app-fin__table tbody tr.is-on td {
+    background: var(--surface-selected);
+  }
+  .app-fin__table tbody tr.is-on th:first-child {
+    color: var(--ink); box-shadow: inset 2px 0 0 var(--fin-series);
+  }
+  .app-fin .is-s0 { --fin-series: var(--chart-1); }
+  .app-fin__table tbody tr:focus-visible { outline: none; }
+  .app-fin__table tbody tr:focus-visible > th, .app-fin__table tbody tr:focus-visible > td {
+    box-shadow: inset 0 2px 0 var(--focus-ring), inset 0 -2px 0 var(--focus-ring);
+  }
+  .app-fin__table tbody tr:focus-visible > th:first-child {
+    box-shadow: inset 2px 0 0 var(--focus-ring), inset 0 2px 0 var(--focus-ring),
+      inset 0 -2px 0 var(--focus-ring);
+  }
+  .app-fin__table tbody tr:focus-visible > td:last-child {
+    box-shadow: inset -2px 0 0 var(--focus-ring), inset 0 2px 0 var(--focus-ring),
+      inset 0 -2px 0 var(--focus-ring);
+  }
+  /* The chart (7.5), as the mockup draws it: over a hairline above the captions, its place gone
+     where it draws nothing. Its head on one line that wraps, the name, the newest figure and the
+     period and unit in ink-faint. The plot as wide as the block, its focus ringed; its ticks and
+     the periods' labels monospaced in ink-faint; the grid solid in chart-grid, the zero line and
+     the crosshair in border. Each mark wears its series colour: the bars, the dots and the
+     markers filled, the line a 2px stroke with round joins and caps, the end marker and the
+     hover's marker ringed in surface-raised; a lone line's bar below zero in chart-neg-3; the
+     bars of the periods not picked faded. The box over the mark on surface-raised. Nothing
+     moves. */
+  .app-fin__chart {
+    margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--hairline);
+  }
+  .app-fin__chart:empty { display: none; }
+  .app-fin__chead {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3);
+    min-height: 28px;
+  }
+  .app-fin__chead > * { margin: 0; }
+  .app-fin__unit { color: var(--ink-faint); }
+  .app-fin__plot { position: relative; margin-top: var(--space-1); }
+  .app-fin__plot:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-fin__plot svg { display: block; width: 100%; }
+  .app-fin__plot text { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-faint); }
+  .app-fin__grid { stroke: var(--chart-grid); stroke-width: 1; }
+  .app-fin__zero, .app-fin__cross { stroke: var(--border); stroke-width: 1; }
+  .app-fin__bar, .app-fin__dot, .app-fin__end, .app-fin__mark { fill: var(--fin-series); }
+  .app-fin__line {
+    fill: none; stroke: var(--fin-series); stroke-width: 2; stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .app-fin__end, .app-fin__mark { stroke: var(--surface-raised); stroke-width: 2; }
+  .app-fin__bar.is-neg { fill: var(--chart-neg-3); }
+  .app-fin__bar.is-dim { opacity: 0.45; }
+  .app-fin__tip {
+    position: absolute; z-index: 2; padding: 4px 8px; transform: translateY(-100%);
+    color: var(--ink); background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-popover); white-space: nowrap;
+    pointer-events: none;
+  }
   @media (width < 700px) {
     .app-fin__table th:first-child, .app-fin__table td:first-child {
       min-width: 168px; white-space: normal;
@@ -968,5 +1034,6 @@
 <script src="/static/company_chart.js"></script>
 <script src="/static/company_estimates.js"></script>
 <script src="/static/company_financials.js"></script>
+<script src="/static/company_financials_chart.js"></script>
 </body>
 </html>

@@ -1,9 +1,12 @@
-// The company page's Financials tab driven in node (the Financials tab's design, 7.2; Review Focus
-// 5), for tests/web/test_company_financials.py: the bundle, app.js, company.js and
-// company_financials.js are loaded in the page's order, with a stub React whose useState keeps
-// its state from one draw of the tab to the next, and a window whose localStorage is the
-// driver's: none, as page.mjs has and as a browser that keeps nothing has; one whose every read
-// and write throws, as a private window's may; or one holding the items given.
+// The company page's Financials tab driven in node (the Financials tab's design, 7.2 and 7.4;
+// Review Focus 5), for tests/web/test_company_financials.py and
+// tests/web/test_company_financials_chart.py: the bundle, app.js and the scripts named after it
+// (company.js and company_financials.js, and the chart's, company_chart.js and
+// company_financials_chart.js, where a test reads the picks) are loaded in the page's order, with
+// a stub React whose useState keeps its state from one draw of the tab to the next, and a window
+// whose localStorage is the driver's: none, as page.mjs has and as a browser that keeps nothing
+// has; one whose every read and write throws, as a private window's may; or one holding the
+// items given.
 //
 // The input, a JSON object on stdin: {"store": null | "throws" | {<key>: <value>, ...}, "steps"}.
 // The steps, a list, each one object:
@@ -13,12 +16,16 @@
 //                                       another company's answer lands or the tab opens again
 //   {"do": "press", "class", "text"}    the drawn tab's button of the class `class` whose text is
 //                                       `text` is pressed, and the tab is drawn again
+//   {"do": "row", "text", "key"?}       the drawn tab's row whose name is `text` is clicked, or,
+//                                       with `key`, takes that key while it has the focus, and
+//                                       the tab is drawn again
 // After each step the trace on stdout gains what it returned (storedScale's unit), whether it
-// threw, the store's items (null for none or one that throws) and the drawn tab's view: the
-// sub-tab selected, the unit and the period pressed, null for a switch not drawn.
+// threw, the store's items (null for none or one that throws), the drawn tab's view: the
+// sub-tab selected, the unit and the period pressed, null for a switch not drawn; the picks the
+// tab hands its chart (null where the chart's place holds nothing); the names of the rows on the
+// chart; and whether a key step's event had its default prevented.
 //
-//   node financials.mjs <bundle.js> <app.js> <company.js> <company_financials.js>
-//     < input.json  > trace.json
+//   node financials.mjs <bundle.js> <app.js> <script.js> ...  < input.json  > trace.json
 import { readFileSync } from 'node:fs';
 
 const [bundle, app, ...scripts] = process.argv.slice(2).map((path) => readFileSync(path, 'utf8'));
@@ -105,10 +112,25 @@ function on(name, attribute) {
   return found ? textOf(found) : null;
 }
 
+// The rows of the drawn tab's tables that hold a line: each a tr with a th of its name first.
+function rows() {
+  return [...elements(tree)].filter((e) => e.type === 'tr' && e.props.onClick);
+}
+
+function nameOf(row) { return textOf(row.props.children[0]); }
+
+// The picks the tab hands its chart, null where the chart's place holds nothing.
+function picks() {
+  const [place] = classed(tree, 'app-fin__chart');
+  const [chart] = [...elements(place.props.children)].filter((e) => e.props.picks);
+  return chart ? chart.props.picks : null;
+}
+
 const trace = [];
 for (const step of input.steps) {
   let result = null;
   let threw = false;
+  let prevented = false;
   try {
     if (step.do === 'stored') result = T.storedScale();
     else if (step.do === 'keep') T.keepScale(step.scale);
@@ -120,6 +142,11 @@ for (const step of input.steps) {
       const [button] = classed(tree, step.class).filter((e) => textOf(e) === step.text);
       button.props.onClick({});
       draw();
+    } else if (step.do === 'row') {
+      const [row] = rows().filter((e) => nameOf(e) === step.text);
+      if (step.key) row.props.onKeyDown({ key: step.key, preventDefault() { prevented = true; } });
+      else row.props.onClick({});
+      draw();
     } else throw new Error('no step ' + step.do);
   } catch (error) {
     threw = true;
@@ -128,6 +155,7 @@ for (const step of input.steps) {
     do: step.do,
     result,
     threw,
+    prevented,
     store: items && Object.assign({}, items),
     view: tree && {
       tab: on('app-fin__tab', 'aria-selected'),
@@ -135,6 +163,9 @@ for (const step of input.steps) {
       period: classed(tree, 'app-fin__period').length ? on('app-fin__period', 'aria-pressed')
         : null,
     },
+    picks: tree && picks(),
+    on: tree && rows().filter((e) => String(e.props.className || '').split(' ').includes('is-on'))
+      .map(nameOf),
   });
 }
 process.stdout.write(JSON.stringify(trace));
