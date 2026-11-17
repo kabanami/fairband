@@ -1,7 +1,8 @@
-"""The company page's two reads (the company page's design, 7.2, 7.4, 10.3, 10.4 and 10.5), each
-from the store alone: neither calls a vendor, so each is a plain GET that needs no request header.
+"""The company page's three reads (the company page's design, 7.2, 7.4, 10.3, 10.4 and 10.5, and the
+Financials tab's design, 7.9 and 8.3), each from the store alone: none calls a vendor, so each is a
+plain GET that needs no request header.
 
-Both answer ``quote``, the head's figures on every tab (``page_fmp.head_quote``: ``{price,
+Each answers ``quote``, the head's figures on every tab (``page_fmp.head_quote``: ``{price,
 change, changePercent, day}``, each ``null`` without a quote's row).
 
 - ``GET /api/companies/{symbol}/page/overview`` answers ``{symbol, dataDate, quote, company,
@@ -16,8 +17,15 @@ change, changePercent, day}``, each ``null`` without a quote's row).
   consensus, target, ratings}``: the Earnings block (``page_fmp.earnings``), the Consensus
   estimates (``page_fmp.consensus``), the price target (``page_fmp.target``) and the ratings
   (``page_fmp.ratings``).
+- ``GET /api/companies/{symbol}/page/financials`` answers ``{symbol, dataDate, quote, currency,
+  cadence, statements, segments, ratios}``: the tab's currency and the company's reporting
+  cadence, ``quarterly`` or ``half-yearly``; ``statements``, the income statement, the balance
+  sheet and the cash flow statement (``income``, ``balance``, ``cashflow``), each ``{annual,
+  quarter}`` (``page_financials.statement``); ``segments``, the revenue by product and by region
+  (``{product, region}``, ``page_financials.segments``); and ``ratios``, the ratios and the key
+  metrics by fiscal year (``page_financials.ratios``). Each is a table, ``{columns, rows}``.
 
-Rules for both:
+Rules for the three:
 
 - An answer is the company's newest HTTP 200 FMP answer with no error to its endpoint under the
   params the fetch stores it with, whatever its age (``store.vendor.latest_response``), parsed.
@@ -30,9 +38,15 @@ Rules for both:
   date), the six answers of the Key statistics (``ratios-ttm``, ``key-metrics-ttm``,
   ``financial-growth``, ``financial-scores``, ``dividends``, ``shares-float``), the price changes
   and the news; the estimates the quote's row, the earnings, the annual consensus, the price
-  target and the grades.
+  target and the grades; the financials the quote's row and ten answers: the six statements
+  (``income-annual``, ``income-quarter``, ``balance-annual``, ``balance-quarter``,
+  ``cashflow-annual``, ``cashflow-quarter``), the ratios and the key metrics by fiscal year
+  (``ratios-annual``, ``key-metrics-annual``) and the two segment answers (``segments-product``,
+  ``segments-geographic``).
 - ``dataDate`` (7.4) is the day of the oldest observation among the answers the read drew, as ISO
-  text, the news left out, since its stories carry their own days; ``null`` when it drew none.
+  text, the news left out, since its stories carry their own days; ``null`` when it drew none. The
+  financials' data date counts its ten answers alone, not the quote's row it answers for the head
+  (the Financials tab's design, 8.3).
 - ``news.stale`` (10.5) is true without a stored answer, or when it was observed at or before the
   clock's time less the effective policy's reuse window (``refresh.reuse_hours``).
 - The consensus keeps the rows dated after the newest fiscal year's period end on file
@@ -42,6 +56,14 @@ Rules for both:
   reporting currency carries the company's (``store.currency.reporting_currency``), USD where it
   has no snapshot. The next earnings date and the last dividend payment are judged on the clock's
   day.
+- The financials' currency (the Financials tab's design, 7.9 and 8.3) is the ``reportedCurrency``
+  of the newest row of the annual income statement (``page_financials.reported_currency``), else
+  the company's (``store.currency.reporting_currency``); every reader is handed it, for a column
+  whose row names none. The cadence is ``half-yearly`` where the period ends of the quarterly
+  income statement say so (``inputs_statements.cadence_of``), and the three quarterly tables are
+  then read by half-year; else ``quarterly``, a company whose cadence the rule cannot tell among
+  them. The ratios and the two segment tables keep the newest ``fetch.STATEMENT_YEARS`` fiscal
+  years, the statements' depth; a statement's table holds every dated row of its answer.
 
 A symbol that is not one is a 400 with its sentence (``reports_api.checked_symbol``); a company
 with no stored profile a 404, "no page data for <symbol>"; on the overview, a stored setting the
@@ -59,13 +81,21 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from fairband.policy import Policy
-from fairband.refresh.fetch import EARNINGS_ROWS, NEWS_STORIES, PAGE_ENDPOINTS, page_params
-from fairband.refresh.inputs_statements import YEAR_END_DRIFT, series_for
+from fairband.refresh.fetch import (
+    EARNINGS_ROWS,
+    NEWS_STORIES,
+    PAGE_ENDPOINTS,
+    STATEMENT_QUARTERS,
+    STATEMENT_YEARS,
+    page_params,
+)
+from fairband.refresh.inputs_statements import YEAR_END_DRIFT, cadence_of, series_for
 from fairband.store.currency import reporting_currency
 from fairband.store.observations import observations_for
 from fairband.store.vendor import latest_response, response_payload
+from fairband.vendors import page_financials as financials
 from fairband.vendors import page_fmp
-from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT
+from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT, StatementKind
 from fairband.web.reports_api import checked_symbol
 from fairband.web.settings_api import effective
 
@@ -78,6 +108,21 @@ _STATISTICS = (
     "dividends",
     "shares-float",
 )
+# The ten answers of the Financials tab (the Financials tab's design, 8.3): the six statements,
+# the ratios and the key metrics by fiscal year, and the two segment answers.
+_FINANCIALS = (
+    "income-annual",
+    "income-quarter",
+    "balance-annual",
+    "balance-quarter",
+    "cashflow-annual",
+    "cashflow-quarter",
+    "ratios-annual",
+    "key-metrics-annual",
+    "segments-product",
+    "segments-geographic",
+)
+_STATEMENT_KINDS: tuple[StatementKind, ...] = ("income", "balance", "cashflow")
 # The params beside the symbol that the fetch stores the engine's answers the page reads under
 # (``fetch._calls``); the page's own are ``fetch.page_params``.
 _ENGINE_PARAMS: dict[str, dict[str, str]] = {
@@ -85,6 +130,12 @@ _ENGINE_PARAMS: dict[str, dict[str, str]] = {
     "price-history": {},
     "earnings": {"limit": str(EARNINGS_ROWS)},
     "estimates-annual": {"period": "annual", "limit": str(ANNUAL_ESTIMATE_LIMIT)},
+    "income-annual": {"period": "annual", "limit": str(STATEMENT_YEARS)},
+    "balance-annual": {"period": "annual", "limit": str(STATEMENT_YEARS)},
+    "cashflow-annual": {"period": "annual", "limit": str(STATEMENT_YEARS)},
+    "income-quarter": {"period": "quarter", "limit": str(STATEMENT_QUARTERS)},
+    "balance-quarter": {"period": "quarter", "limit": str(STATEMENT_QUARTERS)},
+    "cashflow-quarter": {"period": "quarter", "limit": str(STATEMENT_QUARTERS)},
 }
 
 
@@ -102,7 +153,7 @@ def add_company_page_routes(
     policy: Policy,
     clock: Callable[[], datetime],
 ) -> None:
-    """Register the company page's two reads; ``policy`` is the file's, which the user's settings
+    """Register the company page's three reads; ``policy`` is the file's, which the user's settings
     overlay, and ``clock`` gives the time the news is judged stale at and the day the next
     earnings date and the last dividend payment are judged on."""
 
@@ -166,6 +217,51 @@ def add_company_page_routes(
             "consensus": page_fmp.consensus(_payload(consensus), after, reporting),
             "target": page_fmp.target(_payload(target)),
             "ratings": page_fmp.ratings(_payload(grades)),
+        }
+
+    @app.get("/api/companies/{symbol}/page/financials")
+    def page_financials(symbol: str) -> dict[str, Any]:
+        symbol = checked_symbol(symbol)
+        with closing(conn_factory()) as conn:
+            _profile(conn, symbol)
+            quote = _quote(conn, symbol)
+            drawn = {endpoint: _stored(conn, endpoint, symbol) for endpoint in _FINANCIALS}
+            reporting = reporting_currency(conn, symbol)
+        answers = {endpoint: _payload(found) for endpoint, found in drawn.items()}
+        named = financials.reported_currency(answers["income-annual"])
+        currency = reporting if named is None else named
+        ends = financials.period_ends(answers["income-quarter"])
+        half_yearly = cadence_of(ends) == "half-yearly"
+        return {
+            "symbol": symbol,
+            "dataDate": _data_date(drawn.values()),
+            "quote": page_fmp.head_quote(_payload(quote)),
+            "currency": currency,
+            "cadence": "half-yearly" if half_yearly else "quarterly",
+            "statements": {
+                kind: {
+                    "annual": financials.statement(answers[f"{kind}-annual"], kind, currency),
+                    "quarter": financials.statement(
+                        answers[f"{kind}-quarter"],
+                        kind,
+                        currency,
+                        quarterly=True,
+                        half_yearly=half_yearly,
+                    ),
+                }
+                for kind in _STATEMENT_KINDS
+            },
+            "segments": {
+                "product": financials.segments(
+                    answers["segments-product"], currency, STATEMENT_YEARS
+                ),
+                "region": financials.segments(
+                    answers["segments-geographic"], currency, STATEMENT_YEARS
+                ),
+            },
+            "ratios": financials.ratios(
+                answers["ratios-annual"], answers["key-metrics-annual"], currency, STATEMENT_YEARS
+            ),
         }
 
 

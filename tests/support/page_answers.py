@@ -1,15 +1,18 @@
-"""The company page's three reads for one made-up company, ``page_payloads``' Lanternfield Optics
+"""The company page's four reads for one made-up company, ``page_payloads``' Lanternfield Optics
 (``LFOX``), which lists in US dollars and reports in New Taiwan dollars: the overview answer, the
-estimates answer and the company's detail, as the page's node tests hand them to its scripts.
+estimates answer, the financials answer and the company's detail, as the page's node tests hand
+them to its scripts.
 
-The two answers are the readers' (``vendors.page_fmp``) on ``page_payloads``' answers, put
-together as ``web/company_api.py`` puts them, so their shapes are the server's; only the data date
-and the news' time are set by hand, since the server takes them from when its answers were
-stored. The detail is written by hand in the shape of ``GET /api/companies/{symbol}``
-(``web/app.py``, ``company``): LFOX valued on the Mature Growth route at $196.50 against a price
-of $182.40, a wide moat, two notes, no review, no report and no open item.
+The three answers are the readers' (``vendors.page_fmp`` and ``vendors.page_financials``) on
+``page_payloads``' answers, put together as ``web/company_api.py`` puts them, so their shapes are
+the server's. Only the data date, the news' time and the financials' currency and cadence are set
+by hand: the server takes the first two from when its answers were stored, and finds the others
+on the stored statements (the newest annual income row names New Taiwan dollars, and the quarters
+end a quarter apart). The detail is written by hand in the shape of ``GET
+/api/companies/{symbol}`` (``web/app.py``, ``company``): LFOX valued on the Mature Growth route at
+$196.50 against a price of $182.40, a wide moat, two notes, no review, no report and no open item.
 
-The builders give the variants: a refused row, a reviewed row with a published report, the two
+The builders give the variants: a refused row, a reviewed row with a published report, the three
 answers of a company with nothing stored but its profile, and the overview of one with nothing
 stored at all. Each returns a new copy."""
 
@@ -18,14 +21,15 @@ from datetime import date
 from typing import Any
 
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
-from fairband.refresh.fetch import NEWS_STORIES
+from fairband.refresh.fetch import NEWS_STORIES, STATEMENT_YEARS
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT
-from fairband.vendors import page_fmp
+from fairband.vendors import page_financials, page_fmp
+from fairband.vendors.fmp import StatementKind
 from support import page_payloads as pages
 
 SYMBOL = pages.SYMBOL
 TODAY = date(2026, 11, 16)  # the clock's day: the earnings of 14 Jan 2027 are the next
-DATA_DATE = "2026-11-14"  # the oldest stored answer either read draws
+DATA_DATE = "2026-11-14"  # the oldest stored answer each read draws
 REPORTING = "TWD"
 NEWEST_YEAR = date(2025, 12, 31)  # the newest fiscal year on file: the consensus starts after it
 REFUSAL = "fewer than three fiscal years of statements on file"
@@ -66,6 +70,35 @@ ESTIMATES: dict[str, Any] = {
     "consensus": page_fmp.consensus(pages.ESTIMATES, NEWEST_YEAR + YEAR_END_DRIFT, REPORTING),
     "target": page_fmp.target(pages.TARGET),
     "ratings": page_fmp.ratings(pages.GRADES),
+}
+
+# Each statement's answers by fiscal year and by quarter.
+_STATEMENTS: dict[StatementKind, tuple[Any, Any]] = {
+    "income": (pages.INCOME_ANNUAL, pages.INCOME_QUARTER),
+    "balance": (pages.BALANCE_ANNUAL, pages.BALANCE_QUARTER),
+    "cashflow": (pages.CASHFLOW_ANNUAL, pages.CASHFLOW_QUARTER),
+}
+
+FINANCIALS: dict[str, Any] = {
+    "symbol": SYMBOL,
+    "dataDate": DATA_DATE,
+    "quote": page_fmp.head_quote(_ROW),
+    "currency": REPORTING,
+    "cadence": "quarterly",
+    "statements": {
+        kind: {
+            "annual": page_financials.statement(annual, kind, REPORTING),
+            "quarter": page_financials.statement(quarter, kind, REPORTING, quarterly=True),
+        }
+        for kind, (annual, quarter) in _STATEMENTS.items()
+    },
+    "segments": {
+        "product": page_financials.segments(pages.SEGMENTS_PRODUCT, REPORTING, STATEMENT_YEARS),
+        "region": page_financials.segments(pages.SEGMENTS_GEOGRAPHIC, REPORTING, STATEMENT_YEARS),
+    },
+    "ratios": page_financials.ratios(
+        pages.RATIOS_ANNUAL, pages.KEY_METRICS_ANNUAL, REPORTING, STATEMENT_YEARS
+    ),
 }
 
 DETAIL: dict[str, Any] = {
@@ -259,4 +292,29 @@ def profile_only_estimates() -> dict[str, Any]:
         "consensus": page_fmp.consensus(None, None, "USD"),
         "target": page_fmp.target(None),
         "ratings": page_fmp.ratings(None),
+    }
+
+
+def profile_only_financials() -> dict[str, Any]:
+    """The financials answer of a company with nothing stored but its profile, which that read
+    does not draw: every table with no column and no row, no data date, the currency the
+    company's (USD, since it has no snapshot) and the cadence quarterly."""
+    return {
+        "symbol": SYMBOL,
+        "dataDate": None,
+        "quote": page_fmp.head_quote(None),
+        "currency": "USD",
+        "cadence": "quarterly",
+        "statements": {
+            kind: {
+                "annual": page_financials.statement(None, kind, "USD"),
+                "quarter": page_financials.statement(None, kind, "USD", quarterly=True),
+            }
+            for kind in _STATEMENTS
+        },
+        "segments": {
+            "product": page_financials.segments(None, "USD", STATEMENT_YEARS),
+            "region": page_financials.segments(None, "USD", STATEMENT_YEARS),
+        },
+        "ratios": page_financials.ratios(None, None, "USD", STATEMENT_YEARS),
     }

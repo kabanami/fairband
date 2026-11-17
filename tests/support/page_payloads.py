@@ -6,6 +6,13 @@ fields the page reads and a few it does not. ``QUOTE``'s day (16 Nov 2026, UTC) 
 ``HISTORY``'s newest (13 Nov 2026). ``EARNINGS`` holds two future dates (14 Jan and 15 Apr 2027),
 a past date without an actual (15 Oct 2026) and three reported quarters. ``NEWS``'s third story's
 address is not a web address.
+
+The Financials tab's ten answers are in New Taiwan dollars, newest row first as FMP gives them:
+each statement by fiscal year (2023 to 2025, ending 31 Dec) and by quarter (Q4 2025 to Q2 2026,
+a quarter apart), the ratios and the key metrics by fiscal year (2024 and 2025), and the revenue
+by product and by region (2023 to 2025), whose rows give ``fiscalYear`` as a number and name no
+currency, as FMP's segment answers do. Each statement holds a line FMP gives as 0 in every period,
+which the tab leaves out.
 """
 
 from typing import Any
@@ -389,4 +396,228 @@ FLOAT: list[dict[str, Any]] = [
         "floatShares": 2287000000,
         "outstandingShares": 2586500000,
     }
+]
+
+# The Financials tab's periods, newest first: a row's date, its fiscal year and its period.
+_YEARS = (("2025-12-31", "2025", "FY"), ("2024-12-31", "2024", "FY"), ("2023-12-31", "2023", "FY"))
+_QUARTERS = (
+    ("2026-06-30", "2026", "Q2"),
+    ("2026-03-31", "2026", "Q1"),
+    ("2025-12-31", "2025", "Q4"),
+)
+
+
+def _by_period(
+    periods: tuple[tuple[str, str, str], ...], figures: dict[str, tuple[float, ...]]
+) -> list[dict[str, Any]]:
+    """FMP's rows of an answer, one a period of ``periods``: its head, then each field's figure in
+    that period, the figures given in the order of ``periods``."""
+    return [
+        {
+            "date": day,
+            "symbol": SYMBOL,
+            "reportedCurrency": "TWD",
+            "fiscalYear": year,
+            "period": period,
+        }
+        | {field: values[index] for field, values in figures.items()}
+        for index, (day, year, period) in enumerate(periods)
+    ]
+
+
+_SHARES = {
+    "weightedAverageShsOut": (21500000000, 21500000000, 21500000000),
+    "weightedAverageShsOutDil": (21530000000, 21530000000, 21530000000),
+}
+
+INCOME_ANNUAL = _by_period(
+    _YEARS,
+    {
+        "revenue": (3270000000000, 2440000000000, 2030000000000),
+        "costOfRevenue": (1800000000000, 1390000000000, 1190000000000),
+        "grossProfit": (1470000000000, 1050000000000, 840000000000),
+        "researchAndDevelopmentExpenses": (260000000000, 214000000000, 188000000000),
+        "sellingGeneralAndAdministrativeExpenses": (150000000000, 131000000000, 117000000000),
+        "otherExpenses": (0, 0, 0),  # FMP's 0 for a line it does not hold
+        "operatingExpenses": (410000000000, 345000000000, 305000000000),
+        "operatingIncome": (1060000000000, 705000000000, 535000000000),
+        "interestIncome": (42000000000, 35000000000, 24000000000),
+        "interestExpense": (12000000000, 13000000000, 14000000000),
+        "incomeBeforeTax": (1090000000000, 727000000000, 545000000000),
+        "incomeTaxExpense": (196000000000, 131000000000, 98000000000),
+        "netIncome": (894000000000, 596000000000, 447000000000),
+        "eps": (41.58, 27.72, 20.79),
+        "epsDiluted": (41.52, 27.68, 20.76),
+        **_SHARES,
+        "ebitda": (1580000000000, 1170000000000, 960000000000),
+        "depreciationAndAmortization": (520000000000, 465000000000, 425000000000),
+    },
+)
+
+INCOME_QUARTER = _by_period(
+    _QUARTERS,
+    {
+        "revenue": (912000000000, 861000000000, 884000000000),
+        "costOfRevenue": (497000000000, 471000000000, 485000000000),
+        "grossProfit": (415000000000, 390000000000, 399000000000),
+        "researchAndDevelopmentExpenses": (69000000000, 67000000000, 68000000000),
+        "sellingGeneralAndAdministrativeExpenses": (40000000000, 39000000000, 39000000000),
+        "otherExpenses": (0, 0, 0),
+        "operatingExpenses": (109000000000, 106000000000, 107000000000),
+        "operatingIncome": (306000000000, 284000000000, 292000000000),
+        "interestIncome": (11000000000, 11000000000, 11000000000),
+        "interestExpense": (3000000000, 3000000000, 3000000000),
+        "incomeBeforeTax": (314000000000, 292000000000, 300000000000),
+        "incomeTaxExpense": (57000000000, 53000000000, 54000000000),
+        "netIncome": (257000000000, 239000000000, 246000000000),
+        "eps": (11.95, 11.12, 11.44),
+        "epsDiluted": (11.94, 11.1, 11.43),
+        **_SHARES,
+        "ebitda": (448000000000, 422000000000, 428000000000),
+        "depreciationAndAmortization": (142000000000, 138000000000, 136000000000),
+    },
+)
+
+BALANCE_ANNUAL = _by_period(
+    _YEARS,
+    {
+        "cashAndCashEquivalents": (1450000000000, 1180000000000, 960000000000),
+        "netReceivables": (330000000000, 270000000000, 230000000000),
+        "inventory": (290000000000, 250000000000, 220000000000),
+        "totalCurrentAssets": (2280000000000, 1870000000000, 1550000000000),
+        "propertyPlantEquipmentNet": (3900000000000, 3310000000000, 2880000000000),
+        "goodwill": (0, 0, 0),
+        "totalAssets": (7210000000000, 6060000000000, 5190000000000),
+        "totalCurrentLiabilities": (820000000000, 700000000000, 610000000000),
+        "longTermDebt": (910000000000, 930000000000, 950000000000),
+        "totalLiabilities": (2380000000000, 2190000000000, 2030000000000),
+        "totalStockholdersEquity": (4830000000000, 3870000000000, 3160000000000),
+        "totalLiabilitiesAndTotalEquity": (7210000000000, 6060000000000, 5190000000000),
+        "totalDebt": (1020000000000, 1050000000000, 1070000000000),
+        "netDebt": (-430000000000, -130000000000, 110000000000),
+    },
+)
+
+BALANCE_QUARTER = _by_period(
+    _QUARTERS,
+    {
+        "cashAndCashEquivalents": (1610000000000, 1520000000000, 1450000000000),
+        "netReceivables": (352000000000, 341000000000, 330000000000),
+        "inventory": (305000000000, 298000000000, 290000000000),
+        "totalCurrentAssets": (2492000000000, 2377000000000, 2280000000000),
+        "propertyPlantEquipmentNet": (4210000000000, 4050000000000, 3900000000000),
+        "goodwill": (0, 0, 0),
+        "totalAssets": (7752000000000, 7467000000000, 7210000000000),
+        "totalCurrentLiabilities": (868000000000, 844000000000, 820000000000),
+        "longTermDebt": (905000000000, 908000000000, 910000000000),
+        "totalLiabilities": (2438000000000, 2410000000000, 2380000000000),
+        "totalStockholdersEquity": (5314000000000, 5057000000000, 4830000000000),
+        "totalLiabilitiesAndTotalEquity": (7752000000000, 7467000000000, 7210000000000),
+        "totalDebt": (1012000000000, 1016000000000, 1020000000000),
+        "netDebt": (-598000000000, -504000000000, -430000000000),
+    },
+)
+
+CASHFLOW_ANNUAL = _by_period(
+    _YEARS,
+    {
+        "netIncome": (894000000000, 596000000000, 447000000000),
+        "depreciationAndAmortization": (520000000000, 465000000000, 425000000000),
+        "stockBasedCompensation": (18000000000, 15000000000, 13000000000),
+        "changeInWorkingCapital": (-64000000000, -41000000000, -30000000000),
+        "netCashProvidedByOperatingActivities": (1368000000000, 1035000000000, 855000000000),
+        "investmentsInPropertyPlantAndEquipment": (-880000000000, -720000000000, -640000000000),
+        "acquisitionsNet": (0, 0, 0),
+        "netCashProvidedByInvestingActivities": (-930000000000, -760000000000, -690000000000),
+        "netDividendsPaid": (-168000000000, -147000000000, -129000000000),
+        "netCashProvidedByFinancingActivities": (-168000000000, -55000000000, -95000000000),
+        "netChangeInCash": (270000000000, 220000000000, 70000000000),
+        "freeCashFlow": (488000000000, 315000000000, 215000000000),
+    },
+)
+
+CASHFLOW_QUARTER = _by_period(
+    _QUARTERS,
+    {
+        "netIncome": (257000000000, 239000000000, 246000000000),
+        "depreciationAndAmortization": (142000000000, 138000000000, 136000000000),
+        "stockBasedCompensation": (5000000000, 5000000000, 5000000000),
+        "changeInWorkingCapital": (-18000000000, -12000000000, -15000000000),
+        "netCashProvidedByOperatingActivities": (386000000000, 370000000000, 372000000000),
+        "investmentsInPropertyPlantAndEquipment": (-240000000000, -232000000000, -238000000000),
+        "acquisitionsNet": (0, 0, 0),
+        "netCashProvidedByInvestingActivities": (-252000000000, -256000000000, -250000000000),
+        "netDividendsPaid": (-44000000000, -44000000000, -42000000000),
+        "netCashProvidedByFinancingActivities": (-44000000000, -44000000000, -42000000000),
+        "netChangeInCash": (90000000000, 70000000000, 80000000000),
+        "freeCashFlow": (146000000000, 138000000000, 134000000000),
+    },
+)
+
+RATIOS_ANNUAL = _by_period(
+    _YEARS[:2],
+    {
+        "grossProfitMargin": (0.4495, 0.4303),
+        "ebitdaMargin": (0.4832, 0.4795),
+        "operatingProfitMargin": (0.3242, 0.2889),
+        "netProfitMargin": (0.2734, 0.2443),
+        "priceToEarningsRatio": (21.4, 24.9),
+        "priceToBookRatio": (3.96, 3.84),
+        "debtToEquityRatio": (0.2112, 0.2713),
+        "currentRatio": (2.78, 2.67),
+        "revenuePerShare": (152.09, 113.49),
+        "dividendPerShare": (7.81, 6.84),
+        "dividendYield": (0.0088, 0.0099),
+        "dividendPayoutRatio": (0.1879, 0.2466),
+    },
+)
+
+KEY_METRICS_ANNUAL = _by_period(
+    _YEARS[:2],
+    {
+        "enterpriseValue": (18330000000000, 15320000000000),
+        "returnOnEquity": (0.2055, 0.1696),
+        "returnOnInvestedCapital": (0.1762, 0.1428),
+        "evToEBITDA": (11.6, 13.1),
+        "netDebtToEBITDA": (-0.27, -0.11),
+        "daysOfInventoryOutstanding": (58.8, 65.6),
+        "capexToRevenue": (0.2691, 0.2951),
+        "researchAndDevelopementToRevenue": (0.0795, 0.0877),  # FMP's spelling
+    },
+)
+
+SEGMENTS_PRODUCT: list[dict[str, Any]] = [
+    {
+        "symbol": SYMBOL,
+        "fiscalYear": year,
+        "period": "FY",
+        "reportedCurrency": None,
+        "date": f"{year}-12-31",
+        "data": {
+            "Camera lenses": camera,
+            "Automotive sensors": cars,
+            "Industrial optics": machines,
+        },
+    }
+    for year, camera, cars, machines in (
+        (2025, 1610000000000, 1080000000000, 580000000000),
+        (2024, 1300000000000, 720000000000, 420000000000),
+        (2023, 1150000000000, 520000000000, 360000000000),
+    )
+]
+
+SEGMENTS_GEOGRAPHIC: list[dict[str, Any]] = [
+    {
+        "symbol": SYMBOL,
+        "fiscalYear": year,
+        "period": "FY",
+        "reportedCurrency": None,
+        "date": f"{year}-12-31",
+        "data": {"Asia": asia, "North America": america, "Europe": europe},
+    }
+    for year, asia, america, europe in (
+        (2025, 1520000000000, 1030000000000, 720000000000),
+        (2024, 1180000000000, 740000000000, 520000000000),
+        (2023, 1010000000000, 600000000000, 420000000000),
+    )
 ]

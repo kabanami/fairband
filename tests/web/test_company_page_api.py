@@ -1,12 +1,14 @@
-"""The company page's two reads (the company page's design, 7.4, 10.3, 10.4 and 10.5) and the two
-fields the company's detail gains (7.2 and 11.1), on the database of ``conftest.py``: AAPL valued
-on the Mature Growth route, AAL refused for its target margin, HGCO valued on the revenue growth
-route.
+"""The company page's three reads (the company page's design, 7.4, 10.3, 10.4 and 10.5, and the
+Financials tab's design, 7.9 and 8.3) and the two fields the company's detail gains (7.2 and
+11.1), on the database of ``conftest.py``: AAPL valued on the Mature Growth route, AAL refused for
+its target margin, HGCO valued on the revenue growth route.
 
 The page's company is ``page_payloads``' LFOX, which has no snapshot unless a test values one. Its
 FMP answers are stored as the refresh stores them: each under the fetch's params, a quote with its
-observations. The expected figures are the readers' (``vendors.page_fmp``) on the same payloads,
-whose own tests read each field: these tests check what each read hands each reader."""
+observations. The expected figures are the readers' (``vendors.page_fmp`` and
+``vendors.page_financials``) on the same payloads, whose own tests read each field: these tests
+check what each read hands each reader. The financials answer is ``page_answers``', the one the
+page's node tests draw."""
 
 import json
 from collections.abc import Callable, Mapping, Sequence
@@ -20,6 +22,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from refresh.vendor_double import FMP_KEY, Router
+from support import page_answers as answers
 from support import page_payloads as pages
 from support.engine_companies import (
     fx_inputs,
@@ -36,7 +39,14 @@ from fairband.engine.review import review_company
 from fairband.engine.route import value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
-from fairband.refresh.fetch import EARNINGS_ROWS, PAGE_ENDPOINTS, fetch_company, page_params
+from fairband.refresh.fetch import (
+    EARNINGS_ROWS,
+    PAGE_ENDPOINTS,
+    STATEMENT_QUARTERS,
+    STATEMENT_YEARS,
+    fetch_company,
+    page_params,
+)
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT
 from fairband.refresh.passthrough import Passthrough
 from fairband.store.db import connect
@@ -48,7 +58,7 @@ from fairband.store.settings import write_settings
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.store.vendor import record_response
 from fairband.vendors import fmp as fmp_api
-from fairband.vendors import page_fmp
+from fairband.vendors import page_financials, page_fmp
 from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT, Fmp
 from fairband.vendors.http import VendorHttp
 from fairband.vendors.normalize_fmp import quote_observations
@@ -58,7 +68,30 @@ AT = datetime(2026, 11, 1, 8, 0, tzinfo=UTC)  # 90 minutes before the clock's NO
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 OVERVIEW = f"/api/companies/{SYMBOL}/page/overview"
 ESTIMATES = f"/api/companies/{SYMBOL}/page/estimates"
-# Every answer the two reads draw, but the quote, which a test stores with its observations.
+FINANCIALS = f"/api/companies/{SYMBOL}/page/financials"
+# The answers of the Key statistics, which the overview draws (the company page's design, 8.3).
+STATISTICS = (
+    "ratios-ttm",
+    "key-metrics-ttm",
+    "financial-growth",
+    "financial-scores",
+    "dividends",
+    "shares-float",
+)
+# The ten answers the financials read draws (the Financials tab's design, 8.3).
+FINANCIAL_ANSWERS: dict[str, Any] = {
+    "income-annual": pages.INCOME_ANNUAL,
+    "income-quarter": pages.INCOME_QUARTER,
+    "balance-annual": pages.BALANCE_ANNUAL,
+    "balance-quarter": pages.BALANCE_QUARTER,
+    "cashflow-annual": pages.CASHFLOW_ANNUAL,
+    "cashflow-quarter": pages.CASHFLOW_QUARTER,
+    "ratios-annual": pages.RATIOS_ANNUAL,
+    "key-metrics-annual": pages.KEY_METRICS_ANNUAL,
+    "segments-product": pages.SEGMENTS_PRODUCT,
+    "segments-geographic": pages.SEGMENTS_GEOGRAPHIC,
+}
+# Every answer the three reads draw, but the quote, which a test stores with its observations.
 ANSWERS: dict[str, Any] = {
     "profile": pages.PROFILE,
     "price-history": pages.HISTORY,
@@ -74,7 +107,9 @@ ANSWERS: dict[str, Any] = {
     "dividends": pages.DIVIDENDS,
     "shares-float": pages.FLOAT,
     "news": pages.NEWS,
+    **FINANCIAL_ANSWERS,
 }
+EMPTY = {"columns": [], "rows": []}  # a table whose answer the store lacks
 # LFOX's fiscal years on file, so the consensus starts after fiscal 2025.
 INCOME = [
     {"symbol": SYMBOL, "date": f"{year}-12-31", "fiscalYear": str(year), "period": "FY"}
@@ -87,11 +122,15 @@ def _params(endpoint: str, symbol: str) -> dict[str, str]:
     """The params the fetch stores ``endpoint``'s answer under (``fetch._calls``)."""
     if endpoint in PAGE_ENDPOINTS:
         return page_params(endpoint, symbol)
+    years = {"period": "annual", "limit": str(STATEMENT_YEARS)}
+    quarters = {"period": "quarter", "limit": str(STATEMENT_QUARTERS)}
     extra = {
         "profile": {},
         "price-history": {},
         "earnings": {"limit": str(EARNINGS_ROWS)},
         "estimates-annual": {"period": "annual", "limit": str(ANNUAL_ESTIMATE_LIMIT)},
+        **{f"{kind}-annual": years for kind in ("income", "balance", "cashflow")},
+        **{f"{kind}-quarter": quarters for kind in ("income", "balance", "cashflow")},
     }[endpoint]
     return {"symbol": symbol, **extra}
 
@@ -147,18 +186,34 @@ def _get(client: TestClient, path: str) -> Any:
     return r.json()
 
 
+def _tables(financials: Mapping[str, Any]) -> list[Any]:
+    """The financials answer's nine tables: each statement's by fiscal year and by quarter, the
+    revenue by product and by region, and the ratios."""
+    statements = financials["statements"]
+    return [
+        *(
+            statements[kind][period]
+            for kind in ("income", "balance", "cashflow")
+            for period in ("annual", "quarter")
+        ),
+        financials["segments"]["product"],
+        financials["segments"]["region"],
+        financials["ratios"],
+    ]
+
+
 def test_the_overview_whole(client: TestClient, db_path: Path, policy: Policy) -> None:
     _store_all(db_path, policy)
     today = NOW.date()
     quote = pages.QUOTE[0]
-    answers = {endpoint: ANSWERS.get(endpoint) for endpoint in PAGE_ENDPOINTS}
+    statistics = {endpoint: ANSWERS[endpoint] for endpoint in STATISTICS}
     body = _get(client, OVERVIEW)
     assert body == {
         "symbol": SYMBOL,
         "dataDate": "2026-11-01",
         "quote": page_fmp.head_quote(quote),
         "company": page_fmp.company(pages.PROFILE),
-        "statistics": page_fmp.statistics(answers, pages.PROFILE, quote, "SEK", today),
+        "statistics": page_fmp.statistics(statistics, pages.PROFILE, quote, "SEK", today),
         "trading": page_fmp.trading(quote, pages.PROFILE, "2027-01-14"),
         "priceChange": page_fmp.price_change(pages.PRICE_CHANGE),
         "prices": page_fmp.prices(pages.HISTORY, quote),
@@ -206,6 +261,153 @@ def test_the_estimates_whole(client: TestClient, db_path: Path, policy: Policy) 
     assert body["consensus"][0]["eps"] == {"value": 61.2, "currency": "SEK"}
     assert body["target"]["consensus"] == {"value": 205.6, "currency": "USD"}
     assert body["quote"]["price"] == 182.4
+
+
+def test_the_financials_whole(client: TestClient, db_path: Path, policy: Policy) -> None:
+    """The ten answers stored as the fetch stores them, and a snapshot in Swedish kronor: the
+    tab's currency is the newest annual income row's, New Taiwan dollars, and every reader is
+    handed it, so the segments' columns, whose rows name none, read it; the quarters end a quarter
+    apart. The answer is the one the page's node tests draw, but its data date, the day the
+    answers were stored."""
+    _store_all(db_path, policy)
+    body = _get(client, FINANCIALS)
+    assert body == answers.FINANCIALS | {"dataDate": "2026-11-01"}
+    assert (body["currency"], body["cadence"]) == ("TWD", "quarterly")
+    assert body["quote"] == _get(client, OVERVIEW)["quote"]
+    tables = _tables(body)
+    assert [table for table in tables if not table["columns"] or not table["rows"]] == []
+    assert len(tables) == 9
+    income = body["statements"]["income"]
+    assert [column["label"] for column in income["annual"]["columns"]] == ["2023", "2024", "2025"]
+    assert [column["label"] for column in income["quarter"]["columns"]] == [
+        "Q4 2025",
+        "Q1 2026",
+        "Q2 2026",
+    ]
+    region = body["segments"]["region"]
+    assert {column["currency"] for column in region["columns"]} == {"TWD"}
+    assert [row["key"] for row in region["rows"]] == ["Asia", "North America", "Europe"]
+
+
+def test_the_financials_of_a_company_with_a_profile_and_nothing_else(
+    client: TestClient, db_path: Path
+) -> None:
+    """Review Focus 2: no statement, no ratio and no segment on file. The read answers with every
+    table empty, no data date (it does not draw the profile), the company's currency, USD with no
+    snapshot, and the cadence quarterly."""
+    _store(db_path, "profile", pages.PROFILE, AT)
+    body = _get(client, FINANCIALS)
+    assert body == answers.profile_only_financials()
+    assert _tables(body) == [EMPTY] * 9
+    assert (body["dataDate"], body["currency"], body["cadence"]) == (None, "USD", "quarterly")
+
+
+def test_the_financials_read_an_answer_of_the_wrong_shape_as_an_empty_table(
+    client: TestClient, db_path: Path
+) -> None:
+    """Review Focus 1: FMP's error object, which the segments pass-through stored as an answer
+    before it checked one, and statements that are no list: the read answers, those tables empty,
+    the currency the company's and the cadence quarterly."""
+    _store(db_path, "profile", pages.PROFILE, AT)
+    error = {"Error Message": "Limit Reach"}
+    _store(db_path, "segments-product", error, AT)
+    _store(db_path, "income-annual", error, AT)
+    _store(db_path, "income-quarter", "not a list", AT)
+    _store(db_path, "segments-geographic", pages.SEGMENTS_GEOGRAPHIC, AT)
+    body = _get(client, FINANCIALS)
+    assert body["segments"]["product"] == EMPTY
+    assert body["statements"]["income"] == {"annual": EMPTY, "quarter": EMPTY}
+    assert (body["currency"], body["cadence"]) == ("USD", "quarterly")
+    region = page_financials.segments(pages.SEGMENTS_GEOGRAPHIC, "USD", STATEMENT_YEARS)
+    assert body["segments"]["region"] == region
+
+
+@pytest.mark.parametrize("older", FINANCIAL_ANSWERS)
+def test_the_financials_data_date_is_the_oldest_of_its_ten_answers(
+    client: TestClient, db_path: Path, older: str
+) -> None:
+    """The oldest day among the ten answers the tab draws (the Financials tab's design, 8.3), each
+    in turn stored a day before the rest. The profile's day, the quote's and another tab's
+    answer's, older still, do not count."""
+
+    def on(day: int) -> datetime:
+        return datetime(2026, 10, day, 12, 0, tzinfo=UTC)
+
+    _store(db_path, "profile", pages.PROFILE, on(20))
+    _quote(db_path, pages.QUOTE, on(21), [SYMBOL])
+    _store(db_path, "ratios-ttm", pages.RATIOS, on(22))
+    for endpoint, payload in FINANCIAL_ANSWERS.items():
+        _store(db_path, endpoint, payload, on(29 if endpoint == older else 30))
+    body = _get(client, FINANCIALS)
+    assert (body["dataDate"], body["quote"]["price"]) == ("2026-10-29", 182.4)
+
+
+def test_the_ratios_and_the_segments_keep_the_statements_years(
+    client: TestClient, db_path: Path
+) -> None:
+    """The Financials tab's design, 8.1 and 8.3: of answers that hold twelve fiscal years, the
+    ratios and each segment table keep the newest eleven, the statements' depth."""
+    assert STATEMENT_YEARS == 11
+    _store(db_path, "profile", pages.PROFILE, AT)
+    years = range(2014, 2026)
+    ratios = [pages.RATIOS_ANNUAL[0] | {"date": f"{y}-12-31", "fiscalYear": str(y)} for y in years]
+    _store(db_path, "ratios-annual", ratios, AT)
+    for endpoint in ("segments-product", "segments-geographic"):
+        first = FINANCIAL_ANSWERS[endpoint][0]
+        segments = [first | {"date": f"{y}-12-31", "fiscalYear": y} for y in years]
+        _store(db_path, endpoint, segments, AT)
+    body = _get(client, FINANCIALS)
+    newest = [str(year) for year in range(2015, 2026)]
+    for table in (body["ratios"], *body["segments"].values()):
+        assert [column["label"] for column in table["columns"]] == newest
+
+
+def test_a_half_year_reporter_s_cadence_and_labels(client: TestClient, db_path: Path) -> None:
+    """The Financials tab's design, 7.9: quarterly income rows that end half a year apart, which
+    FMP names Q4 and Q2, are a half-year reporter's. The three quarterly tables label them H2 and
+    H1; the annual tables keep their years."""
+    _store(db_path, "profile", pages.PROFILE, AT)
+    _store(db_path, "income-annual", pages.INCOME_ANNUAL, AT)
+    halves = ("2025-12-31", "2026-06-30")
+    for kind in ("income", "balance", "cashflow"):
+        rows = [row for row in FINANCIAL_ANSWERS[f"{kind}-quarter"] if row["date"] in halves]
+        assert [row["period"] for row in rows] == ["Q2", "Q4"]
+        _store(db_path, f"{kind}-quarter", rows, AT)
+    body = _get(client, FINANCIALS)
+    assert body["cadence"] == "half-yearly"
+    for kind in ("income", "balance", "cashflow"):
+        columns = body["statements"][kind]["quarter"]["columns"]
+        assert [column["label"] for column in columns] == ["H2 2025", "H1 2026"]
+    columns = body["statements"]["income"]["annual"]["columns"]
+    assert [column["label"] for column in columns] == ["2023", "2024", "2025"]
+
+
+def test_the_currency_is_the_newest_annual_income_row_s(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """The Financials tab's design, 7.9 and 8.3: the tab's currency is the newest annual income
+    row's, whatever the company's snapshot says (Swedish kronor here); a column whose row names
+    another currency keeps its own, and the segments' columns, whose rows name none, read the
+    tab's. Where the newest row names none, the tab's currency is the company's."""
+    _store_all(db_path, policy)
+    newest, older = pages.INCOME_ANNUAL[:2]
+    income = [newest | {"reportedCurrency": "USD"}, older | {"reportedCurrency": "EUR"}]
+    _store(db_path, "income-annual", income, AT + timedelta(minutes=1))
+    body = _get(client, FINANCIALS)
+    assert body["currency"] == "USD"
+    columns = body["statements"]["income"]["annual"]["columns"]
+    assert [(column["label"], column["currency"]) for column in columns] == [
+        ("2024", "EUR"),
+        ("2025", "USD"),
+    ]
+    assert {column["currency"] for column in body["segments"]["product"]["columns"]} == {"USD"}
+    unnamed = [newest | {"reportedCurrency": None}, older | {"reportedCurrency": "EUR"}]
+    _store(db_path, "income-annual", unnamed, AT + timedelta(minutes=2))
+    body = _get(client, FINANCIALS)
+    assert body["currency"] == "SEK"
+    columns = body["statements"]["income"]["annual"]["columns"]
+    assert [column["currency"] for column in columns] == ["EUR", "SEK"]
+    assert {column["currency"] for column in body["segments"]["product"]["columns"]} == {"SEK"}
 
 
 def test_an_estimate_dated_within_the_drift_of_the_newest_year_is_that_year(
@@ -271,7 +473,7 @@ def test_a_close_too_large_for_a_float_is_left_out_of_the_read(
 
 
 def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: Path) -> None:
-    """Review Focus 2: a company fetched before the page's calls, or whose ten calls all failed,
+    """Review Focus 2: a company fetched before the page's calls, or whose page calls all failed,
     opens with every figure ``None``, no price and no story."""
     _store(db_path, "profile", pages.PROFILE, AT)
     overview = _get(client, OVERVIEW)
@@ -300,7 +502,7 @@ def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: 
 
 
 def test_a_bad_symbol_is_a_400_and_no_profile_a_404(client: TestClient) -> None:
-    for tab in ("overview", "estimates"):
+    for tab in ("overview", "estimates", "financials"):
         r = client.get(f"/api/companies/a b/page/{tab}")
         assert (r.status_code, r.json()) == (400, {"detail": "'a b' is not a symbol"})
         # AAPL has a snapshot and no stored profile: the page reads need the profile alone
@@ -418,23 +620,30 @@ def test_the_quote_row_comes_through_the_observation(client: TestClient, db_path
 def test_the_reads_call_no_vendor(
     tmp_path: Path, db_path: Path, policy: Policy, vendor: Vendor, passthrough: Passthrough
 ) -> None:
-    """An app with a pass-through whose every call fails: both reads answer from the store, the
-    stale news among them, and the vendor is never asked."""
+    """An app with a pass-through whose every call fails: the three reads answer from the store,
+    the stale news and statements three days old among them, and the vendor is never asked."""
     vendor.answer = lambda request: httpx.Response(500)
     _store(db_path, "profile", pages.PROFILE, AT)
     _store(db_path, "news", pages.NEWS, AT - timedelta(days=3))
+    _store(db_path, "income-annual", pages.INCOME_ANNUAL, AT - timedelta(days=3))
+    _store(db_path, "segments-product", pages.SEGMENTS_PRODUCT, AT - timedelta(days=3))
     with passthrough_client(tmp_path, db_path, policy, passthrough) as client:
         news = _get(client, OVERVIEW)["news"]
         _get(client, ESTIMATES)
+        financials = _get(client, FINANCIALS)
     assert (news["stale"], len(news["stories"])) == (True, 3)
+    assert len(financials["statements"]["income"]["annual"]["columns"]) == 3
+    assert len(financials["segments"]["product"]["rows"]) == 3
+    assert financials["dataDate"] == "2026-10-29"
     assert vendor.paths == []
 
 
 def test_the_reads_find_what_the_fetch_stores(
     db_path: Path, client: TestClient, policy: Policy
 ) -> None:
-    """The refresh's fetch of ACME over the fixtures, then both reads: each answer they draw is
-    found under the params the fetch stored it with, so a figure of each is there."""
+    """The refresh's fetch of ACME over the fixtures, then the three reads: each answer they draw
+    is found under the params the fetch stored it with, so a figure of each is there, and no table
+    of the financials is empty."""
     router = Router()
     with (
         VendorHttp(
@@ -473,6 +682,16 @@ def test_the_reads_find_what_the_fetch_stores(
     assert (overview["dataDate"], estimates["dataDate"]) == ("2026-11-01", "2026-11-01")
     assert estimates["quote"] == overview["quote"]
     assert overview["news"]["stale"] is False
+    financials = _get(client, "/api/companies/ACME/page/financials")
+    tables = _tables(financials)
+    assert [table for table in tables if not table["columns"] or not table["rows"]] == []
+    assert len(tables) == 9
+    assert (financials["dataDate"], financials["currency"], financials["cadence"]) == (
+        "2026-11-01",
+        "USD",
+        "quarterly",
+    )
+    assert financials["quote"] == overview["quote"]
 
 
 def test_the_detail_carries_the_moat_in_force_and_the_note_count(
