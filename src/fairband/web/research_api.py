@@ -43,9 +43,10 @@ moat class in force (method 4.9), ``"Wide"``, ``"Narrow"`` or ``"None"``: the re
 counts and has a value, else the snapshot's when the snapshot has a value, else ``None``. So a
 refused snapshot with a counted review that values the company has that review's moat.
 
-``GET /api/companies/{symbol}/research`` answers the company's research records (18.3), which the
-drawer's Details listed until it left (the company page's design, 11) and no page reads now (the
-Research tab will, B-218), each record as its own read serves it: ``overrides``, ``guidance``,
+``GET /api/companies/{symbol}/research`` answers the company's research records (18.3,
+``research_records``), which the drawer's Details listed until it left (the company page's design,
+11) and the Research tab's read carries in its ``records`` (``company_api``; the Research tab's
+design, 8.1), each record as its own read serves it: ``overrides``, ``guidance``,
 ``killCriteria``, ``newsItems``, ``notes`` and ``findings`` newest first, a finding, a guidance
 record and a kill criterion's threshold with the currency of its money (``agents_api.money_json``;
 spec 2026-11-15 8.1, 9.1); ``judgments``, the latest report's, in the order the agent gave them;
@@ -163,19 +164,23 @@ def add_research_routes(app: FastAPI, conn_factory: Callable[[], sqlite3.Connect
         with closing(conn_factory()) as conn:
             if latest_snapshot(conn, company) is None:
                 raise HTTPException(404, f"no snapshot for {company}")
-            reporting = reporting_currency(conn, company)
-            return {
-                "overrides": [record_json(o) for o in overrides_for(conn, company)],
-                "guidance": [guidance_json(g, reporting) for g in guidance_for(conn, company)],
-                "judgments": [record_json(j) for j in latest_judgments(conn, company)],
-                "killCriteria": [
-                    criterion_json(k, reporting) for k in kill_criteria_for(conn, company)
-                ],
-                "newsItems": [record_json(n) for n in news_items_for(conn, company)],
-                "notes": [record_json(n) for n in notes_for(conn, company)],
-                "findings": [finding_json(f, reporting) for f in findings_for(conn, company)],
-                "ledger": [record_json(e) for e in entries(conn, company, LEDGER_ROWS)],
-            }
+            return research_records(conn, company)
+
+
+def research_records(conn: sqlite3.Connection, company: str) -> dict[str, Any]:
+    """The research read's eight lists of ``company``, a symbol in the store's form (module
+    docstring)."""
+    reporting = reporting_currency(conn, company)
+    return {
+        "overrides": [record_json(o) for o in overrides_for(conn, company)],
+        "guidance": [guidance_json(g, reporting) for g in guidance_for(conn, company)],
+        "judgments": [record_json(j) for j in latest_judgments(conn, company)],
+        "killCriteria": [criterion_json(k, reporting) for k in kill_criteria_for(conn, company)],
+        "newsItems": [record_json(n) for n in news_items_for(conn, company)],
+        "notes": [record_json(n) for n in notes_for(conn, company)],
+        "findings": [finding_json(f, reporting) for f in findings_for(conn, company)],
+        "ledger": [record_json(e) for e in entries(conn, company, LEDGER_ROWS)],
+    }
 
 
 def _levels(

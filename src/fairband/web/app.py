@@ -475,7 +475,7 @@ def create_app(
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
-    add_company_page_routes(app, conn_factory, policy, clock)
+    add_company_page_routes(app, conn_factory, policy, taxed, clock)
     add_research_routes(app, conn_factory)
     add_history_routes(app, conn_factory)
     add_multiples_routes(app, conn_factory, passthrough)

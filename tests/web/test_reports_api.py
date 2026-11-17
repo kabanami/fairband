@@ -19,6 +19,12 @@ from fastapi.testclient import TestClient
 from refresh.synthetic import bodies
 from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
 from support.payloads import store_payloads
+from support.reports import AGENT, JUDGMENTS
+from support.reports import body as _body
+from support.reports import published as _published
+from support.reports import sections as _sections
+from support.reports import snapshot_id as _snapshot_id
+from support.reports import submit as _submit
 from support.vendor import FIXTURES, Vendor
 from support.web import HEADER, NOW, TODAY
 
@@ -27,7 +33,7 @@ from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
-from fairband.reports.check import HEADINGS, NO_REFERENCE, UNRESOLVED, headings
+from fairband.reports.check import HEADINGS, NO_REFERENCE, UNRESOLVED
 from fairband.reports.refs import day_words
 from fairband.store.db import connect
 from fairband.store.ledger import Writer
@@ -35,19 +41,9 @@ from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh
 from fairband.store.reviews import insert_review
 from fairband.store.snapshots import insert_snapshot, snapshot_row
-from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
 pytestmark = pytest.mark.usefixtures("secondaries")
 
-AGENT = HEADER | {
-    PRINCIPAL_HEADER: "agent",
-    ACTOR_HEADER: "claude-opus-5-5",
-    CLIENT_HEADER: "claude-code/2.1",
-}
-JUDGMENTS = [
-    {"judgment": kind, "decision": f"keep the {kind}"}
-    for kind in ("phase", "moat", "belief", "roic")
-]
 # AAL's route, the revenue-growth route's, asks for the target margin in place of the ROIC.
 REFUSED_JUDGMENTS = [
     {"judgment": kind, "decision": f"keep the {kind}"}
@@ -65,48 +61,6 @@ BASIS = (
     " ratio 10)"
 )
 FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"
-
-
-def _snapshot_id(client: TestClient, symbol: str = "AAPL") -> int:
-    found: int = client.get(f"/api/companies/{symbol}").json()["snapshot"]["id"]
-    return found
-
-
-def _sections(sid: int, mode: str = "full report", *extra: Any) -> list[dict[str, Any]]:
-    """The sections of ``mode``: section 1 cites the price, the value and r, then ``extra``."""
-    s = f"snapshot:{sid}"
-    first = [
-        "The price of ",
-        {"cite": "$150.00", "ref": f"{s}/price"},
-        " is above the value at belief of ",
-        {"cite": "$128", "ref": f"{s}/value"},
-        ", discounted at ",
-        {"cite": "9.0%", "ref": "policy:required_return"},
-        ". Three reasons stand out in FY2025.",
-        *extra,
-    ]
-    rest = [{"heading": h, "parts": ["Plain words."]} for h in headings(mode)[1:]]
-    return [{"heading": "Summary", "parts": first}, *rest]
-
-
-def _body(sid: int, **changes: Any) -> dict[str, Any]:
-    body = {
-        "mode": "full report",
-        "stance": "hold",
-        "sections": _sections(sid),
-        "judgments": JUDGMENTS,
-    }
-    return body | changes
-
-
-def _submit(client: TestClient, body: dict[str, Any], symbol: str = "AAPL") -> Any:
-    return client.post(f"/api/companies/{symbol}/reports", json=body, headers=AGENT)
-
-
-def _published(client: TestClient, body: dict[str, Any], symbol: str = "AAPL") -> Any:
-    r = _submit(client, body, symbol)
-    assert r.status_code == 201, r.text
-    return r.json()["report"]
 
 
 def _refused_body(sid: int) -> dict[str, Any]:

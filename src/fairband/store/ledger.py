@@ -6,9 +6,10 @@ actor) and its client's name and version. It names the kind of write (``note``, 
 ``override``, ``work-item``, ``claim`` and the others of spec 7), the company when there is one,
 the record it points to by table and id (neither for a write that stored no record, as a rejected
 report stores none), what the write rested on (the company's snapshot and, when there is one, the
-work item), and one line of summary. Rows are appended, never changed, and read newest first.
-``record`` joins the caller's transaction when it holds one, so a record and its ledger row
-commit together or not at all.
+work item), and one line of summary. Rows are appended, never changed, and read newest first;
+``entry_count`` counts a company's rows, which a read cuts at its limit. ``record`` joins the
+caller's transaction when it holds one, so a record and its ledger row commit together or not at
+all.
 """
 
 import sqlite3
@@ -102,6 +103,13 @@ def entries(
             "SELECT * FROM ledger WHERE symbol = ? ORDER BY id DESC LIMIT ?", (symbol, limit)
         )
     return [_row(r) for r in rows]
+
+
+def entry_count(conn: sqlite3.Connection, symbol: str) -> int:
+    """The count of the company's rows, whatever ``entries`` cuts them at."""
+    row = conn.execute("SELECT COUNT(*) FROM ledger WHERE symbol = ?", (symbol,)).fetchone()
+    found: int = row[0]
+    return found
 
 
 def _row(row: sqlite3.Row) -> LedgerRow:

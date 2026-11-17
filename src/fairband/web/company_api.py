@@ -1,6 +1,6 @@
-"""The company page's three reads (the company page's design, 7.2, 7.4, 10.3, 10.4 and 10.5, and the
-Financials tab's design, 7.9 and 8.3), each from the store alone: none calls a vendor, so each is a
-plain GET that needs no request header.
+"""The company page's four reads (the company page's design, 7.2, 7.4, 10.3, 10.4 and 10.5, the
+Financials tab's design, 7.9 and 8.3, and the Research tab's design, 8.1), each from the store
+alone: none calls a vendor, so each is a plain GET that needs no request header.
 
 Each answers ``quote``, the head's figures on every tab (``page_fmp.head_quote``: ``{price,
 change, changePercent, day}``, each ``null`` without a quote's row).
@@ -24,8 +24,23 @@ change, changePercent, day}``, each ``null`` without a quote's row).
   quarter}`` (``page_financials.statement``); ``segments``, the revenue by product and by region
   (``{product, region}``, ``page_financials.segments``); and ``ratios``, the ratios and the key
   metrics by fiscal year (``page_financials.ratios``). Each is a table, ``{columns, rows}``.
+- ``GET /api/companies/{symbol}/page/research?report=<id>`` answers ``{symbol, dataDate, quote,
+  reports, report, call, ofReport, records}``, ``dataDate`` ``null`` since the report's call
+  carries its own days: ``reports``, the company's revisions newest first as the list read answers
+  them (``reports_api.report_list``); ``report``, the revision ``report`` names, else the latest,
+  whole as the report read answers it (``reports_api.report_json``), on the effective policy;
+  ``call``, its value card's figures from the snapshot it rests on and the review and the
+  secondary valuation it names (``research_page.report_call``, on the policy's designation edges);
+  ``ofReport``, ``{killCriteria, newsItems}``, the records its cards draw
+  (``research_page.of_report``), each as the research read serves it; the three ``null`` for a
+  company with no report. ``records`` is the research read's eight lists
+  (``research_api.research_records``), with ``reviews``, the company's reviews as the reviews read
+  serves them, without their results, ``secondaryValuations``, its secondary valuations as their
+  read serves them, each newest first, and ``ledgerCount``, the count of its ledger rows, which
+  ``ledger`` cuts at the newest twenty. A report of another company is a 404, "report <id> is
+  <its symbol>'s, not <symbol>'s"; an id that names none a 404, "no report <id>".
 
-Rules for the three:
+Rules for the overview, the estimates and the financials:
 
 - An answer is the company's newest HTTP 200 FMP answer with no error to its endpoint under the
   params the fetch stores it with, whatever its age (``store.vendor.latest_response``), parsed.
@@ -67,13 +82,15 @@ Rules for the three:
   depth; a statement's table holds every dated row of its answer.
 
 A symbol that is not one is a 400 with its sentence (``reports_api.checked_symbol``); a company
-with no stored profile a 404, "no page data for <symbol>"; on the overview, a stored setting the
-policy refuses a 409 (``settings_api.effective``). A company needs no snapshot.
+with no stored profile a 404, "no page data for <symbol>"; on the overview and the research read,
+a stored setting the policy refuses a 409 (``settings_api.effective``). A company needs no
+snapshot, but for the research read, which answers the same 404 for a company with none and needs
+no stored profile.
 """
 
 import json
 import sqlite3
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -82,6 +99,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from fairband.policy import Policy
+from fairband.policy.tax import TaxTable
 from fairband.refresh.fetch import (
     EARNINGS_ROWS,
     NEWS_STORIES,
@@ -92,12 +110,22 @@ from fairband.refresh.fetch import (
 )
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT, cadence_of, series_for
 from fairband.store.currency import reporting_currency
+from fairband.store.ledger import entry_count
 from fairband.store.observations import observations_for
+from fairband.store.reports import ReportRow, report_row, reports_for
+from fairband.store.research import kill_criteria_for, news_items_for
+from fairband.store.reviews import review_row, reviews_for
+from fairband.store.secondary import secondaries_for, secondary_row
+from fairband.store.snapshots import latest_snapshot, snapshot_row
 from fairband.store.vendor import latest_response, response_payload
 from fairband.vendors import page_financials as financials
 from fairband.vendors import page_fmp
 from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT, StatementKind
-from fairband.web.reports_api import checked_symbol
+from fairband.web.agents_api import criterion_json, record_json
+from fairband.web.reports_api import checked_symbol, report_json, report_list
+from fairband.web.research_api import research_records
+from fairband.web.research_page import of_report, report_call
+from fairband.web.reviews_api import review_json, secondary_json
 from fairband.web.settings_api import effective
 
 # The page answers of the Key statistics (the design's 8.3).
@@ -152,11 +180,13 @@ def add_company_page_routes(
     app: FastAPI,
     conn_factory: Callable[[], sqlite3.Connection],
     policy: Policy,
+    tax: TaxTable,
     clock: Callable[[], datetime],
 ) -> None:
-    """Register the company page's three reads; ``policy`` is the file's, which the user's settings
-    overlay, and ``clock`` gives the time the news is judged stale at and the day the next
-    earnings date and the last dividend payment are judged on."""
+    """Register the company page's four reads; ``policy`` is the file's, which the user's settings
+    overlay, ``tax`` the table a report's references read the statements with, and ``clock`` gives
+    the time the news is judged stale at and the day the next earnings date and the last dividend
+    payment are judged on."""
 
     @app.get("/api/companies/{symbol}/page/overview")
     def page_overview(symbol: str) -> dict[str, Any]:
@@ -264,6 +294,75 @@ def add_company_page_routes(
                 answers["ratios-annual"], answers["key-metrics-annual"], currency, STATEMENT_YEARS
             ),
         }
+
+    @app.get("/api/companies/{symbol}/page/research")
+    def page_research(symbol: str, report: int | None = None) -> dict[str, Any]:
+        symbol = checked_symbol(symbol)
+        with closing(conn_factory()) as conn:
+            if latest_snapshot(conn, symbol) is None:
+                raise HTTPException(404, f"no page data for {symbol}")
+            current = effective(conn, policy)
+            revisions = reports_for(conn, symbol)
+            shown = _shown(conn, symbol, revisions, report)
+            quote = _quote(conn, symbol)
+            records = {
+                **research_records(conn, symbol),
+                "reviews": [review_json(r, with_result=False) for r in reviews_for(conn, symbol)],
+                "secondaryValuations": [secondary_json(s) for s in secondaries_for(conn, symbol)],
+                "ledgerCount": entry_count(conn, symbol),
+            }
+            if shown is None:
+                parts: dict[str, Any] = {"report": None, "call": None, "ofReport": None}
+            else:
+                parts = _report_parts(conn, shown, current, tax)
+        return {
+            "symbol": symbol,
+            "dataDate": None,
+            "quote": page_fmp.head_quote(_payload(quote)),
+            "reports": report_list(revisions),
+            **parts,
+            "records": records,
+        }
+
+
+def _shown(
+    conn: sqlite3.Connection, symbol: str, revisions: Sequence[ReportRow], report_id: int | None
+) -> ReportRow | None:
+    """The revision the research read shows: the one ``report_id`` names, else the latest of
+    ``revisions``, the company's newest first; ``None`` for a company with none. A 404 for an id
+    that names no report or another company's."""
+    if report_id is None:
+        return revisions[0] if revisions else None
+    found = report_row(conn, report_id)
+    if found is None:
+        raise HTTPException(404, f"no report {report_id}")
+    if found.symbol != symbol:
+        raise HTTPException(404, f"report {report_id} is {found.symbol}'s, not {symbol}'s")
+    return found
+
+
+def _report_parts(
+    conn: sqlite3.Connection, report: ReportRow, policy: Policy, tax: TaxTable
+) -> dict[str, Any]:
+    """``report`` whole, its call and the records its cards draw (the module docstring), on the
+    effective ``policy``."""
+    snapshot = snapshot_row(conn, report.snapshot_id)
+    assert snapshot is not None  # a report is stored on its company's snapshot
+    review = None if report.review_id is None else review_row(conn, report.review_id)
+    secondary = None if report.secondary_id is None else secondary_row(conn, report.secondary_id)
+    symbol = report.symbol
+    criteria, news = of_report(
+        report, kill_criteria_for(conn, symbol), news_items_for(conn, symbol)
+    )
+    reporting = reporting_currency(conn, symbol)
+    return {
+        "report": report_json(conn, report, policy, tax),
+        "call": report_call(snapshot, review, secondary, policy.designation_edges),
+        "ofReport": {
+            "killCriteria": [criterion_json(k, reporting) for k in criteria],
+            "newsItems": [record_json(n) for n in news],
+        },
+    }
 
 
 def _profile(conn: sqlite3.Connection, symbol: str) -> _Answer:

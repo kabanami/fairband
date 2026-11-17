@@ -92,7 +92,7 @@ stored report always renders. A missing report is a 404, "no report <id>".
 """
 
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import asdict, fields
 from datetime import date, datetime
@@ -463,21 +463,20 @@ def add_report_routes(
                 complete_item(conn, item.id, report_id, at)
                 summary = f"completed with report {report_id}"
                 rows.add("complete", "work_items", item.id, summary, item.id)
-            return {"report": _report_json(conn, report, current, tax)}
+            return {"report": report_json(conn, report, current, tax)}
 
     @app.get("/api/companies/{symbol}/reports")
     def reports(symbol: str) -> dict[str, Any]:
         symbol = checked_symbol(symbol)
         with closing(conn_factory()) as conn:
             found = reports_for(conn, symbol)
-        listed = [record_json(r) for r in found]
-        return {"reports": [{k: v for k, v in r.items() if k != "sections"} for r in listed]}
+        return {"reports": report_list(found)}
 
     @app.get("/api/reports/{report_id}")
     def report(report_id: int) -> dict[str, Any]:
         with closing(conn_factory()) as conn:
             found = _report(conn, report_id)
-            return _report_json(conn, found, effective(conn, policy), tax)
+            return report_json(conn, found, effective(conn, policy), tax)
 
     @app.get("/api/reports/{report_id}/markdown")
     def report_markdown(report_id: int) -> Response:
@@ -572,10 +571,12 @@ def _report(conn: sqlite3.Connection, report_id: int) -> ReportRow:
     return found
 
 
-def _report_json(
+def report_json(
     conn: sqlite3.Connection, report: ReportRow, policy: Policy, tax: TaxTable
 ) -> dict[str, Any]:
-    """A report whole: its record, its judgments, its two appendixes and its references."""
+    """A report whole, as the report read answers it: its record, its judgments, its two
+    appendixes and its references; ``policy`` is the effective one and ``tax`` the statements'
+    table. The Research tab's read answers the report it shows by it."""
     return {
         **record_json(report),
         "judgments": [record_json(j) for j in judgments_for(conn, report.id)],
@@ -583,6 +584,12 @@ def _report_json(
         "appendixB": appendix_b(report.sections),
         "references": references(conn, report, policy, tax),
     }
+
+
+def report_list(reports: Iterable[ReportRow]) -> list[dict[str, Any]]:
+    """The revisions ``reports`` as the list read answers them, each record without its sections.
+    The Research tab's read answers the company's revisions by it."""
+    return [{k: v for k, v in record_json(r).items() if k != "sections"} for r in reports]
 
 
 def checked_symbol(text: str) -> str:

@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from fairband.store.db import transaction
-from fairband.store.ledger import OWNER, SYSTEM, LedgerRow, Writer, entries, record
+from fairband.store.ledger import OWNER, SYSTEM, LedgerRow, Writer, entries, entry_count, record
 
 NOW = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)
 
@@ -30,6 +30,17 @@ def test_record_and_entries(conn: sqlite3.Connection) -> None:
     assert rows[1].actor == "claude-opus-5-5" and rows[1].client == "claude-code/2.1"
     assert [r.symbol for r in entries(conn, "AAPL")] == ["AAPL"]
     assert len(entries(conn, limit=1)) == 1
+
+
+def test_entry_count(conn: sqlite3.Connection) -> None:
+    """The count of every row of the company, which ``entries`` cuts at its limit; none for a
+    company with no row, and a row of no company counts for none."""
+    for n in range(3):
+        record(conn, OWNER, NOW, "note", "AAPL", "notes", n + 1, summary="a note")
+    record(conn, SYSTEM, NOW, "work-item", "MSFT", "work_items", 1, summary="expiry")
+    record(conn, SYSTEM, NOW, "derivation", None, "derivations", 9, summary="ratio")
+    assert (entry_count(conn, "AAPL"), entry_count(conn, "MSFT")) == (3, 1)
+    assert (entry_count(conn, "NOPE"), len(entries(conn, "AAPL", limit=2))) == (0, 2)
 
 
 def test_a_row_reads_back_whole(conn: sqlite3.Connection) -> None:
