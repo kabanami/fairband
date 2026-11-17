@@ -4,7 +4,7 @@ company's page. It matches as the Screen's field does, a ticker that starts with
 name that holds it, on the rows the page already holds, and lists eight at most: the ticker that
 is the text first, then the tickers that start with it, the names that start with it and the names
 that hold it, the larger company first within each. The arrow keys move the mark, Enter opens the
-marked company, Escape closes the list. The page's own scripts run in node after the bundle
+marked company, Escape empties the field. The page's own scripts run in node after the bundle
 (``support.page``); the tests read what ``finder.matches``, ``finder.step``, ``finder.list`` and
 ``finder.view`` return, and the shell's handlers and the styles as text."""
 
@@ -129,13 +129,29 @@ def test_the_list_draws_each_company_its_ticker_and_its_name_and_marks_one() -> 
     ]
 
 
-def test_a_company_with_no_name_draws_its_ticker_alone_and_no_match_says_so() -> None:
+def test_a_company_with_no_name_draws_its_ticker_alone() -> None:
     tree = node("finder.list", [[_row("NONAME", None)], 0], FINDER)
+    assert tree["props"]["aria-label"] == "Companies"
     [option] = [e for e in elements(tree) if e["props"].get("role") == "option"]
     assert text(option) == "NONAME" and classed(option, "app-finder__name") == []
-    none = node("finder.list", [[], 0], FINDER)
-    assert [e for e in elements(none) if e["props"].get("role") == "option"] == []
-    assert text(classed(none, "app-finder__none")) == "No company matches"
+
+
+@pytest.mark.parametrize(
+    ("note", "words"),
+    [(None, "No company matches"), ("The companies have not loaded.",) * 2],
+)
+def test_an_empty_list_says_why_in_one_row_that_cannot_be_picked(
+    note: str | None, words: str
+) -> None:
+    """Nothing found, or the rows not yet in: one row with the sentence, an option of the list so
+    a reader that cannot see it hears it, disabled and never selected, with no handler."""
+    tree = node("finder.list", [[], 0, None, note], FINDER)
+    [row] = [e for e in elements(tree) if e["type"] == "li"]
+    assert text(row) == words
+    assert row["props"]["className"] == "caption app-finder__none"
+    assert row["props"]["role"] == "option" and row["props"]["aria-disabled"] == "true"
+    assert row["props"]["aria-selected"] == "false"
+    assert "onMouseDown" not in row["props"]
 
 
 def test_the_field_at_rest_is_a_closed_combobox_with_the_screens_words() -> None:
@@ -147,21 +163,44 @@ def test_the_field_at_rest_is_a_closed_combobox_with_the_screens_words() -> None
     props = field["props"]
     assert props["placeholder"] == "Ticker or company" and props["aria-label"] == "Find a company"
     assert props["role"] == "combobox" and props["aria-expanded"] == "false"
-    assert props["aria-controls"] == "app-finder-list" and props["aria-autocomplete"] == "list"
+    assert props["aria-autocomplete"] == "list"
+    assert props.get("aria-controls") is None  # the list is not on the page while closed
     assert props["value"] == "" and props.get("aria-activedescendant") is None
     assert classed(tree, "app-finder__list") == []
 
 
 def test_the_shell_opens_the_page_through_the_hash_and_keeps_the_field_on_a_press() -> None:
-    """Read as text: a pick sets the hash to the company's page as the ticker's link names it, so
-    the browser's Back returns to the view left; a press on an option does not take the focus
-    from the field before the pick; a blur closes the list."""
+    """Read as text, since node runs the shell's first state alone: a pick sets the hash to the
+    company's page as the ticker's link names it, so the browser's Back returns to the view left;
+    a press of the main button on a row picks it and does not take the focus from the field, and
+    another button picks nothing; a blur closes the list; a key of a text being composed is the
+    text's own; the mark stays on the list when the rows change under it; while the rows are not
+    in the list says so, and looks for them again shortly until they are; the list is named to
+    the field only while it is on the page."""
     script = _static_file("finder.js")
-    assert "window.location.hash = P.companyHref(row);" in script
-    assert "onMouseDown: function (event) { event.preventDefault(); pick(row); }" in script
-    assert "onBlur: close" in script
-    assert "var open = state.open && !!rows;" in script
-    assert "var found = open ? matches(rows, state.query) : [];" in script
+    for line in (
+        "window.location.hash = P.companyHref(row);",
+        "if (event.button) return; /* the main button alone picks */",
+        "onBlur: close",
+        "if (event.nativeEvent && event.nativeEvent.isComposing) return;",
+        "var found = state.open ? matches(rows, state.query) : [];",
+        "var active = Math.min(state.active, Math.max(found.length - 1, 0));",
+        "var does = state.open ? step(found.length, active, event.key) : null;",
+        "'aria-controls': state.open ? 'app-finder-list' : null,",
+        "rows ? null : 'The companies have not loaded.'",
+        "if (rows || !state.open) return undefined;",
+    ):
+        assert line in script, line
+
+
+def test_the_finder_finds_the_rows_the_screens_field_finds() -> None:
+    """One function says whether a row is found, for the Screen's field and for the finder
+    (``finds``, app.js), so the two cannot drift apart: the finder ranks the rows it accepts."""
+    for query in ("a", "apple", "apl"):
+        on_the_screen = {row["ticker"] for row in ROWS if node("finds", [row, query])}
+        assert set(_matches(query)) == on_the_screen, query
+    assert "if (!P.finds(row, needle)) return;" in _static_file("finder.js")
+    assert "var found = !needle || finds(r, needle);" in _static_file("app.js")
 
 
 def test_the_page_loads_the_finder_before_the_script_that_draws_the_header() -> None:

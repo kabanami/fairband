@@ -10,9 +10,11 @@
 //   {"do": "show", "view", "section"}            a header view, a link or a hash opens `view`
 //                                                (FairbandPage.show, controls.js)
 //   {"do": "answer", "url", "status", "body"}    the oldest fetch in flight to `url` answers
+//   {"do": "details"}                            Details ▾ is pressed
 // After each step and the work it sets off, the trace on stdout gains the view the header marks,
-// whether its right slot holds the finder, and what the bar under it draws: the status region's
-// words, whether Details ▾ stands beside them, whether the run's bar is drawn, and the notice.
+// whether its right slot holds the finder, and what the bar under it draws: its class, the status
+// region's words, whether Details ▾ stands beside them and whether its menu is open, whether the
+// run's bar is drawn, and the notice.
 //
 //   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -118,7 +120,11 @@ const trace = [];
 for (const step of steps) {
   if (step.do === 'show') P.show(step.view, step.section);
   else if (step.do === 'answer') answered(step);
-  else throw new Error('no step ' + step.do);
+  else if (step.do === 'details') {
+    const [button] = [...elements(rootOn('controls').drawn)]
+      .filter((e) => e.type === window.Fairband.Button && textOf(e) === 'Details ▾');
+    button.props.onClick();
+  } else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
   const header = rootOn('header').drawn;
   const bar = [...elements(rootOn('controls').drawn)];
@@ -131,8 +137,10 @@ for (const step of steps) {
     actions: [...elements(header.props.children)]
       .filter((e) => e.type === window.Fairband.Button)
       .map((e) => e.props['aria-label'] || textOf(e)),
+    bar: rootOn('controls').drawn.props.className,
     status: status ? textOf(status) : null,
     details: bar.some((e) => e.type === window.Fairband.Button && textOf(e) === 'Details ▾'),
+    menu: bar.some((e) => String(e.props.className || '').split(' ').includes('fb-menu--filters')),
     run: bar.some((e) => e.type === window.Fairband.RunProgress),
     notice: notice ? textOf(notice) : null,
   });

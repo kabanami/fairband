@@ -13,6 +13,8 @@
 //                                           (FairbandPage.show, controls.js)
 //   {"do": "hash", "hash"}                  the browser's Back or Forward moves the hash to `hash`
 //                                           (#company/LFOX, # for the screen): controls.js reads it
+//   {"do": "scroll", "top"}                 the reader scrolls the company page's panel down to
+//                                           `top` pixels
 //   {"do": "again"}                         the loader runs on the company and tab shown, as a
 //                                           refresh's end and a note taken in the head run it
 //   {"do": "answer", "url", "status", "body"}  the oldest fetch in flight to `url` answers
@@ -23,10 +25,10 @@
 //                                           (FairbandPage.watch): its popup opens
 // After each step and the work it sets off, the trace on stdout gains what the step fetched (each
 // request's method and path), the paths still in flight, the companies the step handed
-// FairbandPage.notesShown, the hash, whether the company page's panel shows, the popups drawn (the
-// watchlist popup, WatchMenu, and the Notes box, NotesBox), and what the company page draws: faded
-// or not, the sentence of a failed read, the head's ticker and price, the tab selected and what
-// the open tab's function drew.
+// FairbandPage.notesShown, the hash, whether the company page's panel shows and how far down it
+// is scrolled, the popups drawn (the watchlist popup, WatchMenu, and the Notes box, NotesBox),
+// and what the company page draws: faded or not, the sentence of a failed read, the head's
+// ticker and price, the tab selected and what the open tab's function drew.
 //
 //   node company_load.mjs <bundle.js> <app.js> <finder.js> <controls.js> <company.js>
 //     < steps.json  > trace.json
@@ -182,7 +184,8 @@ for (const step of steps) {
   else if (step.do === 'hash') {
     location.hash = step.hash;
     for (const listener of listeners.hashchange || []) listener();
-  } else if (step.do === 'again') P.onShow.company();
+  } else if (step.do === 'scroll') panels.company.scrollTop = step.top;
+  else if (step.do === 'again') P.onShow.company();
   else if (step.do === 'answer' || step.do === 'fail') answered(step);
   else if (step.do === 'notes') press('app-notes-open');
   else if (step.do === 'watch') P.watch({ ticker: P.company.symbol }, { name: 'Watchlists' });
@@ -195,6 +198,7 @@ for (const step of steps) {
     notesShown: shown,
     hash: location.hash,
     shows: !panels.company.hidden,
+    scrollTop: panels.company.scrollTop || 0,
     popups: popups(),
     page: page(),
   });

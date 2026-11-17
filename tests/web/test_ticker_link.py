@@ -226,7 +226,7 @@ def test_the_link_reads_as_the_ticker() -> None:
 def test_the_report_page_links_to_the_company_page() -> None:
     """The head's right end: the one headline figure and the price, then Company page, a link in
     the button's look to the company page, the symbol encoded as the screen's link encodes it.
-    The link back to the screen stays."""
+    The page draws no link back to the screen: the header's Screen view is the way back."""
     detail = copy.deepcopy(answers.DETAIL)
     detail["result"]["symbol"] = "BRK.B"
     head = node("reportHead", [detail], REPORT)

@@ -76,6 +76,9 @@
     var company = '/api/companies/' + encodeURIComponent(want.symbol);
     if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);
     if (state.symbol !== want.symbol) P.notesShown(want.symbol);
+    /* The panel stays shown from one company to the next (the header's finder, the browser's
+       Back): the next page opens at its head, not at the depth the reader left. */
+    if (state.symbol !== want.symbol) mount.scrollTop = 0;
     state.whole = whole;
     state.reading = want.tab;
     state.loading = true;

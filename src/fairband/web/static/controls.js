@@ -240,6 +240,7 @@
         (tab === 'company' ? companyPath() : ''));
     if (!opened && !P.section && !moved) return;
     state.tab = tab;
+    state.detailsOpen = false; /* a view opened with no press, by Back or Forward, shuts it too */
     P.closePopups();
     VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });
     if (tab === 'groups') loadGroups();
@@ -417,8 +418,8 @@
       if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);
     });
     /* The stamp is the latest refresh's finish, whatever its status (the status line says how it
-       ended). While a run is alive, or before any refresh finished, there is none: an absent
-       stamp, never a placeholder. */
+       ended; on a page of one company, only where it did not end done). While a run is alive, or
+       before any refresh finished, there is none: an absent stamp, never a placeholder. */
     var ran = alive || !state.last ? null : state.last.finishedAt;
     header.render(h(F.AppHeader, {
       views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },
@@ -443,12 +444,15 @@
        A page of one company, the company page or the report page, draws neither the last
        refresh's line nor Details ▾: both describe the universe, and the header's stamp says when
        the engine ran (the founder, 2026-11-17). A run's bar and a notice still draw there, since
-       the header has neither, and the status region stays, empty, so a run that starts is
-       announced from a region the page already had. A bar that draws nothing takes no room. */
+       the header has neither, and so does the line of a run that did not end done: the stamp is
+       that run's finish too, and would read as a fresh run over figures it did not renew. The
+       status region stays, empty, so a run that starts is announced from a region the page
+       already had. A bar that draws nothing takes no room. */
     var one = state.tab === 'report' || state.tab === 'company';
+    var quiet = one && !(state.last && state.last.status !== 'done');
     var run = alive ? runProps(state.running) : null;
     var status = run ? [run.total > 0 ? h(F.RunProgress, runProps(state.running)) : run.stage]
-      : one ? [] : lastLine(state.last);
+      : quiet ? [] : lastLine(state.last);
     var c = !run && !one && state.last ? state.last.calibration : null;
     var details = c && c.phases ? detailsMenu(c) : null;
     var notice = state.notice;

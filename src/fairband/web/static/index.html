@@ -64,9 +64,10 @@
   .app-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); }
   /* At phone width the refresh controls stay beside the lockup, so the header grows by the
      views' line alone (B-82): below 560px the engine stamp gives way (the status line under the
-     header still says when the last refresh ended), and below 400px the buttons read Prices and
-     Full. Below 450px the six views, the Inbox count with them, wrap onto two lines rather than
-     widen the page (spec 2026-11-06 Tier 2, 18.5). */
+     header still says when the last refresh ended, on the views that draw it: a page of one
+     company draws it only for a run that did not end done), and below 400px the buttons read
+     Prices and Full. Below 450px the six views, the Inbox count with them, wrap onto two lines
+     rather than widen the page (spec 2026-11-06 Tier 2, 18.5). */
   .app-actions__short { display: none; }
   @media (width < 560px) {
     .fb-hdr__ran { display: none; }
@@ -583,17 +584,17 @@
   .app-chart .fb-c + .app-report__error { margin-top: var(--space-2); }
   .fb-report__section > .app-report__error { margin: var(--space-1) 0 var(--space-3); }
   @media (width < 840px) { .app-charts { grid-template-columns: minmax(0, 1fr); } }
-  /* The company page (the company page's design, 7), as its mockup lays it out: the link back to
-     the screen; the head, the logo on the drawer's tile at 40px, the name, the ticker, the phase
-     badge and the moat stamp over the caption line at its left, and at its right the price in
-     figure-lg, the day's change in the text's own colour and the close's day, then the controls,
-     Request research's menu opening from its button's right edge and its lines under the
-     buttons; the tabs' row on a hairline, the open tab underlined in accent and the data date at
-     its right end. Under it the open tab's two columns of blocks, one column below 1180px: each
-     block a raised panel with a hairline border, its title and the caption at its right in its
-     head; in a block, lists of a name and a figure on hairlines, a figure on one line and a word
-     or a name wrapping inside its half of the row, groups under their titles in label, and small
-     tables of figures. Loading, the page keeps what it had, faded. */
+  /* The company page (the company page's design, 7), as its mockup lays it out, with no link back
+     to the screen (the decision log of 2026-11-17): the head, the logo on the drawer's tile at
+     40px, the name, the ticker, the phase badge and the moat stamp over the caption line at its
+     left, and at its right the price in figure-lg, the day's change in the text's own colour and
+     the close's day, then the controls, Request research's menu opening from its button's right
+     edge and its lines under the buttons; the tabs' row on a hairline, the open tab underlined in
+     accent and the data date at its right end. Under it the open tab's two columns of blocks, one
+     column below 1180px: each block a raised panel with a hairline border, its title and the
+     caption at its right in its head; in a block, lists of a name and a figure on hairlines, a
+     figure on one line and a word or a name wrapping inside its half of the row, groups under their
+     titles in label, and small tables of figures. Loading, the page keeps what it had, faded. */
   #company { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
   .app-company { max-width: 1760px; padding: var(--space-2) 0 var(--space-8); }
   .app-company.is-loading { opacity: 0.5; }

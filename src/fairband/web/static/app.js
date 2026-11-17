@@ -211,7 +211,8 @@
      in the screen's words (levelRows), the basis chip of the band they draw (bandBasis) and the
      local day of its report (localIso). The Inbox view's row (inbox.js, B-210) keeps a request
      for each pending item too, posts its launch (openLaunch) and draws the line's words
-     (launchWords) from the item the line is drawn from (lineItem). The drawer with its bar
+     (launchWords) from the item the line is drawn from (lineItem). The header's finder
+     (finder.js) finds the rows the Screen's field finds (finds). The drawer with its bar
      (drawer), its parts (sections), the Notes box (notesBox), the open item's line (launchLine),
      an input's value (inputValue), a figure a share in a currency (money) and a logo's ground
      (logoGround) are here for the tests, which read them in node (tests/web/page.mjs). */
@@ -219,7 +220,7 @@
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
-    find: find,
+    find: find, finds: finds,
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
     watch: watch, closePopups: closePopups,
@@ -346,6 +347,13 @@
     return list.indexOf(value) !== -1;
   }
 
+  /* Whether a text, trimmed and in lower case, finds a row: its ticker starts with the text, or
+     its name holds it. The Screen's field and the header's finder (finder.js) share it. */
+  function finds(r, needle) {
+    return r.ticker.toLowerCase().indexOf(needle) === 0 ||
+      (r.name || '').toLowerCase().indexOf(needle) !== -1;
+  }
+
   /* The design system's reference rule (the gallery's apply). ScreenTable narrows nothing, so the
      page keeps the rows it loaded and draws the ones that pass; the server's order stands. The
      ticker matches by prefix and the name anywhere. A field a row lacks matches no filter: a
@@ -364,8 +372,7 @@
   function narrow(rows, query, filters) {
     var needle = (query || '').trim().toLowerCase();
     return rows.filter(function (r) {
-      var found = !needle || r.ticker.toLowerCase().indexOf(needle) === 0 ||
-        (r.name || '').toLowerCase().indexOf(needle) !== -1;
+      var found = !needle || finds(r, needle);
       return found &&
         within(filters.designation, r.designation) &&
         within(filters.stance, r.agentStance) &&

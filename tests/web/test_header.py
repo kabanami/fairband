@@ -91,8 +91,10 @@ def test_a_page_of_one_company_draws_no_last_line_and_no_details(view: str) -> N
     assert page["view"] == ""
     assert page["status"] == "" and page["details"] is False
     assert page["run"] is False and page["notice"] is None
+    assert page["bar"] == "app-bar app-bar--bare"  # a bar that draws nothing takes no room
     assert page["finder"] is True
     assert screen["status"].endswith(LINE_END) and screen["details"] is True
+    assert screen["bar"] == "app-bar"
     assert screen["finder"] is False
 
 
@@ -111,7 +113,7 @@ def test_a_running_refresh_draws_its_bar_on_a_page_of_one_company(view: str) -> 
     _, page = _trace(
         [{"do": "answer", "url": CURRENT, "status": 200, "body": RUNNING}, _show(view, "AAPL")]
     )
-    assert page["run"] is True and page["details"] is False
+    assert page["run"] is True and page["details"] is False and page["bar"] == "app-bar"
     assert page["actions"] == ["Cancel"]
     assert page["finder"] is True
 
@@ -135,16 +137,48 @@ def test_a_notice_still_draws_on_the_company_page_and_before_any_refresh_the_lin
         ]
     )
     assert page["status"] == "" and page["notice"] is None
-    assert failed["status"] == ""
+    assert failed["status"] == "" and failed["bar"] == "app-bar"
     assert failed["notice"].startswith("The refresh status did not load: ")
     assert screen["status"] == "No refresh has run yet." and screen["notice"] == failed["notice"]
 
 
-def test_the_bar_takes_no_room_while_it_draws_nothing() -> None:
-    """Read as text: the bar with no line, no run and no notice is marked, and the mark takes its
-    margins away, so a page of one company starts right under the header."""
-    controls = _static_file("controls.js")
-    assert "className: 'app-bar' + (bare ? ' app-bar--bare' : '')" in controls
+def _ended(status: str, message: str) -> dict[str, Any]:
+    """The refresh's state after a run that did not end done: its message and no calibration."""
+    last = LAST["last"] | {"status": status, "message": message, "calibration": None}
+    body = {"refresh": None, "last": last, "error": None}
+    return {"do": "answer", "url": CURRENT, "status": 200, "body": body}
+
+
+@pytest.mark.parametrize("view", ["company", "report"])
+@pytest.mark.parametrize(
+    ("status", "message"),
+    [("failed", "no company was admitted"), ("cancelled", "cancelled after 40 companies")],
+)
+def test_a_run_that_did_not_end_done_says_so_on_a_page_of_one_company(
+    view: str, status: str, message: str
+) -> None:
+    """The header's stamp is the latest run's finish whatever its status, and the line under the
+    header is what says how the run ended. Without the line a failed or cancelled run would read
+    there as a fresh one, over figures it did not renew: such a run keeps its line on the two
+    pages, with no Details."""
+    _, page = _trace([_ended(status, message), _show(view, "AAPL")])
+    assert page["status"].startswith(f"full {status} ")
+    assert page["status"].endswith(" · " + message)
+    assert page["details"] is False and page["bar"] == "app-bar"
+
+
+def test_details_left_open_is_shut_when_the_reader_comes_back_to_the_screen() -> None:
+    """The browser's Back and Forward change the view with no press and no focus to close the
+    menu; the two pages draw no Details, and it must not stand open on the Screen again."""
+    _, opened, page, back = _trace(
+        [LANDED, {"do": "details"}, _show("company", "AAPL"), _show("screen")]
+    )
+    assert opened["menu"] is True
+    assert page["details"] is False and page["menu"] is False
+    assert back["details"] is True and back["menu"] is False
+
+
+def test_the_bare_bar_has_no_margins() -> None:
     page = " ".join(_static_file("index.html").split())
     assert ".app-bar--bare { margin: 0; }" in page
     assert ".app-bar--bare .app-status { margin: 0; }" in page

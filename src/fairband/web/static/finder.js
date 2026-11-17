@@ -1,16 +1,17 @@
 /* The header's finder (the company page's design, the decision log of 2026-11-17), loaded after
    app.js and before controls.js, which draws it in the header's right slot on every view but the
-   Screen, whose table has a field of its own: a field that opens a company's page. It matches as
-   the Screen's field does (narrow, app.js), a ticker that starts with the text or a name that
-   holds it, on the rows the page already holds, so it asks the server nothing, and lists eight at
-   most: the ticker that is the text, then the tickers that start with it, the names that start
-   with it and the names that hold it, the larger company first within each. The arrow keys move
-   the mark, turning round at the ends; Enter opens the marked company, the first when no key
-   moved the mark; Escape, a blur and a pick close the list. A pick sets the hash to the address
-   the ticker's link names (companyHref), so the browser's Back returns to the view left, and
-   empties the field. The matching, the keys' steps and the list are pure functions on
-   FairbandPage.finder for the tests, which read them in node; view keeps the text, the mark and
-   whether the list is open. */
+   Screen, whose table has a field of its own: a field that opens a company's page. It finds the
+   rows the Screen's field finds (finds, app.js), a ticker that starts with the text or a name
+   that holds it, on the rows the page already holds, so it asks the server nothing, and lists
+   eight at most: the ticker that is the text, then the tickers that start with it, the names
+   that start with it and the names that hold it, the larger company first within each. The
+   arrow keys move the mark, turning round at the ends; Enter opens the marked company, the first
+   when no key moved the mark; Escape empties the field; a blur closes the list and keeps the
+   text. A pick sets the hash to the address the ticker's link names (companyHref), so the
+   browser's Back returns to the view left, and empties the field, which keeps the focus. With
+   nothing found, and while the rows are not in, the list says so in one row. The matching, the
+   keys' steps and the list are pure functions on FairbandPage.finder for the tests, which read
+   them in node; view keeps the text, the mark and whether the list is open. */
 (function () {
   'use strict';
 
@@ -18,6 +19,7 @@
   var P = FairbandPage;
 
   var LIMIT = 8;
+  var WAIT_MS = 300; /* between two looks for the rows, while an open list waits for them */
 
   /* The rows the text finds, best first: 0 the ticker itself, 1 a ticker that starts with it, 2 a
      name that starts with it, 3 a name that holds it; within a rank the larger market cap first,
@@ -27,12 +29,11 @@
     if (!needle || !rows) return [];
     var ranked = [];
     rows.forEach(function (row) {
-      var ticker = String(row.ticker || '').toLowerCase();
-      var name = String(row.name || '').toLowerCase();
-      var at = name.indexOf(needle);
+      if (!P.finds(row, needle)) return;
+      var ticker = row.ticker.toLowerCase();
       var rank = ticker === needle ? 0 : ticker.indexOf(needle) === 0 ? 1
-        : at === 0 ? 2 : at > 0 ? 3 : -1;
-      if (rank !== -1) ranked.push({ row: row, rank: rank });
+        : String(row.name || '').toLowerCase().indexOf(needle) === 0 ? 2 : 3;
+      ranked.push({ row: row, rank: rank });
     });
     ranked.sort(function (a, b) {
       return a.rank - b.rank || (b.row.marketCap || 0) - (a.row.marketCap || 0) ||
@@ -54,21 +55,30 @@
   }
 
   /* The list under the field, in the bundle's menu frame: a company a row, its ticker then its
-     name, the marked one selected; a press on a row picks it and leaves the focus in the field.
-     With nothing found, the sentence that says so. */
-  function list(found, active, pick) {
+     name, the marked one selected; a press of the main button on a row picks it and leaves the
+     focus in the field. With no company, one row that cannot be picked: the note it is given, or
+     that nothing matches. */
+  function list(found, active, pick, note) {
     return h('ul', {
-      id: 'app-finder-list', role: 'listbox', className: 'fb-menu app-finder__list'
+      id: 'app-finder-list', role: 'listbox', 'aria-label': 'Companies',
+      className: 'fb-menu app-finder__list'
     },
       found.length ? found.map(function (row, i) {
         return h('li', {
           key: row.ticker, id: 'app-finder-opt-' + i, role: 'option',
           className: 'app-finder__opt', 'aria-selected': i === active ? 'true' : 'false',
-          onMouseDown: function (event) { event.preventDefault(); pick(row); }
+          onMouseDown: function (event) {
+            if (event.button) return; /* the main button alone picks */
+            event.preventDefault();
+            pick(row);
+          }
         },
           h('span', { className: 'ticker' }, row.ticker),
           row.name ? h('span', { className: 'body app-finder__name' }, row.name) : null);
-      }) : h('li', { className: 'caption app-finder__none' }, 'No company matches'));
+      }) : h('li', {
+        role: 'option', 'aria-disabled': 'true', 'aria-selected': 'false',
+        className: 'caption app-finder__none'
+      }, note || 'No company matches'));
   }
 
   var SHUT = { query: '', active: 0, open: false };
@@ -79,8 +89,19 @@
     var state = held[0];
     var set = held[1];
     var rows = P.rows();
-    var open = state.open && !!rows; /* no list before the rows arrive */
-    var found = open ? matches(rows, state.query) : [];
+    var found = state.open ? matches(rows, state.query) : [];
+    /* The rows may change under an open list (a refresh's end loads them again): the mark stays
+       on it. */
+    var active = Math.min(state.active, Math.max(found.length - 1, 0));
+    /* Nothing draws the header as the rows arrive: an open list that waits for them asks again
+       shortly, until they are in or the list closes. */
+    React.useEffect(function () {
+      if (rows || !state.open) return undefined;
+      var timer = setTimeout(function () {
+        set({ query: state.query, active: state.active, open: true });
+      }, WAIT_MS);
+      return function () { clearTimeout(timer); };
+    });
 
     function pick(row) {
       set(SHUT);
@@ -95,7 +116,9 @@
       if (state.query.trim() && !state.open) set({ query: state.query, active: 0, open: true });
     }
     function key(event) {
-      var does = open ? step(found.length, state.active, event.key) : null;
+      /* a key of a text being composed is the text's own */
+      if (event.nativeEvent && event.nativeEvent.isComposing) return;
+      var does = state.open ? step(found.length, active, event.key) : null;
       if (!does) return;
       event.preventDefault();
       if (does.close) set(SHUT);
@@ -107,13 +130,15 @@
       h('input', {
         id: 'app-finder-q', type: 'text', className: 'app-finder__q', role: 'combobox',
         placeholder: 'Ticker or company', 'aria-label': 'Find a company',
-        'aria-expanded': open ? 'true' : 'false', 'aria-controls': 'app-finder-list',
+        'aria-expanded': state.open ? 'true' : 'false',
+        'aria-controls': state.open ? 'app-finder-list' : null,
         'aria-autocomplete': 'list',
-        'aria-activedescendant': found.length ? 'app-finder-opt-' + state.active : null,
+        'aria-activedescendant': found.length ? 'app-finder-opt-' + active : null,
         autoComplete: 'off', spellCheck: false, value: state.query,
         onChange: typed, onKeyDown: key, onFocus: focused, onBlur: close
       }),
-      open ? list(found, state.active, pick) : null);
+      state.open
+        ? list(found, active, pick, rows ? null : 'The companies have not loaded.') : null);
   }
 
   /* What controls.js and the tests use. */

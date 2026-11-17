@@ -414,3 +414,20 @@ def test_the_popups_close_as_a_view_is_shown() -> None:
     assert tab["popups"] == []
     assert watch["popups"] == ["WatchMenu"]
     assert other["popups"] == []
+
+
+def test_another_company_opens_at_its_head_and_the_same_company_keeps_the_readers_place() -> None:
+    """The panel scrolls, and it stays shown from one company to the next, so the page of a
+    company picked in the header's finder would open at the depth the reader left: the loader
+    takes the panel back to its top as it turns to another company. A reread at a refresh's end
+    and a tab of the same company keep the reader's place."""
+    trace = _drive(
+        [
+            *OPEN,
+            {"do": "scroll", "top": 900},
+            AGAIN,
+            _show("LFOX", "estimates"),
+            _show("BRK.B", "overview"),
+        ]
+    )
+    assert [step["scrollTop"] for step in trace[3:]] == [900, 900, 900, 0]

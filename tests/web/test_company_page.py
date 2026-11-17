@@ -475,7 +475,7 @@ def test_the_tabs_draw_from_the_functions_later_scripts_hang_on_draw() -> None:
 def test_the_reads_and_their_failures() -> None:
     """The detail, then the open tab's read; the page shown stays, faded, until the new one
     lands, and the latest read wins; a tab's failed read draws one sentence, the detail's its
-    own and the link back."""
+    own, with no link back: the header's Screen view is the way back."""
     script = _static_file("company.js")
     load = _function(script, "load")
     _in_order(
