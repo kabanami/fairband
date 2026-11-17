@@ -237,6 +237,16 @@ def test_routes_and_params(
     assert _sent(recorder.last) == (f"/stable/{route}", {**params, "apikey": KEY})
 
 
+def test_the_ratios_and_the_key_metrics_by_fiscal_year(fmp: Fmp, recorder: Recorder) -> None:
+    """Spec 2026-11-17 8.1: the Financials tab's two routes, by fiscal year, each with exactly the
+    symbol, the period and the limit beside the key."""
+    by_year = {"symbol": "BRK-B", "period": "annual", "limit": "11", "apikey": KEY}
+    fmp.ratios("BRK.B", 11)
+    assert _sent(recorder.last) == ("/stable/ratios", by_year)
+    fmp.key_metrics("BRK.B", 11)
+    assert _sent(recorder.last) == ("/stable/key-metrics", by_year)
+
+
 def test_the_filing_routes(fmp: Fmp, recorder: Recorder) -> None:
     """Spec 2026-11-11, 3: the three routes and their parameters, the key apart."""
     assert FILINGS_LIMIT == 1000

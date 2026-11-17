@@ -211,7 +211,10 @@ def test_each_revenue_split_names_its_newest_year(
         assert parts[part]["payload"] == body
     assert (parts["product"]["newestYear"], parts["geographic"]["newestYear"]) == newest
     again = with_passthrough.get("/api/vendor/segments/ACME").json()["responses"]
-    assert [again[part]["reused"] for part in again] == [True, True]  # a reuse names it too
+    # A reuse names it too; a payload that is not a list is stored unusable and fetched again
+    # (spec 2026-11-17 8.1).
+    lists = [isinstance(body, list) for body in (product, geographic)]
+    assert [again[part]["reused"] for part in again] == lists
     assert (again["product"]["newestYear"], again["geographic"]["newestYear"]) == newest
 
 

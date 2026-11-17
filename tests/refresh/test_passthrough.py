@@ -355,6 +355,23 @@ def test_segments_fetch_two_endpoints(env: Env) -> None:
     assert env.router.calls == {"segments-product": 1, "segments-geographic": 1}
 
 
+def test_a_segments_part_that_is_not_a_list_is_stored_unusable(env: Env) -> None:
+    """Spec 2026-11-17 8.1: FMP answers some failures with HTTP 200 and ``{"Error Message":
+    ...}``. A segments part that is not a list is stored with its error, answered as fetched, and
+    fetched again by the next request, as the news is; the part beside it, a list, is reused."""
+    env.router.bodies["segments-product"] = b'{"Error Message": "x"}'
+    passthrough = _passthrough(env)
+    first = passthrough.fetch("segments", "ACME", {})
+    product = first["product"]
+    assert (product.reused, product.payload) == (False, {"Error Message": "x"})
+    assert product.row.error == 'unusable payload: {"Error Message": "x"}'
+    assert first["geographic"].row.error is None
+    again = passthrough.fetch("segments", "ACME", {})
+    assert [part.reused for part in again.values()] == [False, True]
+    assert again["product"].row.id > product.row.id
+    assert env.router.calls == {"segments-product": 2, "segments-geographic": 1}
+
+
 def test_dcf_fetches_two_endpoints(env: Env) -> None:
     passthrough = _passthrough(env)
     parts = passthrough.fetch("dcf", "ACME", {})
@@ -591,11 +608,11 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     finally:
         worker_fmp.close()
         passthrough_fmp.close()
-    assert fetched.reused is False and outcome.calls == 25
-    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 25.
+    assert fetched.reused is False and outcome.calls == 29
+    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 29.
     interval = limiter.interval.total_seconds()  # 60 / pace, to the microsecond
-    assert limiter.totals() == PaceTotals(26, pytest.approx(325 * interval), 0)
-    assert sleeps[-1] == pytest.approx(25 * interval)
+    assert limiter.totals() == PaceTotals(30, pytest.approx(435 * interval), 0)
+    assert sleeps[-1] == pytest.approx(29 * interval)
 
 
 class Held:

@@ -11,7 +11,9 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
   (``fetch.NEWS_STORIES``, ``fetch.page_params``), so a call at 60 and the refresh reuse each
   other's copy;
 - ``segments``: two calls, ``segments-product`` and ``segments-geographic``, the revenue by product
-  and by region, answered as the parts ``product`` and ``geographic``;
+  and by region, answered as the parts ``product`` and ``geographic``; the refresh stores each
+  company's two under the same keys, the symbol alone (``fetch.page_params``, spec 2026-11-17
+  8.1), so a call and the refresh reuse each other's copy;
 - ``insider-trades``: ``insider-trades``, the newest insider trades, a page of
   ``INSIDER_TRADES_LIMIT``, which the reuse key holds; a ``limit`` (1 to that size) is checked
   here and cuts the route's answer, never the call or the stored page;
@@ -43,11 +45,12 @@ payload: ``KINDS`` stays that route's list, and ``unknown_kind`` names it alone.
   filed, and a ``filing:`` ref names its stored copy by the response id, so a second copy would
   only split the cites of one filing over two ids. Nothing is deleted.
 
-A ``news``, a ``filings`` or a ``filing-reports`` payload is usable when it is a list, a
-``filing-report`` one when ``filing_report_usable``: FMP answers a period it does not hold, an
-unknown symbol, or some failures with HTTP 200 and ``{"Error Message": ...}``. An unusable one is
-stored with the error ``unusable payload: ...``, answered as fetched, never reused, as
-``pe-history``'s is; so neither the pass-through nor the refresh reuses a ``news`` error body.
+A ``news``, a ``segments`` part, a ``filings`` or a ``filing-reports`` payload is usable when it
+is a list, a ``filing-report`` one when ``filing_report_usable``: FMP answers a period it does not
+hold, an unknown symbol, or some failures with HTTP 200 and ``{"Error Message": ...}``. An
+unusable one is stored with the error ``unusable payload: ...``, answered as fetched, never
+reused, as ``pe-history``'s is; so neither the pass-through nor the refresh reuses a ``news`` or a
+``segments`` error body.
 
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (provider,
 endpoint, symbol and the call's logical params, ``symbol`` among them) stored without an error is
@@ -273,9 +276,12 @@ class Passthrough:
             case "segments":
                 product = partial(fmp.segments_product, symbol)
                 geographic = partial(fmp.segments_geographic, symbol)
+                logical = {"symbol": symbol}
                 return [
-                    _Call("product", "segments-product", {"symbol": symbol}, product),
-                    _Call("geographic", "segments-geographic", {"symbol": symbol}, geographic),
+                    _Call("product", "segments-product", logical, product, usable=_is_list),
+                    _Call(
+                        "geographic", "segments-geographic", logical, geographic, usable=_is_list
+                    ),
                 ]
             case "insider-trades":
                 # ``limit`` cuts the answer, not the call (``vendor_api``): the page is fetched and
@@ -361,7 +367,8 @@ def filing_report_usable(payload: Any) -> bool:
 
 
 def _is_list(payload: Any) -> bool:
-    """Whether a ``news``, a ``filings`` or a ``filing-reports`` payload reads: a list."""
+    """Whether a ``news``, a ``segments`` part, a ``filings`` or a ``filing-reports`` payload
+    reads: a list."""
     return isinstance(payload, list)
 
 

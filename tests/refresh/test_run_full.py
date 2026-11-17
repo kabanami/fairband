@@ -304,7 +304,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
         ("NEWT", "pending", None),
     ]
     assert deciles(env) is None and env.snapshots() == []
-    assert env.router.symbol_calls == Counter({"": 1, "ACME": 27, "AXLE": 27})
+    assert env.router.symbol_calls == Counter({"": 1, "ACME": 31, "AXLE": 31})
     assert "rates" not in {p.stage for p in env.progress}  # a cancelled fetch runs no rates
 
     env.router.symbol_calls.clear()
@@ -314,7 +314,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     row = env.last()
     assert (row.id, row.status) == (second, "done") and second == first + 1
     # No screener call; KRON's pair is fetched, now that KRON is.
-    assert env.router.symbol_calls == Counter({"MILD": 27, "NEWT": 27, "KRON": 27, "USDSEK": 1})
+    assert env.router.symbol_calls == Counter({"MILD": 31, "NEWT": 31, "KRON": 31, "USDSEK": 1})
     assert Progress(second, "fetch", 5, 0, 0, None) in env.progress
     assert env.items(second) == [(symbol, "valued", None) for symbol in ADMITTED]
     assert {refresh for refresh, _ in universe(env).values()} == {second}
@@ -332,10 +332,10 @@ def test_a_scoped_refresh_fetches_again_and_a_full_one_reuses(env_fixture_univer
     (method 10). A full refresh within the window reuses, so it continues after a cancel."""
     env = env_fixture_universe
     env.refresh().run("full")
-    assert env.router.symbol_calls["ACME"] == 27
+    assert env.router.symbol_calls["ACME"] == 31
     env.clock.now += timedelta(minutes=5)
     env.refresh().run("scoped", ["ACME"])
-    assert env.router.symbol_calls["ACME"] == 54  # the 25 FMP and 2 GuruFocus calls, again
+    assert env.router.symbol_calls["ACME"] == 62  # the 29 FMP and 2 GuruFocus calls, again
     env.clock.now += timedelta(minutes=5)
     calls = Counter(env.router.symbol_calls)
     assert env.refresh().run("full") > 0 and env.last().status == "done"
@@ -430,7 +430,7 @@ def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: li
     # The quote is asked once a company, ACME's twice; every other call once.
     assert env.router.calls["quote"] == len(ADMITTED) + 1
     assert env.router.symbol_calls == Counter(
-        {"": 1, "ACME": 28, "AXLE": 27, "KRON": 27, "MILD": 27, "NEWT": 27, "USDSEK": 1}
+        {"": 1, "ACME": 32, "AXLE": 31, "KRON": 31, "MILD": 31, "NEWT": 31, "USDSEK": 1}
     )
     assert sleeps == [env.policy.refresh.rate_limit_hold_s]  # the one hold, and no other sleep
 
@@ -456,8 +456,8 @@ def test_a_single_429_holds_every_worker_on_a_paced_run(
     assert hold == env.policy.refresh.rate_limit_hold_s == 60
     gf_calls = env.router.calls["summary"] + env.router.calls["keyratios"]
     fmp_calls = sum(env.router.symbol_calls.values()) - gf_calls
-    # The screener, 25 a company, ACME's retry, then the rates stage's one call, KRON's USDSEK.
-    assert fmp_calls == 1 + 25 * len(ADMITTED) + 1 + 1
+    # The screener, 29 a company, ACME's retry, then the rates stage's one call, KRON's USDSEK.
+    assert fmp_calls == 1 + 29 * len(ADMITTED) + 1 + 1
     # k calls took the slots at 0 to k - 1 s before the hold (the first slot is now: no sleep);
     # the retry slept the hold; the hold put every later call at 60 s or after, one a second.
     k = len([s for s in sleeps if s < hold]) + 1

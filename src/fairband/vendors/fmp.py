@@ -89,6 +89,16 @@ answered HTTP 200 with one row or a list:
   default, the fiscal years, newest first. The three, five and ten-year figures
   (``tenYRevenueGrowthPerShare``) are totals over the span, not yearly rates.
 - ``dividends``: ``symbol``, ``limit``.
+
+The Financials tab's routes, checked live on 2026-11-17 (spec 2026-11-17 financials tab, 5 and
+8.1); each answered eleven rows for AAPL, a row a fiscal year, newest first:
+
+- ``ratios``, ``key-metrics``: ``symbol``, ``period``, ``limit``. The fields are the trailing
+  routes' without the ``TTM`` at the end (``grossProfitMargin``); a margin or a return is a
+  fraction.
+
+The tab also shows the pass-throughs' two segment routes, which the refresh fetches with the
+company page's other calls.
 """
 
 from collections.abc import Mapping, Sequence
@@ -231,6 +241,18 @@ class Fmp:
     def shares_float(self, symbol: str) -> VendorResponse:
         """The shares outstanding, the shares that float and the free float in percent."""
         return self._get("shares-float", {"symbol": to_fmp_symbol(symbol)})
+
+    def ratios(self, symbol: str, limit: int) -> VendorResponse:
+        """The ratios of the newest ``limit`` fiscal years: margins, multiples, health, per share,
+        the dividend."""
+        params = {"symbol": to_fmp_symbol(symbol), "period": "annual", "limit": str(limit)}
+        return self._get("ratios", params)
+
+    def key_metrics(self, symbol: str, limit: int) -> VendorResponse:
+        """The metrics of the newest ``limit`` fiscal years: returns, EV multiples, yields,
+        efficiency."""
+        params = {"symbol": to_fmp_symbol(symbol), "period": "annual", "limit": str(limit)}
+        return self._get("key-metrics", params)
 
     def transcript(self, symbol: str, year: int, quarter: int) -> VendorResponse:
         params = {"symbol": to_fmp_symbol(symbol), "year": str(year), "quarter": str(quarter)}

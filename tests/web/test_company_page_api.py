@@ -151,7 +151,7 @@ def test_the_overview_whole(client: TestClient, db_path: Path, policy: Policy) -
     _store_all(db_path, policy)
     today = NOW.date()
     quote = pages.QUOTE[0]
-    answers = {endpoint: ANSWERS[endpoint] for endpoint in PAGE_ENDPOINTS}
+    answers = {endpoint: ANSWERS.get(endpoint) for endpoint in PAGE_ENDPOINTS}
     body = _get(client, OVERVIEW)
     assert body == {
         "symbol": SYMBOL,

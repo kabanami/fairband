@@ -1,7 +1,7 @@
-"""Fetch one company: twenty-five FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
+"""Fetch one company: twenty-nine FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
 routes spec 5.5, the splits of spec 2026-11-09 10.1, the quarterly balance sheet of spec
-2026-11-13 12.1 and the company page's ten of spec 2026-11-16 10.1), each reused while fresh and
-stored whole.
+2026-11-13 12.1, and the company page's fourteen: the ten of spec 2026-11-16 10.1 and the
+Financials tab's four of spec 2026-11-17 8.1), each reused while fresh and stored whole.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
@@ -28,12 +28,15 @@ anything but a list, is unusable. The peers are not required. The splits are sto
 (dataset ``split``, ``split_observations``); any list is usable, the empty list among them (a
 company with no split has none, reused like any other answer), and anything but a list is
 unusable. The splits are not required either: without them the company is valued on what it has.
-The company page's ten (``PAGE_ENDPOINTS``), fetched last, after the two GuruFocus calls, store no
-rows: the page reads their stored payloads. Each is usable when it is a list, the empty list among
-them (a company with no dividend, no analyst or no news has none, reused like any other answer),
-and unusable otherwise (FMP's ``{"Error Message": ...}``). None of the ten is required. ``news`` is
-stored under the pass-through's endpoint and params (``page_params``), so the fetch's copy and a
-pass-through's at the same limit reuse each other.
+The company page's fourteen (``PAGE_ENDPOINTS``), fetched last, after the two GuruFocus calls,
+store no rows: the page reads their stored payloads. Each is usable when it is a list, the empty
+list among them (a company with no dividend, no analyst, no news or no segments has none, reused
+like any other answer), and unusable otherwise (FMP's ``{"Error Message": ...}``). None of the
+fourteen is required. ``news`` and the two segment answers, ``segments-product`` and
+``segments-geographic``, are stored under the pass-through's endpoints and params
+(``page_params``), so the fetch's copy and a pass-through's (the news' at the same limit) reuse
+each other; the segments pass-through refuses an answer that is not a list as this module does,
+so neither reuses FMP's error body.
 
 A ``VendorError`` is stored as a response row with the error, its HTTP status if one came back and
 no payload, in a transaction of its own, and the fetch goes on with the next endpoint, except after
@@ -105,9 +108,9 @@ GROWTH_YEARS = 1  # the newest fiscal year's growth
 DIVIDEND_ROWS = 4
 NEWS_STORIES = 60
 
-# The company page's calls (spec 2026-11-16 10.1), the endpoints as stored, in fetch order after
-# GuruFocus's two. None is required, and none gives a fact or an observation: the page reads their
-# stored payloads.
+# The company page's calls (spec 2026-11-16 10.1, then the Financials tab's four of spec 2026-11-17
+# 8.1), the endpoints as stored, in fetch order after GuruFocus's two. None is required, and none
+# gives a fact or an observation: the page reads their stored payloads.
 PAGE_ENDPOINTS: tuple[str, ...] = (
     "ratios-ttm",
     "key-metrics-ttm",
@@ -119,8 +122,14 @@ PAGE_ENDPOINTS: tuple[str, ...] = (
     "dividends",
     "shares-float",
     "news",
+    "ratios-annual",
+    "key-metrics-annual",
+    "segments-product",
+    "segments-geographic",
 )
 _PAGE_LIMITS = {"financial-growth": GROWTH_YEARS, "dividends": DIVIDEND_ROWS, "news": NEWS_STORIES}
+# The page endpoints by fiscal year, over the statements' years.
+_PAGE_BY_YEAR = frozenset({"ratios-annual", "key-metrics-annual"})
 
 # Without these the company cannot be valued; their failure sets ``FetchOutcome.error``. The
 # quarterly consensus is not among them: FMP answers ``[]`` for a company without quarterly
@@ -246,19 +255,24 @@ def provider_of(endpoint: str) -> Provider:
 
 
 def page_params(endpoint: str, symbol: str) -> dict[str, str]:
-    """The logical params the fetch stores for a page endpoint of ``PAGE_ENDPOINTS``: the symbol,
-    and the depth as ``limit`` for ``financial-growth`` (``GROWTH_YEARS``), ``dividends``
-    (``DIVIDEND_ROWS``) and ``news`` (``NEWS_STORIES``). ``news``'s are the pass-through's at the
-    same limit, so each reuses the other's copy. Raises ``ValueError`` for any other endpoint."""
+    """The logical params the fetch stores for a page endpoint of ``PAGE_ENDPOINTS``: the symbol;
+    the depth as ``limit`` for ``financial-growth`` (``GROWTH_YEARS``), ``dividends``
+    (``DIVIDEND_ROWS``) and ``news`` (``NEWS_STORIES``); and ``period`` ``annual`` with
+    ``STATEMENT_YEARS`` as ``limit`` for ``ratios-annual`` and ``key-metrics-annual``. ``news``'s
+    are the pass-through's at the same limit, and the two segment endpoints' the pass-through's
+    (the symbol alone), so each reuses the other's copy. Raises ``ValueError`` for any other
+    endpoint."""
     if endpoint not in PAGE_ENDPOINTS:
         raise ValueError(f"not a page endpoint: {endpoint}")
+    if endpoint in _PAGE_BY_YEAR:
+        return {"symbol": symbol, "period": "annual", "limit": str(STATEMENT_YEARS)}
     limit = _PAGE_LIMITS.get(endpoint)
     return {"symbol": symbol} if limit is None else {"symbol": symbol, "limit": str(limit)}
 
 
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
     """The calls for ``symbol`` in fetch order: fifteen FMP, two GuruFocus, then the company
-    page's ten FMP, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``."""
+    page's fourteen FMP, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(
@@ -292,6 +306,10 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         "dividends": partial(fmp.dividends, symbol, DIVIDEND_ROWS),
         "shares-float": partial(fmp.shares_float, symbol),
         "news": partial(fmp.news, symbol, NEWS_STORIES),
+        "ratios-annual": partial(fmp.ratios, symbol, STATEMENT_YEARS),
+        "key-metrics-annual": partial(fmp.key_metrics, symbol, STATEMENT_YEARS),
+        "segments-product": partial(fmp.segments_product, symbol),
+        "segments-geographic": partial(fmp.segments_geographic, symbol),
     }
     as_reported = {"period": "annual", "limit": str(STATEMENT_YEARS)}
     return [

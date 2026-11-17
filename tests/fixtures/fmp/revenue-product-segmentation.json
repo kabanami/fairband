@@ -1,0 +1,24 @@
+[
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2025,
+    "period": "FY",
+    "reportedCurrency": null,
+    "date": "2025-12-31",
+    "data": {
+      "Machines": 800000000,
+      "Parts and Service": 400000000
+    }
+  },
+  {
+    "symbol": "ACME",
+    "fiscalYear": 2024,
+    "period": "FY",
+    "reportedCurrency": null,
+    "date": "2024-12-31",
+    "data": {
+      "Machines": 740000000,
+      "Parts and Service": 360000000
+    }
+  }
+]
