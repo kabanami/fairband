@@ -50,11 +50,13 @@
      The page shown stays, faded, until the new one lands, and the latest read wins, so a read
      that lands after the reader moved to another company or tab is dropped. A read of another
      company stops the following of the request of the company shown before it starts, and drops
-     a note drafted on another company (FairbandPage.notesShown); every landing follows the open
-     item's launch again (shown). A tab's read that fails draws its sentence under the tabs; the
-     detail's draws its own (failure) and the link back. An Overview's read that lands draws its
-     stored news, then asks for newer news where they are stale (newer); a tab held is shown with
-     what it holds and asks nothing. */
+     a note drafted on another company (FairbandPage.notesShown), and again as it lands or fails,
+     so a Notes box opened from the faded head of the company before it closes as the page turns;
+     a read of the company shown keeps its draft; every landing follows the open item's launch
+     again (shown). A tab's read that fails draws its sentence under the tabs; the detail's draws
+     its own (failure) and the link back. An Overview's read that lands draws its stored news,
+     then asks for newer news where they are stale (newer); a tab held is shown with what it holds
+     and asks nothing. */
   function load() {
     var want = P.company;
     var request = ++latest;
@@ -90,6 +92,7 @@
         state.reading = null;
         if (whole) state.answers = {};
         if (found.answer) state.answers[want.tab] = found.answer;
+        if (state.symbol !== want.symbol) P.notesShown(want.symbol);
         state.symbol = want.symbol;
         state.tab = want.tab;
         state.detail = found.detail;
@@ -103,6 +106,7 @@
         if (request !== latest) return;
         state.whole = false;
         state.reading = null;
+        if (state.symbol !== want.symbol) P.notesShown(want.symbol);
         state.symbol = want.symbol;
         state.tab = want.tab;
         state.detail = null;
