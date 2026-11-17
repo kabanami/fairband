@@ -62,6 +62,8 @@
 | Buttons' titles | `Add to the chart`, `Take off the chart`, `The chart holds 4 lines. Take one off first.` |
 | Failures | 404 `no page data for <symbol>`; a tab whose read fails, as the other tabs |
 
+After the whole-branch review (2026-11-17) the Ratios table's first column's head reads `as each row says; per share in <currency>`: the spec's 7.3 and its decision log hold the ruling, and they win over this table.
+
 ## Review Focus
 
 Five conditions the spec implies and a hurried build would miss. Each has its test in the task that owns the code.

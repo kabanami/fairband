@@ -196,7 +196,9 @@ One panel, the page's full width, in this order:
   and a ratio can stand together. They also stay when the reader leaves the tab for another tab
   of the same company and comes back. They do not stay from one company to the next: a company's
   tab opens on **Revenue** alone (*my call*; a company whose income statement has no Revenue
-  line opens on the first line of the table).
+  line opens on the first line of the table). The lines kept are those of the company whose
+  Financials tab was drawn last: they go when another company's Financials tab is drawn, and
+  not when the reader only looks at another company's other tabs.
 - A line is known by its sub-tab, its table and its key (section 9), so `Net income` of the
   income statement and of the cash flow statement are two lines.
 
@@ -670,7 +672,9 @@ The design is right. The mockup:
 - adds a line on a click with Ctrl or Cmd held; the tab does not (*my call*: the `+` is the one
   way, and it is in sight);
 - writes amounts with no decimal for every company (7.7's rule for a small company is new);
-- names its colours `--series-1` to `--series-4`; they are `chart-1` to `chart-4` (7.6).
+- names its colours `--series-1` to `--series-4`; they are `chart-1` to `chart-4` (7.6);
+- heads the Ratios table `as each row says`; the tab adds `; per share in <currency>` (7.3,
+  the whole-branch review's ruling).
 
 ## 14. Acceptance
 
@@ -691,8 +695,8 @@ The readout, in this design's decision log: the full refresh's minutes against 1
 of failed calls among the four by endpoint, the database's growth, how many companies have no
 segments, and what the foreign filers showed (the currency of the per-share lines above all).
 Reuse is judged an endpoint at a time, so a full refresh inside the reuse window of the last one
-makes only the four new calls a company. The readout says which it measured: a whole refresh,
-or the four calls alone.
+makes only the four new calls a company, and again any call whose last answer failed. The
+readout says which it measured: a whole refresh, or the four calls alone.
 
 ## 15. Left to the builder
 
@@ -819,6 +823,13 @@ or the four calls alone.
     half-year reporter whose newest row is stored twice read as quarterly. The read now hands it
     each end once, oldest first.
   - The policy files' comment that counts the fetch's calls, "13 FMP and 2 GuruFocus calls each"
-    (`fairband-policy-v16.toml`, and v6 to v15), was untrue before this branch, and it is left as
+    (`fairband-policy-v16.toml`, and v5 to v15), was untrue before this branch, and it is left as
     it is. A policy's hash is its bytes, and the store refuses a known version under another
     hash, so the comment is corrected in the next policy version (B-229).
+- 2026-11-17, the fix wave's re-review. Every finding was addressed. What it left, filed in
+  B-239 and not fixed on the branch, since the plan has one fix wave: the lines kept for a
+  company are not checked against a new answer, so a company first opened with no line keeps
+  an empty chart after a refresh gives it lines, until the reader presses a row, and where a
+  kept line is gone the reader can take the last drawn line off. Neither raises. Claude's
+  ruling on the case the review found unstated in 7.4: the lines kept are those of the company
+  whose Financials tab was drawn last, and 7.4 now says so.
