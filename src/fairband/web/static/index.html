@@ -646,9 +646,13 @@
      out: inside a block, two or three columns, three becoming two under 810px of the block's
      width and both one under 460px, as Price facts' three groups do too (8.5). At 810px each of
      three columns is as wide as the table of yearly rates a share needs with three negative
-     three-figure rates in figure-sm on each row (the decision log of 2026-11-17); the company's
-     brief in ink-muted, three lines while closed, Show more under it in accent; the meter clear
-     of the levels; the report's line under a hairline rule. */
+     three-figure rates in figure-sm on each row. In the two-column form the block's halves end
+     near one another (the decision log of 2026-11-17): Key statistics' third stack spans both
+     columns and lays its groups out in them, Growth beside the yearly rates a share, which span
+     two rows, and Dividends under Growth; Price facts' first group, Trading, spans two rows beside
+     the two price changes, one under the other. The company's brief in ink-muted, three lines
+     while closed, Show more under it in accent; the meter clear of the levels; the report's line
+     under a hairline rule. */
   .app-company__two {
     display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--space-8);
   }
@@ -658,6 +662,14 @@
   }
   @container (width < 810px) {
     .app-company__three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container (460px <= width < 810px) {
+    .app-company__three > .app-company__stack:last-child {
+      display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-4) var(--space-8); align-items: start;
+    }
+    .app-company__three > .app-company__stack:last-child > :nth-child(2),
+    .app-company__three > .app-company__group:first-child { grid-row: span 2; }
   }
   @container (width < 460px) {
     .app-company__two, .app-company__three { grid-template-columns: minmax(0, 1fr); }

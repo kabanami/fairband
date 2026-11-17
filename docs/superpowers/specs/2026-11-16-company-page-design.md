@@ -764,3 +764,13 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
   December is a Saturday, and its change is over the close that FMP's year to date in Price facts
   is over. This replaces the entry above that has the range include 31 December as the mockup's
   filter does.
+- 2026-11-17, the fix wave's follow-up, Claude's call (8.3, 8.5, 8.7): the three columns from
+  810px (above) made two inner columns the form of Key statistics and Price facts at every common
+  width, from a window of 1,180 to about 1,750px, where the third column's groups wrapped under
+  the first and left the block's right half blank: about 540px in Key statistics, 250px in Price
+  facts. In the two-column form (460px to under 810px of block width) Key statistics' third stack
+  spans both columns and lays its groups out in them, Growth beside the yearly rates a share,
+  which span two rows, and Dividends under Growth; Price facts' Trading spans two rows beside
+  Price change and Price change, years, one under the other. The halves end about 160px apart in
+  Key statistics and 65px in Price facts; each column keeps its order of reading, Size first and
+  Valuation at the top of the second. The three-column and one-column forms are unchanged.

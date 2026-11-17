@@ -1220,3 +1220,48 @@ def test_the_script_and_the_columns_inside_a_block() -> None:
     assert narrower is not None
     assert ".app-company__two, .app-company__three" in narrower[1]
     assert "grid-template-columns: minmax(0, 1fr);" in narrower[1]
+
+
+def test_a_block_in_two_columns_ends_its_halves_near_one_another() -> None:
+    """The two-column form of a block, from 460px to under 810px of its width (the decision log of
+    2026-11-17), lays out what would wrap under its first column alone. Key statistics' third
+    stack spans both columns and lays its groups out in them, Growth beside the yearly rates a
+    share, which span two rows, so Dividends sits under Growth; Price facts' first group, Trading,
+    spans two rows beside the two price changes, one under the other. The rules reach those
+    alone: Key statistics' grid holds three stacks, the third's second group the yearly rates;
+    Price facts' grid holds three groups and no stack. The three-column form and the one-column
+    form keep their rules."""
+    html = _static_file("index.html")
+    found = re.search(
+        r"\n  @container \(460px <= width < 810px\) \{\n(.*?)\n  \}\n", html, re.DOTALL
+    )
+    assert found is not None
+    assert html.count("@container (460px <= width < 810px)") == 1
+    assert html.index("@container (width < 810px)") < found.start()
+    assert found.start() < html.index("@container (width < 460px)")
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", found[1])
+    stack = ".app-company__three > .app-company__stack:last-child"
+    spread = (
+        "display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr));"
+        " gap: var(--space-4) var(--space-8); align-items: start;"
+    )
+    spans = f"{stack} > :nth-child(2), .app-company__three > .app-company__group:first-child"
+    assert [(" ".join(s.split()), " ".join(b.split())) for s, b in rules] == [
+        (stack, spread),
+        (spans, "grid-row: span 2;"),
+    ]
+    [stats] = classed(_page("statistics", answers.OVERVIEW), "app-company__three")
+    stacks = stats["props"]["children"]
+    assert [s["props"]["className"] for s in stacks] == ["app-company__stack"] * 3
+    # the stack's children, as React flattens the list it is handed into the element's children
+    [third] = stacks[2]["props"]["children"]
+    assert [g["props"]["className"] for g in third] == ["app-company__group"] * 3
+    assert [text(classed(g, "app-company__grouptitle")[0]) for g in third] == [
+        "Growth, fiscal 2025",
+        "Growth a year, per share",
+        "Dividends",
+    ]
+    [facts] = classed(_page("priceFacts", answers.OVERVIEW), "app-company__three")
+    groups = facts["props"]["children"]
+    assert [g["props"]["className"] for g in groups] == ["app-company__group"] * 3
+    assert text(classed(groups[0], "app-company__grouptitle")[0]) == "Trading"

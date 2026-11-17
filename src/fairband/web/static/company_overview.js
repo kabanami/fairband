@@ -143,8 +143,10 @@
   /* The Key statistics block (8.3) of the overview answer, in the formats of 14.1: compact
      amounts, a money one with its currency's mark; percents to one decimal, the dividend yield
      to two; multiples with their x and the dash at 0; ratios and scores as plain numbers. Three
-     columns: Size, Margins and Returns; Valuation and Financial health; the two growth groups,
-     the newest fiscal year's named by its year, and Dividends. */
+     stacks: Size, Margins and Returns; Valuation and Financial health; the two growth groups,
+     the newest fiscal year's named by its year, and Dividends. In three columns a stack each; in
+     two (index.html) the third stack's groups go under the first two, Growth beside the yearly
+     rates a share and Dividends under Growth. */
   function statistics(answer) {
     var s = answer.statistics;
     var size = s.size;
@@ -246,7 +248,8 @@
 
   /* ------------------------------------------------------------- Price facts */
 
-  /* The Price facts block (8.5) of the overview answer: three groups side by side. Trading, from
+  /* The Price facts block (8.5) of the overview answer: three groups side by side, or in two
+     columns (index.html) Trading beside the two price changes, one under the other. Trading, from
      the stored quote's row: the money rows to cents, the day's and the year's range from low to
      high, the volumes compact as bare counts and the next earnings date. Price change and Price
      change, years: each a change, a percent as given to one decimal with its sign, in the text's
