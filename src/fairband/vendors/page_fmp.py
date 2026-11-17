@@ -1,6 +1,8 @@
 """The company page's figures from FMP's stored answers (the company page's design, 7.2, 8.3, 8.5,
 9, 10.3, 10.4, 14.2 and 14.3): pure readers, a parsed payload in and plain data out, with no store,
-network or clock. The page's two reads hand them the newest stored answers.
+network or clock. The page's reads hand them the newest stored answers: the Overview's and the
+Estimates' for their figures, the Financials tab's for the head's quote alone, its tables having
+their own readers (``page_financials``).
 
 The rule: every figure is the answer's own field, shaped and never recomputed, but for ``yearly``,
 which turns FMP's growth over three, five or ten years, a total, into a rate a year. A figure's

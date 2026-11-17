@@ -851,3 +851,7 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
     now; one blue in three strengths; the same in grey; teal, yellow and terracotta), and Claude
     advised against the three colours, which on these pages already mean the buy zone, phase 4 and
     the trim zone. The founder: "keep as is, no strip".
+- 2026-11-17, the Financials tab (B-216): designed in
+  `docs/superpowers/specs/2026-11-17-financials-tab-design.md` and built on the branch
+  `worktree-financials-tab`. When that branch is merged, 7.3's row of tabs gains Financials,
+  second: Overview, Financials, Estimates and Research.

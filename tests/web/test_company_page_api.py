@@ -230,7 +230,7 @@ def test_the_overview_whole(client: TestClient, db_path: Path, policy: Policy) -
     assert size["enterpriseValue"] == {"value": 12480000000000, "currency": "SEK"}
     assert size["marketCap"] == {"value": 412600000000, "currency": "USD"}
     assert body["trading"]["nextEarnings"] == "2027-01-14"
-    # The head's figures, which both reads carry (the design's 7.2).
+    # The head's figures, which each of the page's reads carries (the design's 7.2).
     assert body["quote"] == {
         "price": 182.4,
         "change": 2.15,

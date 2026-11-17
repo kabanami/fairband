@@ -3,7 +3,7 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
 (``agents_api``), the guidance routes (``guidance_api``), the override and review routes
 (``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
-Methodology section read and the report routes (``reports_api``), the company page's two reads
+Methodology section read and the report routes (``reports_api``), the company page's three reads
 (``company_api``), the research read (``research_api``), the multiples history read
 (``multiples_api``), the band's history read (``history_api``), the vendor pass-through route
 (``vendor_api``), the filing reads (``filings_api``), the company logo's read (``logo_api``), and

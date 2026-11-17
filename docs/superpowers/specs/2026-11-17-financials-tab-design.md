@@ -6,7 +6,10 @@ and by quarter, the revenue by product and by region, the ratios by fiscal year,
 lines the reader picks over one wide table), that a ratio draws as a line, that one chart holds
 several lines, that the amounts read in millions or in billions, and the look (version 3 of the
 mockup: "its right, proceed"). Every other choice below is Claude's, marked *my call* where it
-is more than a reading of those requests, and can be overturned as any other.
+is more than a reading of those requests, and can be overturned as any other. The plan was
+built on the branch `worktree-financials-tab` on 2026-11-17; the decision log's entry of that
+day on the build records where the build differs from this design. The merge and the live steps
+of section 14 wait for the founder's word.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -739,3 +742,48 @@ segments, and what the foreign filers showed (the currency of the per-share line
   another company (7.4); the sub-tab and the period are kept while the app is open, the unit in
   the browser (7.2); the three colours' values (7.6); one decimal in millions for a small
   company (7.7); the read holds the lists of lines (8.3); PEG joins the ratios (12.4).
+- 2026-11-17, the build, the builder's and the controller's calls, for the founder to overturn:
+  - A statement's or a ratio's line's `key` in the read's answer is FMP's field name (8.3 says
+    the page's own name for the line; section 12 leaves the key to the builder). FMP's fields are
+    unique in each table, so a key is one a line. A segment's key is its name, as 8.3 says.
+  - The answer holds nine tables: the three statements by fiscal year and by quarter, the two
+    segment tables and the ratios.
+  - A count of one in the left caption reads `the last fiscal year`, `the last quarter` or `the
+    last half-year`, words 7.2 does not give. A table with columns and no line has no left
+    caption: its sentence, `No figures on file.`, says what it holds.
+  - The tab's component is keyed on the answer's symbol, so the picks are dropped when another
+    company's answer lands, and not while the old company's tab is still drawn, faded, as the
+    next one loads (9).
+  - The block is a `section` with the panel's class and no title, as the mockup's; its name,
+    `Financials`, is for a screen reader alone.
+  - No mark is drawn for any figure the table writes as a dash: a share count or a multiple of
+    exactly 0 as well as an amount, which 7.5 names. A per-share figure of exactly 0, a bar of no
+    height, draws none either.
+  - The ticks' letter follows the plot's largest tick and includes `T`, for trillions (TSM reads
+    `0T 1T 2T 3T`); 7.5's examples name `B` and `M`.
+  - One picked line that cannot draw (a ratio under Quarterly) shows its name and `by year only`
+    in the chart's head, and the sentence of 7.5 in the plot's place. With no room on its right,
+    the box of several lines stands at the period's left, placed by its right edge.
+  - A bar's class is `app-fin__col`; the row of controls keeps `app-fin__bar`, so neither takes
+    the other's style.
+  - Section 10 says `charts.md` "gains the section of 7.6 and loses nothing". The build reworded
+    the sentences the four colours made untrue, on the controller's rulings. In `charts.md`,
+    "Because there is no categorical palette, the six categorical checks do not apply." became
+    "No other chart has a categorical palette, so the six categorical checks do not apply to
+    them; *Several series the reader picks* says what its four colours were held to." The brand
+    book's "Charts." paragraph gained "the one chart whose lines the reader picks takes four
+    series hues", and `SpreadChart.md`'s "Don't add a third line" says Fairband has no
+    categorical palette "for a chart with a subject" where it said "by design". No rule was
+    dropped.
+  - The section's last bullet states what was measured and what was not. The four colours are
+    not held to the palette method's lightness band or to its chroma floor: `chart-1`, the
+    accent, `chart-3` in the dark theme and `chart-2` in the light one stand outside them. Two
+    pairs share a lightness, and hue alone parts them. Under simulated tritan sight the light
+    theme's `chart-3` and `chart-4` are 4.7 apart, which the method reports and does not gate.
+    The task's review measured every figure again.
+  - The test sketch of the plan's Task 6 expected each of `chart-2`, `chart-3` and `chart-4` in
+    `charts.md`, where the section the plan gave named them only as "`chart-1` to `chart-4`".
+    The test pins the whole section, word for word.
+  - The fixtures of the two new routes are named `ratios.annual.json` and
+    `key-metrics.annual.json`, not `ratios.json` and `key-metrics.json` as the plan's Task 1 has
+    them: the vendor double keeps a request's period in a shared fixture's name.
