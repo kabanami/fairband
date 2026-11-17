@@ -221,7 +221,9 @@
      symbol or id while it is open runs its loader again (spec 2026-11-06 Tier 2, 18.4). The
      company page takes a company's symbol and a tab, kept in P.company for its script, as the
      report page takes its own; a change of tab replaces the hash as a change of view does, so the
-     browser's Back never steps through the tabs (the company page's design, 7.1). */
+     browser's Back never steps through the tabs (the company page's design, 7.1). A view shown
+     closes the watchlist popup and the Notes box (FairbandPage.closePopups), which no press
+     closes when the browser's Back or Forward moves the hash. */
   function show(tab, section, id) {
     if (VIEWS.indexOf(tab) === -1 || ((tab === 'report' || tab === 'company') && !section)) {
       tab = 'screen';
@@ -235,6 +237,7 @@
         (tab === 'company' ? companyPath() : ''));
     if (!opened && !P.section && !moved) return;
     state.tab = tab;
+    P.closePopups();
     VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });
     if (tab === 'groups') loadGroups();
     if (P.onShow[tab]) P.onShow[tab]();

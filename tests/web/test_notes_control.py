@@ -386,16 +386,20 @@ def test_the_draft_stays_until_another_company_shows() -> None:
     assert "notesShown" not in _function(script, "close")
     assert "notesShown" not in _function(script, "landed")
     # the page turns to another company as it is asked for one, never as it reads its own again,
-    # and again as the read of another company lands or fails, so a box opened from the faded
-    # head of the company before it, while the read was out, closes as the page turns
+    # and again as the read of another company lands or fails while the page shows, so a box
+    # opened from the faded head of the company before it, while the read was out, closes as the
+    # page turns; a landing after the reader left the view leaves the notes alone (run in node in
+    # tests/web/test_company_load.py)
     load = _function(_static_file("company.js"), "load")
     shown = "if (state.symbol !== want.symbol) P.notesShown(want.symbol);"
     _in_order(load, "var want = P.company;", shown, "state.symbol = want.symbol;")
+    landing = "if (state.symbol !== want.symbol && !mount.hidden) P.notesShown(want.symbol);"
     landed = load[load.index(".then(function (found) {") : load.index(".catch(function (err) {")]
     failed = load[load.index(".catch(function (err) {") :]
     for branch in (landed, failed):
-        _in_order(branch, "if (request !== latest) return;", shown, "state.symbol = want.symbol;")
-    assert load.count(shown) == load.count("P.notesShown(") == 3
+        _in_order(branch, "if (request !== latest) return;", landing, "state.symbol = want.symbol;")
+    assert load.count(shown) == 1 and load.count(landing) == 2
+    assert load.count("P.notesShown(") == 3
 
 
 def test_the_box_s_classes_are_its_own() -> None:

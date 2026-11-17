@@ -184,7 +184,8 @@
      a launch is followed (following), the phase numbers and a work item's open states; and the
      later views, find, the lists (null until they load), their reload, which settles once they are
      in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
-     where it is handed one (the company page's Watchlists ▾); companyHref, the address a ticker
+     where it is handed one (the company page's Watchlists ▾); closePopups, which closes the popup
+     and the Notes box as controls.js shows a view; companyHref, the address a ticker
      links to, which a watchlist's table hands ScreenTable as the screen's does (the company page's
      design, 12); the loaded rows (null until they load), the chosen columns, openRow, which opens
      a row's drawer, reloadDetail, which reads the drawer's company again after another view's
@@ -221,7 +222,7 @@
     find: find,
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
-    watch: watch,
+    watch: watch, closePopups: closePopups,
     companyHref: companyHref,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
@@ -456,6 +457,13 @@
   function closeWatch() {
     state.watch = null;
     renderWatch();
+  }
+
+  /* A view is shown (controls.js, show): the watchlist popup and the Notes box close, so neither
+     stays drawn over a view the browser's Back or Forward, or a link, opened with no press. */
+  function closePopups() {
+    if (state.watch) closeWatch();
+    if (state.notes) closeNotes();
   }
 
   function renderWatch() {
