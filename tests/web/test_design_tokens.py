@@ -43,6 +43,40 @@ EXCEPTION = (
     "One chart has no subject, the Financials tab's, whose lines the reader picks: there "
     "`chart-1` to `chart-4` name the lines."
 )
+# charts.md's section for that chart, whole, from its heading to the line before the next.
+SECTION = """
+## Several series the reader picks
+
+One chart in Fairband has no subject: the Financials tab's, where the reader picks up to four
+lines and none is the point more than another. That chart, and only a chart like it, takes
+`chart-1` to `chart-4`. Every other chart keeps one hue and `chart-context`.
+
+- A line takes the lowest of the four that is free when it is picked and keeps it until it
+  leaves the chart. Taking one line off never repaints the others. One line alone wears
+  `chart-1`.
+- Never a fifth colour: the chart holds four lines.
+- Lines of one unit share a plot and a scale. Another unit takes a plot of its own under it, on
+  the same periods. Never two scales on one plot.
+- An amount is a column from zero; a rate is a line on an axis that fits its range.
+- With one line, a figure below zero takes `chart-neg-3`, the polarity pair. With several, a
+  column wears its line's colour above zero and below: colour is identity there.
+- The legend is the row of labels above the plot, each a swatch, a name and the newest figure.
+  Text never wears a series colour.
+- This chart spans the page, so a column is at most 44px wide alone and 28px among several.
+  `chart-bar-max` stays `HistoryBars`'s.
+- The four were measured as a set: every pair is 10.6 or more apart under simulated protan and
+  deutan sight and 21 or more under full sight (OKLab ΔE × 100), and each is 3:1 or more on
+  `surface-raised`, in both themes. They are not held to the palette method's lightness band
+  (OKLCH L 0.48 to 0.67 in the dark theme, 0.43 to 0.77 in the light one) or to its chroma floor
+  (0.10). `chart-1` is the accent, which is lighter than the band in the dark theme and under
+  the floor in the light one; `chart-3` is lighter than the band in the dark theme and `chart-2`
+  darker than it in the light one. Two pairs share a lightness, `chart-2` and `chart-4` in the
+  dark theme and `chart-3` and `chart-4` in the light one: hue alone keeps them apart. Under
+  simulated tritan sight, which the method reports and does not gate, the light theme's
+  `chart-3` and `chart-4` are 4.7 apart: the label beside each line names it. None is a
+  `phase-*`, `caution` or `critical` value. `chart-3` is a yellow near `caution`: it is a mark
+  in a plot, never a status.
+"""
 
 
 def _member(name: str) -> bytes:
@@ -84,36 +118,24 @@ def test_the_vendored_tokens_are_the_archive_s() -> None:
 
 def test_the_chart_rules_name_the_chart_with_several_series() -> None:
     """The archive's charts.md has the section for the chart whose lines the reader picks, after
-    the rule of one series hue and before the polarity's; the section gives that chart the four
-    series tokens, `chart-1` to `chart-4`, and keeps every other chart to one hue; the rule of
-    one series hue sends the reader there; and the rule against two scales on one plot stands."""
+    the rule of one series hue and before the polarity's, and the section is SECTION, word for
+    word; the rule of one series hue sends the reader there, the paragraph on the categorical
+    checks sends the reader there too, and the rule against two scales on one plot stands."""
     charts = _member("docs/charts.md").decode("utf-8")
     heading = "\n## Several series the reader picks\n"
     assert charts.count(heading) == 1
     emphasis = charts.index("\n## Emphasis, not categorical colour\n")
     polarity = charts.index("\n## Polarity uses the status pair\n")
     assert emphasis < charts.index(heading) < polarity
-    section = " ".join(charts.split(heading, 1)[1].split("\n## ", 1)[0].split())
-    assert "takes `chart-1` to `chart-4`. Every other chart keeps one hue" in section
-    assert "Never a fifth colour: the chart holds four lines." in section
-    assert "Never two scales on one plot." in section
+    start = charts.index(heading) + 1  # the heading's own line
+    section = charts[start : charts.index("\n## ", start)]
+    assert " ".join(section.split()) == " ".join(SECTION.split())
     assert (
         "no categorical palette to get wrong — and if one ever appears, the answer is small "
         "multiples, not more hues. One chart is the exception; see *Several series the reader "
         "picks*.\n" in charts
     )
     assert "Never two y-scales on one plot" in charts
-    assert (
-        "None is a `phase-*`, `caution` or `critical` value. `chart-3` is a yellow near "
-        "`caution`: it is a mark in a plot, never a status." in section
-    )
-    # what the four were held to, and the two checks they were not
-    assert (
-        "and each is 3:1 or more on `surface-raised`, in both themes. They are not held to one "
-        "lightness band or to the chroma floor: `chart-1` is the accent, which is lighter than the "
-        "band in the dark theme and under the chroma floor in the light one, and the others differ "
-        "in lightness, which is part of what keeps each pair apart. None is a `phase-*`" in section
-    )
     assert (
         "\nNo other chart has a categorical palette, so the six categorical checks do not apply to "
         "them; *Several series the reader picks* says what its four colours were held to. "
