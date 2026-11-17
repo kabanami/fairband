@@ -1,9 +1,10 @@
 """The design system's three more series colours and its rule for the chart that takes them (the
 Financials tab's design, 7.6 and 10): ``chart-2``, ``chart-3`` and ``chart-4`` stand after
 ``chart-1`` in ``tokens.json`` and in both themes of ``tokens.css``; the vendored copy the app
-serves equals the archive's, byte for byte; and the archive's ``charts.md`` names the chart with
-several series and keeps its rule against two scales on one plot. The archive is read in place,
-never unpacked (CLAUDE.md)."""
+serves equals the archive's, byte for byte; the archive's ``charts.md`` names the chart with
+several series and keeps its rule against two scales on one plot; and the brand book and
+``SpreadChart.md`` make room for that one chart. The archive is read in place, never unpacked
+(CLAUDE.md)."""
 
 import json
 import re
@@ -102,3 +103,26 @@ def test_the_chart_rules_name_the_chart_with_several_series() -> None:
         "picks*.\n" in charts
     )
     assert "Never two y-scales on one plot" in charts
+    assert (
+        "None is a `phase-*`, `caution` or `critical` value. `chart-3` is a yellow near "
+        "`caution`: it is a mark in a plot, never a status." in section
+    )
+    assert (
+        "\nNo other chart has a categorical palette, so the six categorical checks apply to that "
+        "one chart alone. `chart-context` is held to the 3:1 mark-contrast floor" in charts
+    )
+    assert "Because there is no categorical palette" not in charts
+
+
+def test_the_rest_of_the_design_system_allows_the_one_chart() -> None:
+    """The brand book's paragraph on charts and SpreadChart's rule against a third line, which
+    said Fairband has one series hue and no categorical palette, make room for the chart whose
+    lines the reader picks."""
+    book = _member("docs/brand-book.md").decode("utf-8")
+    assert (
+        "plus a validated diverging scale for anything measured against a baseline; the one chart "
+        "whose lines the reader picks takes four series hues." in book
+    )
+    spread = _member("docs/components/SpreadChart.md").decode("utf-8")
+    assert "and Fairband has no categorical palette for a chart with a subject.\n" in spread
+    assert "no categorical palette by design" not in spread
