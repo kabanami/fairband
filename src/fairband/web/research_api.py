@@ -255,7 +255,6 @@ def _review(
     a value."""
     levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
     ratio, word = _standing(review.value, levels, price, edges)
-    currency = money_of(review.result)[1]
     flags = None if review.value is None else [asdict(f) for f in review.result.flags]
     return {
         "id": review.id,
@@ -264,13 +263,19 @@ def _review(
         "priceToValue": ratio,
         "designation": word,
         "refusal": review.refusal,
-        "bridge": [
-            _line(line, overrides.get(line["override_id"]), currency) for line in review.bridge
-        ],
+        "bridge": bridge_lines(review, overrides),
         "overrideCount": len(review.override_ids),
         "mechanical": review.mechanical_value,
         "flags": flags,
     }
+
+
+def bridge_lines(review: ReviewRow, overrides: Mapping[int, OverrideRow]) -> list[dict[str, Any]]:
+    """The review's bridge lines as the detail serves them (module docstring), each with its
+    override of ``overrides``, the company's by id, in the review's reporting currency; the
+    Research tab's read gives its reviews' lines so too (``company_api``)."""
+    currency = money_of(review.result)[1]
+    return [_line(line, overrides.get(line["override_id"]), currency) for line in review.bridge]
 
 
 def _line(line: Mapping[str, Any], override: OverrideRow | None, currency: str) -> dict[str, Any]:

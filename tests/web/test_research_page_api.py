@@ -555,6 +555,30 @@ def test_the_records_carry_the_reviews_the_secondary_valuations_and_the_ledger_s
     assert (records["ledgerCount"], len(records["ledger"])) == (25, 20)
 
 
+def test_a_review_s_bridge_lines_carry_their_label_and_unit(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Each bridge line of a review in ``records`` carries its input's label in a reader's words,
+    its unit in the review's reporting currency and its override's reason and writer, as the
+    company detail's lines do (``research_api.bridge_lines``), so the Records view draws the
+    review's bridge without working them out; the reviews read keeps its stored lines."""
+    _aal_review(db_path, policy, results)
+    [review] = _page(client, "AAL")["records"]["reviews"]
+    [served] = client.get("/api/companies/AAL/reviews").json()["reviews"]
+    [stored] = served["bridge"]
+    assert set(stored) == {"tag", "overrideId", "old", "new", "delta", "refusal"}
+    detail = client.get("/api/companies/AAL").json()["review"]
+    assert review == served | {"bridge": detail["bridge"]}
+    [line] = review["bridge"]
+    assert line == stored | {
+        "label": "target margin",
+        "unit": "ratio",
+        "reason": "the peers by hand",
+        "principal": "agent",
+        "actor": "claude-opus-5-5",
+    }
+
+
 def test_the_read_calls_no_vendor(
     tmp_path: Path, db_path: Path, policy: Policy, vendor: Vendor, passthrough: Passthrough
 ) -> None:

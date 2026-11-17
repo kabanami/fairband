@@ -35,7 +35,9 @@ change, changePercent, day}``, each ``null`` without a quote's row).
   (``research_page.of_report``), each as the research read serves it; the three ``null`` for a
   company with no report. ``records`` is the research read's eight lists
   (``research_api.research_records``), with ``reviews``, the company's reviews as the reviews read
-  serves them, without their results, ``secondaryValuations``, its secondary valuations as their
+  serves them, without their results, each bridge line as the company detail serves it, with its
+  input's label, its unit in the review's reporting currency and its override's reason and writer
+  (``research_api.bridge_lines``), ``secondaryValuations``, its secondary valuations as their
   read serves them, each newest first, and ``ledgerCount``, the count of its ledger rows, which
   ``ledger`` cuts at the newest twenty. A report of another company is a 404, "report <id> is
   <its symbol>'s, not <symbol>'s"; an id that names none a 404, "no report <id>".
@@ -112,6 +114,7 @@ from fairband.refresh.inputs_statements import YEAR_END_DRIFT, cadence_of, serie
 from fairband.store.currency import reporting_currency
 from fairband.store.ledger import entry_count
 from fairband.store.observations import observations_for
+from fairband.store.overrides import overrides_for
 from fairband.store.reports import ReportRow, report_row, reports_for
 from fairband.store.research import kill_criteria_for, news_items_for
 from fairband.store.reviews import review_row, reviews_for
@@ -123,7 +126,7 @@ from fairband.vendors import page_fmp
 from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT, StatementKind
 from fairband.web.agents_api import criterion_json, record_json
 from fairband.web.reports_api import checked_symbol, report_json, report_list
-from fairband.web.research_api import research_records
+from fairband.web.research_api import bridge_lines, research_records
 from fairband.web.research_page import of_report, report_call
 from fairband.web.reviews_api import review_json, secondary_json
 from fairband.web.settings_api import effective
@@ -305,9 +308,13 @@ def add_company_page_routes(
             revisions = reports_for(conn, symbol)
             shown = _shown(conn, symbol, revisions, report)
             quote = _quote(conn, symbol)
+            overrides = {o.id: o for o in overrides_for(conn, symbol)}
             records = {
                 **research_records(conn, symbol),
-                "reviews": [review_json(r, with_result=False) for r in reviews_for(conn, symbol)],
+                "reviews": [
+                    review_json(r, with_result=False) | {"bridge": bridge_lines(r, overrides)}
+                    for r in reviews_for(conn, symbol)
+                ],
                 "secondaryValuations": [secondary_json(s) for s in secondaries_for(conn, symbol)],
                 "ledgerCount": entry_count(conn, symbol),
             }
