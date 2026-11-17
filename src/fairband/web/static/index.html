@@ -1025,6 +1025,187 @@
       min-width: 168px; white-space: normal;
     }
   }
+  /* The company page's Research tab (the Research tab's design, 7.2 to 7.4, 7.7 and 7.8), as its
+     mockup lays it out. Under the tabs' row the bar: Report and Records, a segmented control on a
+     hairline, the chosen one on surface-selected; the report's line in ink-muted; Footnote marks
+     and Download .md at its right end; its notes under it. Then the section list, 196px wide,
+     which stays in view while the report scrolls: its groups' heads in label and ink-faint, each
+     name on a 2px hairline at its left edge, the one in view on surface-selected with a 2px accent
+     edge, as the app marks a selection, and so the report on file shown. Beside it the panels,
+     each on surface-raised with a hairline border: the heading at 18px on a 24px line; the text at
+     the reading width, 16px on a 24px line; a wide table across the panel, the whole width where
+     a cell is long; named lists side by side over a hairline; the two sides in two columns; the
+     cards, each on surface with a hairline border, in a column beside the first run of text that
+     stays in view while the panel scrolls, their text at 14px, a table's cells after the first set
+     right. A cite in the text's colour over a dotted line in border, accent under the pointer and
+     with the focus, with no line in an agent's table; its [n] hidden until Footnote marks is on;
+     its source in a box on surface-raised over the page. The three parts kept closed, a head that
+     opens each, + or − before its name; inside, the report page's own parts, their panel's frame
+     and title left to the head, the references in two columns where the width allows. */
+  .app-research {
+    display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4);
+  }
+  .app-research__top { display: flex; flex-direction: column; gap: var(--space-2); }
+  .app-research__bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5);
+  }
+  .app-research__views {
+    display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hairline);
+    border-radius: var(--radius-md); overflow: hidden;
+  }
+  .app-research__view {
+    appearance: none; margin: 0; padding: 6px 12px; color: var(--ink-muted); background: none;
+    border: 0; border-right: 1px solid var(--hairline); cursor: pointer;
+  }
+  .app-research__view:last-child { border-right: 0; }
+  .app-research__view:hover { color: var(--ink); background: var(--surface-hover); }
+  .app-research__view[aria-selected="true"] {
+    color: var(--ink); background: var(--surface-selected);
+  }
+  .app-research__view:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-research__line {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3);
+    margin: 0; color: var(--ink-muted);
+  }
+  .app-research__actions {
+    display: flex; flex-wrap: wrap; gap: var(--space-2); margin-left: auto;
+  }
+  .app-research__note, .app-research__none { margin: 0; color: var(--ink-muted); }
+  .app-research__error { margin: 0; color: var(--caution); }
+  .app-research__layout {
+    display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: var(--space-6);
+    align-items: start;
+  }
+  .app-research__list {
+    position: sticky; top: var(--space-3); display: flex; flex-direction: column;
+    gap: var(--space-5); max-height: calc(100vh - 24px); overflow-y: auto;
+  }
+  .app-research__group { display: flex; flex-direction: column; gap: 6px; }
+  .app-research__grouphead { margin: 0; color: var(--ink-faint); }
+  .app-research__links, .app-research__files {
+    display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none;
+  }
+  .app-research__link {
+    appearance: none; box-sizing: border-box; display: flex; align-items: baseline;
+    justify-content: space-between; gap: var(--space-2); width: 100%; margin: 0;
+    padding: 5px 8px 5px 10px; text-align: left; color: var(--ink-muted); background: none;
+    border: 0; border-left: 2px solid var(--hairline); cursor: pointer;
+  }
+  .app-research__link:hover { color: var(--ink); background: var(--surface-hover); }
+  .app-research__link.is-on {
+    color: var(--ink); background: var(--surface-selected); border-left-color: var(--accent);
+  }
+  .app-research__link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-research__n { color: var(--ink-faint); }
+  .app-research__file {
+    display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 6px 10px;
+    color: var(--ink); text-decoration: none; border-left: 2px solid var(--hairline);
+  }
+  .app-research__file.is-on {
+    background: var(--surface-selected); border-left-color: var(--accent);
+  }
+  a.app-research__file:hover { background: var(--surface-hover); }
+  a.app-research__file:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-research__what { color: var(--ink-muted); }
+  .app-research__main { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+  .app-research__sec {
+    min-width: 0; padding: var(--space-5) var(--space-6) var(--space-6);
+    background: var(--surface-raised); border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg); scroll-margin-top: var(--space-3);
+  }
+  .app-research__title { margin: 0 0 14px; font-size: 18px; line-height: 24px; }
+  .app-research__body { display: flex; flex-direction: column; gap: var(--space-5); }
+  .app-research__run {
+    display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; max-width: 43rem;
+  }
+  .app-research .fb-report__prose, .app-research .fb-report__list,
+  .app-research .fb-report__scroll { margin: 0; }
+  .app-research .fb-report__prose, .app-research .fb-report__list {
+    font-size: 16px; line-height: 24px; overflow-wrap: anywhere;
+  }
+  .app-research__wide { min-width: 0; }
+  .app-research__wide--full .fb-report__table { width: 100%; }
+  .app-research__columns {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--space-5) var(--space-8); padding-top: 18px; border-top: 1px solid var(--hairline);
+  }
+  .app-research__sides {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--space-5) var(--space-10);
+  }
+  .app-research__named, .app-research__side {
+    display: flex; flex-direction: column; gap: var(--space-2); min-width: 0;
+  }
+  .app-research__name { margin: 0; color: var(--ink-muted); }
+  .app-research__name > .fb-report__prose {
+    max-width: none; font: inherit; letter-spacing: inherit; text-transform: inherit;
+    color: inherit;
+  }
+  .app-research__split {
+    display: grid; grid-template-columns: minmax(0, 43rem) minmax(0, 1fr);
+    gap: var(--space-5) var(--space-8); align-items: start;
+  }
+  .app-research__cards {
+    position: sticky; top: var(--space-3); display: flex; flex-direction: column;
+    gap: var(--space-3); min-width: 0;
+  }
+  .app-research__card {
+    display: flex; flex-direction: column; gap: var(--space-2); min-width: 0;
+    padding: var(--space-3) 14px 14px; background: var(--surface);
+    border: 1px solid var(--hairline); border-radius: var(--radius-md);
+  }
+  .app-research__card .fb-report__prose, .app-research__card .fb-report__list {
+    font-size: 14px; line-height: 20px;
+  }
+  .app-research__card .fb-report__table { width: 100%; }
+  .app-research__card .fb-report__table :is(th, td):not(:first-child) { text-align: right; }
+  .app-research .fb-cite { color: inherit; border-bottom-color: var(--border); }
+  .app-research .fb-cite:hover, .app-research .fb-cite:focus-visible {
+    color: var(--accent); border-bottom-color: var(--accent);
+  }
+  .app-research .fb-cite:focus-visible {
+    outline: 2px solid var(--focus-ring); outline-offset: 2px;
+  }
+  .app-research .fb-report__prose .fb-cite, .app-research .fb-report__list .fb-cite {
+    font-size: 0.875em; line-height: inherit;
+  }
+  .app-research .fb-report__table .fb-cite { border-bottom: 0; }
+  .app-research .fb-cite__n { display: none; }
+  .app-research--marks .fb-cite__n { display: inline; }
+  .app-research__tip {
+    position: fixed; z-index: 20; box-sizing: border-box; max-width: min(380px, calc(100vw - 24px));
+    padding: 6px 10px; font-size: 12px; line-height: 17px; color: var(--ink);
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-popover); pointer-events: none;
+  }
+  .app-research__tip[hidden] { display: none; }
+  details.app-research__sec { padding: 0; }
+  .app-research__summary {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3);
+    padding: 14px var(--space-6); list-style: none; border-radius: var(--radius-lg);
+    cursor: pointer;
+  }
+  .app-research__summary::-webkit-details-marker { display: none; }
+  .app-research__summary::before {
+    content: "+"; width: 12px; font-family: var(--font-mono); color: var(--ink-faint);
+  }
+  details[open] > .app-research__summary::before { content: "−"; }
+  .app-research__summary:hover { background: var(--surface-hover); }
+  .app-research__summary:focus-visible {
+    outline: 2px solid var(--focus-ring); outline-offset: -2px;
+  }
+  .app-research__gloss { color: var(--ink-faint); }
+  .app-research__fold { padding: var(--space-1) var(--space-6) var(--space-6); }
+  .app-research__fold > .app-report__panel {
+    margin: 0; padding: 0; background: none; border: 0; border-radius: 0;
+  }
+  .app-research__fold > .app-report__panel > h3 { display: none; }
+  .app-research__fold .app-report__notes {
+    max-width: none; columns: 2 22rem; column-gap: var(--space-10);
+  }
+  .app-research__fold .app-report__notes li { break-inside: avoid; }
+  .app-research__fold .fb-rec + .fb-rec,
+  .app-research__fold .app-report__entered + .fb-rec { margin-top: var(--space-3); }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
      menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
@@ -1092,5 +1273,6 @@
 <script src="/static/company_financials.js"></script>
 <script src="/static/company_financials_chart.js"></script>
 <script src="/static/company_research_text.js"></script>
+<script src="/static/company_research.js"></script>
 </body>
 </html>

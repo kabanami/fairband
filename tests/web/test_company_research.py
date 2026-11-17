@@ -1,0 +1,600 @@
+"""The company page's Research tab, its frame (the Research tab's design, 7.2, 7.3, 7.4, 7.7 and
+7.8; Review Focus 3 and 5): the bar and its line, the section list, a section's panel drawn by its
+layout with the design system's reader, a cite's source, the footnote marks kept in the browser,
+the three closed parts, a company with no report, the two views and the Markdown's refusal.
+company.js, report_parts.js, company_research_text.js and company_research.js run in node after
+the bundle and app.js (``support.page``), and the tests read the trees the tab's builders return;
+``research.mjs`` drives the tab's state, with a store and answers of its own; the rules node
+cannot run are read from the page's CSS.
+
+The answer is ``support.research_answers``' LFOX: report 31, revision 2 of a full report, a hold,
+on the data of 10 Nov 2026, valid until 12 Feb 2027, and report 19 before it, revision 1, a trim
+of 2 Oct 2026. Every company, figure and sentence is invented."""
+
+import json
+import re
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import pytest
+from support import page_answers
+from support import research_answers as answers
+from support.page import BUNDLE, NODE, STATIC, classed, elements, node, text
+from support.web import _static_file
+
+pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
+
+SCRIPTS = (
+    STATIC / "company.js",
+    STATIC / "report_parts.js",
+    STATIC / "company_research_text.js",
+    STATIC / "company_research.js",
+)
+DRIVER = Path(__file__).parent / "research.mjs"
+KEY = "fairband.research.marks"
+TODAY = page_answers.TODAY.isoformat()
+HEADINGS = [s["heading"] for s in answers.SECTIONS]
+RECORDS = "The company's records on file, from any report."
+EXPIRED = "The value of this report is past the date it was valid until"
+MARKS = ("app-research__marks", "Footnote marks")
+DOWNLOAD = ("app-research__download", "Download .md")
+MARKDOWN = "/api/reports/31/markdown"
+
+
+def _research(helper: str, *args: Any) -> Any:
+    """What ``research.<helper>`` returns on ``args``, the tab's scripts loaded after app.js."""
+    return node("research." + helper, list(args), *SCRIPTS)
+
+
+def _drive(
+    store: Any, steps: list[dict[str, Any]], replies: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """The trace of ``steps`` with the store ``store`` and the fetch's ``replies``
+    (``research.mjs``)."""
+    assert NODE is not None
+    scripts = (BUNDLE, STATIC / "app.js", *SCRIPTS)
+    done = subprocess.run(
+        [NODE, str(DRIVER), *(str(script) for script in scripts)],
+        input=json.dumps({"store": store, "answers": replies or {}, "steps": steps}),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stderr
+    trace: list[dict[str, Any]] = json.loads(done.stdout)
+    return trace
+
+
+def _mount(answer: dict[str, Any] | None = None, do: str = "mount") -> dict[str, Any]:
+    """The tab opened on ``answer``, the synthetic one where none is given, with LFOX's detail."""
+    return {
+        "do": do,
+        "answer": answer if answer is not None else answers.answer(),
+        "detail": page_answers.detail(),
+    }
+
+
+def _press(name: str, words: str) -> dict[str, Any]:
+    return {"do": "press", "class": name, "text": words}
+
+
+def _classes(e: dict[str, Any]) -> list[str]:
+    return str(e["props"].get("className") or "").split()
+
+
+def _one(tree: Any, name: str) -> dict[str, Any]:
+    [found] = classed(tree, name)
+    return found
+
+
+def _texts(tree: Any) -> list[str]:
+    return [text(e) for e in elements(tree)]
+
+
+def _references(count: int) -> list[dict[str, Any]]:
+    """``count`` references, the report's own first, then synthetic ones after them."""
+    own: list[dict[str, Any]] = answers.answer()["report"]["references"]
+    more = [
+        {"n": n, "ref": f"derived:{n}", "source": f"derivation {n}"}
+        for n in range(len(own) + 1, count + 1)
+    ]
+    return own + more
+
+
+def _rule(selector: str) -> str:
+    """The declarations of the page's one rule whose line opens with ``selector``, on one line."""
+    css = _static_file("index.html")
+    ends = [m.end() for m in re.finditer(r"(?m)^[ \t]*" + re.escape(selector), css)]
+    assert len(ends) == 1, selector
+    return " ".join(css[ends[0] : css.index("}", ends[0])].split())
+
+
+# ------------------------------------------------------------------------------------- the bar
+
+
+def test_the_bar_s_line() -> None:
+    """In the Report view, the report's line: its stance in the Stance column's chip, faded with
+    the report page's title once its validity ended before the detail's day; its mode; its
+    revision; its date and time as the page writes them; who wrote it; valid until and the
+    date."""
+    answer = answers.answer()
+    answer["report"]["appendixA"]["snapshot"]["validUntil"] = "2027-02-04"
+    tree = _research("bar", answer, "report", False, {"today": TODAY})
+    line = _one(tree, "app-research__line")
+    stance = _one(line, "fb-stance")
+    assert stance["props"]["className"] == "fb-stance fb-stance--hold label"
+    assert stance["props"].get("title") is None
+    assert text(stance) == "hold"
+    found = _texts(line)
+    at = [found.index(w) for w in ("hold", "full report", "revision 2", "valid until 4 Feb 2027")]
+    assert at == sorted(at)
+    drawn = list(elements(line))
+    when = node("when", [answers.CREATED])
+    [chip] = [e for e in drawn if "principal" in e["props"]]
+    assert (chip["props"]["principal"], chip["props"]["actor"]) == ("agent", "claude-opus-5-5")
+    # the date and time, then the writer, between the revision and the end of the window
+    order = [drawn.index(e) for e in drawn if e == when or e is chip]
+    assert len(order) == 2 and order == sorted(order)
+    assert found.index("revision 2") < order[0] and order[1] < found.index("valid until 4 Feb 2027")
+
+    for today in ("2027-02-05", "2027-03-01"):
+        late = _one(_research("bar", answer, "report", False, {"today": today}), "fb-stance")
+        assert late["props"]["className"] == "fb-stance fb-stance--hold fb-stance--expired label"
+        assert late["props"]["title"] == EXPIRED
+    on_the_day = _research("bar", answer, "report", False, {"today": "2027-02-04"})
+    assert "fb-stance--expired" not in _one(on_the_day, "fb-stance")["props"]["className"]
+
+
+def test_a_valuation_review_names_the_report_it_reuses_or_that_it_has_none() -> None:
+    """A valuation review that reuses a full report says so in the line with that report's date;
+    one that reuses none says so under the bar; a full report says neither."""
+    answer = answers.answer()
+    answer["report"] |= {"mode": "valuation review", "reusesFullReportOf": 19}
+    reuses = _research("bar", answer, "report", False, {"today": TODAY})
+    assert "reuses the full report of 2 Oct 2026" in _texts(_one(reuses, "app-research__line"))
+    assert classed(reuses, "app-research__note") == []
+
+    answer["report"]["reusesFullReportOf"] = None
+    none = _research("bar", answer, "report", False, {"today": TODAY})
+    assert text(_one(none, "app-research__note")) == "No full report to reuse."
+    assert not [w for w in _texts(none) if w.startswith("reuses the full report of")]
+
+    full = _research("bar", answers.answer(), "report", False, {"today": TODAY})
+    assert classed(full, "app-research__note") == []
+    assert not [w for w in _texts(full) if w.startswith("reuses the full report of")]
+
+
+# ------------------------------------------------------------------------------------ the list
+
+
+def test_the_list() -> None:
+    """The report's twelve headings in their order, then the three kept closed, References with
+    their count; ten headings for a valuation review. The reports on file with their count, each
+    with its date and revision over its mode and stance: the one shown marked and no link, the
+    other a link to its address on the tab. The name ``shown`` names is marked."""
+    answer = answers.answer()
+    answer["report"]["references"] = _references(185)
+    tree = _research("list", answer, "research-s1")
+    assert tree["type"] == "nav"
+    heads = [text(e) for e in classed(tree, "app-research__grouphead")]
+    assert heads == ["The report", "Kept closed", "Reports on file · 2"]
+    links = classed(tree, "app-research__link")
+    assert [text(e) for e in links] == [
+        *HEADINGS,
+        "References185",
+        "Appendix A",
+        "Appendix B",
+    ]
+    assert [e["type"] for e in links] == ["button"] * 15
+    assert [("is-on" in _classes(e)) for e in links] == [True] + [False] * 14
+    assert text(_one(links[12], "app-research__n")) == "185"
+
+    shown, other = classed(tree, "app-research__file")
+    assert "is-on" in _classes(shown) and shown["type"] != "a" and "href" not in shown["props"]
+    assert text(shown) == "11 Nov 2026, revision 2Full report, hold"
+    assert other["type"] == "a" and "is-on" not in _classes(other)
+    assert other["props"]["href"] == node("companyPage.researchHref", ["LFOX", 19], *SCRIPTS)
+    assert other["props"]["href"] == "#company/LFOX/research/19"
+    assert text(other) == "2 Oct 2026, revision 1Full report, trim"
+
+    marked = _research("list", answer, "research-b")
+    assert [text(e) for e in classed(marked, "app-research__link") if "is-on" in _classes(e)] == [
+        "Appendix B"
+    ]
+
+    review = answers.answer()
+    review["report"] |= {
+        "mode": "valuation review",
+        "sections": [s for s in answers.SECTIONS if s["heading"] not in HEADINGS[1:3]],
+    }
+    listed = _research("list", review, "research-s1")
+    names = [text(e) for e in classed(listed, "app-research__link")]
+    count = len(review["report"]["references"])
+    assert names == [
+        *(h for h in HEADINGS if h not in HEADINGS[1:3]),
+        f"References{count}",
+        "Appendix A",
+        "Appendix B",
+    ]
+
+
+# ------------------------------------------------------------------------------- the sections
+
+
+def _section(index: int, cards: dict[str, Any] | None = None) -> Any:
+    report = answers.answer()["report"]
+    return _research("section", report["sections"][index], index, report, cards or {})
+
+
+def _rows(tree: Any) -> list[dict[str, Any]]:
+    """The rows of a section's panel, in order."""
+    rows: list[dict[str, Any]] = _one(tree, "app-research__body")["props"]["children"][0]
+    return rows
+
+
+def _laid(index: int) -> dict[str, Any]:
+    section = answers.SECTIONS[index]
+    laid: dict[str, Any] = node(
+        "researchText.lay",
+        [section["heading"], section["parts"], answers.STANCE],
+        STATIC / "company_research_text.js",
+    )
+    return laid
+
+
+def _block_count(laid: dict[str, Any]) -> int:
+    """The blocks ``lay`` gives a section, its rows' and its cards', a named block one: a run's
+    and a columns row's blocks, a wide row's and a pair's one, a sides row's one a side, and none
+    in a row of charts alone."""
+    count = len(laid["cards"])
+    for row in laid["rows"]:
+        if row["kind"] in ("run", "columns"):
+            count += len(row["blocks"])
+        elif row["kind"] == "sides":
+            count += len(row["sides"])
+        elif row["kind"] in ("wide", "pair"):
+            count += 1
+    return count
+
+
+def _drawn_blocks(tree: Any) -> list[dict[str, Any]]:
+    """The elements the reader drew for a section's blocks, a named block's body among them but
+    not its name."""
+    names = {id(e) for name in classed(tree, "app-research__name") for e in elements(name)}
+    kinds = ("fb-report__prose", "fb-report__list", "fb-report__scroll")
+    return [
+        e for e in elements(tree) if id(e) not in names and any(k in _classes(e) for k in kinds)
+    ]
+
+
+def test_a_section_is_drawn_by_its_layout() -> None:
+    """A section is a panel with its heading, id research-s<n> from 1. A run of text at the
+    reading width; a wide table across the panel, the whole width where a cell is long; named
+    lists side by side; the two sides each under its label; the cards of rule 2, each under its
+    name, in a column beside the first run; a paragraph beside its charts drawn at the reading
+    width as a run is. No block drawn twice, none left out."""
+    business = _section(1)
+    assert business["type"] == "section" and business["props"]["id"] == "research-s2"
+    [title] = [e for e in elements(business) if e.get("type") == "h2"]
+    assert text(title) == "The business"
+    [split] = _rows(business)
+    assert "app-research__split" in _classes(split)
+    run, cards = split["props"]["children"]
+    assert "app-research__run" in _classes(run) and "app-research__cards" in _classes(cards)
+    assert [text(_one(c, "app-research__name")) for c in classed(cards, "app-research__card")] == [
+        "Revenue by product",
+        "What drives revenue",
+    ]
+
+    earnings = _section(4)
+    assert [" ".join(_classes(r)) for r in _rows(earnings)] == [
+        "app-research__run",
+        "app-research__wide",
+        "app-research__run",
+        "app-research__wide app-research__wide--full",
+        "app-research__run",
+    ]
+    assert classed(earnings, "app-research__cards") == []
+
+    summary = _section(0)
+    [columns] = classed(summary, "app-research__columns")
+    assert [
+        text(_one(n, "app-research__name")) for n in classed(columns, "app-research__named")
+    ] == [
+        "Reasons for",
+        "Main risks",
+        "What would change the view",
+    ]
+    assert "Stance: hold." not in text(summary)
+
+    debate = _section(5)
+    [sides] = classed(debate, "app-research__sides")
+    assert [text(_one(s, "app-research__name")) for s in classed(sides, "app-research__side")] == [
+        "The bull case",
+        "The bear case",
+    ]
+
+    financial = _section(3)
+    assert [" ".join(_classes(r)) for r in _rows(financial)] == ["app-research__run"] * 6
+
+    for index in range(len(answers.SECTIONS)):
+        drawn = _drawn_blocks(_section(index))
+        assert len(drawn) == _block_count(_laid(index)), index
+        texts = [json.dumps(e) for e in drawn]
+        assert len(set(texts)) == len(texts), index
+
+
+def test_the_blocks_are_the_bundle_s() -> None:
+    """Each block of a run is the element the design system's reader draws for it,
+    ``Fairband.reportText.draw``, its cites numbered by the report's references."""
+    [mounted] = _drive({}, [_mount()])
+    [summary] = [e for e in elements(mounted["tree"]) if e["props"].get("id") == "research-s1"]
+    run = classed(summary, "app-research__run")[0]
+    laid = _laid(0)
+    blocks = laid["rows"][0]["blocks"]
+    report = answers.answer()["report"]
+    footnotes = {e["ref"]: e["n"] for e in report["references"]}
+    drawn = run["props"]["children"][0]
+    assert len(drawn) == len(blocks) >= 3
+    for key, (element, block) in enumerate(zip(drawn, blocks, strict=True)):
+        assert element == node("Fairband.reportText.draw", [block, footnotes, key])
+    assert classed(run, "fb-cite__n")  # the cites carry their numbers, which the CSS hides
+
+
+def test_a_section_with_no_card_draws_no_cards_column() -> None:
+    """A section whose layout gives no card, and none from the records, draws no cards column;
+    the records' cards for its heading stand in one beside its first run."""
+    thesis = _section(6)
+    assert classed(thesis, "app-research__cards") == []
+    assert classed(thesis, "app-research__split") == []
+    card = {"type": "div", "props": {"className": "probe", "children": ["a record's card"]}}
+    held = _section(6, {"The thesis": [card]})
+    [split] = _rows(held)
+    run, cards = split["props"]["children"]
+    assert "app-research__run" in _classes(run)
+    assert cards["props"]["children"] == [[card]]
+
+
+# ------------------------------------------------------------------------------- a cited number
+
+
+def test_a_cite_s_source() -> None:
+    """A cite's box gives its reference's number and its source; none for a ref the references
+    lack."""
+    references = [
+        {"n": 1, "ref": "snapshot:38/price", "source": "snapshot 38, the price"},
+        {
+            "n": 3,
+            "ref": "fact:AAPL/revenue/2026",
+            "source": "FMP income statement, revenue, fiscal 2026",
+        },
+    ]
+    words = "[3] FMP income statement, revenue, fiscal 2026"
+    assert _research("source", "fact:AAPL/revenue/2026", references) == words
+    assert _research("source", " fact:AAPL/revenue/2026 ", references) == words
+    assert _research("source", "fact:AAPL/revenue/2027", references) is None
+    assert _research("source", "constructor", references) is None
+
+
+def test_footnote_marks() -> None:
+    """Footnote marks is off at first; a press turns the tab's class on and keeps 1 in the
+    browser, a second press 0; a reload with the item reads on. A store that throws reads off,
+    and the press does not throw: the marks last while the tab is open."""
+    mounted, pressed, again = _drive({}, [_mount(), _press(*MARKS), _press(*MARKS)])
+    assert "app-research--marks" not in _classes(mounted["tree"])
+    assert _one(mounted["tree"], "app-research__marks")["props"]["aria-pressed"] == "false"
+    assert "app-research--marks" in _classes(pressed["tree"])
+    assert _one(pressed["tree"], "app-research__marks")["props"]["aria-pressed"] == "true"
+    assert pressed["store"] == {KEY: "1"}
+    assert "app-research--marks" not in _classes(again["tree"]) and again["store"] == {KEY: "0"}
+
+    [reloaded] = _drive({KEY: "1"}, [_mount()])
+    assert "app-research--marks" in _classes(reloaded["tree"])
+
+    mounted, pressed = _drive("throws", [_mount(), _press(*MARKS)])
+    assert "app-research--marks" not in _classes(mounted["tree"])
+    assert pressed["threw"] is False
+    assert "app-research--marks" in _classes(pressed["tree"])
+
+    kept = _drive(
+        {},
+        [
+            {"do": "keep", "on": True},
+            {"do": "stored"},
+            {"do": "keep", "on": False},
+            {"do": "stored"},
+        ],
+    )
+    assert [(s["result"], s["store"]) for s in kept] == [
+        (None, {KEY: "1"}),
+        (True, {KEY: "1"}),
+        (None, {KEY: "0"}),
+        (False, {KEY: "0"}),
+    ]
+    stored, keep = _drive("throws", [{"do": "stored"}, {"do": "keep", "on": True}])
+    assert (stored["result"], stored["threw"], keep["threw"]) == (False, False, False)
+
+
+def test_the_marks_are_hidden_until_asked_for_and_a_cite_reads_as_the_text() -> None:
+    """A cite takes the text's colour, accent on hover and focus; its [n] is hidden until
+    Footnote marks is on; in an agent's table it carries no dotted line; in a card a table's
+    cells after the first are set right. The section in view is marked as the app marks a
+    selection."""
+    assert _rule(".app-research .fb-cite__n {") == "display: none;"
+    assert _rule(".app-research--marks .fb-cite__n {") == "display: inline;"
+    assert "color: inherit;" in _rule(".app-research .fb-cite {")
+    hover = _rule(".app-research .fb-cite:hover, .app-research .fb-cite:focus-visible {")
+    assert "color: var(--accent);" in hover and "border-bottom-color: var(--accent);" in hover
+    assert _rule(".app-research .fb-report__table .fb-cite {") == "border-bottom: 0;"
+    right = _rule(".app-research__card .fb-report__table :is(th, td):not(:first-child) {")
+    assert right == "text-align: right;"
+    on = _rule(".app-research__link.is-on {")
+    assert "background: var(--surface-selected);" in on
+    assert "border-left-color: var(--accent);" in on
+    assert "border-left: 2px solid" in _rule(".app-research__link {")
+    # the tab's rules name no colour of their own: each is a token of the design system
+    css = _static_file("index.html")
+    tab = css[css.index("  /* The company page's Research tab") :]
+    tab = tab[: tab.index("\n  /*", 10)]
+    assert ".app-research" in tab
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(", tab)
+
+
+# ------------------------------------------------------------------------------- the closed parts
+
+
+def test_the_closed_parts() -> None:
+    """After the sections, three details, closed: References with their count, Appendix A and
+    Appendix B with the glossary's count, each opened drawing what the report page draws (the
+    references, Appendix A's nine parts and the glossary, P.reportParts)."""
+    report = answers.answer()["report"]
+    report["references"] = _references(185)
+    parts = _research("closed", report)
+    assert [p["type"] for p in parts] == ["details"] * 3
+    assert [p["props"]["id"] for p in parts] == ["research-refs", "research-a", "research-b"]
+    assert all("open" not in p["props"] for p in parts)
+    heads = [
+        [text(e) for e in _one(p, "app-research__summary")["props"]["children"]] for p in parts
+    ]
+    assert heads == [
+        ["References", "185 sources, one for each cited number"],
+        ["Appendix A", "the audit of the records the report rests on"],
+        ["Appendix B", f"the glossary, {len(report['appendixB'])} terms"],
+    ]
+    for part, helper in zip(parts, ("references", "appendixA", "appendixB"), strict=True):
+        fold = _one(part, "app-research__fold")
+        assert fold["props"]["children"] == [node("reportParts." + helper, [report], *SCRIPTS)]
+    appendix = node("reportParts.appendixA", [report], *SCRIPTS)
+    assert [text(e) for e in elements(appendix) if e.get("type") == "h4"] == [
+        "Snapshot",
+        "Inputs",
+        "Bridge",
+        "Overrides",
+        "Secondary valuation",
+        "Guidance on file",
+        "Checks that ran",
+        "Versions",
+        "Classifier evidence",
+    ]
+
+
+def test_a_press_on_a_closed_part_s_name_opens_it() -> None:
+    """A press on a name in the list scrolls to its panel, and opens it where it is one of the
+    closed three."""
+    _, closed, section = _drive(
+        {},
+        [
+            _mount(),
+            _press("app-research__link", "Appendix A"),
+            _press("app-research__link", "Summary"),
+        ],
+    )
+    assert closed["touched"] == {"research-a": {"open": True, "scrolled": True}}
+    assert section["touched"] == {"research-s1": {"open": False, "scrolled": True}}
+
+
+# --------------------------------------------------------------------- the views and the states
+
+
+def test_the_view_is_report_first_and_a_press_shows_records() -> None:
+    """The tab opens on Report: the bar's line, its two controls, the list and the panels. A
+    press on Records puts its sentence in the line's place; Footnote marks, Download .md, the
+    list and the panels leave. Another report of the company keeps the view; another company's
+    tab opens on Report."""
+    other = answers.answer()
+    other["symbol"] = "BRK.B"
+    mounted, records, revision, company = _drive(
+        {},
+        [
+            _mount(),
+            _press("app-research__view", "Records"),
+            _mount(_report_19(), "land"),
+            _mount(other, "land"),
+        ],
+    )
+    views = classed(mounted["tree"], "app-research__view")
+    assert [(text(v), v["props"]["aria-selected"]) for v in views] == [
+        ("Report", "true"),
+        ("Records", "false"),
+    ]
+    assert [v["props"]["role"] for v in views] == ["tab", "tab"]
+    assert classed(mounted["tree"], "fb-stance")
+    assert classed(mounted["tree"], "app-research__marks")
+    assert classed(mounted["tree"], "app-research__download")
+    assert classed(mounted["tree"], "app-research__list")
+    assert len(classed(mounted["tree"], "app-research__sec")) == 15
+
+    for shows in (records, revision):
+        tree = shows["tree"]
+        assert [v["props"]["aria-selected"] for v in classed(tree, "app-research__view")] == [
+            "false",
+            "true",
+        ]
+        assert text(_one(tree, "app-research__line")) == RECORDS
+        for gone in (
+            "fb-stance",
+            "app-research__marks",
+            "app-research__download",
+            "app-research__list",
+            "app-research__sec",
+        ):
+            assert classed(tree, gone) == [], gone
+    assert classed(company["tree"], "app-research__list")
+
+
+def _report_19() -> dict[str, Any]:
+    """The answer of the tab on report 19, the company's first revision."""
+    answer = answers.answer()
+    answer["report"] |= {"id": 19, "revision": 1, "stance": "trim"}
+    return answer
+
+
+def test_a_company_with_no_report() -> None:
+    """With no report, the Report view draws No report yet. and nothing else: no line, no list,
+    no controls and no Request research of the tab's own, which the head has. Records is still
+    a view."""
+    answer = answers.answer() | {"report": None, "call": None, "reports": []}
+    mounted, records = _drive({}, [_mount(answer), _press("app-research__view", "Records")])
+    tree = mounted["tree"]
+    assert text(_one(tree, "app-research__none")) == "No report yet."
+    for gone in ("app-research__line", "app-research__list", "app-research__marks"):
+        assert classed(tree, gone) == [], gone
+    assert "Request research" not in text(tree)
+    assert "Download .md" not in text(tree)
+    assert [text(v) for v in classed(tree, "app-research__view")] == ["Report", "Records"]
+    assert text(_one(records["tree"], "app-research__line")) == RECORDS
+    assert classed(records["tree"], "app-research__none") == []
+
+
+def test_download_s_refusal() -> None:
+    """Download .md fetches the report's Markdown; a refusal draws one sentence under the bar,
+    the server's words in it, and another report of the company draws none."""
+    pressed, revision = _drive(
+        {},
+        [_mount(), _press(*DOWNLOAD), _mount(_report_19(), "land")],
+        {MARKDOWN: {"status": 500, "body": {"detail": "the export failed"}}},
+    )[1:]
+    assert pressed["fetched"] == [["GET", MARKDOWN]]
+    error = _one(pressed["tree"], "app-research__error")
+    assert text(error) == "The Markdown did not download: the export failed."
+    bar = _one(pressed["tree"], "app-research__top")
+    assert error in bar["props"]["children"]
+    assert classed(revision["tree"], "app-research__error") == []
+
+
+# --------------------------------------------------------------------------------- the page
+
+
+def test_the_tab_hangs_on_the_page_s_draw_keyed_on_the_company() -> None:
+    """draw.research(answer, detail) is the tab keyed on the company of its answer, so another
+    company's answer opens a new one; its scripts load in the page's order."""
+    drawn = node("companyPage.draw.research", [answers.ANSWER, page_answers.DETAIL], *SCRIPTS)
+    assert drawn["props"]["key"] == "LFOX"
+    assert drawn["props"]["answer"] == answers.ANSWER
+    assert drawn["props"]["detail"] == page_answers.DETAIL
+    html = _static_file("index.html")
+    scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
+    assert scripts.index("report_parts.js") == scripts.index("report.js") - 1
+    assert scripts.index("company_research.js") == scripts.index("company_research_text.js") + 1
