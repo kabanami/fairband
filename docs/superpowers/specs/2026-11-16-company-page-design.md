@@ -677,3 +677,61 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
   again through the pass-through when older than a day; the quote's row found through the
   observation; the yearly rate computed by the server; the report page losing the sentences too
   and gaining a link to the company page; a link only of an `http` or `https` address.
+- 2026-11-17, the build, Claude's call (10.3): both page reads carry a top-level `quote`,
+  `{price, change, changePercent, day}`, for the head, since the head is on every tab; the
+  overview's `trading` holds the eight money rows, the two volumes and the next earnings date.
+- 2026-11-17, the build, Claude's call (8.3, 10.3): `Last payment` is the latest payment date on
+  or before the day of the read, never a date still to come; the reader takes that day as an
+  argument.
+- 2026-11-17, the build, Claude's call (9): the consensus rows are cut at the newest fiscal year's
+  end plus the engine's drift of a 52/53-week year's end (`inputs_statements.YEAR_END_DRIFT`,
+  seven days), so a reported year whose estimate row is dated a few days after its end is not
+  drawn as a consensus year.
+- 2026-11-17, the build, Claude's call (8.3): the Key statistics list eight groups; "seven
+  groups" in sections 8 and 8.3 and in the plan was a miscount. With no fiscal year in the answer
+  the growth group's title is `Growth, last fiscal year`.
+- 2026-11-17, the build, Claude's call (14.1): money is written as the design system writes an
+  amount (`Fairband.formatMoney`), with no thousands separator, in every currency, so the page
+  agrees with the meter, the drawer and the screen; a count is grouped (`167,000`). The rule that
+  a date is monospaced covers a date drawn as a figure (a row's value, a column's cell); a date
+  inside a caption's words (`close 13 Nov 2026`, `data 14 Nov 2026`) keeps the caption's face, as
+  in the mockup the founder approved. A fiscal year is a row's name, in body type.
+- 2026-11-17, the build, Claude's call (4, 14.1): a growth rate and a yearly rate are rates, not
+  changes: no sign when positive, the minus when negative, as the mockup draws them. The sign
+  rule covers the price's change: the head's, the chart's lead and the Price change groups.
+- 2026-11-17, the build, Claude's call (7.2): the stamp shows the moat in force, the counting
+  review's where it has a value, else the snapshot's. The clause "as the screen's row reads it"
+  was wrong: the screen's row reads the snapshot's moat alone, so the stamp and the screen's Moat
+  column can differ once a review changes the moat.
+- 2026-11-17, the build, Claude's call (7.5): the company page reads again when a refresh ends
+  while it shows, as the report page does. A detail read that fails for a reason other than a 404
+  draws the tab's failure sentence; a 404 draws the server's own.
+- 2026-11-17, the build, Claude's call (7.2): the head's watchlists button is disabled until the
+  page knows the company's memberships (the screen's row, or the loaded lists), so the popup can
+  never replace them with one list.
+- 2026-11-17, the build, Claude's call (10.1): the pass-through's `news` kind stores an answer
+  that is not a list as unusable, as the fetch does, since the two share a key at sixty stories.
+  `fetch.page_params(endpoint, symbol)` gives the params the fetch stores for a page endpoint.
+- 2026-11-17, the build, Claude's call (10.5): where the news pass-through answers with a payload
+  that is not a list, or with a body that is not JSON, the stored stories stay and the note reads
+  `newer news did not load: the answer held no stories`.
+- 2026-11-17, the build, Claude's call (8.4): the chart is keyed on the company, so each company
+  opens at 1Y; the year-to-date range includes 31 December of the year before, as the mockup's
+  filter does; the x ticks are thinned counting from January, so that each January shows.
+- 2026-11-17, the build, Claude's call (8.2): the basis chip is `reviewed` exactly where the
+  meter draws a review's or a secondary valuation's band (`bandBasis`), and the four levels come
+  from one builder the drawer shares (`levelRows`). A refused row whose review or secondary
+  valuation gives a band draws that band and no refusal sentence, on the page and in the drawer.
+- 2026-11-17, the build, Claude's call (11.1): `notesControl(symbol, count, after)` takes the read
+  to run again after a note is taken. The line `on override N` that Details drew after a note's
+  chip is not drawn in the box: its words are in neither the Words table nor this section.
+- 2026-11-17, the build, Claude's call (11): the drawer's `Company page` button is the default
+  size, as Request research beside it is. The code of the drawer's removed parts is in git at
+  commit 6da1b0f, for whoever answers B-220.
+- 2026-11-17, the build, Claude's call (13): the `Company page` link stands at the right end of
+  the report page's head, after its figures.
+- 2026-11-17, the build, Claude's call (12): Space on the focused ticker link is not stopped, as
+  the section names Enter alone, so it opens the drawer as Space on the row does.
+- 2026-11-17, the build, Claude's call: the plan
+  (`docs/superpowers/plans/2026-11-16-company-page-plan.md`) is not rewritten. Its Task 4 and
+  Task 5 blocks give the shapes as planned; this log gives them as built.
