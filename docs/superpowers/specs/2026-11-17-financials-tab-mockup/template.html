@@ -1,0 +1,631 @@
+<title>Fairband Financials Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* The app's own look, dark first as the app is: its header, a company's head and tabs, and under
+     them one wide block, the Financials tab: a chart of the chosen line over a table of periods. */
+  :root {
+    --surface: #121417; --surface-sunken: #0d0f11; --surface-raised: #191c20; --surface-hover: #202429;
+    --surface-selected: #15262a; --hairline: #2a2f35; --border: #636b76; --ink: #e8eaed;
+    --ink-muted: #a3abb5; --ink-faint: #7b838e; --ink-inverse: #0d0f11; --accent: #4bc0b0;
+    --on-accent: #06201d; --phase-4: #c4bb5c; --chart-grid: #22272c; --chart-neg: #c2603f;
+    --series-1: #4bc0b0; --series-2: #437dde; --series-3: #f3c530; --series-4: #c05296;
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.62);
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --surface: #fbfcfd; --surface-sunken: #f2f4f6; --surface-raised: #ffffff; --surface-hover: #eef1f4;
+      --surface-selected: #e4f3f1; --hairline: #e2e6ea; --border: #7d858f; --ink: #11161b;
+      --ink-muted: #4d555f; --ink-faint: #656e7a; --ink-inverse: #ffffff; --accent: #0f7a6e;
+      --on-accent: #ffffff; --phase-4: #76681a; --chart-grid: #eceff2; --chart-neg: #a34524;
+    --series-1: #0f7a6e; --series-2: #1b3d9c; --series-3: #b5820c; --series-4: #c562b2;
+      --shadow: 0 10px 28px rgba(17, 22, 27, 0.14);
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --surface: #fbfcfd; --surface-sunken: #f2f4f6; --surface-raised: #ffffff; --surface-hover: #eef1f4;
+    --surface-selected: #e4f3f1; --hairline: #e2e6ea; --border: #7d858f; --ink: #11161b;
+    --ink-muted: #4d555f; --ink-faint: #656e7a; --ink-inverse: #ffffff; --accent: #0f7a6e;
+    --on-accent: #ffffff; --phase-4: #76681a; --chart-grid: #eceff2; --chart-neg: #a34524;
+    --series-1: #0f7a6e; --series-2: #1b3d9c; --series-3: #b5820c; --series-4: #c562b2;
+    --shadow: 0 10px 28px rgba(17, 22, 27, 0.14);
+    color-scheme: light;
+  }
+  body { background: var(--surface); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 20px; }
+  .gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .title { font-size: 20px; line-height: 26px; font-weight: 600; margin: 0; }
+  .heading { font-size: 15px; line-height: 20px; font-weight: 600; margin: 0; }
+  .control { font-size: 13px; line-height: 16px; font-weight: 500; }
+  .label { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+  .caption { font-size: 11px; line-height: 15px; }
+  .figure { font-family: var(--mono); font-size: 14px; line-height: 20px; }
+  .figure-sm { font-family: var(--mono); font-size: 12px; line-height: 16px; }
+  .figure-lg { font-family: var(--mono); font-size: 20px; line-height: 26px; font-weight: 500; }
+  .ticker { font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 600; letter-spacing: 0.04em; }
+  .muted { color: var(--ink-muted); }
+  .faint { color: var(--ink-faint); }
+
+  .mock { margin: 0; padding-block: 8px; background: var(--surface-sunken); color: var(--ink-muted); border-bottom: 1px solid var(--hairline); }
+
+  /* the app's header, drawn for its place only */
+  .hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; min-height: 44px; padding-block: 6px;
+    background: var(--surface-raised); border-bottom: 1px solid var(--hairline); }
+  .hdr__name { font-weight: 600; font-size: 16px; display: inline-flex; align-items: center; gap: 8px; }
+  .hdr__mark { width: 20px; height: 20px; }
+  .hdr__nav { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-muted); }
+  .hdr__right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .field { box-sizing: border-box; width: 220px; max-width: 100%; padding: 4px 8px; font-family: var(--sans); font-size: 13px;
+    line-height: 16px; color: var(--ink-faint); background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 5px; }
+  .btn { display: inline-flex; align-items: center; padding: 4px 10px; color: var(--ink); background: var(--surface-raised);
+    border: 1px solid var(--border); border-radius: 5px; white-space: nowrap; }
+  .btn--primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+  .btn--quiet { color: var(--accent); border-color: transparent; background: none; }
+  .btn--lg { padding: 8px 12px; }
+
+  .page { padding-block: 16px 40px; max-width: 1760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+  .head__id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .head__logo { width: 40px; height: 40px; flex: none; border-radius: 3px; background: #ffffff; object-fit: contain; }
+  .head__line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .head__side { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+  .head__quote { display: flex; align-items: baseline; gap: 12px; }
+  .head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .phase { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; background: var(--surface-raised); }
+  .phase__n { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; padding: 0 4px; font-weight: 700;
+    color: var(--ink-inverse); background: var(--phase-4); }
+  .phase__label { display: inline-flex; align-items: center; padding: 0 4px; }
+  .moat { display: inline-flex; align-items: center; padding: 0 4px; color: var(--ink-muted); border: 1px solid currentColor; border-radius: 3px; }
+
+  .tabs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; border-bottom: 1px solid var(--hairline); }
+  .tab { padding: 8px 12px; color: var(--ink-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.is-on { color: var(--ink); border-bottom-color: var(--accent); }
+  .tabs__asof { margin: 0 0 8px auto; color: var(--ink-faint); }
+
+  .panel { min-width: 0; padding: 16px; background: var(--surface-raised); border: 1px solid var(--hairline); border-radius: 8px; }
+  .fin__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+  .fin__opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hairline); border-radius: 5px; overflow: hidden; }
+  .seg button { appearance: none; margin: 0; padding: 6px 12px; font: inherit; font-size: 13px; line-height: 16px; font-weight: 500;
+    color: var(--ink-muted); background: none; border: 0; border-right: 1px solid var(--hairline); cursor: pointer; }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { color: var(--ink); background: var(--surface-hover); }
+  .seg button[aria-pressed="true"], .seg button[aria-selected="true"] { color: var(--ink); background: var(--surface-selected); }
+  .seg button:focus-visible, .fin__table tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .chart { position: relative; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+  .chart__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-height: 28px; }
+  .chart__plot { display: block; width: 100%; margin-top: 4px; }
+  .chart__plot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chart__grid { stroke: var(--chart-grid); stroke-width: 1; }
+  .chart__zero, .chart__cross { stroke: var(--border); stroke-width: 1; }
+  .chart__bar.is-neg { fill: var(--chart-neg); }
+  .chart__bar.is-dim { opacity: 0.45; }
+  .chart__line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart__mark { stroke: var(--surface-raised); stroke-width: 2; }
+  .chart__tick { fill: var(--ink-faint); font-family: var(--mono); font-size: 11px; }
+  .chart__unit { fill: var(--ink-faint); font-family: var(--sans); font-size: 11px; }
+  .chart__none { margin: 12px 0 0; color: var(--ink-faint); }
+  .fill-0 { fill: var(--series-1); background: var(--series-1); } .stroke-0 { stroke: var(--series-1); }
+  .fill-1 { fill: var(--series-2); background: var(--series-2); } .stroke-1 { stroke: var(--series-2); }
+  .fill-2 { fill: var(--series-3); background: var(--series-3); } .stroke-2 { stroke: var(--series-3); }
+  .fill-3 { fill: var(--series-4); background: var(--series-4); } .stroke-3 { stroke: var(--series-4); }
+  .chart__tip { position: absolute; z-index: 2; padding: 4px 8px; pointer-events: none; white-space: nowrap; color: var(--ink);
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 5px; box-shadow: var(--shadow); }
+  .tip__when { color: var(--ink-muted); }
+  .tip__row { display: flex; align-items: center; gap: 6px; font-family: var(--sans); }
+  .tip__row .figure-sm { margin-left: auto; padding-left: 12px; }
+
+  /* the lines on the chart, each a swatch, a name, its newest figure and a button that takes it off */
+  .dot { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 2px; }
+  .dot--line { border-radius: 50%; }
+  .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding: 0; list-style: none; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 2px 2px 8px; min-height: 22px; background: var(--surface);
+    border: 1px solid var(--hairline); border-radius: 5px; }
+  .chip:not(:has(button)) { padding-right: 8px; }
+  .chip.is-off { color: var(--ink-faint); }
+  .chip.is-off .dot { opacity: 0.4; }
+  .chip__x { appearance: none; width: 22px; height: 22px; margin: 0; padding: 0; font: inherit; font-size: 15px; line-height: 1;
+    color: var(--ink-faint); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+  .chip__x:hover { color: var(--ink); background: var(--surface-hover); }
+  .chip__x:focus-visible, .add:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .fin__meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin: 16px 0 4px; color: var(--ink-faint); }
+  .fin__sub { margin: 20px 0 4px; }
+  .fin__scroll { overflow-x: auto; }
+  .fin__table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+  .fin__table th, .fin__table td { padding: 5px 0 5px 16px; text-align: right; border-bottom: 1px solid var(--hairline); }
+  .fin__table thead th { vertical-align: bottom; font-weight: 500; color: var(--ink-muted); }
+  .fin__table thead .caption { display: block; color: var(--ink-faint); font-weight: 400; }
+  .fin__table th:first-child, .fin__table td:first-child { position: sticky; left: 0; z-index: 1; min-width: 232px; padding-left: 8px;
+    text-align: left; font-family: var(--sans); font-weight: 400; background: var(--surface-raised); color: var(--ink-muted); }
+  .fin__table tbody tr { cursor: pointer; }
+  .fin__table tbody tr:hover td, .fin__table tbody tr:hover th { background: var(--surface-hover); }
+  .fin__table tr.is-on td, .fin__table tr.is-on th { background: var(--surface-selected); }
+  .fin__table tr.is-on th:first-child { box-shadow: inset 2px 0 0 var(--row, var(--accent)); color: var(--ink); }
+  .add { appearance: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+    margin: -1px 4px -1px -4px; padding: 0; vertical-align: middle; font-family: var(--mono); font-size: 13px; line-height: 1;
+    color: var(--ink-faint); background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+  .fin__table tbody tr:hover .add:not(:disabled), .add:focus-visible { color: var(--ink); border-color: var(--border); }
+  .add:disabled { opacity: 0.35; cursor: not-allowed; }
+  .fin__table tr.is-total th:first-child, .fin__table tr.is-total td { color: var(--ink); font-weight: 600; }
+  .fin__table tr.is-sub th:first-child { padding-left: 24px; }
+  .fin__table tr.is-sec { cursor: default; }
+  .fin__table tr.is-sec th { padding-top: 16px; color: var(--ink-faint); background: var(--surface-raised); border-bottom-color: var(--border); }
+  .fin__table tr.is-sec:hover th { background: var(--surface-raised); }
+  .fin__table td.is-nil { color: var(--ink-faint); }
+  @media (width < 700px) {
+    .fin__table th:first-child, .fin__table td:first-child { min-width: 168px; white-space: normal; }
+  }
+</style>
+
+<p class="mock caption gutter">A mockup of the Financials tab. Apple's figures are real: the statements Fairband stored on 17 Nov 2026, and FMP's ratios by fiscal year. Only the tab's own controls work: press a line to chart it alone, or press its + to add it to the chart. Millions and Billions change the unit of the amounts. The chart opens on three lines as an example; the page itself would open on Revenue alone.</p>
+
+<header class="hdr gutter">
+  <span class="hdr__name"><svg class="hdr__mark" viewBox="0 0 20 20" aria-hidden="true"><rect x="9" y="1" width="2" height="18" fill="#d9a23f"/><rect x="2" y="4" width="16" height="3" fill="#4bc0b0"/><rect x="4" y="9" width="12" height="3" fill="#7fb8af"/><rect x="2" y="14" width="16" height="3" fill="#4bc0b0"/></svg>Fairband</span>
+  <nav class="hdr__nav control" aria-label="Views"><span>Screen</span><span>Groups</span><span>Watchlists</span><span>Methodology</span><span>Settings</span><span>Inbox</span></nav>
+  <div class="hdr__right">
+    <span class="field">Ticker or company</span>
+    <span class="btn control">Refresh prices</span><span class="btn btn--primary control">Refresh all</span>
+    <span class="caption faint">engine ran 17 Nov 2026, 07:26</span>
+  </div>
+</header>
+
+<main class="page gutter">
+  <section class="head" id="head"></section>
+  <nav class="tabs" aria-label="The company page's tabs">
+    <span class="tab control">Overview</span><span class="tab control is-on">Financials</span><span class="tab control">Estimates</span><span class="tab control">Research</span>
+    <p class="caption tabs__asof">data 17 Nov 2026</p>
+  </nav>
+  <section class="panel" aria-label="Financials">
+    <div class="fin__bar">
+      <div class="seg" role="tablist" aria-label="Statement" id="kinds"></div>
+      <div class="fin__opts"><div class="seg" role="group" aria-label="Unit of the amounts" id="scales"></div><div class="seg" role="group" aria-label="Period" id="periods"></div></div>
+    </div>
+    <div class="chart" id="chart">
+      <div class="chart__head" id="chart-head"></div>
+      <svg class="chart__plot" id="plot" role="img" tabindex="0"></svg>
+      <p class="chart__none caption" id="none" hidden></p>
+      <div class="chart__tip figure-sm" id="tip" hidden></div>
+    </div>
+    <div id="tables"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var DATA = /*__DATA__*/null;
+  var KINDS = [['income', 'Income statement'], ['balance', 'Balance sheet'], ['cashflow', 'Cash flow'], ['segments', 'Segments'], ['ratios', 'Ratios']];
+  var MAX = 4; /* the lines one chart holds */
+  /* A pick is one line on the chart: its sub-tab, its table there, its label and its colour slot.
+     The picks stay as the reader moves between sub-tabs, so a statement line and a ratio can meet. */
+  var state = {
+    kind: 'income', period: 'annual',
+    scale: 'm', /* m: amounts in millions, b: in billions */
+    picks: [
+      { kind: 'income', table: 0, label: 'Revenue', slot: 0 },
+      { kind: 'income', table: 0, label: 'Net income', slot: 1 },
+      { kind: 'ratios', table: 0, label: 'Operating', slot: 2 },
+    ],
+  };
+  var esc = function (text) { return String(text).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var $ = function (id) { return document.getElementById(id); };
+  var held = function (v) { return v !== null && v !== undefined; };
+  /* The reader's unit stays in this browser; a browser that keeps nothing shows millions. */
+  try { if (window.localStorage.getItem('fin-scale') === 'b') state.scale = 'b'; } catch (e) { /* no store */ }
+
+  /* ---- words and figures */
+  function grouped(value, digits) {
+    return value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }).replace('-', '−');
+  }
+  /* A row's unit: m millions of the currency, p per share, n millions of shares, % x r d as given. */
+  function unitOf(row) { return row.unit || (row.kind === 'p' ? 'p' : row.kind === 'n' ? 'n' : 'm'); }
+  /* An amount draws as bars from zero; a rate draws as a line on an axis that fits its range. */
+  function formOf(unit) { return unit === 'm' || unit === 'p' || unit === 'n' ? 'bars' : 'line'; }
+  function shown(value, unit) {
+    if (!held(value) || (value === 0 && (unit === 'm' || unit === 'n'))) return '—';
+    if (unit === '%') return grouped(value * 100, 1) + '%';
+    if (unit === 'x') return grouped(value, 1) + 'x';
+    if (unit === 'r' || unit === 'p') return grouped(value, 2);
+    if (state.scale === 'b' && (unit === 'm' || unit === 'n')) return grouped(value / 1000, 2);
+    return grouped(value, 0);
+  }
+  function tick(value, unit, span) {
+    if (unit === '%') return grouped(value * 100, span < 0.1 ? 1 : 0) + '%';
+    if (unit === 'x') return grouped(value, span < 5 ? 1 : 0) + 'x';
+    if (unit === 'r' || unit === 'p') return grouped(value, span < 5 ? 2 : span < 50 ? 1 : 0);
+    if (unit === 'd') return grouped(value, 0);
+    if (Math.abs(span) >= 5000) return grouped(value / 1000, 0) + 'B';
+    return grouped(value, 0) + 'M';
+  }
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function day(iso) { var p = iso.split('-'); return Number(p[2]) + ' ' + MONTHS[Number(p[1]) - 1] + ' ' + p[0]; }
+  function unitWords(unit) {
+    var currency = DATA.income.annual.currency;
+    var big = state.scale === 'b' ? 'billions' : 'millions';
+    return { m: currency + ', ' + big, p: currency + ' a share', n: big + ' of shares', '%': 'percent', x: 'multiple', r: 'ratio', d: 'days' }[unit];
+  }
+
+  /* ---- a sub-tab's tables, each a title, its columns and rows. Segments and ratios are by fiscal year only. */
+  function yearly(kind) { return kind === 'segments' || kind === 'ratios'; }
+  function tablesOf(kind, period) {
+    if (kind === 'segments') return [{ title: 'Revenue by product', t: DATA.product }, { title: 'Revenue by region', t: DATA.region }];
+    if (kind === 'ratios') return [{ title: null, t: DATA.ratios }];
+    return [{ title: null, t: DATA[kind][period] }];
+  }
+  /* A line's name away from its table: a ratio takes its section's word, a segment says what it splits. */
+  function nameOf(kind, rows, row) {
+    if (kind === 'segments') return 'Revenue: ' + row.label;
+    if (kind !== 'ratios') return row.label;
+    var head = '';
+    for (var i = rows.indexOf(row); i >= 0; i--) { if (rows[i].kind === 'h') { head = rows[i].label; break; } }
+    if (head === 'Margins') return row.label + ' margin';
+    if (head === 'Per share') return row.label + ' a share';
+    if (head === 'Dividends') return 'Dividend ' + row.label.toLowerCase();
+    return row.label;
+  }
+  function same(pick, kind, table, label) { return pick.kind === kind && pick.table === table && pick.label === label; }
+  function pickAt(kind, table, label) {
+    for (var i = 0; i < state.picks.length; i++) { if (same(state.picks[i], kind, table, label)) return state.picks[i]; }
+    return null;
+  }
+  /* A pick as the chart reads it in the period shown: its row and columns, or why it does not draw. */
+  function seriesOf(pick) {
+    var off = yearly(pick.kind) && state.period === 'quarter' ? 'by year only' : null;
+    var t = tablesOf(pick.kind, off ? 'annual' : state.period)[pick.table].t;
+    var row = t.rows.filter(function (r) { return r.kind !== 'h' && r.label === pick.label; })[0];
+    if (!row) {
+      t = tablesOf(pick.kind, 'annual')[pick.table].t;
+      row = t.rows.filter(function (r) { return r.kind !== 'h' && r.label === pick.label; })[0];
+      off = 'no figures by quarter';
+    }
+    var unit = unitOf(row);
+    var at = {};
+    t.columns.forEach(function (c, i) { at[c.label] = row.values[i]; });
+    return { pick: pick, slot: pick.slot, name: nameOf(pick.kind, t.rows, row), unit: unit, form: formOf(unit), columns: t.columns, at: at, off: off };
+  }
+
+  /* ---- the controls */
+  function controls() {
+    $('kinds').innerHTML = KINDS.map(function (k) {
+      return '<button type="button" role="tab" aria-selected="' + (k[0] === state.kind) + '" data-kind="' + k[0] + '">' + k[1] + '</button>';
+    }).join('');
+    $('periods').hidden = yearly(state.kind);
+    $('periods').innerHTML = [['annual', 'Annual'], ['quarter', 'Quarterly']].map(function (p) {
+      return '<button type="button" aria-pressed="' + (p[0] === state.period) + '" data-period="' + p[0] + '">' + p[1] + '</button>';
+    }).join('');
+    $('scales').hidden = state.kind === 'ratios'; /* no row of that table is an amount */
+    $('scales').innerHTML = [['m', 'Millions'], ['b', 'Billions']].map(function (p) {
+      return '<button type="button" aria-pressed="' + (p[0] === state.scale) + '" data-scale="' + p[0] + '">' + p[1] + '</button>';
+    }).join('');
+  }
+  $('kinds').addEventListener('click', function (event) {
+    var kind = event.target.getAttribute('data-kind');
+    if (!kind) return;
+    state.kind = kind;
+    if (yearly(kind)) state.period = 'annual'; /* the chart and the table always show one period */
+    draw();
+  });
+  $('periods').addEventListener('click', function (event) {
+    var period = event.target.getAttribute('data-period');
+    if (period) { state.period = period; draw(); }
+  });
+
+  $('scales').addEventListener('click', function (event) {
+    var scale = event.target.getAttribute('data-scale');
+    if (!scale) return;
+    state.scale = scale;
+    try { window.localStorage.setItem('fin-scale', scale); } catch (e) { /* no store */ }
+    draw();
+    var again = document.querySelector('[data-scale="' + scale + '"]');
+    if (again) again.focus({ preventScroll: true });
+  });
+
+  /* ---- the tables: a press on a row charts it alone, a press on its + adds it to the chart or takes it off */
+  function tableHtml(found, index) {
+    var t = found.t;
+    var units = state.kind === 'ratios' ? 'as each row says' : unitWords('m') + (state.kind === 'income' ? ', except per share' : '');
+    var full = state.picks.length >= MAX;
+    var head = '<tr><th scope="col" class="caption">' + esc(units) + '</th>' + t.columns.map(function (c) {
+      var end = day(c.end).replace(/ \d{4}$/, '');
+      return '<th scope="col" class="figure-sm">' + esc(c.label) + '<span class="caption">' + esc(end) + '</span></th>';
+    }).join('') + '</tr>';
+    var body = t.rows.map(function (row, j) {
+      if (row.kind === 'h') {
+        return '<tr class="is-sec"><th scope="colgroup" colspan="' + (t.columns.length + 1) + '" class="label">' + esc(row.label) + '</th></tr>';
+      }
+      var unit = unitOf(row);
+      var at = index + ':' + j;
+      var pick = pickAt(state.kind, index, row.label);
+      var name = nameOf(state.kind, t.rows, row);
+      var cls = (row.kind === 't' ? 'is-total ' : '') + (row.kind === 's' ? 'is-sub ' : '') + (pick ? 'is-on' : '');
+      var add = pick
+        ? '<button type="button" class="add" data-add="' + at + '" aria-pressed="true" aria-label="Take ' + esc(name) + ' off the chart" title="Take off the chart">' +
+          '<span class="dot fill-' + pick.slot + (formOf(unit) === 'line' ? ' dot--line' : '') + '"></span></button>'
+        : '<button type="button" class="add" data-add="' + at + '" aria-pressed="false" aria-label="Add ' + esc(name) + ' to the chart" title="' +
+          (full ? 'The chart holds ' + MAX + ' lines. Take one off first.' : 'Add to the chart') + '"' + (full ? ' disabled' : '') + '>+</button>';
+      return '<tr class="' + cls + '"' + (pick ? ' style="--row: var(--series-' + (pick.slot + 1) + ')"' : '') + ' tabindex="0" data-at="' + at + '" aria-selected="' + !!pick + '">' +
+        '<th scope="row">' + add + esc(row.label) + '</th>' + row.values.map(function (v) {
+          var text = shown(v, unit);
+          return '<td class="figure' + (text === '—' ? ' is-nil' : '') + '">' + text + '</td>';
+        }).join('') + '</tr>';
+    }).join('');
+    return (found.title ? '<h3 class="heading fin__sub">' + esc(found.title) + '</h3>' : '') +
+      '<div class="fin__scroll"><table class="fin__table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+  }
+  function rowAt(at) {
+    var p = at.split(':');
+    return { table: Number(p[0]), label: tablesOf(state.kind, state.period)[Number(p[0])].t.rows[Number(p[1])].label };
+  }
+  function freeSlot() {
+    for (var s = 0; s < MAX; s++) { if (!state.picks.some(function (p) { return p.slot === s; })) return s; }
+    return 0;
+  }
+  function drop(pick) {
+    state.picks = state.picks.filter(function (p) { return p !== pick; });
+    if (state.picks.length === 1) state.picks[0].slot = 0; /* one line alone wears the one series hue */
+  }
+  function press(target, add) {
+    var button = target.closest ? target.closest('button[data-add]') : null;
+    var tr = target.closest ? target.closest('tr[data-at]') : null;
+    if (!tr) return;
+    var at = tr.getAttribute('data-at');
+    var row = rowAt(at);
+    var pick = pickAt(state.kind, row.table, row.label);
+    if (button || add) {
+      if (pick) { if (state.picks.length > 1) drop(pick); }
+      else if (state.picks.length < MAX) state.picks.push({ kind: state.kind, table: row.table, label: row.label, slot: freeSlot() });
+    } else {
+      state.picks = [{ kind: state.kind, table: row.table, label: row.label, slot: 0 }];
+    }
+    draw();
+    var again = document.querySelector(button ? 'button[data-add="' + at + '"]' : 'tr[data-at="' + at + '"]');
+    if (again) again.focus({ preventScroll: true });
+  }
+  $('tables').addEventListener('click', function (event) { press(event.target, event.ctrlKey || event.metaKey); });
+  $('tables').addEventListener('keydown', function (event) {
+    if (event.target.closest('button')) return; /* a button answers Enter and Space with its own click */
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); press(event.target, false); }
+  });
+
+  /* ---- the chart: the lines of one unit share a panel and one scale, each other unit takes a panel
+     of its own under it, and every panel stands on the same periods. No panel has two scales. */
+  function niceStep(span, count) {
+    var raw = span / count;
+    var power = Math.pow(10, Math.floor(Math.log10(raw)));
+    var unit = Number((raw / power).toPrecision(12));
+    return (unit > 5 ? 10 : unit > 2 ? 5 : unit > 1 ? 2 : 1) * power;
+  }
+  function scale(values, form, count) {
+    var top = Math.max.apply(null, values);
+    var low = Math.min.apply(null, values);
+    if (form === 'bars') { top = Math.max(0, top); low = Math.min(0, low); }
+    if (top === low) { top += Math.abs(top) * 0.1 || 1; if (form !== 'bars') low -= Math.abs(low) * 0.1 || 1; }
+    var step = niceStep(top - low, count);
+    return { step: step, min: Math.floor(low / step + 1e-9) * step, max: Math.ceil(top / step - 1e-9) * step };
+  }
+  var AREA = [160, 120, 100, 90]; /* a panel's plot height by the number of panels */
+  var geo = null;
+  function headHtml(all, drawn, cols) {
+    if (all.length === 1 && drawn.length === 1) {
+      var s = drawn[0];
+      var newest = s.at[cols[cols.length - 1].label];
+      return '<h2 class="heading" id="chart-name">' + esc(s.name) + '</h2><span class="figure-lg" id="chart-value">' + shown(newest, s.unit) + '</span>' +
+        '<span class="caption faint" id="chart-note">' + esc(cols[cols.length - 1].label + ', ' + unitWords(s.unit)) + '</span>';
+    }
+    return '<ul class="chips" aria-label="The lines on the chart">' + all.map(function (s, i) {
+      var value = s.off ? '<span class="caption">' + s.off + '</span>'
+        : '<span class="figure-sm">' + shown(s.at[cols[cols.length - 1].label], s.unit) + '</span>';
+      return '<li class="chip control' + (s.off ? ' is-off' : '') + '"><span class="dot fill-' + s.slot + (s.form === 'line' ? ' dot--line' : '') + '"></span>' +
+        '<span>' + esc(s.name) + '</span>' + value +
+        (all.length > 1 ? '<button type="button" class="chip__x" data-drop="' + i + '" aria-label="Take ' + esc(s.name) + ' off the chart" title="Take off the chart">×</button>' : '') + '</li>';
+    }).join('') + '</ul>' + (cols ? '<span class="caption faint" id="chart-note">figures for ' + esc(cols[cols.length - 1].label) + '</span>' : '');
+  }
+  function chart() {
+    var all = state.picks.map(seriesOf);
+    var drawn = all.filter(function (s) { return !s.off; });
+    var svg = $('plot');
+    $('tip').hidden = true;
+    if (!drawn.length) {
+      geo = null;
+      $('chart-head').innerHTML = headHtml(all, drawn, null);
+      svg.style.display = 'none';
+      $('none').hidden = false;
+      $('none').textContent = 'These lines have figures by fiscal year only. Choose Annual, or press a line in the table.';
+      return;
+    }
+    svg.style.display = '';
+    $('none').hidden = true;
+    var cols = drawn[0].columns;
+    drawn.forEach(function (s) { s.values = cols.map(function (c) { return held(s.at[c.label]) ? s.at[c.label] : null; }); });
+    $('chart-head').innerHTML = headHtml(all, drawn, cols);
+    var panels = [];
+    drawn.forEach(function (s) {
+      var panel = panels.filter(function (p) { return p.unit === s.unit; })[0];
+      if (!panel) { panel = { unit: s.unit, form: s.form, series: [] }; panels.push(panel); }
+      panel.series.push(s);
+    });
+    var solo = drawn.length === 1;
+    var W = Math.max(svg.clientWidth || 900, 280);
+    var m = { l: 6, r: 58, t: 18, b: 22 };
+    var area = AREA[panels.length - 1];
+    var y0 = 0;
+    panels.forEach(function (p) { p.top = y0 + m.t; p.bottom = p.top + area; y0 = p.bottom + 8; });
+    var H = panels[panels.length - 1].bottom + m.b;
+    var band = (W - m.l - m.r) / cols.length;
+    var out = '';
+    panels.forEach(function (p) {
+      var values = [];
+      p.series.forEach(function (s) { values = values.concat(s.values.filter(held)); });
+      if (!values.length) values = [0];
+      var sc = scale(values, p.form, area >= 150 ? 4 : 3);
+      p.y = function (v) { return p.top + (sc.max - v) / (sc.max - sc.min) * area; };
+      if (!solo) out += '<text class="chart__unit" x="' + m.l + '" y="' + (p.top - 6) + '">' + esc(unitWords(p.unit)) + '</text>';
+      for (var g = sc.min; g <= sc.max + sc.step / 2; g += sc.step) {
+        var zero = Math.abs(g) < sc.step / 1e6;
+        var gy = Math.round(p.y(g)) + 0.5;
+        out += '<line class="' + (zero ? 'chart__zero' : 'chart__grid') + '" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + gy + '" y2="' + gy + '"/>';
+        out += '<text class="chart__tick" x="' + (W - m.r + 8) + '" y="' + (gy + 4) + '">' + tick(zero ? 0 : g, p.unit, sc.max - sc.min) + '</text>';
+      }
+      if (p.form === 'bars') {
+        var k = p.series.length;
+        var group = Math.min(band * 0.72, k === 1 ? 44 : 28 * k);
+        var width = Math.max((group - 2 * (k - 1)) / k, 1.5);
+        p.series.forEach(function (s, q) {
+          s.values.forEach(function (v, i) {
+            if (v === null) return;
+            var x = m.l + band * (i + 0.5) - group / 2 + q * (width + 2);
+            var base = p.y(0);
+            var y1 = p.y(v);
+            var r = Math.min(4, Math.max(Math.abs(y1 - base), 1), width / 2);
+            var d = v >= 0 ? 1 : -1;
+            if (Math.abs(y1 - base) < 1) y1 = base - d;
+            out += '<path class="chart__bar ' + (solo && v < 0 ? 'is-neg' : 'fill-' + s.slot) + '" data-i="' + i + '" d="M' + x + ',' + base + ' V' + (y1 + d * r) +
+              ' Q' + x + ',' + y1 + ' ' + (x + r) + ',' + y1 + ' H' + (x + width - r) + ' Q' + (x + width) + ',' + y1 + ' ' + (x + width) + ',' + (y1 + d * r) + ' V' + base + ' Z"/>';
+          });
+        });
+      } else {
+        p.series.forEach(function (s) {
+          var d = '';
+          var pen = false;
+          var last = null;
+          s.values.forEach(function (v, i) {
+            if (v === null) { pen = false; return; }
+            var x = m.l + band * (i + 0.5);
+            var alone = !pen && (i === s.values.length - 1 || s.values[i + 1] === null);
+            if (alone && i < s.values.length - 1) out += '<circle class="fill-' + s.slot + '" cx="' + x + '" cy="' + p.y(v) + '" r="2.5"/>';
+            d += (pen ? ' L' : ' M') + x + ',' + p.y(v);
+            pen = true;
+            last = [x, p.y(v)];
+          });
+          out += '<path class="chart__line stroke-' + s.slot + '" d="' + d.trim() + '"/>';
+          if (last) out += '<circle class="chart__mark fill-' + s.slot + '" cx="' + last[0] + '" cy="' + last[1] + '" r="5"/>';
+        });
+      }
+    });
+    var widest = Math.max.apply(null, cols.map(function (c) { return c.label.length; })) * 6.8 + 10;
+    var every = Math.max(1, Math.ceil(widest / band));
+    cols.forEach(function (c, i) {
+      if ((cols.length - 1 - i) % every !== 0) return;
+      out += '<text class="chart__tick" text-anchor="middle" x="' + (m.l + band * (i + 0.5)) + '" y="' + (H - 6) + '">' + esc(c.label) + '</text>';
+    });
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.style.height = H + 'px';
+    svg.setAttribute('aria-label', drawn.map(function (s) { return s.name + ' in ' + unitWords(s.unit); }).join('; ') + ', ' + cols[0].label + ' to ' +
+      cols[cols.length - 1].label + '. The left and right arrow keys read each period. The table below holds every figure.');
+    svg.innerHTML = out + '<g id="over"></g>';
+    geo = { W: W, band: band, left: m.l, cols: cols, panels: panels, solo: solo, top: panels[0].top, bottom: panels[panels.length - 1].bottom, at: null };
+  }
+
+  /* ---- what hover and the arrow keys show: one period's figures, every line at once */
+  function quiet() {
+    $('tip').hidden = true;
+    if (!geo) return;
+    geo.at = null;
+    $('over').innerHTML = '';
+    Array.prototype.forEach.call($('plot').querySelectorAll('.is-dim'), function (el) { el.classList.remove('is-dim'); });
+  }
+  function showAt(i) {
+    var g = geo;
+    if (!g) return;
+    i = Math.max(0, Math.min(g.cols.length - 1, i));
+    g.at = i;
+    var svg = $('plot');
+    var tip = $('tip');
+    var cx = g.left + g.band * (i + 0.5);
+    var over = '';
+    var rows = '';
+    var top = null;
+    var lines = g.panels.some(function (p) { return p.form === 'line'; });
+    if (lines) over += '<line class="chart__cross" x1="' + cx + '" x2="' + cx + '" y1="' + g.top + '" y2="' + g.bottom + '"/>';
+    g.panels.forEach(function (p) {
+      p.series.forEach(function (s) {
+        var v = s.values[i];
+        rows += '<div class="tip__row"><span class="dot fill-' + s.slot + (s.form === 'line' ? ' dot--line' : '') + '"></span><span>' + esc(s.name) +
+          '</span><span class="figure-sm">' + shown(v, s.unit) + '</span></div>';
+        if (v === null) return;
+        var y = p.form === 'line' ? p.y(v) - 8 : Math.min(p.y(0), p.y(v));
+        if (top === null) top = y;
+        if (p.form === 'line') over += '<circle class="chart__mark fill-' + s.slot + '" cx="' + cx + '" cy="' + p.y(v) + '" r="5"/>';
+      });
+    });
+    $('over').innerHTML = over;
+    Array.prototype.forEach.call(svg.querySelectorAll('.chart__bar'), function (el) {
+      el.classList.toggle('is-dim', top !== null && el.getAttribute('data-i') !== String(i));
+    });
+    if (top === null) { tip.hidden = true; return; }
+    tip.hidden = false;
+    var box = svg.getBoundingClientRect();
+    var width = box.width;
+    var down = box.top - $('chart').getBoundingClientRect().top; /* the plot's top inside the chart's block */
+    if (g.solo) {
+      var s0 = g.panels[0].series[0];
+      tip.textContent = g.cols[i].label + ' · ' + shown(s0.values[i], s0.unit);
+      tip.style.left = Math.max(0, Math.min(width - tip.offsetWidth, cx - tip.offsetWidth / 2)) + 'px';
+      tip.style.top = (down + top - tip.offsetHeight - 6) + 'px';
+    } else {
+      tip.innerHTML = '<div class="tip__when">' + esc(g.cols[i].label) + '</div>' + rows;
+      var left = cx + g.band / 2 + 4;
+      if (left + tip.offsetWidth > width) left = cx - g.band / 2 - 4 - tip.offsetWidth;
+      tip.style.left = Math.max(0, left) + 'px';
+      tip.style.top = (down + g.top) + 'px';
+    }
+  }
+  function hover(event) {
+    if (!geo) return;
+    var box = $('plot').getBoundingClientRect();
+    showAt(Math.floor(((event.clientX - box.left) / box.width * geo.W - geo.left) / geo.band));
+  }
+  $('plot').addEventListener('pointermove', hover);
+  $('plot').addEventListener('pointerdown', hover);
+  $('plot').addEventListener('pointerleave', quiet);
+  $('plot').addEventListener('blur', quiet);
+  $('plot').addEventListener('keydown', function (event) {
+    if (!geo) return;
+    var last = geo.cols.length - 1;
+    var at = geo.at === null ? last + 1 : geo.at;
+    var to = { ArrowLeft: at - 1, ArrowRight: geo.at === null ? last : at + 1, Home: 0, End: last }[event.key];
+    if (event.key === 'Escape') { quiet(); return; }
+    if (to === undefined) return;
+    event.preventDefault();
+    showAt(to);
+  });
+  $('chart-head').addEventListener('click', function (event) {
+    var index = event.target.getAttribute('data-drop');
+    if (index === null) return;
+    drop(state.picks[Number(index)]);
+    draw();
+    var next = document.querySelector('.chip__x') || $('plot');
+    next.focus({ preventScroll: true });
+  });
+
+  /* ---- the head, drawn once */
+  function head() {
+    var phase = DATA.phase ? '<span class="phase"><span class="phase__n figure-sm">4</span><span class="phase__label label">' + esc(DATA.phase) + '</span></span>' : '';
+    var moat = DATA.moat ? '<span class="moat label">' + esc(DATA.moat === 'None' ? 'No' : DATA.moat) + ' moat</span>' : '';
+    $('head').innerHTML = '<div class="head__id">' + (DATA.logo ? '<img class="head__logo" alt="" src="' + DATA.logo + '">' : '') +
+      '<div><div class="head__line"><h1 class="title">' + esc(DATA.name) + '</h1><span class="ticker">' + esc(DATA.symbol) + '</span>' + phase + moat + '</div>' +
+      '<p class="caption muted" style="margin:0">' + esc(DATA.sub) + '</p></div></div>' +
+      '<div class="head__side"><div class="head__quote"><span class="figure-lg">$' + grouped(DATA.price, 2) + '</span><span class="caption faint">close 16 Nov 2026</span></div>' +
+      '<div class="head__actions"><span class="btn btn--quiet control">Notes</span><span class="btn btn--lg control">Watchlists ▾</span><span class="btn btn--lg control">Request research</span></div></div>';
+  }
+
+  function draw() {
+    controls();
+    var all = tablesOf(state.kind, state.period);
+    var note = state.kind === 'segments' ? 'by fiscal year, as the company reports its segments'
+      : state.kind === 'ratios' ? 'by fiscal year; the same definitions as Key statistics on the Overview'
+      : state.period === 'annual' ? 'the last ' + all[0].t.columns.length + ' fiscal years' : 'the last ' + all[0].t.columns.length + ' quarters';
+    $('tables').innerHTML = '<div class="fin__meta caption"><span>' + esc(note) + '</span><span>press a line to chart it alone, or its + to add it to the chart</span></div>' +
+      all.map(function (t, i) { return tableHtml(t, i); }).join('');
+    chart();
+  }
+  head();
+  draw();
+  window.addEventListener('resize', chart);
+})();
+</script>
