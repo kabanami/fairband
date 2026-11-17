@@ -1534,8 +1534,9 @@ def test_items_are_named_by_number_and_time() -> None:
 def test_the_drawer_s_head_and_appendix_a_say_what_the_figures_are_in() -> None:
     """Spec 2026-11-10 7.4 and 10: the line that names the reporting currency, the ADS and the rate
     (``currencyLine``, its words in ``tests/web/test_drawer_currency.py``) is in the drawer's head
-    under the company's name; none on a domestic row. Appendix A's secondary valuation reads its
-    totals and its parts in the currency and names the rate."""
+    under the company's name, and under the Research tab's bar, where it adds that every figure a
+    share is per ADS (``tests/web/test_company_research.py``); none on a domestic row. Appendix A's
+    secondary valuation reads its totals and its parts in the currency and names the rate."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
@@ -1543,6 +1544,9 @@ def test_the_drawer_s_head_and_appendix_a_say_what_the_figures_are_in() -> None:
         "className: 'body app-drawer__name' }, body.company.name) : null,",
         "currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },",
         "sector ? h('p', { key: 'sector',",
+    )
+    assert "currency: props.detail ? P.currencyLine(props.detail, true) : ''," in (
+        _function(_static_file("company_research.js"), "Research")
     )
     appendix = _function(_code(_static_file("report_parts.js")), "secondary")
     for text in (
@@ -2260,24 +2264,23 @@ def test_a_report_s_old_address_opens_the_research_tab() -> None:
     """The Research tab's design, 7.1 and 9: the report page left, its panel, its script and its
     view; its addresses, #report/<symbol> and #report/<symbol>/<id>, which a link or a bookmark
     may still name, open the company page's Research tab on the same report, the hash replaced
-    by the tab's, and FairbandPage.openReport opens it so; without a symbol it is the Screen
-    (``tests/web/test_company_load.py`` runs them). No view, panel, rule or script names the
-    report page."""
+    by the tab's; without a symbol it is the Screen (``tests/web/test_company_load.py`` runs
+    them). fromHash alone sends them there: no script opens a report by another way. No view,
+    panel, rule or script names the report page."""
     js = _static_file("controls.js")
     views = re.search(r"\n  var VIEWS = \[(.*?)\];", js, re.DOTALL)
     assert views is not None and "report" not in re.findall(r"'(\w+)'", views.group(1))
     _in_order(
         _function(js, "fromHash"),
         "var parts = location.hash.slice(1).split('/');",
-        "if (parts[0] === 'report') openReport(parts[1], parts[2]);",
+        "if (parts[0] === 'report') show('company', parts[1], 'research', parts[2]);",
         "else show(parts[0], parts[1], parts[2], parts[3]);",
     )
-    assert "show('company', symbol, 'research', id == null ? null : String(id));" in (
-        _function(js, "openReport")
-    )
-    assert "P.openReport = openReport;" in js
     for gone in ("keepReport", "reportPath", "P.report ", "P.report.", "onShow.report"):
         assert gone not in js, gone
+    for script in resources.files("fairband.web").joinpath("static").iterdir():
+        if script.name.endswith(".js"):
+            assert "openReport" not in script.read_text(encoding="utf-8"), script.name
     assert "state.tab === 'report'" not in js and "show('report'" not in js
     html = _static_file("index.html")
     assert 'id="report"' not in html and "#report" not in html

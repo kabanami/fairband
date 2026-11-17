@@ -153,6 +153,46 @@ def test_the_bar_s_line() -> None:
     assert "fb-stance--expired" not in _one(on_the_day, "fb-stance")["props"]["className"]
 
 
+# LFOX's detail reports in TWD and is an ADR, five ordinary shares an ADS, at TWD 32.40 a dollar.
+PER_ADS = (
+    "Reports in TWD; one ADS is five ordinary shares; every per-share figure here is per ADS;"
+    " valued at TWD 32.40 per USD"
+)
+
+
+def test_the_report_view_says_what_the_figures_are_in() -> None:
+    """The foreign filers' design (spec 2026-11-10, 6.2 and 7.4), the report page's head's line
+    carried to the tab: in the Report view, under the bar, for a company in another currency or
+    an ADR, what its figures are in, every figure a share per ADS on an ADR
+    (``FairbandPage.currencyLine`` of the detail the tab is handed, with ``perAds``), in caption
+    and ink-faint, before the bar's other lines; none for a company in US dollars that is no ADR,
+    none in the Records view and none for a company with no report."""
+    adr, records = _drive({}, [_mount(), _press("app-research__view", RECORDS_VIEW)])
+    line = _one(adr["tree"], "app-research__currency")
+    assert line["type"] == "p"
+    assert _classes(line) == ["caption", "app-muted", "app-research__currency"]
+    assert text(line) == PER_ADS == node("currencyLine", [page_answers.detail(), True])
+    top = _one(adr["tree"], "app-research__top")["props"]["children"]
+    assert top.index(line) == 1  # under the bar, the first of its lines
+    assert classed(records["tree"], "app-research__currency") == []
+
+    domestic = page_answers.detail(currency="USD", isAdr=False, adrRatio=None, fxRate=None)
+    [usd] = _drive({}, [{"do": "mount", "answer": answers.answer(), "detail": domestic}])
+    assert classed(usd["tree"], "app-research__currency") == []
+    assert classed(usd["tree"], "app-research__line") != []  # the bar's line still stands
+
+    sek = page_answers.detail(currency="SEK", isAdr=False, adrRatio=None, fxRate=8.0)
+    [foreign] = _drive({}, [{"do": "mount", "answer": answers.answer(), "detail": sek}])
+    assert text(_one(foreign["tree"], "app-research__currency")) == (
+        "Reports in SEK; valued at SEK 8.00 per USD"
+    )
+
+    none = answers.answer() | {"report": None, "call": None, "reports": []}
+    [empty] = _drive({}, [_mount(none)])
+    assert classed(empty["tree"], "app-research__currency") == []
+    assert _rule(".app-research__currency {") == "margin: 0;"
+
+
 def test_a_valuation_review_names_the_report_it_reuses_or_that_it_has_none() -> None:
     """A valuation review that reuses a full report says so in the line with that report's date;
     one that reuses none says so under the bar; a full report says neither."""
@@ -731,5 +771,11 @@ def test_print_draws_the_report_view_alone() -> None:
         assert rule in tab, rule
     code = re.sub(r"/\*.*?\*/", "", block)
     hidden = "".join(re.findall(r"([^{}]*)\{ display: none !important; \}", code))
-    for name in ("app-research__line", "app-company__id", "app-company__name", "ticker"):
+    for name in (
+        "app-research__line",
+        "app-research__currency",
+        "app-company__id",
+        "app-company__name",
+        "ticker",
+    ):
         assert name not in hidden, name

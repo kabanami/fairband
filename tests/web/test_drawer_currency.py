@@ -1,8 +1,8 @@
 """The page's words for a company in another currency, or an ADR (spec 2026-11-10 6.2, 7.4 and
 10): a USD figure with `$` as before, any other with its code before the number, a total to whole
 units and a figure a share to two decimals; the rate, the differential and the ADR ratio among the
-inputs, each in its own form; and the line under the drawer's and the report page's heads that
-says what the figures are in. A guidance record's money in the record's own currency (spec
+inputs, each in its own form; and the line under the drawer's head and the Research tab's bar
+that says what the figures are in. A guidance record's money in the record's own currency (spec
 2026-11-15 9.5). The page's own script runs in node after the bundle (``page.mjs``), and the tests
 read what its helpers return."""
 
@@ -132,9 +132,10 @@ def test_the_head_says_what_the_figures_are_in(body: dict[str, Any], line: str) 
     assert _call("currencyLine", body) == line
 
 
-def test_the_report_page_says_every_figure_a_share_is_per_ads() -> None:
+def test_the_research_tab_says_every_figure_a_share_is_per_ads() -> None:
     """Spec 6.2: the report's words, "one ADS is five ordinary shares; every per-share figure here
-    is per ADS"; a company that is no ADR says nothing of it."""
+    is per ADS", which the Research tab draws under its bar (``tests/web/test_company_research.py``);
+    a company that is no ADR says nothing of it."""
     assert _call("currencyLine", TSM, True) == (
         "Reports in TWD; one ADS is five ordinary shares; every per-share figure here is per ADS;"
         " valued at TWD 32.96 per USD"

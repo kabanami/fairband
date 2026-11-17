@@ -192,16 +192,17 @@
      which opens a row's drawer, reloadDetail, which reads the drawer's company again after
      another view's write about it (the Inbox view's decline and a watchlist's Request research,
      spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the
-     drawer shows again when a run ends. controls.js adds show, onShow, section, openReport,
-     running and countInbox, the Inbox view onInbox, and agents.js adds agents, the Settings
-     view's Agents section; a view drawn from the rows or the lists sets onRender, which runs
-     after each draw of the screen, so it draws again as they load and change (the company page's
-     runs the Watchlists view's, set before it, then its own). A report's parts after its sections
+     drawer shows again when a run ends. controls.js adds show, onShow, section, running and
+     countInbox, the Inbox view onInbox, and agents.js adds agents, the Settings view's Agents
+     section; a view drawn from the rows or the lists sets onRender, which runs after each draw of
+     the screen, so it draws again as they load and change (the company page's runs the
+     Watchlists view's, set before it, then its own). A report's parts after its sections
      (report_parts.js, 18.4) draw with this script's parts: the inputs table, a table of figures
      by year, an input's figure in its unit, the secondary valuation's rows and path, the guidance
      table, the phase evidence, pairs, a date, a total in a currency, an exchange rate and a
-     count; the line that says what the figures are in (currencyLine) is the drawer's. The company
-     page (company.js; the company page's design, 7) draws its head with the logo, the phase
+     count; the line that says what the figures are in (currencyLine) is the drawer's and the
+     Research tab's, which adds that every figure a share is per ADS. The company page
+     (company.js; the company page's design, 7) draws its head with the logo, the phase
      numbers, the moat stamp (moatStamp), the Notes control as the drawer's bar draws it
      (notesControl, 11.1) and Request research with a request of its own (asking), whose
      following of a launch the page stops as it starts to read another company (stopLaunch) and
@@ -1875,10 +1876,10 @@
   }
 
   /* What a company's figures are in (spec 2026-11-10 6.2, 7.4 and 10), the line under the head of
-     the drawer and of the report page, from the company read:
+     the drawer and under the Research tab's bar, from the company read:
      the reporting currency, the ordinary shares an ADS stands for, and the rate its value was
      translated at, "Reports in TWD; one ADS is five ordinary shares; valued at TWD 32.96 per
-     USD". The report page (`perAds`) adds that every figure a share is per ADS. A company in USD
+     USD". The Research tab (`perAds`) adds that every figure a share is per ADS. A company in USD
      that is no ADR, and has no ratio on file, has none: ''. */
   function currencyLine(body, perAds) {
     var code = body.currency || 'USD';

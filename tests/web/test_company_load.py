@@ -263,20 +263,6 @@ def test_a_report_s_old_address_opens_the_research_tab_on_the_same_report() -> N
     assert screen["hash"] == "" and screen["shows"] is False and screen["fetched"] == []
 
 
-def test_open_report_opens_the_research_tab_on_the_report() -> None:
-    """``FairbandPage.openReport(symbol, id)`` opens the tab as the old address does: on the
-    report with that id, or on the company's latest report where none is given."""
-    aapl = "/api/companies/AAPL"
-    opened, detail = _drive(
-        [{"do": "openReport", "symbol": "AAPL", "id": 9}, _answer(aapl, _detail(182.4, "AAPL"))]
-    )
-    assert opened["hash"] == "#company/AAPL/research/9" and opened["shows"] is True
-    assert opened["fetched"] == _get(aapl)
-    assert detail["fetched"] == _get(aapl + "/page/research?report=9")
-    [latest] = _drive([{"do": "openReport", "symbol": "AAPL", "id": None}])
-    assert latest["hash"] == "#company/AAPL/research"
-
-
 def test_another_report_of_the_tab_shown_drops_the_first_s_late_answer() -> None:
     """Another id of the tab reads the tab again, the detail kept; the answer of the report asked
     for first, landing after the second was asked for, is dropped, and the page stays faded on

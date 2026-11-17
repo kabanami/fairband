@@ -245,13 +245,6 @@
     render();
   }
 
-  /* A report, as the report page's addresses name it and FairbandPage.openReport opens it: the
-     company page's Research tab on the report `id`, or on the company's latest report where none
-     is given (the Research tab's design, 7.1); with no symbol, the Screen, as show has it. */
-  function openReport(symbol, id) {
-    show('company', symbol, 'research', id == null ? null : String(id));
-  }
-
   /* The company a hash names, kept in P.company: the symbol decoded, as the links encode it, and
      upper-cased, as the store keeps it; the tab, the Overview for none or one the page does not
      know; and the report's id, a whole number on the Research tab, else null, the company's latest
@@ -285,10 +278,12 @@
      #company/<symbol>/estimates, its Estimates tab, #company/<symbol>/research, its Research tab
      on the latest report, or #company/<symbol>/research/<id>, on that report. The report page's
      addresses, which a link or a bookmark may still name, #report/<symbol> and
-     #report/<symbol>/<id>, open the Research tab on the same report (openReport). */
+     #report/<symbol>/<id>, open the Research tab on the same report, the company's latest where
+     no id is given, the hash replaced by the tab's; #report with no symbol is the Screen, as show
+     has it (the Research tab's design, 7.1). */
   function fromHash() {
     var parts = location.hash.slice(1).split('/');
-    if (parts[0] === 'report') openReport(parts[1], parts[2]);
+    if (parts[0] === 'report') show('company', parts[1], 'research', parts[2]);
     else show(parts[0], parts[1], parts[2], parts[3]);
   }
 
@@ -554,18 +549,16 @@
   /* What the later views use: show opens a view; each view registers its loader in onShow, and
      onShow[tab]() runs each time that view opens; section is the Methodology section a hash
      named; company is the company, the tab and the report the company page shows,
-     { symbol, tab, id }, the id null but on a report of the Research tab; openReport(symbol, id?)
-     opens a report, the company's latest where no id is given, on the Research tab; running() is
-     true while a refresh runs;
-     followRefresh() follows a refresh another view started (the Settings view's revalue) as the
-     header follows its own: the run bar while it runs, the rows loaded again when it ends;
-     countInbox(items) hands the header the Inbox view's own read, so its count follows; the
-     Inbox view sets onInbox(items), which each of the header's own reads calls. */
+     { symbol, tab, id }, the id null but on a report of the Research tab; running() is true
+     while a refresh runs; followRefresh() follows a refresh another view started (the Settings
+     view's revalue) as the header follows its own: the run bar while it runs, the rows loaded
+     again when it ends; countInbox(items) hands the header the Inbox view's own read, so its
+     count follows; the Inbox view sets onInbox(items), which each of the header's own reads
+     calls. */
   P.show = show;
   P.onShow = {};
   P.section = null;
   P.company = null;
-  P.openReport = openReport;
   P.running = function () { return state.running !== null; };
   P.followRefresh = function () { started = true; poll(); };
   P.countInbox = inboxRead;

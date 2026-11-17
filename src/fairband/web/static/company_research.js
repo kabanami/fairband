@@ -9,7 +9,9 @@
    count of the rows its panels draw after a space; in the Report view the report's line, its
    stance in the Stance column's chip, faded once its validity ended, its mode, its revision, its
    date and time, who wrote it, valid until and, for a valuation review, the full report it
-   reuses; at its right Footnote marks and Download .md; under it a valuation review's note that
+   reuses; at its right Footnote marks and Download .md; under it, for a company in another
+   currency or an ADR, what its figures are in (FairbandPage.currencyLine of the detail, every
+   figure a share per ADS on an ADR; spec 2026-11-10, 6.2 and 7.4), a valuation review's note that
    it reuses none and the Markdown's refusal. In the Records view the line's sentence, and under
    the bar the company's records on file (7.10), which company_research_records.js draws
    (FairbandPage.researchRecords, loaded after this script and called as the tab draws). Then, in
@@ -118,9 +120,11 @@
   /* The bar (7.2) on `answer` in the view `view`, 'report' or 'records', Footnote marks `marks`
      on or off, Records with the count of the rows its panels draw (company_research_records.js).
      `act` holds what it draws with and what its controls call: `today`, the detail's day, against
-     which the report's validity has ended; `failed`, the Markdown's refusal or null; view(next),
-     marks() and download(). Under it, in the Report view, a valuation review's note that it
-     reuses no full report, and the Markdown's refusal. */
+     which the report's validity has ended; `currency`, what the company's figures are in, '' for
+     a company in US dollars that is no ADR; `failed`, the Markdown's refusal or null; view(next),
+     marks() and download(). Under it, in the Report view of a report, the line of what the
+     figures are in (spec 2026-11-10, 6.2 and 7.4), as the report page's head had it, a valuation
+     review's note that it reuses no full report, and the Markdown's refusal. */
   function bar(answer, view, marks, act) {
     var report = answer.report;
     var shown = view === 'report';
@@ -140,6 +144,8 @@
           }, 'Footnote marks'),
           h(F.Button, { size: 'sm', className: 'app-research__download', onClick: act.download },
             'Download .md')) : null),
+      shown && report && act.currency
+        ? h('p', { className: 'caption app-muted app-research__currency' }, act.currency) : null,
       shown && report && report.mode === 'valuation review' && report.reusesFullReportOf == null
         ? h('p', { className: 'caption app-research__note' }, 'No full report to reuse.') : null,
       shown && act.failed ? h('p', { className: 'caption app-research__error' }, act.failed)
@@ -896,6 +902,7 @@
     }, [report ? report.id : null, view[0]]);
     var act = {
       today: props.detail ? props.detail.today : null,
+      currency: props.detail ? P.currencyLine(props.detail, true) : '',
       failed: failed[0] && report && failed[0].id === report.id ? failed[0].text : null,
       view: function (next) { view[1](next); },
       marks: function () {

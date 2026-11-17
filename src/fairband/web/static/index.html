@@ -974,7 +974,8 @@
   /* The company page's Research tab (the Research tab's design, 7.2 to 7.9), as its
      mockup lays it out. Under the tabs' row the bar: Report and Records, a segmented control on a
      hairline, the chosen one on surface-selected; the report's line in ink-muted; Footnote marks
-     and Download .md at its right end; its notes under it. Then the section list, 196px wide,
+     and Download .md at its right end; under it what the figures are in, in caption and
+     ink-faint, and its notes. Then the section list, 196px wide,
      which stays in view while the report scrolls: its groups' heads in label and ink-faint, each
      name on a 2px hairline at its left edge, the one in view on surface-selected with a 2px accent
      edge, as the app marks a selection, and so the report on file shown. Beside it the panels,
@@ -1033,6 +1034,7 @@
     display: flex; flex-wrap: wrap; gap: var(--space-2); margin-left: auto;
   }
   .app-research__note, .app-research__none { margin: 0; color: var(--ink-muted); }
+  .app-research__currency { margin: 0; }
   .app-research__error { margin: 0; color: var(--caution); }
   .app-research__layout {
     display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: var(--space-6);
