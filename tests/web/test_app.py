@@ -1934,24 +1934,13 @@ def test_the_guidance_table_reads_each_record_s_call_state_and_currency() -> Non
         assert text in table, text
 
 
-def test_the_note_s_post_waits_for_the_notes_control() -> None:
-    """Details and its research read left the drawer (the company page's design, 11); Add a note's
-    draft and its post stay for the Notes control (11.1): the note posted as the owner, a refusal's
-    sentence kept with the text, and the company's detail read again once it is taken, so its
-    count of notes follows. The server's research read stays (B-218 reads it)."""
+def test_details_and_its_research_read_left_the_drawer() -> None:
+    """Details and its research read left the drawer (the company page's design, 11); Add a note
+    moved to the Notes control (11.1), which ``test_notes_control.py`` tests. The server's research
+    read stays (B-218 reads it)."""
     script = _static_file("app.js")
     for gone in ("detailsOpen", "readResearch", "toggleDetails", "/research'"):
         assert gone not in script, gone
-    post = _function(script, "postNote")
-    assert (
-        "api.post('/api/companies/' + encodeURIComponent(symbol) + '/notes', { text: text })"
-        in post
-    )
-    _in_order(post, "if (!r.ok) throw new Error(", "draft.text = '';", "reloadDetail(symbol);")
-    assert "draft.error = err.message;" in post
-    assert "state.noteDraft = { symbol: symbol, text: '', error: null, posting: false };" in (
-        _function(script, "drafted")
-    )
 
 
 def test_the_secondary_path_lists_its_parts_or_drivers() -> None:

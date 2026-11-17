@@ -189,8 +189,8 @@ def test_no_change_where_the_quote_is_not_the_snapshot_s_price() -> None:
 
 
 def test_the_head_s_controls() -> None:
-    """At the right of the head, after the quote: Watchlists ▾, then Request research as the
-    report page draws it, with the open item's line."""
+    """At the right of the head, after the quote: Notes (``test_notes_control.py``), Watchlists ▾,
+    then Request research as the report page draws it, with the open item's line."""
     item = {
         "id": 5,
         "state": "pending",
@@ -202,7 +202,8 @@ def test_the_head_s_controls() -> None:
     detail = answers.detail(item=item, launchReady=True)
     tree = _head(detail)
     [actions] = classed(tree, "app-company__actions")
-    watch, request = actions["props"]["children"]
+    notes, watch, request = actions["props"]["children"]
+    assert notes is _button(actions, "Notes 2")
     assert watch is _button(actions, "Watchlists ▾")
     # in the look of Request research's button: the default variant and size
     assert "variant" not in watch["props"] and "size" not in watch["props"]
@@ -213,7 +214,7 @@ def test_the_head_s_controls() -> None:
     assert _button(request, "Request research")["props"]["disabled"] is True  # an item is open
     assert "Requested · pending" in text(request)
     [quote] = classed(tree, "app-company__quote")
-    _drawn_in_order(tree, quote, watch, request)
+    _drawn_in_order(tree, quote, notes, watch, request)
 
 
 def test_the_watchlists_button_opens_the_screen_s_popup_under_itself() -> None:

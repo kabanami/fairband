@@ -5,12 +5,14 @@
    order, narrows the loaded rows to the reader's find and filters and lays out what the engine
    produced, rounded for display only. Each row's watchlist mark opens a popup that puts the
    company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The drawer is a short
-   card, the company, its value and two buttons: Company page, which opens the company's page, and
-   Request research, which posts a research request to the work inbox (the company page's design,
-   11; spec 2026-11-06 Tier 2, 18.2). Where launching is set up, a request also opens the window
-   where Claude Code starts, and the line under the button follows its launch (spec 2026-11-16
-   agent launch, 10). The header, the status line and the group view are controls.js, loaded after
-   this script; it reaches the screen through window.FairbandPage. */
+   card under its bar, the company, its value and two buttons: Company page, which opens the
+   company's page, and Request research, which posts a research request to the work inbox (the
+   company page's design, 11; spec 2026-11-06 Tier 2, 18.2). Where launching is set up, a request
+   also opens the window where Claude Code starts, and the line under the button follows its
+   launch (spec 2026-11-16 agent launch, 10). At the bar's left, Notes opens a box of the company's
+   notes, from /api/companies/{symbol}/notes, which takes a new one (the company page's design,
+   11.1); the company page's head draws it too. The header, the status line and the group view
+   are controls.js, loaded after this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -50,7 +52,8 @@
     watch: null, /* { symbol, anchor, ids, name, error } while a mark's popup is open */
     pastFirstScreen: false, /* the table is scrolled more than one screen down: Top shows */
     request: null, /* Request research of one company: { symbol, open, mode, note, error, … } */
-    noteDraft: null /* Add a note of one company: { symbol, text, error, posting } */
+    notes: null, /* { symbol, anchor, after, notes, loading, error } while a Notes box is open */
+    noteDraft: null /* Add a note's draft, of one company: { symbol, text, error, posting } */
   };
   var latest = 0;
   var latestDetail = 0;
@@ -195,17 +198,19 @@
      Request research with a request of its own (asking), whose following of a launch the page
      stops as it starts to read another company (stopLaunch) and starts as its read lands
      (followItem). The company page (company.js; the company page's design, 7) draws its head
-     with the logo, the phase numbers, the moat stamp (moatStamp) and Request research as the
-     report page keeps it, and opens the watchlists popup under its head's button (watch) on the
-     company's row or, the lists loaded, on the company alone (rows, watchlists); its Fairband
-     value block (company_overview.js, 8.2) draws the meter, the four levels under it in the
-     screen's words (levelRows), the basis chip of the band they draw (bandBasis) and the local
-     day of its report (localIso). The Inbox view's row (inbox.js, B-210) keeps a request for each
-     pending item too, posts its launch (openLaunch) and draws the line's words (launchWords) from
-     the item the line is drawn from (lineItem). The drawer's parts (sections), the open item's
-     line (launchLine), an input's value (inputValue), a figure a share in a currency (money) and
-     a logo's ground (logoGround) are here for the tests, which read them in node
-     (tests/web/page.mjs). */
+     with the logo, the phase numbers, the moat stamp (moatStamp), the Notes control as the
+     drawer's bar draws it (notesControl, 11.1) and Request research as the report page keeps it,
+     opens the watchlists popup under its head's button (watch) on the company's row or, the
+     lists loaded, on the company alone (rows, watchlists), and says when it turns to another
+     company (notesShown), so a note drafted on another goes; its Fairband value block
+     (company_overview.js, 8.2) draws the meter, the four levels under it in the screen's words
+     (levelRows), the basis chip of the band they draw (bandBasis) and the local day of its report
+     (localIso). The Inbox view's row (inbox.js, B-210) keeps a request for each pending item too,
+     posts its launch (openLaunch) and draws the line's words (launchWords) from the item the line
+     is drawn from (lineItem). The drawer with its bar (drawer), its parts (sections), the Notes
+     box (notesBox), the open item's line (launchLine), an input's value (inputValue), a figure a
+     share in a currency (money) and a logo's ground (logoGround) are here for the tests, which
+     read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
@@ -227,7 +232,8 @@
     launchLine: launchLine, launchWords: launchWords, lineItem: lineItem,
     openLaunch: openLaunch, stopLaunch: stopLaunch, followItem: followItem,
     currencyLine: currencyLine, logo: logo, logoGround: logoGround, moatStamp: moatStamp,
-    sections: sections
+    notesControl: notesControl, notesBox: notesBox, notesShown: notesShown,
+    drawer: drawer, sections: sections
   };
 
   function load() {
@@ -272,8 +278,10 @@
     var d = state.drawer;
     if (d && d.symbol === row.ticker && !d.error) return;
     /* the company the drawer showed no longer follows its launch (spec 2026-11-16 agent launch,
-       10), whether the new one's read lands or fails */
+       10), whether the new one's read lands or fails, and the drawer turning to another company
+       drops a note drafted on another (notesShown) */
     if (state.request && state.request.symbol !== row.ticker) stopLaunch(state.request);
+    if (!d || d.symbol !== row.ticker) notesShown(row.ticker);
     var request = ++latestDetail;
     state.drawer = { symbol: row.ticker, body: d && d.body, loading: true, error: null };
     render();
@@ -418,15 +426,16 @@
     }).map(function (w) { return w.id; });
   }
 
-  /* onWatch: a mark opens its popup, or closes it when the popup is its own. The popup opens under
-     `mark` where one is given, the company page's Watchlists ▾ (the company page's design, 7.2),
-     else under the mark the click landed on. */
+  /* onWatch: a mark opens its popup, closing a Notes box, or closes it when the popup is its own.
+     The popup opens under `mark` where one is given, the company page's Watchlists ▾ (the company
+     page's design, 7.2), else under the mark the click landed on. */
   function watch(row, mark) {
     var anchor = mark || pressedMark;
     if (!anchor || (state.watch && state.watch.anchor === anchor)) {
       closeWatch();
       return;
     }
+    closeNotes();
     state.watch = {
       symbol: row.ticker, anchor: anchor, ids: membersOf(row.ticker, row), name: '', error: null
     };
@@ -509,9 +518,9 @@
 
   /* The popup, in the bundle's menu style as Details ▾ draws it: a box per list, ticked where the
      company is on it, then the New watchlist field and Add. Fixed under the mark, or over it when
-     the mark sits low in the window; it follows the mark as the page scrolls and closes when the
-     mark is gone (its row narrowed away) or hidden. It stands at the end of the page, away from
-     the mark, so focus moves into it as it opens. */
+     the mark sits low in the window (place); it follows the mark as the page scrolls and closes
+     when the mark is gone (its row narrowed away) or hidden. It stands at the end of the page,
+     away from the mark, so focus moves into it as it opens. */
   function WatchMenu(props) {
     var w = props.watch;
     var ref = React.useRef(null);
@@ -520,13 +529,7 @@
         closeWatch();
         return;
       }
-      var rect = w.anchor.getBoundingClientRect();
-      var style = ref.current.style;
-      var below = rect.bottom < window.innerHeight * 0.6;
-      style.left = Math.max(0, Math.min(rect.left,
-        window.innerWidth - ref.current.offsetWidth)) + 'px';
-      style.top = below ? rect.bottom + 4 + 'px' : 'auto';
-      style.bottom = below ? 'auto' : window.innerHeight - rect.top + 4 + 'px';
+      place(ref.current, w.anchor);
     });
     React.useEffect(function () {
       var first = ref.current.querySelector('input');
@@ -583,6 +586,18 @@
   });
   document.addEventListener('scroll', function () { if (state.watch) renderWatch(); }, true);
   window.addEventListener('resize', function () { if (state.watch) renderWatch(); });
+
+  /* A popup fixed under its control, `anchor`, or over it when the control sits low in the
+     window, from the control's left edge and inside the window: the watchlist popup and the
+     Notes box. */
+  function place(menu, anchor) {
+    var rect = anchor.getBoundingClientRect();
+    var style = menu.style;
+    var below = rect.bottom < window.innerHeight * 0.6;
+    style.left = Math.max(0, Math.min(rect.left, window.innerWidth - menu.offsetWidth)) + 'px';
+    style.top = below ? rect.bottom + 4 + 'px' : 'auto';
+    style.bottom = below ? 'auto' : window.innerHeight - rect.top + 4 + 'px';
+  }
 
   /* ------------------------------------------------------- the sticky bar and Top */
 
@@ -671,12 +686,19 @@
       }, 'Top ↑') : null,
       d ? drawer(d) : null));
     renderWatch();
+    renderNotes();
     var page = window.FairbandPage;
     if (page.onRender) page.onRender();
   }
 
   /* ------------------------------------------------------------------ the drawer */
 
+  /* The drawer of `d`, { symbol, body, loading, error }. Its bar: Notes for the drawer's company at
+     its left (notesControl, the company page's design, 11.1), with the count of its notes while
+     the drawer holds its detail and none while the drawer turns to it or its read failed, a note
+     taken reading the detail again (reread); Close at its right. Under the bar the company's
+     parts (sections), a failed read's sentence, or the ticker alone while the first read is
+     out. */
   function drawer(d) {
     var content;
     if (d.error) content = note(d.error);
@@ -684,6 +706,8 @@
     else content = h('h2', { className: 'ticker app-drawer__ticker' }, d.symbol);
     return h('aside', { className: 'app-drawer', 'aria-label': 'Detail for ' + d.symbol },
       h('div', { className: 'app-drawer__bar' },
+        notesControl(d.symbol, d.body && !d.loading ? d.body.noteCount : null,
+          reread(d.symbol)),
         h(F.Button, { variant: 'quiet', size: 'sm', onClick: close }, 'Close')),
       h('div', { className: d.loading ? 'app-drawer__body is-loading' : 'app-drawer__body' },
         content));
@@ -1238,9 +1262,168 @@
     reloadDetail(d.symbol);
   }
 
-  /* Nothing draws Add a note yet: the Notes control (the company page's design, 11.1) will. */
+  /* ------------------------------------------------------------------- the notes */
 
-  /* Add a note's field for the drawer's company, kept until the drawer shows another. */
+  /* Notes (the company page's design, 11.1). The box has a root of its own at the end of the page,
+     as the watchlist popup has, so it opens over the drawer and over the company page's head. */
+  var notesMount = document.body.appendChild(document.createElement('div'));
+  var notesRoot = ReactDOM.createRoot(notesMount);
+  var latestNotes = 0;
+
+  /* The Notes control of a company, `symbol`, in the quiet button's look: the word Notes, followed
+     by `count`, the company's notes, when it has one or more (Notes 3). The drawer's bar draws it
+     at its left and the company page's head before Watchlists ▾. A click opens the box under it
+     (openNotes); `after` reads the view's company again once a note is taken, so the count
+     follows. */
+  function notesControl(symbol, count, after) {
+    return h(F.Button, {
+      variant: 'quiet', size: 'sm', className: 'app-notes-open',
+      onClick: function (event) { openNotes(symbol, event.currentTarget, after); }
+    }, count ? 'Notes ' + count : 'Notes');
+  }
+
+  /* A Notes control's click: the box opens under the control, `anchor`, with the company's draft
+     (drafted), and reads the company's notes; the watchlist popup closes, so one box stands at a
+     time. A click on the control whose box is open closes it. */
+  function openNotes(symbol, anchor, after) {
+    if (state.notes && state.notes.anchor === anchor) {
+      closeNotes();
+      return;
+    }
+    closeWatch();
+    drafted(symbol);
+    state.notes = {
+      symbol: symbol, anchor: anchor, after: after, notes: null, loading: true, error: null
+    };
+    readNotes();
+  }
+
+  function closeNotes() {
+    latestNotes++;
+    state.notes = null;
+    renderNotes();
+  }
+
+  /* The open box's notes, read: newest first, as the read gives them (store.research,
+     notes_for). While the read is out the box shows what it holds, faded; a failed read's message
+     takes the list's place. A read that lands after the box closed, or after a later read began,
+     is dropped. */
+  function readNotes() {
+    var box = state.notes;
+    var request = ++latestNotes;
+    box.loading = true;
+    renderNotes();
+    getJson('/api/companies/' + encodeURIComponent(box.symbol) + '/notes')
+      .then(function (body) {
+        if (request !== latestNotes) return;
+        box.notes = body.notes;
+        box.error = null;
+        box.loading = false;
+        renderNotes();
+      }, function (err) {
+        if (request !== latestNotes) return;
+        box.error = err.message;
+        box.loading = false;
+        renderNotes();
+      });
+  }
+
+  function renderNotes() {
+    notesRoot.render(state.notes ? h(NotesBox, { box: state.notes }) : null);
+  }
+
+  /* The box, fixed under its control as the watchlist popup is (place), or over it when the
+     control sits low in the window; it follows the control as the page scrolls and closes when
+     the control is gone (the drawer closed) or hidden (its view left). Focus moves into its field
+     as it opens. */
+  function NotesBox(props) {
+    var box = props.box;
+    var ref = React.useRef(null);
+    React.useLayoutEffect(function () {
+      if (!box.anchor.getClientRects().length) { /* gone, or its view hidden */
+        closeNotes();
+        return;
+      }
+      place(ref.current, box.anchor);
+    });
+    React.useEffect(function () {
+      ref.current.querySelector('textarea').focus();
+    }, [box.anchor]);
+    return notesBox(Object.assign({}, box, { draft: drafted(box.symbol) }), ref);
+  }
+
+  /* The Notes box of `box`, { symbol, notes, loading, error, draft }, in the bundle's menu style as
+     the watchlist popup draws it. Its list: the company's notes in their order, newest first,
+     each its text as written and under it its principal chip, with its principal, its actor and
+     its time in the reader's offset, which the chip draws as the day; No notes yet. where the
+     read holds none, and nothing before the first read lands; while a read is out what the box
+     holds, faded; a failed read's sentence in the list's place. The list scrolls under 240px.
+     Under it Add a note as Details had it: the field, named for the company, holding the draft,
+     Add a note, disabled for an empty draft and while the note is posted (postNote), then the
+     server's sentence on a refusal, the text kept. `ref` is the box's own (NotesBox). */
+  function notesBox(box, ref) {
+    var draft = box.draft;
+    var named = 'A note on ' + box.symbol;
+    var listed = null;
+    if (box.error) {
+      listed = h('p', { className: 'caption app-notes-box__failed' },
+        'The notes did not load: ' + box.error + '. Open Notes again to retry.');
+    } else if (box.notes && box.notes.length) {
+      listed = h('ul', { className: 'app-list app-notes-box__list' }, box.notes.map(function (n) {
+        return h('li', { key: n.id },
+          h('p', { className: 'body app-notes-box__text' }, n.text),
+          h('div', { className: 'app-notes-box__chip' },
+            h(F.PrincipalChip, { principal: n.principal, actor: n.actor, at: localIso(n.at) })));
+      }));
+    } else if (box.notes) {
+      listed = h('p', { className: 'body app-muted app-notes-box__none' }, 'No notes yet.');
+    }
+    return h('div', {
+      ref: ref, className: 'fb-menu fb-menu--filters app-notes-box', role: 'group',
+      'aria-label': 'Notes'
+    },
+      h('div', {
+        className: 'fb-menu__body app-notes-box__body' + (box.loading ? ' is-loading' : '')
+      }, listed),
+      h('div', { className: 'fb-menu__foot' },
+        h('form', {
+          className: 'app-notes-box__new',
+          onSubmit: function (event) { event.preventDefault(); postNote(box.symbol); }
+        },
+          h('textarea', {
+            className: 'control app-field app-notes-box__field', rows: 3, value: draft.text,
+            placeholder: named, 'aria-label': named,
+            onChange: function (event) { draft.text = event.target.value; renderNotes(); }
+          }),
+          h(F.Button, {
+            type: 'submit', size: 'sm', disabled: draft.posting || !draft.text.trim()
+          }, 'Add a note')),
+        draft.error ? h('p', { className: 'caption app-notes-box__error' }, draft.error) : null));
+  }
+
+  /* The box closes on a press or focus outside it and its control, and on Escape, which hands
+     focus back to the control, as the watchlist popup does; the drawer's own Escape sees the box,
+     a menu, and waits. It follows its control when anything scrolls and when the window
+     resizes. */
+  function closeNotesOutside(event) {
+    var box = state.notes;
+    if (!box || !(event.target instanceof Node)) return;
+    if (notesMount.contains(event.target) || box.anchor.contains(event.target)) return;
+    closeNotes();
+  }
+  document.addEventListener('pointerdown', closeNotesOutside);
+  document.addEventListener('focusin', closeNotesOutside);
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !state.notes) return;
+    var anchor = state.notes.anchor;
+    closeNotes();
+    if (anchor.isConnected) anchor.focus();
+  });
+  document.addEventListener('scroll', function () { if (state.notes) renderNotes(); }, true);
+  window.addEventListener('resize', function () { if (state.notes) renderNotes(); });
+
+  /* Add a note's draft of a company, `symbol`: kept as its box closes, until the drawer or the
+     company page turns to another company (notesShown) or a box opens on another. */
   function drafted(symbol) {
     if (!state.noteDraft || state.noteDraft.symbol !== symbol) {
       state.noteDraft = { symbol: symbol, text: '', error: null, posting: false };
@@ -1248,28 +1431,39 @@
     return state.noteDraft;
   }
 
-  /* Add a note: the note, as the owner, with the request header every page write carries; a
-     refusal shows the server's sentence under the field, the text kept. Taken, the field clears
-     and, while the drawer still shows the company, its detail is read again (reloadDetail), so
-     its count of notes follows. */
+  /* A view turns to a company, `symbol`: the drawer as it opens another (open), the company page
+     as it is asked for another (company.js). A note drafted on another company goes, and so does
+     a box open on another. */
+  function notesShown(symbol) {
+    if (state.noteDraft && state.noteDraft.symbol !== symbol) state.noteDraft = null;
+    if (state.notes && state.notes.symbol !== symbol) closeNotes();
+  }
+
+  /* Add a note, from the open box: the note, as the owner, with the request header every page
+     write carries; a refusal shows the server's sentence under the field (refusalDetail), the
+     text kept. Taken, the field clears, a box still open on the company reads its notes again,
+     so the new one is first, and the box's `after` reads the view's company again, so its
+     control's count follows: the drawer's detail (reloadDetail) or the company page's own
+     read. */
   function postNote(symbol) {
+    var box = state.notes;
     var draft = drafted(symbol);
     var text = draft.text.trim();
     if (!text || draft.posting) return;
     draft.posting = true;
     draft.error = null;
-    render();
+    renderNotes();
     api.post('/api/companies/' + encodeURIComponent(symbol) + '/notes', { text: text })
       .then(function (r) {
-        if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
-          : 'the server answered ' + r.status);
+        if (!r.ok) throw new Error(refusalDetail(r));
         draft.text = '';
-        reloadDetail(symbol);
+        if (state.notes && state.notes.symbol === symbol) readNotes();
+        box.after();
       })
       .catch(function (err) { draft.error = err.message; })
       .then(function () {
         draft.posting = false;
-        render();
+        renderNotes();
       });
   }
 

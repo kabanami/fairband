@@ -3,17 +3,17 @@
    head, the link back to the screen, as on the report page. The head stands on every tab: at its
    left the logo, the name, the ticker, the phase badge, the moat stamp and one caption line, the
    exchange, the sector and the industry; at its right the latest snapshot's price, the day's
-   change where the stored quote is that price's, the day of the close, then the watchlists
-   control and Request research. Under it the tabs' row: Overview and Estimates, and Research, a
-   link to the report page, the data date of the open tab at the row's right end. Under the row the
-   open tab's blocks, which the later scripts hang on companyPage.draw by tab; nothing is drawn
-   there while a tab's function is missing. The head reads the company's detail, as the drawer and
-   the report page do; each tab its own read of the store, which carries the head's quote too; and
-   the Overview, where its stored news is stale, one read of the news pass-through after it draws
-   them, the page's one read that may call a vendor (10.5). The parts the blocks are built from,
-   a panel, a list of names and figures, a group, a small table, and the formatters of their
-   figures (14.1), are on FairbandPage.companyPage with the head and the tabs' row, for those
-   scripts and for the tests, which read them in node. */
+   change where the stored quote is that price's, the day of the close, then Notes, the
+   watchlists control and Request research. Under it the tabs' row: Overview and Estimates, and
+   Research, a link to the report page, the data date of the open tab at the row's right end.
+   Under the row the open tab's blocks, which the later scripts hang on companyPage.draw by tab;
+   nothing is drawn there while a tab's function is missing. The head reads the company's
+   detail, as the drawer and the report page do; each tab its own read of the store, which
+   carries the head's quote too; and the Overview, where its stored news is stale, one read of
+   the news pass-through after it draws them, the page's one read that may call a vendor (10.5).
+   The parts the blocks are built from, a panel, a list of names and figures, a group, a small
+   table, and the formatters of their figures (14.1), are on FairbandPage.companyPage with the
+   head and the tabs' row, for those scripts and for the tests, which read them in node. */
 (function () {
   'use strict';
 
@@ -40,20 +40,21 @@
   var latest = 0;
 
   /* The page FairbandPage.company names (7.1, 7.5). Another company, or the tab shown asked for
-     again (the view opened again, a request's post ended, or a refresh ended while the page
-     shows, controls.js), or the tab whose read is out, not yet shown, asked for again, reads the
-     detail, then the tab's read, and drops what the page held of the other tab, so the head and
-     the tab draw the run's figures; another tab of the company shown reads only that tab, and
-     one it read already is shown at once, but while a read of the detail is out, which that tab
-     may be older than, it reads the detail and the tab, so a reread a refresh's end started is
-     never dropped for the figures of before the run. The page
-     shown stays, faded, until the new one lands, and the latest read wins, so a read that lands
-     after the reader moved to another company or tab is dropped. A read of another company stops
-     the following of the request of the company shown before it starts, and every landing
-     follows the open item's launch again (shown). A tab's read that fails draws its sentence
-     under the tabs; the detail's draws its own (failure) and the link back. An Overview's read
-     that lands draws its stored news, then asks for newer news where they are stale (newer); a
-     tab held is shown with what it holds and asks nothing. */
+     again (the view opened again, a request's post ended, a note was taken in the head's Notes
+     box, or a refresh ended while the page shows, controls.js), or the tab whose read is out,
+     not yet shown, asked for again, reads the detail, then the tab's read, and drops what the
+     page held of the other tab, so the head and the tab draw the run's figures; another tab of
+     the company shown reads only that tab, and one it read already is shown at once, but while a
+     read of the detail is out, which that tab may be older than, it reads the detail and the
+     tab, so a reread a refresh's end started is never dropped for the figures of before the run.
+     The page shown stays, faded, until the new one lands, and the latest read wins, so a read
+     that lands after the reader moved to another company or tab is dropped. A read of another
+     company stops the following of the request of the company shown before it starts, and drops
+     a note drafted on another company (FairbandPage.notesShown); every landing follows the open
+     item's launch again (shown). A tab's read that fails draws its sentence under the tabs; the
+     detail's draws its own (failure) and the link back. An Overview's read that lands draws its
+     stored news, then asks for newer news where they are stale (newer); a tab held is shown with
+     what it holds and asks nothing. */
   function load() {
     var want = P.company;
     var request = ++latest;
@@ -70,6 +71,7 @@
       state.whole;
     var company = '/api/companies/' + encodeURIComponent(want.symbol);
     if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);
+    if (state.symbol !== want.symbol) P.notesShown(want.symbol);
     state.whole = whole;
     state.reading = want.tab;
     state.loading = true;
@@ -207,11 +209,13 @@
      (FairbandPage.logo), the name, the ticker, the phase badge, the moat stamp
      (FairbandPage.moatStamp), and one caption line, the exchange, the sector and the industry of
      the universe row, the parts it has. Right: the latest snapshot's price in figure-lg, in US
-     dollars, the day's change, and the day of its close; then the watchlists control, which
-     opens the screen's popup for this company under itself, on the row watchRow gives, disabled
-     without one; and Request research, the report page's: its menu, its line and the following
-     of its launch, with the request the page keeps for its company (shown), or, where it keeps
-     none for it, as in the tests, which draw a head with no read, a new one it keeps nowhere. */
+     dollars, the day's change, and the day of its close; then Notes with the count of the
+     company's notes (FairbandPage.notesControl, 11.1), whose box opens under it and, once a note
+     is taken, reads the page again (load); the watchlists control, which opens the screen's
+     popup for this company under itself, on the row watchRow gives, disabled without one; and
+     Request research, the report page's: its menu, its line and the following of its launch,
+     with the request the page keeps for its company (shown), or, where it keeps none for it, as
+     in the tests, which draw a head with no read, a new one it keeps nowhere. */
   function head(d, quote) {
     var r = d.result;
     var c = d.company || {};
@@ -238,6 +242,7 @@
             ? h('p', { className: 'caption app-company__at' }, 'close ' + day(r.price_date))
             : null),
         h('div', { className: 'app-company__actions' },
+          P.notesControl(r.symbol, d.noteCount, load),
           h(F.Button, {
             disabled: !row,
             onClick: function (event) { P.watch(row, event.currentTarget); }

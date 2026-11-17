@@ -428,14 +428,29 @@
   .app-request__launch { margin-top: var(--space-2); }
   .app-request__open { margin-left: var(--space-2); }
   .app-secondary__path { margin-top: var(--space-2); }
-  /* Add a note, kept for the Notes control (the company page's design, 11.1): the field as wide as
-     its box, a refusal under it. */
-  .app-notes__new {
-    display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2);
-    margin-top: var(--space-3);
+  /* Notes (the company page's design, 11.1): the control at the left of the drawer's bar, Close
+     staying at its right. Its box, the bundle's menu as the watchlist popup draws it, fixed where
+     app.js places it under or over the control and wide enough for a note to read: the company's
+     notes in a list that scrolls under 240px, faded while they are read, each note's text with
+     its line breaks kept and its chip under it; the line of none or of a failed read in the
+     list's place; under the list Add a note, the field as wide as the box, its button under it
+     and a refusal under them. */
+  .app-drawer__bar .app-notes-open { margin-right: auto; }
+  .app-notes-box {
+    position: fixed; top: auto; right: auto; box-sizing: border-box; width: 22rem;
+    max-width: 100vw;
   }
-  .app-notes__field { width: 100%; resize: vertical; font-family: var(--font-sans); }
-  .app-notes__error { margin: var(--space-2) 0 0; color: var(--caution); }
+  .app-notes-box__body { max-height: 240px; }
+  .app-notes-box__body.is-loading { opacity: 0.5; }
+  .app-notes-box__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .app-notes-box__chip { margin-top: var(--space-1); }
+  .app-notes-box__none { margin: 0; padding: 0 var(--space-1); }
+  .app-notes-box__failed { margin: 0; padding: 0 var(--space-1); color: var(--caution); }
+  .app-notes-box__new {
+    display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2);
+  }
+  .app-notes-box__field { width: 100%; resize: vertical; font-family: var(--font-sans); }
+  .app-notes-box__error { margin: var(--space-2) 0 0; color: var(--caution); }
   /* The report page (spec 2026-11-06 Tier 2, 18.4), in CompanyReport's order, one column: the
      head, the ticker, the name and the phase badge, then the one headline figure with the price
      beside it; the meter under it, at the width it reads best, a refusal under it; the meta line
