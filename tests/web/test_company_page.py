@@ -442,6 +442,10 @@ def test_a_panel_a_list_of_pairs_a_group_and_a_table() -> None:
     assert [text(e) for e in elements(table) if e["type"] == "th"] == ["", "3Y"]
     cells = [e for e in elements(table) if e["type"] == "td"]
     assert [c["props"]["className"] for c in cells] == ["body app-company__rowname", "figure"]
+    # a table in a narrow column takes its figures' type
+    small = _page("table", ["", "3Y"], [["Revenue", "25.0%"]], "figure-sm")
+    cells = [e for e in elements(small) if e["type"] == "td"]
+    assert [c["props"]["className"] for c in cells] == ["body app-company__rowname", "figure-sm"]
 
     panel = _page("panel", "Company", None, ["inside"])
     assert panel["type"] == "section"

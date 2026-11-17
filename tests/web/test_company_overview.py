@@ -122,6 +122,32 @@ def test_the_company_block() -> None:
     assert "body" in _fact(tree, "CEO")["props"]["className"].split()
 
 
+def test_a_text_value_wraps_inside_its_cell_and_a_figure_does_not() -> None:
+    """A list's value in body, a word or a name, wraps inside its half of the row, so a long
+    industry (``Drug Manufacturers - Specialty & Generic``) or a long name stays inside its list;
+    a value in figure stays on one line (the decision log of 2026-11-17). Each of the Company
+    block's facts is marked by its kind: the six words in body, the employees and the day it
+    listed in figure."""
+    assert _rule(".app-kv__v {") == "text-align: right; white-space: nowrap;"
+    wraps = "white-space: normal; overflow-wrap: anywhere; min-width: 0;"
+    assert _rule(".app-kv__v.body {") == wraps
+    long = COMPANY | {
+        "industry": "Drug Manufacturers - Specialty & Generic",
+        "ceo": "Maria Alejandra Fernandez-Villanueva de la Cruz",
+    }
+    tree = _page("Company", {"company": long})
+    kinds = {
+        text(classed(row, "app-kv__k")[0]): classed(row, "app-kv__v")[0]["props"]["className"]
+        for row in classed(tree, "app-kv__row")
+    }
+    words = ("CEO", "Website", "Sector", "Industry", "Country", "Exchange")
+    assert kinds == {name: "body app-kv__v" for name in words} | {
+        "Employees": "figure app-kv__v",
+        "Listed": "figure app-kv__v",
+    }
+    assert text(_fact(tree, "Industry")) == "Drug Manufacturers - Specialty & Generic"
+
+
 def test_the_brief_opens_and_closes() -> None:
     """Open, the brief is whole and the button says Show less; the component keeps whether it is
     open and turns it at a click."""
@@ -534,6 +560,10 @@ def test_the_statistics_groups_rows_and_figures() -> None:
     for name, rows in ROWS.items():
         assert _lists(groups[name]) == [rows], name
     assert _table(groups["Growth a year, per share"]) == PER_SHARE
+    # the table's rates in figure-sm, so twelve of them fit a column of three (the decision log
+    # of 2026-11-17); its rows' names in body, as every table's
+    cells = [e for e in elements(groups["Growth a year, per share"]) if e.get("type") == "td"]
+    assert {c["props"]["className"] for c in cells} == {"body app-company__rowname", "figure-sm"}
     # words in body, figures in figure: Paid is the frequency's word
     assert "body" in _fact(groups["Dividends"], "Paid")["props"]["className"].split()
     assert "figure" in _fact(groups["Dividends"], "Yield")["props"]["className"].split()
@@ -564,7 +594,11 @@ def test_a_reporting_currency_figure_carries_its_code() -> None:
 def _figures(tree: Any) -> list[str]:
     """The text of every figure of ``tree``: each list's and each table cell's but the rows'
     names."""
-    cells = [e for e in classed(tree, "figure") if e.get("type") == "td"]
+    cells = [
+        e
+        for e in elements(tree)
+        if e.get("type") == "td" and "app-company__rowname" not in e["props"]["className"]
+    ]
     return [text(e) for e in classed(tree, "app-kv__v") + cells]
 
 
@@ -633,24 +667,30 @@ def test_interest_cover_at_zero_is_the_dash() -> None:
 
 def test_the_overview_draws_two_columns_with_three_blocks_in_each() -> None:
     """``draw.overview``: the grid of two columns; at the left, in order, Company on the answer's
-    company, Fairband value on the detail and Key statistics on the answer; at the right, the
-    column that adds no height of its own (8.7), the price chart on the answer's prices, keyed on
-    the company, so each company's chart opens at the past year with no day picked, then Price
-    facts on the answer and News on the answer's stories and the note the page sets on them."""
+    company, Fairband value on the detail and Key statistics on the answer; at the right the price
+    chart on the answer's prices, keyed on the company, so each company's chart opens at the past
+    year with no day picked, then Price facts on the answer and News on the answer's stories and
+    the note the page sets on them. Both columns are the page's plain column (8.7): Key
+    statistics, the left one's last block, is a block the rule that grows a column's last block
+    selects, so it grows where the right column is the taller; News, the right one's last block,
+    fills what is left instead."""
     tree = _page("draw.overview", answers.OVERVIEW, answers.DETAIL)
     assert tree["props"]["className"] == "app-company__grid"
     left, right = tree["props"]["children"]
     assert left["props"]["className"] == "app-company__col"
-    assert right["props"]["className"] == "app-company__col app-company__col--match"
+    assert right["props"]["className"] == "app-company__col"
     company, value, statistics = left["props"]["children"]
     assert company["props"]["company"] == answers.OVERVIEW["company"]
     assert value == _page("value", answers.DETAIL)
     assert statistics == _page("statistics", answers.OVERVIEW)
+    assert statistics["type"] == "section"
+    assert statistics["props"]["className"].split() == ["app-company__panel"]
     chart, facts, news = right["props"]["children"]
     assert chart["props"]["prices"] == answers.OVERVIEW["prices"]
     assert chart["props"]["key"] == "price " + answers.SYMBOL
     assert facts == _page("priceFacts", answers.OVERVIEW)
     assert news == _page("news", {"stories": STORIES, "note": None})
+    assert news["props"]["className"].split() == ["app-company__panel", "app-company__panel--fill"]
     script = _static_file("company_overview.js")
     start = script.index("  function overview(")
     assert "h(P.companyChart.Chart, {" in script[start : script.index("\n  }\n", start)]
@@ -1126,19 +1166,25 @@ def _top_rule(selector: str) -> str:
 
 
 def test_the_columns_rule_is_in_the_page_s_css() -> None:
-    """8.7 and 9: the grid stretches both columns to the row's height; on the Overview the right
-    column adds none of its own, so the left sets the row, and News fills what is left, over a
-    floor of 260px, its list scrolling inside it; on every other tab the last block of each
-    column grows to the row. Under 1180px one column, the right column's blocks after the
-    left's, the news list scrolling under 520px."""
+    """8.7 and 9, both ways (the decision log of 2026-11-17): the grid stretches both columns to
+    the row's height, which the taller column sets. The news list has no height of its own, so
+    its stories never size the row: on the Overview the right column's least height is the
+    chart, Price facts and News at its floor of 260px. Where the left column is the taller, News
+    fills what is left, its list scrolling inside it; where the right column is, the left
+    column's last block grows to the row; on every other tab the last block of each column grows
+    to the row. Under 1180px one column, the right column's blocks after the left's, the news
+    list as tall as its stories under 520px."""
     grid = _top_rule(".app-company__grid {")
     assert "align-items: stretch;" in grid and "align-items: start" not in grid
-    assert _top_rule(".app-company__col--match {") == "height: 0; min-height: 100%;"
+    # no column adds no height of its own: the rule that made the left column alone set the row
+    # is gone, from the page's CSS and from the Overview's script
+    assert "app-company__col--match" not in _static_file("index.html")
+    assert "app-company__col--match" not in _static_file("company_overview.js")
     fill = _top_rule(".app-company__panel--fill {")
     for part in ("display: flex;", "flex-direction: column;", "flex: 1 1 0;", "min-height: 260px;"):
         assert part in fill
     news = _top_rule(".app-company__news {")
-    for part in ("flex: 1 1 0;", "min-height: 0;", "overflow-y: auto;"):
+    for part in ("flex: 1 1 0;", "height: 0;", "min-height: 0;", "overflow-y: auto;"):
         assert part in news
     grows = ".app-company__col > .app-company__panel:last-child:not(.app-company__panel--fill) {"
     assert _top_rule(grows) == "flex: 1 1 auto;"
@@ -1148,9 +1194,8 @@ def test_the_columns_rule_is_in_the_page_s_css() -> None:
     rules = [" ".join(line.split()) for line in narrow[1].splitlines()]
     assert rules == [
         ".app-company__grid { grid-template-columns: minmax(0, 1fr); }",
-        ".app-company__col--match { height: auto; min-height: 0; }",
         ".app-company__panel--fill { flex: none; }",
-        ".app-company__news { flex: none; max-height: 520px; }",
+        ".app-company__news { flex: none; height: auto; max-height: 520px; }",
     ]
     assert html.count("@media (width < 1180px)") == 1
     assert ".app-company__news:focus-visible {" in html
@@ -1158,14 +1203,17 @@ def test_the_columns_rule_is_in_the_page_s_css() -> None:
 
 def test_the_script_and_the_columns_inside_a_block() -> None:
     """The tab's script loads after company.js. Inside a block, three columns become two under
-    700px of the block's width and one under 460px; two columns become one there too."""
+    810px of the block's width (the decision log of 2026-11-17: the least width of the table of
+    yearly rates a share, at three negative three-figure rates a row, in three columns with their
+    gaps) and one under 460px; two columns become one there too."""
     html = _static_file("index.html")
     scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
     assert scripts.index("company_overview.js") == scripts.index("company.js") + 1
     for name, columns in (("two", "minmax(0, 1fr) minmax(0, 1fr)"), ("three", "repeat(3,")):
         [rule] = re.findall(r"\n  \.app-company__" + name + r" \{([^}]*)\}", html)
         assert "grid-template-columns: " + columns in " ".join(rule.split())
-    narrow = re.search(r"@container \(width < 700px\) \{([^}]*)\}", html)
+    assert "@container (width < 700px)" not in html
+    narrow = re.search(r"@container \(width < 810px\) \{([^}]*)\}", html)
     assert narrow is not None
     assert ".app-company__three { grid-template-columns: repeat(2, minmax(0, 1fr));" in narrow[1]
     narrower = re.search(r"@container \(width < 460px\) \{([^}]*)\}", html)

@@ -18,11 +18,11 @@
   var P = FairbandPage;
   var C = P.companyPage;
 
-  /* The Overview (8): the grid's two columns. At the left Company on the answer's company, keyed
-     on the company so each company's brief opens closed, Fairband value on the company's detail
-     and Key statistics on the answer. At the right, the column that adds no height of its own, so
-     the left one sets the row and both end on one line (8.7): first Price, company_chart.js's
-     chart (FairbandPage.companyChart, loaded after this script and read as the tab draws) on the
+  /* The Overview (8): the grid's two columns, which end on one line (8.7). At the left Company on
+     the answer's company, keyed on the company so each company's brief opens closed, Fairband
+     value on the company's detail and Key statistics on the answer, which grows to the row where
+     the right column is the taller. At the right first Price, company_chart.js's chart
+     (FairbandPage.companyChart, loaded after this script and read as the tab draws) on the
      answer's prices, keyed on the company so each company's chart opens at 1Y with no day picked;
      then Price facts on the answer; then News, which fills what is left, on the answer's stories
      and the note the page sets on them where newer news did not load (company.js, newer). */
@@ -32,7 +32,7 @@
         h(Company, { key: 'company ' + answer.symbol, company: answer.company }),
         value(detail),
         statistics(answer)),
-      h('div', { className: 'app-company__col app-company__col--match' },
+      h('div', { className: 'app-company__col' },
         h(P.companyChart.Chart, { key: 'price ' + answer.symbol, prices: answer.prices }),
         priceFacts(answer),
         news({ stories: answer.news.stories, note: answer.news.note || null })));
@@ -229,7 +229,8 @@
   }
 
   /* The yearly growth a share over three, five and ten years, a small table under its title:
-     revenue, net income, cash flow and the dividend, each rate as the read gives it (14.3). */
+     revenue, net income, cash flow and the dividend, each rate as the read gives it (14.3), in
+     figure-sm, so twelve rates fit one of the block's three columns. */
   var PER_SHARE = [
     ['revenue', 'Revenue'], ['netIncome', 'Net income'], ['cashFlow', 'Cash flow'],
     ['dividend', 'Dividend']
@@ -241,7 +242,7 @@
       C.table(['', '3Y', '5Y', '10Y'], PER_SHARE.map(function (row) {
         var rate = rates[row[0]];
         return [row[1], C.percent(rate.y3), C.percent(rate.y5), C.percent(rate.y10)];
-      })));
+      }), 'figure-sm'));
   }
 
   /* ------------------------------------------------------------- Price facts */

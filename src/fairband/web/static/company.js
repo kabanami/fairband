@@ -328,15 +328,18 @@
       h('h3', { className: 'label app-company__grouptitle' }, title), kv(rows));
   }
 
-  /* A small table of figures: its head's cells in label, then its rows, each led by its name. */
-  function table(head, rows) {
+  /* A small table of figures: its head's cells in label, then its rows, each led by its name, its
+     figures in `type`, figure unless told (figure-sm, for a table in a narrow column). */
+  function table(head, rows, type) {
     return h('table', { className: 'app-company__table' },
       h('thead', null, h('tr', null, head.map(function (cell, i) {
         return h('th', { key: i, className: 'label' }, cell);
       }))),
       h('tbody', null, rows.map(function (row, i) {
         return h('tr', { key: i }, row.map(function (cell, j) {
-          return h('td', { key: j, className: j ? 'figure' : 'body app-company__rowname' }, cell);
+          return h('td', {
+            key: j, className: j ? type || 'figure' : 'body app-company__rowname'
+          }, cell);
         }));
       })));
   }
