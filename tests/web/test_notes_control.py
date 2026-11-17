@@ -344,7 +344,9 @@ def test_the_box_opens_under_its_control_and_closes_as_the_popup_does() -> None:
 def test_a_note_taken_reads_the_notes_and_the_company_again() -> None:
     """Taken, the field clears, the box still open on the company reads its notes again, so the
     new one is first, and the view the box opened from reads its company again, so the count
-    follows: the drawer through reloadDetail, the company page through its own read."""
+    follows: the drawer through reloadDetail, the company page through its own read. A control
+    made without ``after`` reads nothing more, and a note it takes draws no error under the
+    cleared field, since the post's catch would show the call's TypeError as a refusal."""
     script = _static_file("app.js")
     post = _function(script, "postNote")
     _in_order(
@@ -352,8 +354,10 @@ def test_a_note_taken_reads_the_notes_and_the_company_again() -> None:
         "var box = state.notes;",
         "draft.text = '';",
         "if (state.notes && state.notes.symbol === symbol) readNotes();",
-        "box.after();",
+        "if (box.after) box.after();",
+        ".catch(function (err) { draft.error = err.message; })",
     )
+    assert post.count("box.after()") == 1
     assert script.count("function postNote(") == 1
     assert "notesControl(d.symbol, d.body && !d.loading ? d.body.noteCount : null,\n" in script
     assert "reread(d.symbol))" in _function(script, "drawer")

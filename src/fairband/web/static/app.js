@@ -1456,7 +1456,7 @@
      text kept. Taken, the field clears, a box still open on the company reads its notes again,
      so the new one is first, and the box's `after` reads the view's company again, so its
      control's count follows: the drawer's detail (reloadDetail) or the company page's own
-     read. */
+     read; a control made without one reads nothing more. */
   function postNote(symbol) {
     var box = state.notes;
     var draft = drafted(symbol);
@@ -1470,7 +1470,7 @@
         if (!r.ok) throw new Error(refusalDetail(r));
         draft.text = '';
         if (state.notes && state.notes.symbol === symbol) readNotes();
-        box.after();
+        if (box.after) box.after();
       })
       .catch(function (err) { draft.error = err.message; })
       .then(function () {
