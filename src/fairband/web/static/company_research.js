@@ -6,23 +6,25 @@
    state, no note and no Request research, which the head has.
 
    Under the tabs' row, the bar (7.2): Report and Records, the tab's two views, Records with the
-   count of the rows its panels draw; in the Report view the report's line, its stance in the
-   Stance column's chip, faded once its validity ended, its mode, its revision, its date and time,
-   who wrote it, valid until and, for a valuation review, the full report it reuses; at its right
-   Footnote marks and Download .md; under it a valuation review's note that it reuses none and the
-   Markdown's refusal. In the Records view the line's sentence, and under the bar the company's
-   records on file (7.10), which company_research_records.js draws (FairbandPage.researchRecords,
-   loaded after this script and called as the tab draws). Then, in the Report view, the section
-   list at the left (7.3): the report's headings, the three parts kept closed, References with
-   their count, and the reports on file, the one shown marked, each other a link to its address;
-   the name of the section in view marked as the app marks a selection, where the browser can
-   tell which is in view, else the first. A press on a name scrolls to its panel and opens it
-   where it is closed. At the right, a panel a section (7.4): its heading, then the rows its
-   layout gives (FairbandPage.researchText.lay), each block drawn by the design system's reader
-   (Fairband.reportText.draw), and the cards beside its first run of text, the named blocks its
-   layout makes cards and the records' cards the tab hands it by heading. Then the references,
-   Appendix A and Appendix B (7.8), each closed, each opened drawing the report's part
-   (FairbandPage.reportParts). A company with no report draws "No report yet." alone.
+   count of the rows its panels draw after a space; in the Report view the report's line, its
+   stance in the Stance column's chip, faded once its validity ended, its mode, its revision, its
+   date and time, who wrote it, valid until and, for a valuation review, the full report it
+   reuses; at its right Footnote marks and Download .md; under it a valuation review's note that
+   it reuses none and the Markdown's refusal. In the Records view the line's sentence, and under
+   the bar the company's records on file (7.10), which company_research_records.js draws
+   (FairbandPage.researchRecords, loaded after this script and called as the tab draws). Then, in
+   the Report view, the section list at the left (7.3): the report's headings, the three parts
+   kept closed, References with their count, and the reports on file, the one shown marked, each
+   other a link to its address, their group named, so the narrow width can stand them in a line
+   under the bar (index.html); the name of the section in view marked as the app marks a
+   selection, where the browser can tell which is in view, else the first. A press on a name
+   scrolls to its panel and opens it where it is closed. At the right, a panel a section (7.4):
+   its heading, then the rows its layout gives (FairbandPage.researchText.lay), each block drawn
+   by the design system's reader (Fairband.reportText.draw), and the cards beside its first run
+   of text, the named blocks its layout makes cards and the records' cards the tab hands it by
+   heading. Then the references, Appendix A and Appendix B (7.8), each closed, each opened
+   drawing the report's part (FairbandPage.reportParts). A company with no report draws
+   "No report yet." alone.
 
    The cards by heading (7.4 rules 1 and 6 to 10): Summary, the report's call (7.5), its value,
    the design system's meter whole and the levels in words; Valuation, each grid the report cites
@@ -36,8 +38,8 @@
    charts by quarter (rule 4); those of a pair and of the quarters' row drawn smaller.
 
    The series the charts read (8.2) are read each on its own after the report lands, each with
-   the request header: the financial tables, the multiples history,
-   five years of closes, the band's history and each sensitivity reading the references name.
+   the request header: the financial tables, the multiples history, five years of closes, the
+   band's history and each sensitivity reading the references name.
    They are kept by the report's id outside the tab, the report shown's alone, read when a
    report's answer lands, again when a new answer of the same report lands (the charts drawn
    staying until their new series land), never when the tab is only drawn again; each landing
@@ -52,6 +54,10 @@
    the reference's number and its words (source), shows in one box of the tab's own on hover and
    on keyboard focus, each cite made focusable; the cite's own title, its ref, is taken off as the
    box shows, so the browser shows no second one.
+
+   Print (7.11) draws the three closed parts open: before the page prints, the tab opens those
+   that are closed, and after it closes again those it opened (openForPrint); the stylesheet does
+   the rest (index.html).
 
    Research, the tab's component, keeps the view, the marks, the section in view, the Markdown's
    refusal and the review whose bridge Records draws in its state, drawn keyed on the company of
@@ -141,13 +147,14 @@
   }
 
   /* One of the bar's two views, selected where it is `view`, with the count `n` after its name
-     where given. */
+     and a space where given, as a Records panel's head has its count ("Records 23"). */
   function viewButton(id, words, view, act, n) {
     return h('button', {
       key: id, type: 'button', role: 'tab', className: 'control app-research__view',
       'aria-selected': id === view ? 'true' : 'false',
       onClick: function () { act.view(id); }
-    }, words, n == null ? null : h('span', { className: 'figure-sm app-research__n' }, C.count(n)));
+    }, words, n == null ? null : ' ',
+      n == null ? null : h('span', { className: 'figure-sm app-research__n' }, C.count(n)));
   }
 
   /* The report's line: its stance in the Stance column's chip, faded with a title that says so
@@ -185,7 +192,8 @@
   /* ------------------------------------------------------------------------------- the list */
 
   /* The section list (7.3) of `answer`'s report, the name of the panel `shown` marked: the
-     report's headings, the three parts kept closed, then the reports on file. */
+     report's headings, the three parts kept closed, then the reports on file, their group named
+     (app-research__group--files). */
   function list(answer, shown) {
     var report = answer.report;
     var names = report.sections.map(function (s, i) {
@@ -202,12 +210,15 @@
       group('Reports on file · ' + C.count(answer.reports.length),
         h('ul', { className: 'app-research__files' }, answer.reports.map(function (r) {
           return h('li', { key: r.id }, file(r, report.id, answer.symbol));
-        }))));
+        })), 'app-research__group--files'));
   }
 
-  function group(title, body) {
-    return h('div', { key: title, className: 'app-research__group' },
-      h('p', { className: 'label app-research__grouphead' }, title), body);
+  /* A group of the list: its head, `title`, over its `body`; `modifier`, where given, a class of
+     its own beside the group's. */
+  function group(title, body, modifier) {
+    return h('div', {
+      key: title, className: 'app-research__group' + (modifier ? ' ' + modifier : '')
+    }, h('p', { className: 'label app-research__grouphead' }, title), body);
   }
 
   /* A name in the list: a press scrolls to its panel `id` and opens it where it is closed (go);
@@ -744,6 +755,34 @@
       h('div', { className: 'app-research__fold' }, body));
   }
 
+  /* ---------------------------------------------------------------------------------- print */
+
+  /* Print draws the three closed parts open (7.11), which a stylesheet cannot do in every
+     browser: before the page prints, each of them that is closed opens, and after it those it
+     opened close again, so one the reader had opened stays open. Gives what takes the two
+     listeners away. */
+  function openForPrint() {
+    var opened = [];
+    function before() {
+      CLOSED.forEach(function (id) {
+        var part = document.getElementById(id);
+        if (!part || part.open) return;
+        part.open = true;
+        opened.push(part);
+      });
+    }
+    function after() {
+      opened.forEach(function (part) { part.open = false; });
+      opened = [];
+    }
+    window.addEventListener('beforeprint', before);
+    window.addEventListener('afterprint', after);
+    return function () {
+      window.removeEventListener('beforeprint', before);
+      window.removeEventListener('afterprint', after);
+    };
+  }
+
   /* -------------------------------------------------------------------------- a cited number */
 
   /* The words of the box of a cite of `ref` (7.7): its reference's number and its source,
@@ -836,7 +875,8 @@
      (FairbandPage.researchRecords). It keeps the view, Report at first; Footnote marks, as the
      browser keeps them; the panel in view, the first at first; the Markdown's refusal, with the
      report it is of, so another report draws none; and the review whose bridge Records draws,
-     none at first, a press on its row again closing it. */
+     none at first, a press on its row again closing it. While it is drawn it opens its closed
+     parts for print (openForPrint). */
   function Research(props) {
     var answer = props.answer;
     var report = answer.report;
@@ -849,6 +889,7 @@
     var refs = React.useRef(null);
     refs.current = report ? report.references : [];
     React.useEffect(function () { return follow(root.current, refs); }, []);
+    React.useEffect(function () { return openForPrint(); }, []);
     React.useEffect(function () { focusable(root.current); });
     React.useEffect(function () {
       return watch(root.current, shown[1]);
@@ -895,7 +936,7 @@
     bar: bar, list: list, section: section, closed: closed, source: source,
     storedMarks: storedMarks, keepMarks: keepMarks, Research: Research,
     valueCard: valueCard, changesCard: changesCard, killCard: killCard, newsCard: newsCard,
-    judgmentCards: judgmentCards, series: series
+    judgmentCards: judgmentCards, series: series, openForPrint: openForPrint
   };
   C.draw.research = research;
 })();

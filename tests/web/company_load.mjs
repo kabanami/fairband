@@ -12,9 +12,10 @@
 //   {"do": "show", "symbol", "tab", "id"?}  a link or a tab's button opens the company page there,
 //                                           on the Research tab at the report `id` where given
 //                                           (FairbandPage.show, controls.js)
-//   {"do": "hash", "hash"}                  the browser's Back or Forward, or a link, moves the hash
-//                                           to `hash` (#company/LFOX, # for the screen, a report's
-//                                           old address #report/LFOX): controls.js reads it
+//   {"do": "hash", "hash"}                  the browser's Back or Forward, or a link, moves the
+//                                           hash to `hash` (#company/LFOX, # for the screen, a
+//                                           report's old address #report/LFOX): controls.js
+//                                           reads it
 //   {"do": "openReport", "symbol", "id"?}   FairbandPage.openReport opens the report `id` of the
 //                                           company, its latest where none is given
 //   {"do": "scroll", "top"}                 the reader scrolls the company page's panel down to

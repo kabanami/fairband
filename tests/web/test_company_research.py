@@ -38,9 +38,10 @@ KEY = "fairband.research.marks"
 TODAY = page_answers.TODAY.isoformat()
 HEADINGS = [s["heading"] for s in answers.SECTIONS]
 RECORDS = "The company's records on file, from any report."
-# Records in the bar with the count of the rows its panels draw of the synthetic records
-# (company_research_records.js; tests/web/test_company_research_records.py).
-RECORDS_VIEW = "Records23"
+# Records in the bar with the count of the rows its panels draw of the synthetic records, after a
+# space, as a Records panel's head has its count (company_research_records.js;
+# tests/web/test_company_research_records.py).
+RECORDS_VIEW = "Records 23"
 EXPIRED = "The value of this report is past the date it was valid until"
 MARKS = ("app-research__marks", "Footnote marks")
 DOWNLOAD = ("app-research__download", "Download .md")
@@ -185,6 +186,12 @@ def test_the_list() -> None:
     assert tree["type"] == "nav"
     heads = [text(e) for e in classed(tree, "app-research__grouphead")]
     assert heads == ["The report", "Kept closed", "Reports on file · 2"]
+    # the reports on file's group named, so the narrow width can set it in a line of its own
+    assert [_classes(g) for g in classed(tree, "app-research__group")] == [
+        ["app-research__group"],
+        ["app-research__group"],
+        ["app-research__group", "app-research__group--files"],
+    ]
     links = classed(tree, "app-research__link")
     assert [text(e) for e in links] == [
         *HEADINGS,
@@ -605,3 +612,124 @@ def test_the_tab_hangs_on_the_page_s_draw_keyed_on_the_company() -> None:
     scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
     assert scripts.index("report_parts.js") == scripts.index("charts.js") - 1
     assert scripts.index("company_research.js") == scripts.index("company_research_text.js") + 1
+
+
+# ------------------------------------------------------------------------- print and the width
+
+
+def _media(query: str) -> str:
+    """The page's one block of rules under ``@media <query>``, on one line."""
+    css = _static_file("index.html")
+    starts = [m.end() for m in re.finditer(r"(?m)^  @media " + re.escape(query) + r" \{\n", css)]
+    assert len(starts) == 1, query
+    return " ".join(css[starts[0] : css.index("\n  }\n", starts[0])].split())
+
+
+def test_print_opens_the_closed_parts_and_closes_those_it_opened() -> None:
+    """Print draws the three closed parts open (7.11). A stylesheet cannot open a closed details
+    in every browser, so the tab's script does: before the page prints, each of the three that is
+    closed opens; after it, those it opened close again, and one the reader had opened stays
+    open. The tab listens while it is drawn, its effect adding the two listeners and its cleanup
+    taking them away."""
+    trace = _drive(
+        {},
+        [
+            _mount(),
+            {"do": "listen"},
+            _press("app-research__link", "Appendix A"),
+            {"do": "event", "name": "beforeprint"},
+            {"do": "event", "name": "afterprint"},
+            {"do": "event", "name": "beforeprint"},
+            {"do": "event", "name": "afterprint"},
+            {"do": "unlisten"},
+            {"do": "event", "name": "beforeprint"},
+        ],
+    )
+    assert not [step for step in trace if step["threw"]]
+    listened, opened, before, after, again, closed, gone, unheard = trace[1:]
+
+    def printing(step: dict[str, Any]) -> list[int]:
+        """The count of the window's print listeners at ``step``."""
+        return [step["listening"].get(event, 0) for event in ("beforeprint", "afterprint")]
+
+    assert printing(trace[0]) == [0, 0] and printing(listened) == [1, 1]
+    assert opened["open"] == {"research-a": True}
+    assert before["open"] == {"research-refs": True, "research-a": True, "research-b": True}
+    assert after["open"] == {"research-refs": False, "research-a": True, "research-b": False}
+    assert again["open"] == before["open"] and closed["open"] == after["open"]
+    assert printing(gone) == [0, 0]
+    assert unheard["open"] == after["open"]
+    research = _static_file("company_research.js")
+    assert "React.useEffect(function () { return openForPrint(); }, []);" in research
+
+
+def test_below_980_px_the_tab_is_one_column() -> None:
+    """The Research tab's design, 7.3, 7.4 and 7.11: below 980 px the tab is one column. The
+    section list is a row above the report, each of its lists a line that scrolls sideways, the
+    reports on file first, in a line under the bar; a name marked by its lower edge. A section's
+    cards stand under its text, and a pair's charts under its paragraph, as many to a row as fit;
+    Records one column; the panels' padding the mockup's."""
+    block = _media("(width < 980px)")
+    for rule in (
+        ".app-research__records { grid-template-columns: minmax(0, 1fr); }",
+        ".app-research__layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }",
+        ".app-research__list { position: static; max-height: none; gap: var(--space-2); }",
+        ".app-research__group--files { order: -1; }",
+        ".app-research__links, .app-research__files { flex-direction: row; overflow-x: auto; }",
+        (
+            ".app-research__link, .app-research__file { width: auto; white-space: nowrap;"
+            " border-left: 0; border-bottom: 2px solid var(--hairline); }"
+        ),
+        (
+            ".app-research__link.is-on, .app-research__file.is-on {"
+            " border-bottom-color: var(--accent); }"
+        ),
+        ".app-research__split, .app-research__pair { grid-template-columns: minmax(0, 1fr); }",
+        ".app-research__cards { position: static; }",
+        (
+            ".app-research__minis { grid-template-columns:"
+            " repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }"
+        ),
+        (
+            ".app-research__minis--all { grid-template-columns:"
+            " repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }"
+        ),
+        ".app-research__sec, .app-research__panel { padding: var(--space-4); }",
+    ):
+        assert rule in block, rule
+
+
+def test_print_draws_the_report_view_alone() -> None:
+    """The Research tab's design, 7.11: printed where the Research tab is drawn, the head's price,
+    its controls and the tabs' row are not, nor the bar's controls or the section list; the
+    company's name and ticker and the bar's line are. The report is one column, a section's cards
+    under its text, a card and a chart whole on a page, a heading kept with what follows it; an
+    agent's table prints whole at the floor of the type scale, as the report page's did
+    (``tests/web/test_app.py``, ``test_a_wide_table_prints_whole``). The other tabs print as they
+    did: the rule for the head names the tab, apart from the tab's own, so a browser that cannot
+    read it still hides the tab's controls."""
+    block = _media("print")
+    tab = block[block.index("/* The Research tab") :]
+    for rule in (
+        (
+            ".app-research__views, .app-research__actions, .app-research__list"
+            " { display: none !important; }"
+        ),
+        (
+            ".app-company:has(.app-research) :is(.app-company__quote, .app-company__actions,"
+            " .app-company__tabs) { display: none !important; }"
+        ),
+        ".app-research__layout { display: block; }",
+        ".app-research__split { grid-template-columns: minmax(0, 1fr); }",
+        ".app-research__cards { position: static; }",
+        ".app-research__card, .app-charts__chart { break-inside: avoid; }",
+        (
+            ".app-research h2, .app-research h3, .app-research h4,"
+            " .app-research__summary { break-after: avoid; }"
+        ),
+    ):
+        assert rule in tab, rule
+    code = re.sub(r"/\*.*?\*/", "", block)
+    hidden = "".join(re.findall(r"([^{}]*)\{ display: none !important; \}", code))
+    for name in ("app-research__line", "app-company__id", "app-company__name", "ticker"):
+        assert name not in hidden, name

@@ -61,7 +61,7 @@ NONE = "None on file."
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 REVIEWS = NAMES.index("Reviews")
 COUNT = 23  # the rows the panels of the synthetic records draw
-RECORDS_VIEW = ("app-research__view", f"Records{COUNT}")
+RECORDS_VIEW = ("app-research__view", f"Records {COUNT}")
 
 
 def _records() -> dict[str, Any]:
@@ -401,8 +401,9 @@ def test_the_ledger_says_the_newest_20_only_when_more_are_on_file() -> None:
 
 
 def test_the_bar_s_count_is_the_rows_drawn() -> None:
-    """Records in the bar carries the count of the rows its panels draw, the judgments left out
-    and the ledger's twenty counted, not the count on file; in either view."""
+    """Records in the bar carries the count of the rows its panels draw, after a space as a
+    panel's head has its count, the judgments left out and the ledger's twenty counted, not the
+    count on file; in either view."""
     records = _records()
     assert node("researchRecords.count", [records], *SCRIPTS) == COUNT
     answer = answers.answer()
@@ -410,7 +411,7 @@ def test_the_bar_s_count_is_the_rows_drawn() -> None:
         bar = node("research.bar", [answer, view, False, {"today": TODAY}], *SCRIPTS)
         report, shown = classed(bar, "app-research__view")
         assert text(report) == "Report"
-        assert text(shown) == f"Records{COUNT}"
+        assert text(shown) == f"Records {COUNT}"
         assert text(_one(shown, "app-research__n")) == str(COUNT)
 
     row = records["ledger"][0]
@@ -420,7 +421,7 @@ def test_the_bar_s_count_is_the_rows_drawn() -> None:
     empty = {key: 0 if key == "ledgerCount" else [] for key in records}
     answer["records"] = empty
     bar = node("research.bar", [answer, "records", False, {"today": TODAY}], *SCRIPTS)
-    assert text(classed(bar, "app-research__view")[1]) == "Records0"
+    assert text(classed(bar, "app-research__view")[1]) == "Records 0"
 
 
 # ---------------------------------------------------------------------------------- the view

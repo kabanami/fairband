@@ -1273,8 +1273,32 @@
   }
   .app-research__open:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .app-research__bridge > td { padding: var(--space-3) 0 var(--space-4); }
+  /* Below 980px the tab is one column (7.3, 7.4, 7.11), as the mockup has it: the section list a
+     row above the report, each of its lists a line that scrolls sideways, the reports on file
+     first, in a line under the bar, the name in view and the report shown marked by an accent
+     lower edge; a section's cards under its text and a pair's charts under its paragraph, as many
+     to a row as the width holds; Records one column; the panels' padding 16px. */
   @media (width < 980px) {
     .app-research__records { grid-template-columns: minmax(0, 1fr); }
+    .app-research__layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+    .app-research__list { position: static; max-height: none; gap: var(--space-2); }
+    .app-research__group--files { order: -1; }
+    .app-research__links, .app-research__files { flex-direction: row; overflow-x: auto; }
+    .app-research__link, .app-research__file {
+      width: auto; white-space: nowrap; border-left: 0; border-bottom: 2px solid var(--hairline);
+    }
+    .app-research__link.is-on, .app-research__file.is-on { border-bottom-color: var(--accent); }
+    .app-research__split, .app-research__pair { grid-template-columns: minmax(0, 1fr); }
+    .app-research__cards { position: static; }
+    .app-research__minis {
+      grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    }
+    .app-research__minis--all {
+      grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    }
+    .app-research__sec, .app-research__panel { padding: var(--space-4); }
+    .app-research__summary { padding: var(--space-3) var(--space-4); }
+    .app-research__fold { padding: var(--space-1) var(--space-4) var(--space-4); }
   }
   /* Printed, as save-as-PDF serves (spec 13.6): no header chrome, no status line, no button or
      menu, no Request research or its lines (plan 4); a panel another view would show is hidden
@@ -1284,20 +1308,37 @@
     .app-request__error { display: none !important; }
     html, body, .app-page { height: auto; }
     .app-page { display: block; }
+    /* The Research tab (the Research tab's design, 7.11) prints the Report view alone: the
+       company's name and ticker, the bar's line, every section and the three closed parts, which
+       the tab's script opens before the page prints (company_research.js, openForPrint). Not the
+       bar's controls or the section list; nor, where the tab is drawn, the head's price, today's,
+       which moves with the latest snapshot while the report rests on its own, the head's
+       controls or the tabs' row, a rule of its own so a browser that cannot read it still hides
+       the tab's controls, and the other tabs print as they did. The report in one column, a
+       section's cards under its text, a card and a chart whole on a page and a heading kept with
+       what follows it. */
+    .app-research__views, .app-research__actions, .app-research__list { display: none !important; }
+    .app-company:has(.app-research) :is(.app-company__quote, .app-company__actions,
+    .app-company__tabs) { display: none !important; }
+    .app-research__layout { display: block; }
+    .app-research__split { grid-template-columns: minmax(0, 1fr); }
+    .app-research__cards { position: static; }
+    .app-research__card, .app-charts__chart { break-inside: avoid; }
+    .app-research h2, .app-research h3, .app-research h4,
+    .app-research__summary { break-after: avoid; }
     /* the agent's table and a list item stay on one page (spec 2026-11-06 Tier 2, 18.4) */
     .fb-report__table, .fb-report__list li { break-inside: avoid; }
-    /* the agent's table prints whole (spec 2026-11-15 9): neither its scroller nor the reader's
-       card clips it, and it takes the floor of the type scale, nothing below it, since a cite
-       and its number never wrap and in a table dense with figures those pairs set its width:
-       the cells' words at the label token's 12px on a 16px line, a cite at figure-sm's 12px,
-       the size of its own class, on the cell's line, and its number at the caption's 11px, its
-       screen size; the cells wrap as on screen, a cite still with its number. The type tokens
-       are classes with no variables, so the sizes are written out; the page's style follows
-       the bundle's, so these win over the reader's rules at equal specificity. */
+    /* the agent's table prints whole (spec 2026-11-15 9), as it did on the report page: its
+       scroller does not clip it, and it takes the floor of the type scale, nothing below it,
+       since a cite and its number never wrap and in a table dense with figures those pairs set
+       its width: the cells' words at the label token's 12px on a 16px line, a cite at
+       figure-sm's 12px, the size of its own class, on the cell's line, and its number at the
+       caption's 11px, its screen size; the cells wrap as on screen, a cite still with its
+       number. The type tokens are classes with no variables, so the sizes are written out; the
+       tab's selector wins over the cell's type class. */
     .fb-report__scroll { overflow: visible; }
-    .fb-report { overflow: visible; }
-    .fb-report .fb-report__table td { font-size: 12px; line-height: 16px; }
-    .fb-report .fb-report__table td .fb-cite { font-size: 12px; }
+    .app-research .fb-report__table td { font-size: 12px; line-height: 16px; }
+    .app-research .fb-report__table td .fb-cite { font-size: 12px; }
   }
 </style>
 </head>

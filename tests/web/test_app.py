@@ -2695,18 +2695,16 @@ def test_the_print_stylesheet() -> None:
 
 
 def test_a_wide_table_prints_whole() -> None:
-    """Spec 2026-11-15 9 (B-119): printed, a report's table is not clipped at the screen's scroll
-    box, nor at the reader's card, an ``article.fb-rec.fb-report`` whose ``.fb-rec`` hides its
-    overflow: ``.fb-report``, as specific and later (the page's style follows the bundle's
-    stylesheet), lets it show. The scroller sets no width and the table none, so an auto-width
-    table takes the smaller of its content and the paper. Since a cite and its number never wrap,
-    in a table dense with figures those pairs set its width, so the table takes the floor of the
-    type scale and nothing below it (the controller's ruling): the cells' words at the ``label``
-    token's 12px on a 16px line, a cite at ``figure-sm``'s 12px, its own class's size, by the
-    reader's own selector, which the later rule beats, and its number at the ``caption``'s 11px,
-    its screen size, with no print rule. Nothing in print stops the cells wrapping, and a cite
-    stays whole with its number by the bundle's rule, which holds in print. The table still stays
-    on one page, and the screen keeps its scroller and its card."""
+    """Spec 2026-11-15 9 (B-119), held on the Research tab (its design, 7.11): printed, an agent's
+    table is not clipped at the screen's scroll box. The scroller sets no width and the table
+    none, so an auto-width table takes the smaller of its content and the paper. Since a cite and
+    its number never wrap, in a table dense with figures those pairs set its width, so the table
+    takes the floor of the type scale and nothing below it (the controller's ruling): the cells'
+    words at the ``label`` token's 12px on a 16px line, a cite at ``figure-sm``'s 12px, its own
+    class's size, and its number at the ``caption``'s 11px, its screen size, with no print rule;
+    the tab's selector beats the cell's type class. Nothing in print stops the cells wrapping, and
+    a cite stays whole with its number by the bundle's rule, which holds in print. The table still
+    stays on one page, and the screen keeps its scroller."""
     page = _static_file("index.html")
     block = page[page.index("@media print {") :]
     block = block[: block.index("\n  }\n")]
@@ -2717,12 +2715,12 @@ def test_a_wide_table_prints_whole() -> None:
         assert words in comment, words
     for text in (
         ".fb-report__scroll { overflow: visible; }",
-        ".fb-report { overflow: visible; }",
-        ".fb-report .fb-report__table td { font-size: 12px; line-height: 16px; }",
-        ".fb-report .fb-report__table td .fb-cite { font-size: 12px; }",
+        ".app-research .fb-report__table td { font-size: 12px; line-height: 16px; }",
+        ".app-research .fb-report__table td .fb-cite { font-size: 12px; }",
         ".fb-report__table, .fb-report__list li { break-inside: avoid; }",
     ):
         assert text in block, text
+    # the reader's card (``fb-report``), which hid its overflow, is no page's now
     code = _code(block)
     assert [line.strip() for line in code.splitlines() if "fb-report__scroll" in line] == [
         ".fb-report__scroll { overflow: visible; }"
@@ -2730,9 +2728,10 @@ def test_a_wide_table_prints_whole() -> None:
     # no width for the table, and no print rule for the cite's number
     assert [line.strip() for line in code.splitlines() if "fb-report__table" in line] == [
         ".fb-report__table, .fb-report__list li { break-inside: avoid; }",
-        ".fb-report .fb-report__table td { font-size: 12px; line-height: 16px; }",
-        ".fb-report .fb-report__table td .fb-cite { font-size: 12px; }",
+        ".app-research .fb-report__table td { font-size: 12px; line-height: 16px; }",
+        ".app-research .fb-report__table td .fb-cite { font-size: 12px; }",
     ]
+    assert re.search(r"\.fb-report[ {,]", code) is None
     assert "fb-cite__n" not in code
     sizes = [int(px) for px in re.findall(r"font-size:\s*(\d+)px", code)]
     assert sizes and min(sizes) >= 11, sizes
@@ -2740,9 +2739,6 @@ def test_a_wide_table_prints_whole() -> None:
     assert page.index("/static/design-system/components/bundle.css") < page.index("<style>")
     css = _component_file("bundle.css")
     assert "overflow-x: auto;" in _rule(css, ".fb-report__scroll {")
-    assert "overflow: hidden;" in _rule(css, ".fb-rec {")
-    # the screen's rule for a cite in a cell, which the print rule beats by coming later
-    assert ".fb-report .fb-report__table td .fb-cite {\n  font-size: 14px;" in css
     assert "font-size: 11px;" in _rule(css, ".fb-cite__n {")
     assert "@media print" not in css
     tokens = _static_file("design-system/tokens/tokens.css")

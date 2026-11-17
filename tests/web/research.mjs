@@ -8,9 +8,10 @@
 // input's answers, at once or, for an answer marked held, when a release step lets it land, an
 // address given a list of answers taking the next at each fetch, the last for every fetch after,
 // and never answers any other; a companyPage.redraw that draws the tab again, as the page draws
-// it when a series lands; and a window whose localStorage is the driver's: none, as page.mjs has
-// and as a browser that keeps nothing has; one whose every read and write throws, as a private
-// window's may; or one holding the items given.
+// it when a series lands; and a window that keeps the listeners added to it, whose localStorage
+// is the driver's: none, as page.mjs has and as a browser that keeps nothing has; one whose every
+// read and write throws, as a private window's may; or one holding the items given. Whether an
+// element found by id is open is kept from one step to the next, as the browser keeps a details'.
 //
 // The input, a JSON object on stdin: {"store": null | "throws" | {<key>: <value>, ...},
 // "answers"?: {<url>: <answer> | [<answer>, ...]}, "steps"}, an answer {"status", "body", "held"?}.
@@ -32,11 +33,17 @@
 //                                        land), and the tab is drawn again
 //   {"do": "release", "url"}             the oldest fetch of `url` still held lands, the work it
 //                                        sets off is done, and the tab is drawn again
+//   {"do": "listen"}                     the tab's print listeners are added (openForPrint), as
+//                                        its effect adds them once it is drawn
+//   {"do": "unlisten"}                   they are taken away, as the effect's cleanup takes them
+//   {"do": "event", "name"}              the window's listeners for `name` run (beforeprint,
+//                                        afterprint), as the browser runs them around a print
 // After each step the trace on stdout gains what it returned (storedMarks' choice), whether it
 // threw, the store's items (null for none or one that throws), the requests made (each its
 // method and address) and the headers each was sent with, the elements found by id that were
-// opened or scrolled to, each {open, scrolled}, the times companyPage.redraw was called, the
-// height each call to reportCharts.groupCharts was given (null for none), and the tree the tab
+// opened or scrolled to, each {open, scrolled}, whether each element found by id so far is open
+// (open), the count of the window's listeners by event, the times companyPage.redraw was called,
+// the height each call to reportCharts.groupCharts was given (null for none), and the tree the tab
 // draws, each component in it drawn with its props in turn, as page.mjs draws one, so a test
 // reads the elements the bundle's components give.
 //
@@ -70,6 +77,7 @@ const React = {
 const ReactDOM = { createRoot() { return { render() {} }; } };
 
 let touched = {}; // the elements found by id this step, by id: { open, scrolled }
+const kept = {}; // whether each element found by id is open, by id, from step to step
 let live = null; // the tree the tab last drew, its handlers kept
 const document = {
   body: { appendChild(node) { return node; } },
@@ -78,11 +86,12 @@ const document = {
   getElementById(id) {
     const [found] = [...elements(live)].filter((e) => e.props.id === id);
     if (!found) return null;
-    const node = touched[id] || (touched[id] = { open: false, scrolled: false });
+    const node = touched[id] || (touched[id] = { open: Boolean(kept[id]), scrolled: false });
+    kept[id] = Boolean(kept[id]);
     return {
       tagName: String(found.type).toUpperCase(),
-      set open(on) { node.open = on; },
-      get open() { return node.open; },
+      set open(on) { node.open = on; kept[id] = on; },
+      get open() { return kept[id]; },
       scrollIntoView() { node.scrolled = true; },
     };
   },
@@ -109,7 +118,14 @@ const fetch = (url, init) => {
   if (!given.held) return Promise.resolve(response);
   return new Promise((land) => { held.push({ url, land: () => land(response) }); });
 };
-const window = { React, ReactDOM, document, fetch, addEventListener() {} };
+const listening = {}; // the window's listeners by event
+const window = {
+  React, ReactDOM, document, fetch,
+  addEventListener(event, listener) { (listening[event] = listening[event] || []).push(listener); },
+  removeEventListener(event, listener) {
+    listening[event] = (listening[event] || []).filter((held) => held !== listener);
+  },
+};
 
 let items = null; // the store's items, where it keeps any
 if (input.store === 'throws') {
@@ -181,6 +197,7 @@ function draw() {
   inside = false;
 }
 
+let unlisten = null; // what takes the tab's print listeners away
 const trace = [];
 for (const step of input.steps) {
   let result = null;
@@ -213,6 +230,10 @@ for (const step of input.steps) {
       held.splice(at, 1)[0].land();
       await new Promise((done) => later(done, 0));
       draw();
+    } else if (step.do === 'listen') unlisten = T.openForPrint();
+    else if (step.do === 'unlisten') unlisten();
+    else if (step.do === 'event') {
+      for (const listener of listening[step.name] || []) listener();
     } else throw new Error('no step ' + step.do);
   } catch (error) {
     threw = true;
@@ -226,6 +247,9 @@ for (const step of input.steps) {
     fetched,
     headers,
     touched,
+    open: Object.assign({}, kept),
+    listening: Object.fromEntries(
+      Object.entries(listening).map(([event, held]) => [event, held.length])),
     redrawn,
     grouped,
     tree: live,
