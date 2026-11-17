@@ -6,7 +6,11 @@ company's head and tabs; that the agents write nothing new for it (way B of sect
 look (version 3 of the mockup, which is version 1 with the chart corrections: "it looks good",
 then "I prefer the apple version. Let's just go with that"). Every other choice below is
 Claude's, marked *my call* where it is more than a reading of those requests, and can be
-overturned as any other. Not built.
+overturned as any other. The plan is built on the branch `worktree-research-tab`, on 2026-11-17
+and 2026-11-18, and not yet merged; the decision log's entries on the build and on the look
+record where the build differs from this design, and the sections below say so in place,
+"(the build's ruling, decision log)". The merge and the acceptance of section 12 wait for the
+founder's word.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -164,6 +168,10 @@ Under the tabs' row, one bar:
   review that reuses a full report, "reuses the full report of" with that report's date, as
   the report page's line says it today. Under the bar, "No full report to reuse." for a
   valuation review that has none, as today.
+- Under the bar in the Report view, first, for a company in another currency or an ADR, what
+  its figures are in, every figure a share per ADS on an ADR, as the report page's head said it
+  (spec 2026-11-10, 6.2 and 7.4); none for a company in US dollars that is no ADR (the build's
+  ruling, decision log).
 - At the right, in the Report view: **Footnote marks**, a switch, off at first, the choice
   kept in the browser as the Financials tab keeps its unit; and **Download .md**, as today,
   its refusal in one sentence under the bar.
@@ -202,7 +210,9 @@ Each section is a panel on `surface-raised` with its heading. Inside:
 - **A wide table** (more than four columns, or a cell above 44 characters) across the panel.
   It takes the panel's whole width where a cell is above 44 characters, else its own.
 - **Cards** at the right of the first run of text, in a column that stays in view while the
-  panel scrolls. Below 980 px the cards stand under that text.
+  panel scrolls. Below 980 px the cards stand under that text. A card with nothing to list, the
+  kill criteria, the news or the judgments of a report that has none, is left out (the build's
+  ruling, decision log).
 
 A **named block** is a list or a table directly under a line of 90 characters or fewer that
 ends in a colon. The line is its name.
@@ -215,7 +225,9 @@ order, text and wide tables, as the report page draws them today.
    row stand side by side, under the text before them; what follows them stands under them.
 2. **Any section with no card of its own** (The business, Industry and competition, The
    thesis): a named list, and a named table that is not wide, become cards beside the text,
-   each under its name.
+   each under its name. A block moves to the cards only where text stays in the rows: a section
+   of named blocks and wide tables alone keeps every block in its place (the build's ruling,
+   decision log).
 3. **Financial performance and health.** A paragraph that opens with a bold lead word stands
    beside the charts of its group. The lead word is the bold text at the paragraph's start,
    read without its full stop and without regard to case: one that starts with "growth" names
@@ -225,7 +237,9 @@ order, text and wide tables, as the report page draws them today.
    named once, by the first paragraph that names it. A paragraph whose lead word names no
    group, and a block that is no such paragraph, stands as text in its place. A group no
    paragraph names stands in a row of its own after them. Where fewer than four paragraphs
-   name a group, every chart stands first, by group, and the text follows.
+   name a group, every chart stands first, by group, and the text follows. The count is of the
+   groups named, so a second paragraph that names a group already named counts for none (the
+   build's ruling, decision log).
 4. **The last earnings call.** The three charts by quarter in one row, then the blocks.
 5. **The bull case and the bear case.** Where the section is exactly two paragraphs that open
    "The bull case" and "The bear case", they stand in two columns, each under those words as
@@ -276,7 +290,9 @@ its value is the mechanical value." For a report that rests on a review, one lin
 the bridge's order (*my call*; the mockup shows no such report): the input's label as the
 bridge names it, its figure before and after in the input's unit, and its effect on the value
 a share, signed, to cents; the line's refusal where it has one. Appendix A keeps the whole
-bridge and each override's record.
+bridge and each override's record. A report on a refused snapshot with no line draws `none` and
+no sentence, since its value is then not the mechanical value (the build's ruling, decision
+log).
 
 ### 7.7 A cited number
 
@@ -324,6 +340,17 @@ count beside Records in the bar is the sum of the rows the panels draw.
 The judgments have no panel (*my call*): a judgment belongs to its report, whose Key judgments
 panel draws it, and the reports on file are one press away.
 
+The columns' heads as built (the build's ruling, decision log): Kill criteria `State`, `The
+thesis is wrong if`, `Set`, `Moved, and why`; Guidance `Metric`, `Period`, `Range`, `Midpoint`,
+`Basis`, `Call of`, `State`; Overrides `Input`, `From`, `To`, `State`, `The reason`; Notes
+`When`, `The note`; Reviews `When`, `Value`, `Mechanical value`, `Overrides inside`, `Price vs
+value, or the refusal`; Secondary valuations `When`, `Form`, `Value a share`, `The reason`; News
+items `Date`, `Headline`, `What happened`; Findings `As of`, `Period`, `Figure`, `The words`,
+`Source`; Ledger `When`, `Kind`, `What was written`, `By`. A review's bridge draws each line as
+the company detail serves it: the tab's read gives each line its input's label, its unit in the
+review's reporting currency and its override's reason and writer, so the bridge names who wrote
+each line and why (the build's ruling, decision log).
+
 ### 7.11 Loading, failure, print and width
 
 Loading and failure are the page's (its design, 7.5): the tab's failed read is one sentence
@@ -332,7 +359,11 @@ under the tabs. The series the charts read land one by one after the report, as 
 Print draws the Report view alone: the company's name and ticker, the bar's line, every
 section with its cards under its text, and the three closed parts, open. The app's header,
 the head's controls, the bar's controls and the section list are not printed. The report
-page's print rules for an agent's table hold.
+page's print rules for an agent's table hold. The tab's script opens the closed parts before
+the page prints and closes those it opened after, since a stylesheet cannot open a closed
+`details` in every browser; and print from the Records view prints the Records, under a head
+that prints its logo, its badges and its caption with the name and ticker (the build's rulings,
+decision log).
 
 The tab takes the company page's width. Below 980 px it is one column.
 
@@ -371,6 +402,10 @@ sensitivity reading the report cites, and the multiples history. The multiples h
 tab's one read that may call a vendor, as it is the report page's; it carries the request
 header. The head's detail gives today's value and price for the value card's caption.
 
+The tab reads them again at each landing of its read, as the report page read them at each
+landing of the report: the charts drawn stay until each new series lands, and a series of an
+older run, or of a report no longer shown, is dropped (the build's ruling, decision log).
+
 `GET /api/reports/{id}`, `GET /api/companies/{symbol}/reports` and
 `GET /api/companies/{symbol}/research` stay for the agents' tools and the export.
 
@@ -388,7 +423,14 @@ No migration, no new vendor call, no change to a refresh.
   layout rules of 7.4 are plain functions over a section's blocks, apart from the drawing, so
   the tests run them in node.
 - `report.js` leaves. What it draws that the tab keeps moves to the tab's script: the
-  references, Appendix A's parts, the glossary, the download.
+  references, Appendix A's parts, the glossary, the download. As built they moved to a script
+  of their own, `report_parts.js` (`FairbandPage.reportParts`, with `reportAppendix`, their
+  name before), which the tab calls; the layout rules stand in `company_research_text.js` and
+  Records in `company_research_records.js` (the build's ruling, decision log).
+- The address of a report on the tab is one function, `researchHref(symbol, id)`, in `app.js`
+  beside `companyHref`, which the inbox's link, the Overview's and the tab's list call; and
+  `FairbandPage.openReport` leaves with the page, `fromHash` alone sending `#report/...` to the
+  tab (the build's ruling, decision log).
 - `charts.js` stays. It gives its charts by group, so a group can stand beside its paragraph.
 - The design system's vendored bundle exports the reader of a section's text in two steps,
   `Fairband.reportText.read(parts)`, the blocks, and `Fairband.reportText.draw(block,
@@ -492,6 +534,14 @@ The readout goes in the decision log: the heights of the seven, and what the eye
 - The mockup shows Apple's report alone, which rests on no review. The value card's kind and
   its third caption sentence (7.5), and the lines of the changes card (7.6), are this design's.
 - The mockup's Records has no Reviews and no Secondary valuations panel (7.10).
+- The mockup's Records panels keep their widths: Kill criteria and Guidance half the view, News
+  items, Findings and Ledger the whole. The build spans a panel that holds records across the
+  view and gives an empty one half, since a guidance range in whole units needs the width (the
+  builder's call in Task 6; the look saw Records drawn right, decision log).
+- The mockup's Price and multiples column holds one chart, the price by week. The build's holds
+  three: the price against the band across the column, and the trailing and the forward P/E
+  side by side under it where the column holds two of 300 px, one under the other where it
+  does not (the look, decision log).
 - The mockup is not a view of the app: its header, its head and its buttons other than the
   tab's own are drawn for their place.
 
@@ -555,3 +605,110 @@ The readout goes in the decision log: the heights of the seven, and what the eye
   records a report's cards draw (7.4); the lines of the changes card
   (7.6); the report page's charts at a smaller height (7.9); the Records panels and the
   bridge on a press (7.10); one read for the tab (8.1).
+- **2026-11-18, the build.** The plan was built subagent-driven on the branch
+  `worktree-research-tab`, eight tasks, each built by a subagent and reviewed: the read (Task 1,
+  `8a29084`); the bundle's export, `Fairband.reportText` (Task 2, `2cbb7e3`); the layout rules
+  (Task 3, `db42870`); the tab's frame, its address and the report's parts moved out of
+  `report.js` (Task 4, `3dd66b1`, `c943aef`, `ea1861a`); the charts and the cards (Task 5,
+  `a9576b8`, `6186813`); Records (Task 6, `b24baa8`, `83040cb`, `3cb4574`); the old addresses,
+  the report page's removal, the narrow width and print (Task 7, `9607ece`, `8117fc4`,
+  `8018ac3`, and its fix round, `c76ea20`); and the documents (Task 8, `b498acf` and this
+  entry's commit). The build's code is `f0599f7..b498acf`; 4,570 tests pass at its head,
+  against 4,444 on main. The controller's rulings, where this design or the plan was silent or
+  wrong, each for the founder to overturn:
+  1. The read's `records` holds ten lists, the research read's eight, `reviews` and
+     `secondaryValuations`, and `ledgerCount`. The plan's "nine lists" in one test counted the
+     Records panels, which leave the judgments out (7.10).
+  2. Between Tasks 4 and 5 a pair of rule 3 drew its paragraph alone and a row of groups
+     nothing, since the charts were Task 5's.
+  3. Between Tasks 4 and 6 the bar drew Records with no count and the Records view nothing
+     under its line, since the count and the panels were Task 6's.
+  4. The report's parts moved to `report_parts.js`, which sets `FairbandPage.reportParts` and
+     keeps `reportAppendix`, so the removal of `report.js` dropped neither; section 9 had them
+     move to the tab's script.
+  5. Rule 2 covers every heading but the nine with cards, charts or columns of their own
+     (Summary, Financial performance and health, The last earnings call, The bull case and the
+     bear case, Valuation, Price and multiples, Recent news, Risks and kill criteria, Key
+     judgments). In those a named block stays in its place in the text, so a named list in
+     Valuation is no card.
+  6. `gapText` is on `FairbandPage`, and the value card writes the meter's gap with it, as
+     every meter does (7.5).
+  7. The read gives `ofReport.newsItems` in the store's order; the news card, and the Records'
+     News items panel, sort them by date, newest first (7.4 rule 8).
+  8. Rule 3 counts the groups named, not the paragraphs that name one: a second paragraph that
+     names a group already named counts for none. The mockup counted every matching paragraph
+     (7.4).
+  9. A block moves to the cards only where text stays in the rows, so a section of a named list
+     and a wide table keeps the list in its place (7.4 rule 2).
+  10. A Financial performance and health section with no parts draws one row of the six
+      groups' charts, which are the report's own whatever its text holds.
+  11. A list entry writes the mode with a capital first letter, "Full report, hold", as the
+      mockup the founder took does.
+  12. The tab's two lists keep their names for a screen reader, `What the tab shows` and `The
+      report's sections`, as the mockup has them; the final review may ask for the design's
+      words.
+  13. The series are read again at each landing of the tab's read, the charts drawn kept until
+      each new series lands and the latest run winning. Read once a report, as first built,
+      they stayed stale after a refresh, and a failed read stayed failed (8.2).
+  14. The changes card of a report on a refused snapshot with no line shows `none` and no
+      sentence, since "its value is the mechanical value" would be false there (7.6).
+  15. A card with nothing to list, the kill criteria, the news or the judgments, is left out,
+      as the mockup draws a card only for what is on file (7.4).
+  16. The series' reading stood in both `report.js` and `company_research.js` until Task 7
+      removed `report.js`, since the plan kept the report page working until the tab took its
+      addresses; one copy is left.
+  17. The Valuation cards draw every sensitivity reading the report's references name, as the
+      report page's charts drew them, so a reading cited only in another section draws in
+      Valuation's column (7.4 rule 6).
+  18. A review's bridge line in the tab's read carries its override's reason and writer beside
+      its label and its unit, so `ValueBridge` names the right writer and reason (7.10).
+  19. The Records panels' heads stand as built, written in 7.10 and in the plan's Words table:
+      `The thesis is wrong if` is the mockup's, and `Moved, and why` and `Price vs value, or the
+      refusal` are the builder's words for "the state's day and reason" and "the designation,
+      or the refusal".
+  20. In print the tab's script opens the three closed parts on `beforeprint` and closes those
+      it opened on `afterprint`, not the stylesheet alone as the plan's Task 7 said: a
+      stylesheet cannot open a closed `details` in every browser (7.11).
+  21. The Report view draws under the bar what a foreign filer's figures are in
+      (`FairbandPage.currencyLine` of the detail, every figure a share per ADS on an ADR). The
+      report page's head drew it, this design left it out, and the earlier design holds (spec
+      2026-11-10, 6.2 and 7.4; 7.2).
+  22. `FairbandPage.openReport` was removed: nothing called it, and section 9 asks only that
+      `#report/...` be sent to the tab.
+  23. Below 980 px the list stands as built, in three lines, the reports on file, the headings'
+      row and Kept closed: 7.3's row that scrolls sideways, with the reports on file in a line
+      under the bar.
+  24. Print from the Records view prints the Records, and the head prints its logo, its badges
+      and its caption with the name and the ticker; 7.11 describes the Report view's print
+      alone.
+
+  What the reviews left open is filed: B-243 (the read), B-244 (the page) and B-245 (the
+  bundle's export). The build also filed B-246, older than it (the other views likely print one
+  page), and B-247 (the playbook's template still names the report page, and the plan changes
+  no agent's write).
+- **2026-11-18, the look in a browser** (the plan's Task 8, step 2), by the controller on the
+  branch at `8018ac3`: a scratch database with the reports of the seven companies of 12.2, a
+  scratch server, a window of 2,000 px and one of 400 px, both themes.
+  - Every tab drew with no error in the browser's console and no NaN, null or undefined in its
+    text. The heights at 2,000 px: AAPL 10,598 px (23,519 on the report page, section 5), NVDA
+    11,665, AVGO 11,931 (ten sections, the valuation review), FRVO 11,009, RKLB 10,988, PLTR
+    11,084 and ASML 11,064.
+  - Seen right: the value card of a report on no review (AAPL), on a review (NVDA, "priced 9
+    Nov 2026" and "The mechanical value was $451.42.") and on a secondary valuation (FRVO, no
+    Today sentence); the line under the bar of a foreign filer (ASML); a valuation review's bar
+    with the report it reuses, and two reports on file (AVGO); the pairs with their charts;
+    Records; the light theme; the narrow width.
+  - Two findings, fixed in `c76ea20`. At 400 px a sensitivity grid of five columns was wider
+    than the window, so the page scrolled sideways (NVDA 449 px, AVGO 465, RKLB 421, ASML 489);
+    the grid now scrolls inside its card, and the panel is 400 px wide on all four. Price and
+    multiples stood its three charts in one column, 988 px tall, beside about 330 px of text;
+    the trailing and the forward P/E now stand side by side under the price chart where the
+    column holds two (section 13).
+  - Print. The review of Task 7 found that the company panel stayed a scroll container in
+    print, which a browser does not break across pages, where the report page's panel had
+    `overflow: visible`; `c76ea20` gives the company panel that rule in print. The controller's
+    first PDF of AAPL held one page, read at first as the page's fault. It was the script's
+    that made it: the script set the screen's media before it printed, so the PDF took the
+    screen's styles, and what the branch printed before `c76ea20` was not measured. With the print styles, after the fix,
+    AAPL's PDF holds 13 pages (277 KB): the three closed parts print open and are closed again
+    after, the head and the bar's line print, and the cards stand under their text.

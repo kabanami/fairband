@@ -48,7 +48,7 @@
 | Tabs | `Overview`, `Financials`, `Estimates`, `Research` |
 | Views | `Report`; `Records` with the count of the rows it draws |
 | The bar's line | the stance; the mode; `revision <n>`; the date and time (`P.when`); the writer (`PrincipalChip`); `valid until <date>`; `reuses the full report of <date>` |
-| Under the bar | `No full report to reuse.`; `The Markdown did not download: <the server's sentence>.` |
+| Under the bar | for a company in another currency or an ADR, first, `Reports in <code>; one ADS is <n> ordinary shares; every per-share figure here is per ADS; valued at <code> <rate> per USD`, each part where it applies (`FairbandPage.currencyLine`); `No full report to reuse.`; `The Markdown did not download: <the server's sentence>.` |
 | The bar, right | `Footnote marks`; `Download .md` |
 | The bar in Records | `The company's records on file, from any report.` |
 | No report | `No report yet.` |
@@ -62,6 +62,7 @@
 | Two columns | `The bull case`, `The bear case` |
 | A cite's box | `[<n>] <the reference's source>` |
 | Records | `Kill criteria`, `Guidance`, `Overrides`, `Notes`, `Reviews`, `Secondary valuations`, `News items`, `Findings`, `Ledger`; `None on file.`; `current`, `superseded`; `the newest 20 of <n>` |
+| Records' heads, as built | Kill criteria `State`, `The thesis is wrong if`, `Set`, `Moved, and why`; Guidance `Metric`, `Period`, `Range`, `Midpoint`, `Basis`, `Call of`, `State`; Overrides `Input`, `From`, `To`, `State`, `The reason`; Notes `When`, `The note`; Reviews `When`, `Value`, `Mechanical value`, `Overrides inside`, `Price vs value, or the refusal`; Secondary valuations `When`, `Form`, `Value a share`, `The reason`; News items `Date`, `Headline`, `What happened`; Findings `As of`, `Period`, `Figure`, `The words`, `Source`; Ledger `When`, `Kind`, `What was written`, `By` |
 | Failures | 404 `no page data for <symbol>`; 404 `no report <id>`; 404 `report <id> is <its symbol>'s, not <symbol>'s`; any other failure of the read, the page's sentence |
 
 ## Review Focus
@@ -293,6 +294,8 @@ Five conditions the spec implies and a hurried build would miss. Each has its te
 - [ ] **Step 1: Write the failing tests:** the hash `#report/AAPL` shows the company view on `research` with no id and the hash becomes `#company/AAPL/research`; `#report/AAPL/9` becomes `#company/AAPL/research/9`; `P.openReport('AAPL', 9)` the same; the inbox row's link and the Overview's "Open the report" are `researchHref`'s; `index.html` holds no `id="report"` and no `report.js`; the stylesheet holds the rule that sets the tab to one column below 980 px and, under `@media print`, hides the list, the bar's controls and the head's controls and shows the closed parts.
 - [ ] **Step 2: Run them.** Expected: FAIL.
 - [ ] **Step 3: Implement.** The tests of Appendix A in `test_report_reader.py` load `report_parts.js`; the report head's test in `test_ticker_link.py` leaves with the head. In print the three closed parts are drawn open by the stylesheet alone.
+
+The build overruled "by the stylesheet alone": a stylesheet cannot open a closed `details` in every browser, so the tab's script opens the three before the page prints and closes those it opened after (the design's decision log, the build's ruling 20).
 - [ ] **Step 4: Run the whole suite.** `uv run pytest -q`. Expected: PASS.
 - [ ] **Step 5: Commit.**
 

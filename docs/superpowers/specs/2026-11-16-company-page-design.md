@@ -855,3 +855,9 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
   `docs/superpowers/specs/2026-11-17-financials-tab-design.md` and built on the branch
   `worktree-financials-tab`, which was merged to main the same day. 7.3's row of tabs now holds
   Financials, second: Overview, Financials, Estimates and Research.
+- 2026-11-18, the Research tab (B-218): designed in
+  `docs/superpowers/specs/2026-11-17-research-tab-design.md` and built on the branch
+  `worktree-research-tab`, not yet merged. The report page is the company page's Research tab
+  since that design: 7.3's Research is a tab of the row, no longer a link to `#report/<symbol>`,
+  which opens the tab on the same report, and section 13's report page left, its references, its
+  appendixes and its charts drawn in the tab.

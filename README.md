@@ -84,8 +84,8 @@ For Codex, add a line to `AGENTS.md` that tells the agent to follow
 
 ## Opening Claude Code from the page
 
-Once `launch.json` holds a window command, **Request research** in a company's drawer, on its
-company page or on its report page also opens a terminal window, in which Claude Code starts with
+Once `launch.json` holds a window command, **Request research** in a company's drawer or on its
+company page also opens a terminal window, in which Claude Code starts with
 the research skill and the work item as its first prompt, `/fairband-research work item 12`. The
 agent claims the item, and the line under the button follows the launch until it does, or says
 what failed: the window, or Claude Code in it. The menu's box **Open Claude Code**, cleared, posts

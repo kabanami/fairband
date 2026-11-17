@@ -477,10 +477,11 @@ def test_a_finding_and_a_guidance_record_name_their_currency() -> None:
             " for a figure that is not money."
         ),
         (
-            "The report page's Appendix A writes a guidance record's money figure in that"
+            "The Research tab's Appendix A writes a guidance record's money figure in that"
             ' currency, `$` for USD and the code before the number otherwise ("SEK 2,100,000,000")'
-            " (16.6; spec 2026-11-15 9.5); no page draws a finding since the drawer's Details left"
-            " (spec 2026-11-16 company page, 11), and an agent reads them through `findings`."
+            " (16.6; spec 2026-11-15 9.5), and its Records view a guidance record's and a"
+            " finding's alike (spec 2026-11-17 research tab, 7.10); an agent reads the findings"
+            " through `findings`."
         ),
     ):
         assert words in references, words
@@ -744,10 +745,10 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
             " the readings the sections cite"
         ),
         (
-            'in The last earnings call three charts by quarter under "By quarter", the revenue, the'
-            " operating margin and the EPS, each by its row's name, each bar's tick its quarter and"
-            ' the last two digits of its year ("Q3 26"), and where no period is stored the three'
-            ' with "No data on file.";'
+            "in The last earnings call three charts by quarter in the section's first row, the"
+            " revenue, the operating margin and the EPS, each by its row's name, each bar's tick"
+            ' its quarter and the last two digits of its year ("Q3 26"), and where no period is'
+            ' stored the three with "No data on file.";'
         ),
         (
             "A bar chart draws a bar for each column of its table that holds a figure, the"
@@ -792,8 +793,9 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
 
 def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s_words() -> None:
     """Spec 2026-11-15 7: 16.6 states the export's two opening lines and its line on a reused full
-    report in the reader's words, the page's line under the title by the same rule, Appendix A's
-    dates in words and its sentence for no secondary valuation without "the route"; and, since
+    report in the reader's words, the Research tab's bar and value card by the same rule (spec
+    2026-11-17 research tab, 7.2 and 7.5), Appendix A's dates in words and its sentence for no
+    secondary valuation without "the route"; and, since
     those lines name no record, the Snapshot part that opens Appendix A on the page and in the
     export alike, which names the snapshot the report rests on (the whole-branch review's I1)."""
     sixteen = _section(16)
@@ -828,12 +830,15 @@ def test_the_lines_above_the_sections_and_appendix_a_s_dates_are_in_the_reader_s
             ' full report to reuse."'
         ),
         (
-            "The page's line under the title follows the same rule, its parts joined by"
-            ' "·", the full report a valuation review reuses last ("On the data of 4 Nov 2026 ·'
-            ' priced that day · valid until 27 Jan 2027 · reuses the full report of 3 Nov 2026"),'
-            " that part left out where the reused report's record is not on file, where the"
-            ' export writes "Reuses an earlier full report.", and names no record: the'
-            " snapshot's and the review's ids are in Appendix A."
+            "The company page's Research tab says the same in the same words, in two places"
+            " (spec 2026-11-17 research tab, 7.2 and 7.5): the bar's line names the stance, the"
+            ' mode, the revision, the date and the writer, then "valid until" and the date and,'
+            ' for a valuation review, "reuses the full report of" and that report\'s date, the'
+            " last left out where the reused report's record is not on file, where the export"
+            ' writes "Reuses an earlier full report."; and the head of the report\'s value card'
+            ' reads "on the data of 4 Nov 2026, priced that day", or "priced" and the price date'
+            " where it is another. Neither names a record: the snapshot's and the review's ids"
+            " are in Appendix A."
         ),
         (
             "The export writes Appendix A's dates in words, as the references write a day: the"
