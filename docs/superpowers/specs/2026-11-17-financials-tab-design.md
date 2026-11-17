@@ -170,8 +170,8 @@ One panel, the page's full width, in this order:
 - The first column holds the lines' names and stays in place while the table scrolls sideways
   inside the block. Its head is a caption that states the unit: `USD, millions, except per
   share` on the income statement, `USD, millions` on the balance sheet, the cash flow statement
-  and Segments, `as each row says` on Ratios; `billions` under Billions; the company's reporting
-  currency in place of `USD` (7.7).
+  and Segments, `as each row says; per share in USD` on Ratios; `billions` under Billions; the
+  company's reporting currency in place of `USD` (7.7).
 - The lines, their order, their names and their kinds are section 12's lists. A kind is a
   **total** (bold), a **line**, a **sub-line** (indented under the line above it) or a **section
   head** (a label in upper case across the row, with no figures and no press).
@@ -193,7 +193,8 @@ One panel, the page's full width, in this order:
 - The chart holds **four lines** at most. At four, the `+` of every other row is disabled, with
   the title `The chart holds 4 lines. Take one off first.`
 - The lines on the chart stay when the reader changes sub-tab or period, so a statement's line
-  and a ratio can stand together. They do not stay from one company to the next: a company's
+  and a ratio can stand together. They also stay when the reader leaves the tab for another tab
+  of the same company and comes back. They do not stay from one company to the next: a company's
   tab opens on **Revenue** alone (*my call*; a company whose income statement has no Revenue
   line opens on the first line of the table).
 - A line is known by its sub-tab, its table and its key (section 9), so `Net income` of the
@@ -689,6 +690,9 @@ By the founder, on the live data, after the merge:
 The readout, in this design's decision log: the full refresh's minutes against 18.5, the count
 of failed calls among the four by endpoint, the database's growth, how many companies have no
 segments, and what the foreign filers showed (the currency of the per-share lines above all).
+Reuse is judged an endpoint at a time, so a full refresh inside the reuse window of the last one
+makes only the four new calls a company. The readout says which it measured: a whole refresh,
+or the four calls alone.
 
 ## 15. Left to the builder
 
@@ -743,14 +747,14 @@ segments, and what the foreign filers showed (the currency of the per-share line
   the browser (7.2); the three colours' values (7.6); one decimal in millions for a small
   company (7.7); the read holds the lists of lines (8.3); PEG joins the ratios (12.4).
 - 2026-11-17, the build, the builder's and the controller's calls, for the founder to overturn:
-  - A statement's or a ratio's line's `key` in the read's answer is FMP's field name (8.3 says
-    the page's own name for the line; section 12 leaves the key to the builder). FMP's fields are
-    unique in each table, so a key is one a line. A segment's key is its name, as 8.3 says.
+  - The `key` of a statement's or a ratio's line in the read's answer is FMP's field name (8.3
+    says the page's own name for the line; section 12 leaves the key to the builder). FMP's fields
+    are unique in each table, so a key is one a line. A segment's key is its name, as 8.3 says.
   - The answer holds nine tables: the three statements by fiscal year and by quarter, the two
     segment tables and the ratios.
   - A count of one in the left caption reads `the last fiscal year`, `the last quarter` or `the
-    last half-year`, words 7.2 does not give. A table with columns and no line has no left
-    caption: its sentence, `No figures on file.`, says what it holds.
+    last half-year`, words 7.2 does not give. On a statement, a table with columns and no line
+    has no left caption: its sentence, `No figures on file.`, says what it holds.
   - The tab's component is keyed on the answer's symbol, so the picks are dropped when another
     company's answer lands, and not while the old company's tab is still drawn, faded, as the
     next one loads (9).
@@ -759,8 +763,8 @@ segments, and what the foreign filers showed (the currency of the per-share line
   - No mark is drawn for any figure the table writes as a dash: a share count or a multiple of
     exactly 0 as well as an amount, which 7.5 names. A per-share figure of exactly 0, a bar of no
     height, draws none either.
-  - The ticks' letter follows the plot's largest tick and includes `T`, for trillions (TSM reads
-    `0T 1T 2T 3T`); 7.5's examples name `B` and `M`.
+  - The ticks' letter follows the plot's largest tick and includes `T`, for trillions (a plot
+    whose largest tick is 3 trillion reads `0T 1T 2T 3T`); 7.5's examples name `B` and `M`.
   - One picked line that cannot draw (a ratio under Quarterly) shows its name and `by year only`
     in the chart's head, and the sentence of 7.5 in the plot's place. With no room on its right,
     the box of several lines stands at the period's left, placed by its right edge.
@@ -787,3 +791,34 @@ segments, and what the foreign filers showed (the currency of the per-share line
   - The fixtures of the two new routes are named `ratios.annual.json` and
     `key-metrics.annual.json`, not `ratios.json` and `key-metrics.json` as the plan's Task 1 has
     them: the vendor double keeps a request's period in a shared fixture's name.
+- 2026-11-17, the whole-branch review, and the controller's rulings on it, for the founder to
+  overturn:
+  - The lines on the chart stay when the reader leaves the tab for another tab of the same
+    company and comes back (7.4). The tab was drawn anew each time it opened, so it came back on
+    Revenue alone, while the sub-tab, the period and the unit came back as they were. The tab's
+    script now keeps the picks beside the sub-tab and the period, with the company they belong
+    to, and they go only when another company's answer lands in the tab (9). The task reviews had
+    not seen it: the tests' node driver drew the tab anew in one step for two events, another
+    company's answer landing and the tab opening again. The driver now tells them apart.
+  - Two sentences of `charts.md`'s section "Several series the reader picks" did not hold of the
+    chart as built. "An amount is a column from zero" left out the per-share figures and the
+    share counts, which the chart also draws as columns (7.5); it now reads "An amount, a
+    per-share figure or a share count is a column from zero". "The label beside each line names
+    it" named a label the chart does not draw, since the labels are a row above the plot; it now
+    reads "the hover box names each line with its figure, and a period's columns stand in the
+    labels' order".
+  - A change of the Words: the first column's head on Ratios reads `as each row says; per share
+    in USD`, with the tab's currency in place of `USD` (7.3). No row of the Per share group said
+    its currency.
+  - With two lines picked and one of them off under Quarterly, the line drawn took
+    `chart-neg-3` for a figure below zero while its label wore the line's own colour. The rule of
+    7.5 is one line picked against two or more, not one line drawn: with two or more picked,
+    drawn or off, every bar wears its line's colour.
+  - The read handed `inputs_statements.cadence_of` every period end of the quarterly income
+    statement, a date stored twice among them, where the engine takes one end a date, so a
+    half-year reporter whose newest row is stored twice read as quarterly. The read now hands it
+    each end once, oldest first.
+  - The policy files' comment that counts the fetch's calls, "13 FMP and 2 GuruFocus calls each"
+    (`fairband-policy-v16.toml`, and v6 to v15), was untrue before this branch, and it is left as
+    it is. A policy's hash is its bytes, and the store refuses a known version under another
+    hash, so the comment is corrected in the next policy version (B-229).
