@@ -283,8 +283,8 @@ bridge and each override's record.
 A cite stays the design system's: the figure in the mono face with a dotted line under it. On
 the tab it takes the text's colour, and `accent` on hover and on focus. Its source, the
 reference's number and its words, shows in a small box on hover and on keyboard focus. Its
-footnote mark, `[n]`, is hidden until Footnote marks is on. In a table's cell of figures the
-dotted line is left out.
+footnote mark, `[n]`, is hidden until Footnote marks is on. In a table the dotted line is left
+out, and in a card a table's cells after the first are set right.
 
 ### 7.8 The closed parts
 
@@ -486,6 +486,9 @@ The readout goes in the decision log: the heights of the seven, and what the eye
   mockup draws beside the value, and its figures are to cents, where the mockup writes the
   value and the levels in whole dollars (7.5). The mockup's "Price that day" is the head's
   "priced that day" or "priced" with the date.
+- The mockup sets the figures of every table right, by reading each column. The build draws a
+  table with the design system's reader, whose cells carry no kind: a card's table has its
+  cells after the first set right, and a wide table's cells stand as the reader sets them.
 - The mockup shows Apple's report alone, which rests on no review. The value card's kind and
   its third caption sentence (7.5), and the lines of the changes card (7.6), are this design's.
 - The mockup's Records has no Reviews and no Secondary valuations panel (7.10).
@@ -542,6 +545,9 @@ The readout goes in the decision log: the heights of the seven, and what the eye
   newest 20 (7.10). The lead words of the financial section are matched as the mockup matched
   them (7.4). The meter is the design system's whole, with money to cents, and a 404 of the
   tab's read is the server's sentence as it arrives (7.5, 7.1).
+- **2026-11-17, approved.** The founder: "approved". The plan is
+  `docs/superpowers/plans/2026-11-17-research-tab-plan.md`. Writing it set one sentence of 7.7:
+  a cite in any table has no dotted line, since the reader's cells carry no kind.
 - **Claude's calls, for the founder to overturn**: the sections drawn by a script of the page
   on one export of the bundle (6); no data date on the tab and the view not in the address
   (7.1, 7.2); the list's form below 980 px (7.3); the kind and the third caption sentence of
