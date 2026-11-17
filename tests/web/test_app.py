@@ -846,6 +846,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/agents.js",
         "/static/settings.js",
         "/static/methodology.js",
+        "/static/report_parts.js",
         "/static/report.js",
         "/static/charts.js",
         "/static/company.js",
@@ -1573,7 +1574,7 @@ def test_the_drawer_s_head_and_the_report_page_say_what_the_figures_are_in() -> 
         "phase ? h(F.PhaseBadge, { phase: phase }) : null",
         "P.currencyLine(d, true) ? h('p', { className: 'caption app-muted app-report__currency' },",
     )
-    appendix = _function(report, "secondary")
+    appendix = _function(_code(_static_file("report_parts.js")), "secondary")
     for text in (
         "var code = s.currency;",
         "code !== 'USD' ? [['Rate', code + ' ' + P.rate(s.fxRate) + ' per USD', true]] : [],",
@@ -1820,8 +1821,8 @@ def test_figure_tables_scroll_by_keyboard_with_the_year_in_view() -> None:
     table = _function(script, "figuresTable")
     assert "return h('th', { key: c[0], className: 'label fb-num' }, c[0]);" in table
     assert "c[3]" not in table and "function noted(" not in script
-    report = _static_file("report.js")
-    calls = re.findall(r"P\.figuresTable\(\[(.*?)\]\)", report, re.DOTALL)
+    parts = _static_file("report_parts.js")
+    calls = re.findall(r"P\.figuresTable\(\[(.*?)\]\)", parts, re.DOTALL)
     assert len(calls) == 2
     for call in calls:
         # each column three elements: its name, its figures by year and their format
@@ -2374,11 +2375,10 @@ def test_the_report_page_order_is_pinned() -> None:
         "P.meter(d, false)",
         "'Download .md')",
         "h(F.ReportReader, {",
-        "'References')",
-        "'Appendix A')",
-        "h(F.ValueBridge, {",
-        "'Appendix B')",
     )
+    # the references and the appendixes, which the Research tab draws too (report_parts.js)
+    parts = _code(_static_file("report_parts.js"))
+    _in_order(parts, "'References')", "'Appendix A')", "h(F.ValueBridge, {", "'Appendix B')")
     page = _function(script, "page")
     _in_order(
         page,
@@ -2439,16 +2439,23 @@ def test_the_report_page_order_is_pinned() -> None:
     # the line under the title names no record: the ids are in Appendix A (spec 2026-11-15 7)
     for gone in ("snapshot:", "review:", "thesis:", "snapshotId", "reviewId"):
         assert gone not in reader, gone
-    refs = _function(script, "references")
+    refs = _function(parts, "references")
     for text in ("h('ol', {", "title: e.ref", "'[' + e.n + ']'", "e.source", "'No references.'"):
         assert text in refs, text
-    download = _function(script, "download")
+    download = _function(parts, "download")
     _in_order(
         download,
         "fetch('/api/reports/' + report.id + '/markdown')",
         "URL.createObjectURL(blob)",
         "link.download = report.symbol + '-revision-' + report.revision + '.md';",
         "link.click();",
+        "failed('The Markdown did not download: ' + err.message + '.');",
+    )
+    _in_order(
+        _function(script, "download"),
+        "state.downloadError = null;",
+        "P.reportParts.download(report, function (sentence) {",
+        "state.downloadError = sentence;",
     )
     assert "function back(" not in script
 
@@ -2460,8 +2467,9 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
     else its refusal; the overrides inside the review, each a record, read-only; the secondary
     valuation's figures, its drivers or parts and its projection; the guidance on file; the checks
     that ran; the versions; the classifier's evidence. Appendix B, a definition list. The owner
-    neither adds nor drops an override on the page (spec 3)."""
-    script = _code(_static_file("report.js"))
+    neither adds nor drops an override on the page (spec 3). The report page and the Research tab
+    draw them alike (report_parts.js)."""
+    script = _code(_static_file("report_parts.js"))
     a = _function(script, "appendixA")
     _in_order(
         a,
@@ -2515,7 +2523,7 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
     for gone in ("Drop", "onClick", "Button"):
         assert gone not in records, gone
     # the page's code sends no override and no drop, the report page's nor the screen's
-    for name in ("report.js", "app.js"):
+    for name in ("report.js", "report_parts.js", "app.js"):
         page = _static_file(name)
         assert "/overrides" not in page and "api.del" not in page and ".del(" not in page, name
     secondary = _function(script, "secondary")
@@ -3322,7 +3330,8 @@ def test_the_report_pages_reads_carry_the_request_header() -> None:
     read = _function(report, "read")
     assert "return fetch(url, { headers: { 'X-Fairband-Request': '1' } }).then(" in read
     assert "return response.ok ? response.json() : refused(response);" in read
-    assert report.count("fetch(") == 2  # the read and the Markdown download
+    assert report.count("fetch(") == 1  # the read; the Markdown download is report_parts.js's
+    assert _code(_static_file("report_parts.js")).count("fetch(") == 1
     assert "headers: { 'Content-Type': 'application/json', 'X-Fairband-Request': '1' }," in (
         _function(_static_file("app.js"), "send")
     )

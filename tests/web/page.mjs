@@ -6,9 +6,9 @@
 // helper is named as window.FairbandPage names it, by a dotted path for one a later script
 // hangs on it ("reportCharts.roicPoints"); its arguments are a JSON list on stdin; its result is
 // JSON on stdout. Scripts named after the helper are loaded after app.js, as the page loads them
-// (charts.js; tests/web/test_report_charts.py; report.js, whose root is the stub's, and its
-// Appendix A's overrides, "reportAppendix.overrides"; tests/web/test_report_reader.py; and its
-// head, "reportHead"; tests/web/test_ticker_link.py).
+// (charts.js; tests/web/test_report_charts.py; report_parts.js and its Appendix A's overrides,
+// "reportAppendix.overrides"; tests/web/test_report_reader.py; report.js, whose root is the
+// stub's, and its head, "reportHead"; tests/web/test_ticker_link.py).
 //
 // A bundle component is named as window names it ("Fairband.HistoryBars") and called with its
 // props, the one argument; the stub's hooks give it its first state, its refs and no effect, and

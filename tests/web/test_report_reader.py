@@ -6,7 +6,7 @@ passes no ``cites`` draws no line. The harness (``page.mjs``) calls the componen
 its props and the tests read the tree it draws (``support.page``).
 
 And Appendix A's record of an override the review applied at a split (spec 2026-11-15 8): the
-page's script, report.js, builds it with the pair in force and the words of the scaling under it,
+page's script, report_parts.js, builds it with the pair in force and the words of the scaling under it,
 and the test reads the tree it builds.
 
 And a cite's number in a report's table (spec 2026-11-15 9): ``ReportReader`` holds a cite and
@@ -24,6 +24,8 @@ from support.page import NODE, STATIC, classed, elements, node, text
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 SECTIONS = [{"heading": "Summary", "parts": ["Plain words."]}]
+# The report's parts after its sections, which the report page and the Research tab draw.
+PARTS = STATIC / "report_parts.js"
 
 
 def _draw(**props: Any) -> Any:
@@ -161,11 +163,11 @@ SNAPSHOT = {
 def test_appendix_a_s_snapshot_line_names_another_currency_last() -> None:
     """The whole-branch review's I1: Appendix A's Snapshot part names the snapshot the report rests
     on and, on a company in another currency, the reporting currency its money figures are in
-    (method 16.6), last, as the export's line does (report.js's ``snapshotLine``); a USD company's
-    names none, and a missing date or figure is a dash."""
+    (method 16.6), last, as the export's line does (report_parts.js's ``snapshotLine``); a USD
+    company's names none, and a missing date or figure is a dash."""
 
     def line(**changes: Any) -> str:
-        return text(node("reportAppendix.snapshotLine", [SNAPSHOT | changes], STATIC / "report.js"))
+        return text(node("reportAppendix.snapshotLine", [SNAPSHOT | changes], PARTS))
 
     usd = (
         "Snapshot 412 · data 4 Nov 2026 · priced 4 Nov 2026 · valid until 27 Jan 2027"
@@ -182,7 +184,7 @@ def test_appendix_a_s_guidance_writes_each_record_in_its_currency() -> None:
     """Spec 2026-11-15 9.5: on the report page, Appendix A's "Guidance on file" writes each figure
     in its record's currency as the server sends it (``render._guidance``): a record in USD with
     `$`, one with none stored in the report's snapshot's SEK, which the server sends as its code,
-    and a percent as before. report.js passes the snapshot's currency as the code
+    and a percent as before. report_parts.js passes the snapshot's currency as the code
     (``P.guidanceTable(a.guidance, a.snapshot.currency)``), which a record naming none falls back
     to."""
 
@@ -241,8 +243,8 @@ def test_an_override_scaled_at_a_split_shows_the_figures_in_force_and_the_words(
     """Spec 2026-11-15 8: on the report page, Appendix A's record of an override the review applied
     at a split, $30.00 entered before a 2-for-1 split, shows the pair in force, $5.90 → $15.00,
     both on the new basis, with the words of the scaling under it as the server sends them; one
-    applied as entered shows its stored pair and no words (report.js's ``overrides``, its tree as
-    the page's script builds it)."""
+    applied as entered shows its stored pair and no words (report_parts.js's ``overrides``, its
+    tree as the page's script builds it)."""
     words = "entered as $30.00 a share before the 2-for-1 split of 27 Jan 2027"
     scaled = _override(1, "earnings.ntm", "USD a share", 11.8, 30.0)
     scaled |= {"inForce": {"old": 5.9, "new": 15.0}, "rescaled": words}
@@ -255,7 +257,7 @@ def test_an_override_scaled_at_a_split_shows_the_figures_in_force_and_the_words(
         "bridge": {"reviewId": 9, "reviewedValue": 337.1, "lines": lines},
         "overrides": [scaled, _override(2, "growth.belief", "ratio", 0.063, 0.08)],
     }
-    tree = node("reportAppendix.overrides", [a], STATIC / "report.js")
+    tree = node("reportAppendix.overrides", [a], PARTS)
     records = [e["props"] for e in elements(tree) if "from" in e["props"]]
     assert [(r["tag"], r["from"], r["to"]) for r in records] == [
         ("earnings.ntm", "$5.90", "$15.00"),
@@ -281,7 +283,7 @@ def test_a_step_refused_at_a_split_shows_the_figures_in_force_beside_its_refusal
         "bridge": {"reviewId": 9, "reviewedValue": None, "refusal": why, "lines": [line]},
         "overrides": [refused],
     }
-    tree = node("reportAppendix.overrides", [a], STATIC / "report.js")
+    tree = node("reportAppendix.overrides", [a], PARTS)
     [record] = [e["props"] for e in elements(tree) if "from" in e["props"]]
     assert (record["from"], record["to"], record["resultNote"]) == ("$5.90", "−$1.00", why)
     assert record.get("effect") is None
