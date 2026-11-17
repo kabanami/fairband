@@ -1094,7 +1094,7 @@
     gap: var(--space-5) var(--space-8); padding-top: 18px; border-top: 1px solid var(--hairline);
   }
   .app-research__sides {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
     gap: var(--space-5) var(--space-10);
   }
   .app-research__named, .app-research__side {
@@ -1123,6 +1123,16 @@
   }
   .app-research__card .fb-report__table { width: 100%; }
   .app-research__card .fb-report__table :is(th, td):not(:first-child) { text-align: right; }
+  /* A card keeps what it draws inside it, so the page never scrolls sideways (7.11): a
+     sensitivity grid wider than its card, five columns at a narrow width, scrolls sideways in its
+     card at every width. Price and multiples' column is a grid of cards at least 300px wide each,
+     the price against the band across it, so the trailing and the forward P/E stand side by side
+     under it where the column holds two and one under the other where it does not. */
+  .app-research__chart .fb-sens { overflow-x: auto; }
+  .app-research__cards--price {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  }
+  .app-research__cards--price > :first-child { grid-column: 1 / -1; }
   .app-research__head {
     display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
     gap: 2px var(--space-3); margin: 0; color: var(--ink-muted);
@@ -1238,7 +1248,6 @@
   .app-research__fold .app-report__notes li { break-inside: avoid; }
   .app-research__fold .fb-rec + .fb-rec,
   .app-research__fold .app-report__entered + .fb-rec { margin-top: var(--space-3); }
-  .app-research__view .app-research__n { margin-left: 6px; }
   .app-research__records {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4);
     align-items: start;
@@ -1310,6 +1319,9 @@
     .app-request__error { display: none !important; }
     html, body, .app-page { height: auto; }
     .app-page { display: block; }
+    /* the company page runs to its end: a browser does not break a scroll container across
+       pages, so its panel is none in print, with no side padding */
+    section#company { overflow: visible; padding: 0; }
     /* The Research tab (the Research tab's design, 7.11) prints the Report view alone: the
        company's name and ticker, the bar's line, every section and the three closed parts, which
        the tab's script opens before the page prints (company_research.js, openForPrint). Not the

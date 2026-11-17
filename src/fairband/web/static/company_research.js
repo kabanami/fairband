@@ -81,6 +81,7 @@
   var CITE_TITLE = /^traces to /; /* the start of the bundle's title of a cite, before its ref */
   var SMALL = 120; /* the charts' height in a pair and in the quarters' row (7.9) */
   var EARNINGS = 'The last earnings call';
+  var PRICE = 'Price and multiples'; /* the heading whose cards stand in a grid of their own */
   var UNDER = ['Key judgments']; /* the headings whose cards stand in a row under the text */
   var NO_CHANGE = 'The report changes no input, so its value is the mechanical value.';
   var KEPT_STATE =
@@ -269,7 +270,9 @@
   /* The panel of `s`, the report's section at `index` (7.4): its heading, then the rows its
      layout gives under the report's stance, and its cards, the named blocks the layout makes
      cards and those `cards` holds for its heading, in a column beside its first run of text, or
-     after its rows where it has none; no column where it has no card. Under Key judgments the
+     after its rows where it has none; no column where it has no card. Price and multiples'
+     column is named (app-research__cards--price), so the stylesheet sets its cards in a grid,
+     the band across it and the two P/E side by side where it holds them. Under Key judgments the
      cards `cards` holds stand after the rows instead. The charts read the series `landed` holds
      (series): the financial tables' beside the paragraphs of Financial performance and health,
      a refusal's sentence once, in the first place a chart stands; the quarters' as the first row
@@ -301,7 +304,8 @@
       return row(r, footnotes, i, charts, i === firstCharts);
     });
     if (aside.length) {
-      var side = h('div', { key: 'cards', className: 'app-research__cards' }, aside);
+      var grid = s.heading === PRICE ? ' app-research__cards--price' : '';
+      var side = h('div', { key: 'cards', className: 'app-research__cards' + grid }, aside);
       var first = kinds.indexOf('run');
       if (first < 0) rows.push(side);
       else {

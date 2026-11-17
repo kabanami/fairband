@@ -507,6 +507,18 @@ def test_the_cards_of_each_heading() -> None:
         ["Trailing P/E"],
         ["Forward P/E"],
     ]
+    # Price and multiples' column alone is a grid of its own (index.html): the band across the
+    # row, the two P/E side by side under it where the column holds them
+    columns = {
+        heading: _one(_panel(tree, HEADINGS.index(heading)), "app-research__cards")
+        for heading in ("Summary", "Valuation", "Price and multiples", "Recent news")
+    }
+    assert {h: c["props"]["className"] for h, c in columns.items()} == {
+        "Summary": "app-research__cards",
+        "Valuation": "app-research__cards",
+        "Price and multiples": "app-research__cards app-research__cards--price",
+        "Recent news": "app-research__cards",
+    }
     [news] = _column(_panel(tree, HEADINGS.index("Recent news")))
     assert "The sources on file" in text(news)
     [kill] = _column(_panel(tree, HEADINGS.index("Risks and kill criteria")))
@@ -525,6 +537,24 @@ def test_the_cards_of_each_heading() -> None:
     assert [_titles(card) for card in before] == [[]]
     price = _panel(mounted["tree"], HEADINGS.index("Price and multiples"))
     assert classed(price, "app-research__cards") == []
+
+
+def test_what_a_card_or_a_row_draws_stays_inside_the_width() -> None:
+    """Spec 7.11: the page never scrolls sideways. A sensitivity grid wider than its card, five
+    columns of a few figures each at a narrow width, scrolls sideways inside its card, at every
+    width; a chart's card is no wider than its column. Price and multiples' column is a grid of
+    cards at least 300px wide each, the first, the price against the band, across the row, so the
+    trailing and the forward P/E stand side by side under it where the column holds two and one
+    under the other where it does not, in their order. A sides row's two columns take the guard
+    the charts' rows have, so neither is wider than the panel."""
+    assert _rule(".app-research__chart .fb-sens {") == "overflow-x: auto;"
+    assert "min-width: 0;" in _rule(".app-research__card {")
+    assert _rule(".app-research__cards--price {") == (
+        "display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));"
+    )
+    assert _rule(".app-research__cards--price > :first-child {") == "grid-column: 1 / -1;"
+    sides = _rule(".app-research__sides {")
+    assert "grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));" in sides
 
 
 # ----------------------------------------------------------------------- the charts in the text

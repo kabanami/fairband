@@ -1035,6 +1035,17 @@ def test_page_opens_the_view_the_hash_names() -> None:
     # every panel but the Methodology view's, whose examples are figures as of a named date
     assert "VIEWS.forEach(function (id) {\n" in js
     assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
+    # a faded panel's tables keep their old figures at ink-faint, a phase number its colour on its
+    # fill; the Research tab's, a report's appendixes on the report's own snapshot, which no
+    # refresh changes, are not faded
+    page = _static_file("index.html")
+    assert (
+        "  .is-recomputing .fb-table:not(.app-research .fb-table) tbody td,\n"
+        "  .is-recomputing .fb-table:not(.app-research .fb-table) tbody td *:not(.fb-phase__n) {\n"
+        "    color: var(--ink-faint);\n"
+        "  }\n"
+    ) in page
+    assert page.count(".is-recomputing") == 2  # the fade's two lines, no other rule
     app = _static_file("app.js")
     assert "find: find" in app  # on window.FairbandPage
     find = app[app.index("function find(symbol) {") :]

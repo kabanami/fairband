@@ -552,6 +552,13 @@ def test_a_press_on_a_closed_part_s_name_opens_it() -> None:
 # --------------------------------------------------------------------- the views and the states
 
 
+def test_the_count_after_records_is_set_off_by_its_space_alone() -> None:
+    """The count follows Records after a space, as a Records panel's head has it; no margin of
+    its own adds to the space."""
+    assert ".app-research__view .app-research__n" not in _static_file("index.html")
+    assert _rule(".app-research__n {") == "color: var(--ink-faint);"
+
+
 def test_the_view_is_report_first_and_a_press_shows_records() -> None:
     """The tab opens on Report: the bar's line, its two controls, the list and the panels. A
     press on Records puts its sentence in the line's place; Footnote marks, Download .md, the
@@ -749,6 +756,9 @@ def test_print_draws_the_report_view_alone() -> None:
     did: the rule for the head names the tab, apart from the tab's own, so a browser that cannot
     read it still hides the tab's controls."""
     block = _media("print")
+    # a browser does not break a scroll container across pages: the company panel is none in
+    # print, and runs to its end with no side padding
+    assert "section#company { overflow: visible; padding: 0; }" in block
     tab = block[block.index("/* The Research tab") :]
     for rule in (
         (
