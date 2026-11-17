@@ -9,7 +9,9 @@ stamp, the Notes control, and that no chart has a Table button, the report page'
 other choice below is Claude's, marked *my call* where it is more than a reading of those
 requests, and can be overturned as any other. Plan 1 was built on the branch `company-page` on
 2026-11-17; the decision log's entries of that day record where the build differs from this
-design. The live acceptance of section 17 is still to come.
+design. It was merged to main and the live steps of section 17 ran on 2026-11-17, on the
+founder's word; the readout is the decision log's last entry. The founder's own look at the pages
+is still his to take.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -774,3 +776,41 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
   Price change and Price change, years, one under the other. The halves end about 160px apart in
   Key statistics and 65px in Price facts; each column keeps its order of reading, Size first and
   Valuation at the top of the second. The three-column and one-column forms are unchanged.
+- 2026-11-17, the readout of the live steps (17), run by Claude on the founder's "option 1"
+  (merge to main, with the backup, the restart, the full refresh and the push named to him):
+  - The steps. The live database was backed up by SQLite's backup to
+    `fairband-before-company-page-2026-11-17.db` (6,465,626,112 bytes, quick check ok). Main was
+    fast-forwarded to the branch (4,306 tests passed on that commit), and the server on 8470 was
+    started from main, down about ten seconds. No migration: the schema stays at 9.
+  - The full refresh, 66: 18.5 minutes against 13.1 for the last full refresh (60, on 14 Nov), so
+    5.4 minutes more. It stored 39,242 answers, 25.0 a company, against 23,843 (15.1 a company).
+    1,569 companies were admitted (1,581 in refresh 60, on three days of newer data), 1,371
+    valued, 198 refused and 1 failed, the same one as in refresh 60
+    (`data fetch failed: income-annual, balance-annual, cashflow-annual`). No call answered 429.
+  - Failed page calls by endpoint: none. Each of the ten page endpoints stored an answer for all
+    1,569 companies, the failed one among them, and none was stored as unusable.
+  - The database's growth: from 6,465,626,112 to 7,622,893,568 bytes, 1.16 GB for the refresh.
+    Its stored answers are 705.9 MB (660.1 MB in refresh 60), of which the ten page endpoints are
+    64.0 MB: the news 49.9 MB, `ratios-ttm` 4.8, `financial-growth` 3.4, `key-metrics-ttm` 3.1,
+    `dividends` 1.0 and the other five 1.7 together. That is 40.8 KB a company, under 10.2's
+    estimate of 54 KB (the news 31.8 KB against 44 KB).
+  - AAPL from the ticker in the screen's table (a headless browser on the live server, a window of
+    1,600px): the head with the phase badge and the moat stamp, the tabs Overview, Estimates and
+    Research with `data 17 Nov 2026`, the blocks in the design's order, and the two columns ending
+    on one line on both tabs. Research opened the report page; Back returned to the Estimates tab
+    and Back again to the screen. The row's drawer is form A, and its Company page opened the
+    page. No page error and no failed request on any page opened.
+  - The five foreign filers (ASML, TSM, NVO, AZN, RELX). On each: the head's price in US dollars,
+    the ADR's quote; Market cap in US dollars; Enterprise value and Revenue in the reporting
+    currency with its code (ASML `EUR 497.5B` and `EUR 39.47B`, TSM `TWD 54.67T` and `TWD 4.94T`,
+    NVO `DKK 1.35T` and `DKK 333.7B`, RELX `GBP 61.87B` and `GBP 9.72B`; AZN reports in US
+    dollars and carries no code); the dividend a share in the reporting currency (NVO
+    `DKK 11.70`); on the Estimates tab the earnings in US dollars, as FMP gives the ADR's, the
+    consensus by fiscal year in the reporting currency with its code, and the price target in US
+    dollars. The value block drew the review's band and the report's line for ASML, TSM, NVO and
+    RELX and the mechanical band with the report's line for AZN. The columns ended on one line on
+    both tabs and nothing overflowed. One figure of the vendor's reads oddly and is drawn as
+    given: RELX's consensus price target, $26.00 beside a price of $40.44.
+  - A company with no dividend (AMZN): Yield `0.00%`, Payout `0.0%`, Dividend a share `$0.00`,
+    Paid and Last payment a dash. A company with no report (VLTO): the mechanical band and the
+    four levels, and no report line.
