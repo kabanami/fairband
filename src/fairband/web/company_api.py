@@ -60,10 +60,11 @@ Rules for the three:
   of the newest row of the annual income statement (``page_financials.reported_currency``), else
   the company's (``store.currency.reporting_currency``); every reader is handed it, for a column
   whose row names none. The cadence is ``half-yearly`` where the period ends of the quarterly
-  income statement say so (``inputs_statements.cadence_of``), and the three quarterly tables are
-  then read by half-year; else ``quarterly``, a company whose cadence the rule cannot tell among
-  them. The ratios and the two segment tables keep the newest ``fetch.STATEMENT_YEARS`` fiscal
-  years, the statements' depth; a statement's table holds every dated row of its answer.
+  income statement say so (``inputs_statements.cadence_of``, on each end once, oldest first, as
+  the engine takes one end a date), and the three quarterly tables are then read by half-year;
+  else ``quarterly``, a company whose cadence the rule cannot tell among them. The ratios and the
+  two segment tables keep the newest ``fetch.STATEMENT_YEARS`` fiscal years, the statements'
+  depth; a statement's table holds every dated row of its answer.
 
 A symbol that is not one is a 400 with its sentence (``reports_api.checked_symbol``); a company
 with no stored profile a 404, "no page data for <symbol>"; on the overview, a stored setting the
@@ -230,7 +231,7 @@ def add_company_page_routes(
         answers = {endpoint: _payload(found) for endpoint, found in drawn.items()}
         named = financials.reported_currency(answers["income-annual"])
         currency = reporting if named is None else named
-        ends = financials.period_ends(answers["income-quarter"])
+        ends = list(dict.fromkeys(financials.period_ends(answers["income-quarter"])))
         half_yearly = cadence_of(ends) == "half-yearly"
         return {
             "symbol": symbol,

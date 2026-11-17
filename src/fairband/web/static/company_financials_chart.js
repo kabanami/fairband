@@ -20,17 +20,17 @@
    from the newest back, where they would touch. An amount, a per-share figure or a share count is
    bars from a zero baseline: one line's at most 44px wide and 72% of the period's width, two to
    four lines' side by side in their order, each at most 28px and 2px apart, together within 72%
-   of the period's width; rounded 4px at the data end and square at the baseline; a lone line's
-   figure below zero in chart-neg-3, and with several every bar in its line's colour. Any other
-   unit is a 2px line on a scale that fits its figures, broken at a gap, a lone figure between
-   gaps a dot, its newest point an end marker 10px across ringed in surface-raised. A figure draws
-   no mark where its table writes a dash (none, or an amount, a share count or a multiple of
-   exactly 0), where it is a bar of 0, or where it is an amount or a per-share figure in another
-   currency than the tab's; no scale is built from such a figure, and a plot with no figure draws
-   its frame, its baseline. A plot's scale in four clean steps, three under 150px, widened by a
-   step where it would be flat; the ticks bare and compact at its right (company_chart.js's
-   steps and figures), monospaced in ink-faint; the zero line in border, the others in
-   chart-grid, solid.
+   of the period's width; rounded 4px at the data end and square at the baseline; with one line
+   picked its figure below zero in chart-neg-3, and with several picked, drawn or off, every bar
+   in its line's colour, as its label is. Any other unit is a 2px line on a scale that fits its
+   figures, broken at a gap, a lone figure between gaps a dot, its newest point an end marker
+   10px across ringed in surface-raised. A figure draws no mark where its table writes a dash
+   (none, or an amount, a share count or a multiple of exactly 0), where it is a bar of 0, or
+   where it is an amount or a per-share figure in another currency than the tab's; no scale is
+   built from such a figure, and a plot with no figure draws its frame, its baseline. A plot's
+   scale in four clean steps, three under 150px, widened by a step where it would be flat; the
+   ticks bare and compact at its right (company_chart.js's steps and figures), monospaced in
+   ink-faint; the zero line in border, the others in chart-grid, solid.
 
    The pointer over the plots, or the arrow keys, Home and End while they have the focus, pick a
    period (company_chart.js's keyed). One line drawn: a box over its mark with the period and the
@@ -264,7 +264,7 @@
 
   /* The plot of the series `lines`, of one unit, in their order, each with its cells a period, on
      the periods at `xs`, each `band` wide, its top at `top` and `height` high, in a tab in
-     `currency`, `lone` where one line is drawn on the chart: its unit, its form, its top and its
+     `currency`, `lone` where one line is picked (geometry): its unit, its form, its top and its
      height; its ticks from its foot up, in four steps from 150px high and three under it, each
      its y, its text and whether it is the zero line, its frame its baseline alone where it has no
      figure to scale; the y of its baseline, or of its scale's end nearer zero; and its series,
@@ -345,12 +345,14 @@
 
   /* The chart of the series `drawn`, in their order, at `width` (the width drawn at before one is
      measured where it is none, and never under the least), in the tab's `currency`, in the svg's
-     units; null where no series draws or they stand on no period. Its width and height, its
-     plots' left edge and width, each period's `band` and x, at the middle of its band; its
-     periods and their labels; and its plots, one a unit in the order the units first come, each
-     holding its unit's series, one under the other, of one height by their number, each with
-     its room above it. */
-  function geometry(drawn, width, currency) {
+     units, `lone` where one line is picked, so that the chart's head is that line's and not the
+     labels, and its bars below zero take the negative colour; with two or more lines picked,
+     drawn or off, every bar keeps its line's colour, as its label does. Null where no series
+     draws or they stand on no period. Its width and height, its plots' left edge and width, each
+     period's `band` and x, at the middle of its band; its periods and their labels; and its
+     plots, one a unit in the order the units first come, each holding its unit's series, one
+     under the other, of one height by their number, each with its room above it. */
+  function geometry(drawn, width, currency, lone) {
     var cols = periods(drawn);
     if (!drawn.length || !cols.length) return null;
     var W = Math.max(LEAST, ok(width) && width > 0 ? width : WIDTH);
@@ -371,7 +373,7 @@
     var high = HEIGHTS[Math.min(units.length, HEIGHTS.length) - 1];
     var plots = units.map(function (unit, k) {
       return plotOf(byUnit[unit], xs, band, TOP + k * (high + BETWEEN + TOP), high, currency,
-        drawn.length === 1);
+        !!lone);
     });
     var last = plots[plots.length - 1];
     return {
@@ -447,9 +449,9 @@
   function block(answer, picks, period, scale, at, width, on) {
     var all = series(answer, picks, period);
     var drawn = all.filter(function (s) { return s.off === null; });
-    var g = geometry(drawn, width, answer.currency);
-    if (!all.length || (!g && drawn.length)) return null;
     var several = all.length > 1;
+    var g = geometry(drawn, width, answer.currency, !several);
+    if (!all.length || (!g && drawn.length)) return null;
     var picked = g && ok(at) && at >= 0 && at < g.periods.length ? at : null;
     return h(React.Fragment, null,
       several ? legend(g, all, scale, answer.currency, on) : head(g, all[0], scale),

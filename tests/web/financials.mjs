@@ -12,8 +12,14 @@
 // The steps, a list, each one object:
 //   {"do": "stored"}                    storedScale() is read
 //   {"do": "keep", "scale"}             keepScale(scale) is called
-//   {"do": "mount", "answer"}           the tab is drawn anew on `answer`, its state new, as when
-//                                       another company's answer lands or the tab opens again
+//   {"do": "mount", "answer"}           the tab opens on `answer`, drawn anew, its state new, as
+//                                       when the reader opens the Financials tab, or comes back to
+//                                       it from another tab; what the script keeps while the app
+//                                       is open stays
+//   {"do": "land", "answer"}            `answer` lands while the tab is drawn, which the page draws
+//                                       as draw.financials gives it, keyed on its company: another
+//                                       company's opens a new tab, its state new; the same
+//                                       company's draws the tab again, its state kept
 //   {"do": "press", "class", "text"}    the drawn tab's button of the class `class` whose text is
 //                                       `text` is pressed, and the tab is drawn again
 //   {"do": "row", "text", "key"?,       the drawn tab's row whose name is `text` is clicked, or,
@@ -151,9 +157,10 @@ for (const step of input.steps) {
   try {
     if (step.do === 'stored') result = T.storedScale();
     else if (step.do === 'keep') T.keepScale(step.scale);
-    else if (step.do === 'mount') {
-      cells = [];
-      props = { answer: step.answer, symbol: step.answer.symbol };
+    else if (step.do === 'mount' || step.do === 'land') {
+      const drawn = window.FairbandPage.companyPage.draw.financials(step.answer);
+      if (step.do === 'mount' || !props || drawn.props.key !== props.key) cells = [];
+      props = drawn.props;
       draw();
     } else if (step.do === 'press') {
       const [button] = classed(tree, step.class).filter((e) => textOf(e) === step.text);

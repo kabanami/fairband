@@ -388,8 +388,8 @@ def _column(
     quarterly: bool = False,
     half_yearly: bool = False,
 ) -> Column:
-    """The column of a period ending ``when``, whose answers' rows are ``rows`` (two for a ratio's
-    year, else one): the first ``fiscalYear`` among them that is a year, else the year of
+    """The column of a period ending ``when``, whose answers' rows are ``rows`` (one or two for a
+    ratio's year, else one): the first ``fiscalYear`` among them that is a year, else the year of
     ``when``; by quarter after the first row's ``period``, ``Q2`` and ``Q4`` reading ``H1`` and
     ``H2`` by half-year; the first ``reportedCurrency`` that is a text, else ``currency``."""
     year = next(filter(None, (_fiscal_year(row.get("fiscalYear")) for row in rows)), when.year)

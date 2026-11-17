@@ -9,7 +9,7 @@ the tests read what the chart's functions return and the trees its builders draw
 ``financials.mjs`` drives a row's press; the layout node cannot run is read from the page's CSS.
 
 The answer is made here, ``ANSWER``, in US dollars: eleven fiscal years, 2016 to 2026, of an
-income statement whose revenue rises from 215,639 to 478,834 million, with a loss in 2020; eight
+income statement whose revenue rises from 208,420 to 471,368 million, with a loss in 2020; eight
 quarters of its revenue alone; a cash flow line below zero every year; a revenue by product that
 ends three years before the statements; and ratios by fiscal year, among them two margins, one
 from 24.5% to 33.0%, and a multiple with gaps."""
@@ -69,7 +69,7 @@ def _table(columns: list[dict[str, Any]], *rows: dict[str, Any]) -> dict[str, An
 EMPTY: dict[str, Any] = {"columns": [], "rows": []}
 
 REVENUE = [
-    215_639e6,
+    208_420e6,
     228_500e6,
     249_100e6,
     262_300e6,
@@ -77,30 +77,30 @@ REVENUE = [
     318_400e6,
     352_900e6,
     371_200e6,
-    391_035e6,
+    387_262e6,
     433_600e6,
-    478_834e6,
+    471_368e6,
 ]
 MARGIN = [0.245, 0.252, 0.261, 0.270, 0.268, 0.281, 0.294, 0.305, 0.312, 0.321, 0.33]
-OPERATING = [0.278, 0.267, 0.27, 0.251, 0.241, 0.298, 0.303, 0.298, 0.315, 0.32, 0.325]
-NET = [45.6e9, 48.4e9, 59.5e9, 55.3e9, -2.1e9, 61.0e9, 72.4e9, 70.9e9, 93_736e6, 88.3e9, 101.2e9]
-REPURCHASED = [-29.7e9, -32.9e9, -72.7e9, -66.9e9, -71.5e9, -85.5e9, -89.4e9, -77.6e9, -94.9e9,
-               -90.2e9, -88.1e9]  # fmt: skip
-EPS = [2.08, 2.30, 2.98, 2.97, -0.12, 3.28, 4.04, 3.90, 4.42, 5.10, 5.87]
-SHARES = [21.9e9, 21.0e9, 20.0e9, 18.6e9, 17.5e9, 16.7e9, 16.3e9, 15.8e9, 15.4e9, 15.0e9, 14.7e9]
-PE = [13.6, None, 18.9, None, 35.3, 28.9, None, 27.5, 37.9, 34.1, 33.2]
+OPERATING = [0.284, 0.262, 0.273, 0.255, 0.236, 0.291, 0.309, 0.293, 0.318, 0.322, 0.325]
+NET = [44.1e9, 49.2e9, 57.8e9, 56.4e9, -2.1e9, 61.0e9, 72.4e9, 70.9e9, 91_847e6, 88.3e9, 101.2e9]
+REPURCHASED = [-31.2e9, -35.4e9, -68.3e9, -63.5e9, -74.1e9, -82.6e9, -91.3e9, -79.8e9, -93.4e9,
+               -86.7e9, -84.5e9]  # fmt: skip
+EPS = [1.96, 2.43, 2.87, 3.06, -0.12, 3.36, 4.04, 3.90, 4.42, 5.10, 5.87]
+SHARES = [22.6e9, 21.4e9, 20.3e9, 19.2e9, 18.1e9, 17.2e9, 16.6e9, 16.0e9, 15.5e9, 15.1e9, 14.7e9]
+PE = [14.2, None, 19.6, None, 33.8, 29.4, None, 26.9, 36.7, 34.5, 32.8]
 
 QUARTERS = [
     {"label": f"Q{q} {y}", "end": end, "currency": "USD"}
     for (q, y, end) in (
-        (1, 2025, "2024-12-28"),
-        (2, 2025, "2025-03-29"),
-        (3, 2025, "2025-06-28"),
-        (4, 2025, "2025-09-27"),
-        (1, 2026, "2025-12-27"),
-        (2, 2026, "2026-03-28"),
-        (3, 2026, "2026-06-27"),
-        (4, 2026, "2026-09-26"),
+        (1, 2025, "2024-12-31"),
+        (2, 2025, "2025-03-31"),
+        (3, 2025, "2025-06-30"),
+        (4, 2025, "2025-09-30"),
+        (1, 2026, "2025-12-31"),
+        (2, 2026, "2026-03-31"),
+        (3, 2026, "2026-06-30"),
+        (4, 2026, "2026-09-30"),
     )
 ]
 
@@ -118,7 +118,7 @@ INCOME_QUARTERS = _table(
         "revenue",
         "Revenue",
         "money",
-        [124.3e9, 95.4e9, 94.0e9, 102.5e9, 140.1e9, 110.0e9, 109.6e9, 121.2e9],
+        [118.6e9, 92.7e9, 90.8e9, 99.4e9, 131.5e9, 104.2e9, 103.9e9, 117.4e9],
         kind="total",
     ),
 )
@@ -225,7 +225,11 @@ def _geometry(
     answer: dict[str, Any] = ANSWER,
     period: str = "annual",
 ) -> Any:
-    return _chart("geometry", _drawn(picks, answer, period), width, answer["currency"])
+    """The geometry of the series of ``picks`` at ``period`` that draw, one line picked where
+    ``picks`` give one series, drawn or off, as the chart's block reckons it."""
+    found: list[dict[str, Any]] = _chart("series", answer, picks, period)
+    drawn = [s for s in found if s["off"] is None]
+    return _chart("geometry", drawn, width, answer["currency"], len(found) == 1)
 
 
 def _block(
@@ -359,7 +363,7 @@ def test_a_press_on_a_row_charts_it_alone() -> None:
             {"do": "row", "text": "Rockets"},
             {"do": "press", "class": "app-fin__tab", "text": "Income statement"},
             {"do": "press", "class": "app-fin__period", "text": "Quarterly"},
-            {"do": "mount", "answer": ANSWER | {"symbol": "BETA"}},
+            {"do": "land", "answer": ANSWER | {"symbol": "BETA"}},
         ]
     )
     assert [step["threw"] for step in trace] == [False] * 12
@@ -463,12 +467,12 @@ def test_an_amount_is_bars_and_a_rate_is_a_line() -> None:
     assert {s["off"] for s in found} == {None}
     revenue = found[0]
     assert revenue["columns"] == INCOME["columns"]
-    assert revenue["at"]["2024"] == {"value": 391_035e6, "currency": "USD"}
+    assert revenue["at"]["2024"] == {"value": 387_262e6, "currency": "USD"}
     assert len(revenue["at"]) == 11
     quarter = _chart("series", ANSWER, [REVENUE_PICK], "quarter")[0]
     assert quarter["columns"] == QUARTERS
     assert quarter["off"] is None
-    assert quarter["at"]["Q4 2026"] == {"value": 121.2e9, "currency": "USD"}
+    assert quarter["at"]["Q4 2026"] == {"value": 117.4e9, "currency": "USD"}
     product = _chart("series", ANSWER, [_pick("segments", "Rockets", "product")], "annual")[0]
     assert product["name"] == "Revenue: Rockets"
     assert list(product["at"]) == YEARS[:8]
@@ -690,7 +694,7 @@ def test_a_flat_or_single_series_divides_by_nothing() -> None:
     assert _finite(g)
     assert len(g["plots"][0]["series"][0]["bars"]) == 11
     one = _answer(
-        _table(_columns(YEARS[-1:]), _row("revenue", "Revenue", "money", [478_834e6])),
+        _table(_columns(YEARS[-1:]), _row("revenue", "Revenue", "money", [471_368e6])),
         ratios=_table(
             _columns(YEARS[-1:]),
             _row("grossProfitMargin", "Gross", "percent", [0.33], name="Gross margin"),
@@ -729,10 +733,10 @@ def test_the_head_of_one_line() -> None:
         [found] = classed(tree, "app-fin__chead")
         return [text(part) for part in found["props"]["children"]]
 
-    assert head(_block([REVENUE_PICK])) == ["Revenue", "478,834", "2026, USD, millions"]
-    assert head(_block([REVENUE_PICK], scale="b")) == ["Revenue", "478.83", "2026, USD, billions"]
+    assert head(_block([REVENUE_PICK])) == ["Revenue", "471,368", "2026, USD, millions"]
+    assert head(_block([REVENUE_PICK], scale="b")) == ["Revenue", "471.37", "2026, USD, billions"]
     [figure] = classed(_block([REVENUE_PICK]), "figure-lg")
-    assert text(figure) == "478,834"
+    assert text(figure) == "471,368"
     assert head(_block([MARGIN_PICK])) == ["Gross margin", "33.0%", "2026, percent"]
     assert head(_block([_pick("income", "eps")], scale="b")) == ["EPS", "5.87", "2026, USD a share"]
     assert head(_block([_pick("income", "weightedAverageShsOut")])) == [
@@ -742,7 +746,7 @@ def test_the_head_of_one_line() -> None:
     ]
     assert head(_block([REVENUE_PICK], period="quarter")) == [
         "Revenue",
-        "121,200",
+        "117,400",
         "Q4 2026, USD, millions",
     ]
     small = _answer(
@@ -766,11 +770,11 @@ def test_the_hover_box_and_the_keys() -> None:
     plot takes the focus; the arrows move a period, from the newest where none is picked."""
     g = _geometry([REVENUE_PICK])
     found = _chart("box", g, 8, "m")
-    assert found["text"] == "2024 · 391,035"
+    assert found["text"] == "2024 · 387,262"
     assert found["x"] == pytest.approx(g["xs"][8])
     assert found["y"] == pytest.approx(g["plots"][0]["series"][0]["bars"][8]["y"])
     assert 0 <= found["left"] <= g["width"]
-    assert _chart("box", g, 8, "b")["text"] == "2024 · 391.04"
+    assert _chart("box", g, 8, "b")["text"] == "2024 · 387.26"
     assert _chart("box", g, None, "m") is None
     assert _chart("box", g, 11, "m") is None
     columns = _columns(YEARS[:4])
@@ -785,7 +789,7 @@ def test_the_hover_box_and_the_keys() -> None:
 
     tree = _block([REVENUE_PICK], at=8)
     [tip] = classed(tree, "app-fin__tip")
-    assert text(tip) == "2024 · 391,035"
+    assert text(tip) == "2024 · 387,262"
     assert "figure-sm" in _classes(tip)
     bars = classed(tree, "app-fin__col")
     assert ["is-dim" in _classes(bar) for bar in bars] == [True] * 8 + [False] + [True] * 2
@@ -1124,6 +1128,35 @@ def test_bars_of_one_period_stand_side_by_side_in_their_colours() -> None:
     )
 
 
+def test_a_bar_below_zero_follows_the_legend_while_one_of_two_lines_is_off() -> None:
+    """The rule is one line picked against two or more, not one line drawn: with a ratio and a
+    statement's line picked under Quarterly, the ratio off, the head is the labels, and the
+    drawn line's bar below zero keeps its slot's class, as its label does, and is not is-neg."""
+    quarters = _table(
+        QUARTERS,
+        _row(
+            "netIncome",
+            "Net income",
+            "money",
+            [21.4e9, 18.2e9, -3.4e9, 16.1e9, 25.3e9, 19.6e9, 17.2e9, 20.5e9],
+            kind="total",
+        ),
+    )
+    answer = _answer(INCOME, quarters)
+    picks = [MARGIN_PICK, _pick("income", "netIncome", slot=1)]
+    tree = _block(picks, answer=answer, period="quarter")
+    assert [_classes(label) for label in classed(tree, "app-fin__label")] == [
+        {"control", "app-fin__label", "is-s0", "is-off"},
+        {"control", "app-fin__label", "is-s1"},
+    ]
+    assert [_classes(m) for m in classed(tree, "app-fin__col")] == [{"app-fin__col", "is-s1"}] * 8
+    [plot] = _geometry(picks, answer=answer, period="quarter")["plots"]
+    assert [bar["neg"] for bar in plot["series"][0]["bars"]] == [False] * 8
+    alone = _geometry([_pick("income", "netIncome")], answer=answer, period="quarter")
+    neg = [bar["neg"] for bar in alone["plots"][0]["series"][0]["bars"]]
+    assert neg == [i == 2 for i in range(8)]  # one line picked: its loss in chart-neg-3
+
+
 def test_the_periods_are_the_union_whatever_the_order() -> None:
     """A statement's line over 2016 to 2026 and a segment's over 2017 and 2023 to 2025: the chart
     stands on the eleven periods whichever is picked first; the segment draws its four marks and
@@ -1143,7 +1176,7 @@ def test_the_periods_are_the_union_whatever_the_order() -> None:
         assert [i for i, top in enumerate(anvils["tops"]) if top is not None] == [1, 7, 8, 9]
         tree = _block(picks, answer=answer)
         labels = dict(_labels(tree))
-        assert (labels["Revenue: Anvils"], labels["Revenue"]) == (DASH, "478,834")
+        assert (labels["Revenue: Anvils"], labels["Revenue"]) == (DASH, "471,368")
         assert [text(c) for c in classed(tree, "app-fin__unit")] == ["figures for 2026"]
 
 
@@ -1155,7 +1188,7 @@ def test_the_labels_of_several_lines() -> None:
     text wears a series colour; the swatch does."""
     tree = _block(THREE)
     assert _labels(tree) == [
-        ("Revenue", "478,834"),
+        ("Revenue", "471,368"),
         ("Net income", "101,200"),
         ("Operating margin", "32.5%"),
     ]
@@ -1172,7 +1205,7 @@ def test_the_labels_of_several_lines() -> None:
         {"app-fin__key", "app-fin__key--round"},
     ]
     figures = [e for label in labels for e in elements(label) if "figure-sm" in _classes(e)]
-    assert [text(f) for f in figures] == ["478,834", "101,200", "32.5%"]
+    assert [text(f) for f in figures] == ["471,368", "101,200", "32.5%"]
     xs = classed(tree, "app-fin__x")
     assert [
         (x["type"], x["props"]["type"], x["props"]["aria-label"], x["props"]["title"], text(x))
@@ -1181,7 +1214,7 @@ def test_the_labels_of_several_lines() -> None:
     assert [text(c) for c in classed(tree, "app-fin__unit")] == ["figures for 2026"]
     assert classed(tree, "figure-lg") == [] and classed(tree, "heading") == []
     assert _labels(_block(THREE, scale="b"))[:2] == [
-        ("Revenue", "478.83"),
+        ("Revenue", "471.37"),
         ("Net income", "101.20"),
     ]
     columns = _columns(YEARS[-2:])
@@ -1215,7 +1248,7 @@ def test_by_quarter_a_ratio_is_off_and_draws_nothing() -> None:
     picks = [REVENUE_PICK, MARGIN_PICK | {"slot": 1}, _pick("income", "grossProfit", slot=2)]
     tree = _block(picks, period="quarter")
     assert _labels(tree) == [
-        ("Revenue", "121,200"),
+        ("Revenue", "117,400"),
         ("Gross margin", "by year only"),
         ("Gross profit", "no figures by quarter"),
     ]
@@ -1253,9 +1286,9 @@ def test_the_box_of_several_lines() -> None:
     found = _chart("box", g, 8, "m")
     assert found["label"] == "2024"
     assert [(r["name"], r["text"]) for r in found["rows"]] == [
-        ("Revenue", "391,035"),
-        ("Net income", "93,736"),
-        ("Operating margin", "31.5%"),
+        ("Revenue", "387,262"),
+        ("Net income", "91,847"),
+        ("Operating margin", "31.8%"),
     ]
     assert [(r["slot"], r["form"]) for r in found["rows"]] == [
         (0, "bars"),
@@ -1270,7 +1303,7 @@ def test_the_box_of_several_lines() -> None:
     narrow = _geometry(THREE, 300)  # room on neither side: against the chart's right edge
     middle = _chart("box", narrow, 5, "m")
     assert middle["right"] is None and 0 <= middle["left"] < narrow["xs"][5]
-    assert _chart("box", g, 8, "b")["rows"][0]["text"] == "391.04"
+    assert _chart("box", g, 8, "b")["rows"][0]["text"] == "387.26"
     assert _chart("box", g, 11, "m") is None
 
     columns = _columns(YEARS[:4])
@@ -1283,7 +1316,7 @@ def test_the_box_of_several_lines() -> None:
         ),
         ratios=_table(
             _columns(YEARS[:4]),
-            _row("operatingProfitMargin", "Operating", "percent", [0.278, 0.267, None, 0.251],
+            _row("operatingProfitMargin", "Operating", "percent", [0.284, 0.262, None, 0.255],
                  name="Operating margin"),
         ),
     )  # fmt: skip
@@ -1291,7 +1324,7 @@ def test_the_box_of_several_lines() -> None:
     assert [(r["name"], r["text"]) for r in _chart("box", g, 0, "m")["rows"]] == [
         ("Revenue", "EUR 25,129"),
         ("Net income", "EUR 3,000"),
-        ("Operating margin", "27.8%"),
+        ("Operating margin", "28.4%"),
     ]
     assert _chart("box", g, 2, "m") is None
 
@@ -1307,9 +1340,9 @@ def test_the_box_of_several_lines() -> None:
     rows = classed(tip, "app-fin__tiprow")
     assert [_classes(r) for r in rows] == [{"app-fin__tiprow", f"is-s{n}"} for n in range(3)]
     assert [text(r) for r in rows] == [
-        "Revenue391,035",
-        "Net income93,736",
-        "Operating margin31.5%",
+        "Revenue387,262",
+        "Net income91,847",
+        "Operating margin31.8%",
     ]
     assert [len(classed(r, "app-fin__key")) for r in rows] == [1, 1, 1]
     assert _classes(classed(rows[2], "app-fin__key")[0]) == {"app-fin__key", "app-fin__key--round"}

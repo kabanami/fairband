@@ -56,14 +56,14 @@ def _head(label: str) -> dict[str, Any]:
 def _years(first: str = "USD") -> list[dict[str, Any]]:
     """The two fiscal years, oldest first, the first in ``first``."""
     return [
-        {"label": "2025", "end": "2025-09-27", "currency": first},
-        {"label": "2026", "end": "2026-09-26", "currency": "USD"},
+        {"label": "2025", "end": "2025-09-30", "currency": first},
+        {"label": "2026", "end": "2026-09-30", "currency": "USD"},
     ]
 
 
 QUARTERS = [
-    {"label": "Q3 2026", "end": "2026-06-27", "currency": "USD"},
-    {"label": "Q4 2026", "end": "2026-09-26", "currency": "USD"},
+    {"label": "Q3 2026", "end": "2026-06-30", "currency": "USD"},
+    {"label": "Q4 2026", "end": "2026-09-30", "currency": "USD"},
 ]
 
 INCOME = {
@@ -370,7 +370,7 @@ def test_a_table_s_rows_and_kinds() -> None:
     [table] = classed(_block(), "app-fin__table")
     grid = _grid(table)
     assert grid == [
-        ["USD, millions, except per share", "202527 Sep", "202626 Sep"],
+        ["USD, millions, except per share", "202530 Sep", "202630 Sep"],
         ["Revenue", "61,200", "72,480"],
         ["Cost of revenue", "−33,150", "−38,010"],
         ["Gross profit", "28,050", "34,470"],
@@ -404,7 +404,7 @@ def test_a_table_s_rows_and_kinds() -> None:
     assert _grid(balance)[2:] == [["Cash", "8,410", DASH], ["Total assets", "96,300", "104,750"]]
 
     quarters = _grid(classed(_block(period="quarter"), "app-fin__table")[0])
-    assert quarters[0] == ["USD, millions, except per share", "Q3 202627 Jun", "Q4 202626 Sep"]
+    assert quarters[0] == ["USD, millions, except per share", "Q3 202630 Jun", "Q4 202630 Sep"]
 
 
 def test_every_sub_tab_of_a_whole_answer_draws_a_cell_a_figure() -> None:
@@ -465,8 +465,9 @@ def test_the_captions() -> None:
         (("balance", "TWD", "b"), "TWD, billions"),
         (("cashflow", "EUR", "m"), "EUR, millions"),
         (("segments", "USD", "m"), "USD, millions"),
-        (("ratios", "USD", "m"), "as each row says"),
-        (("ratios", "USD", "b"), "as each row says"),
+        (("ratios", "USD", "m"), "as each row says; per share in USD"),
+        (("ratios", "USD", "b"), "as each row says; per share in USD"),
+        (("ratios", "TWD", "m"), "as each row says; per share in TWD"),
     ):
         assert _tab("caption", *args) == words, args
     for args, words in (
@@ -503,9 +504,11 @@ def test_the_captions() -> None:
     assert [text(n) for n in quarters] == ["the last 2 half-years", RIGHT]
     ratios = _block(kind="ratios")
     assert text(classed(ratios, "app-fin__note")[0]).startswith("by fiscal year; the same")
-    assert _grid(classed(ratios, "app-fin__table")[0])[0][0] == "as each row says"
+    assert _grid(classed(ratios, "app-fin__table")[0])[0][0] == "as each row says; per share in USD"
     taiwan = _block(answers.FINANCIALS, kind="balance", scale="b")
     assert _grid(classed(taiwan, "app-fin__table")[0])[0][0] == "TWD, billions"
+    taiwan = _block(answers.FINANCIALS, kind="ratios")
+    assert _grid(classed(taiwan, "app-fin__table")[0])[0][0] == "as each row says; per share in TWD"
     segments = _block(kind="segments", scale="b")
     assert [_grid(t)[0][0] for t in classed(segments, "app-fin__table")] == ["USD, billions"] * 2
 
@@ -513,9 +516,9 @@ def test_the_captions() -> None:
 def test_a_column_s_head() -> None:
     """A column's head: its period over the day and month its period ends; a third line, the
     code, where the column's currency is not the tab's."""
-    assert _tab("head", {"label": "2026", "end": "2026-09-26", "currency": "USD"}, "USD") == [
+    assert _tab("head", {"label": "2026", "end": "2026-09-30", "currency": "USD"}, "USD") == [
         "2026",
-        "26 Sep",
+        "30 Sep",
         None,
     ]
     assert _tab("head", {"label": "2019", "end": "2019-12-31", "currency": "EUR"}, "USD") == [
@@ -550,10 +553,10 @@ def test_a_figure_s_text() -> None:
     and for 0. Per share and a plain ratio to two decimals, a percent to one (the dividend yield
     to two), a multiple to one with x and a dash at 0, days to none. Below zero a minus, none
     where the figure rounds to zero."""
-    assert _figure("money", 478_834e6) == "478,834"
-    assert _figure("money", 478_834e6, "b") == "478.83"
-    assert _figure("money", -86_390e6) == "−86,390"
-    assert _figure("money", -86_390e6, "b") == "−86.39"
+    assert _figure("money", 471_368e6) == "471,368"
+    assert _figure("money", 471_368e6, "b") == "471.37"
+    assert _figure("money", -84_170e6) == "−84,170"
+    assert _figure("money", -84_170e6, "b") == "−84.17"
     assert _figure("money", 12.34e6, "m", 1) == "12.3"
     assert _figure("money", 0) == DASH
     assert _figure("money", None) == DASH
@@ -858,7 +861,7 @@ def test_the_picks_stay_across_sub_tabs_and_go_with_the_company() -> None:
             _press("app-fin__tab", "Income statement"),
             _press("app-fin__period", "Quarterly"),
             _press("app-fin__tab", "Segments"),
-            {"do": "mount", "answer": ANSWER | {"symbol": "BETA"}},
+            {"do": "land", "answer": ANSWER | {"symbol": "BETA"}},
         ],
         CHARTED,
     )
@@ -885,6 +888,75 @@ def test_the_picks_stay_across_sub_tabs_and_go_with_the_company() -> None:
     ]
     drawn = node("companyPage.draw.financials", [ANSWER | {"symbol": "BETA"}], *SCRIPTS)
     assert drawn["props"]["key"] == "BETA"
+
+
+def test_the_picks_stay_when_the_tab_opens_again_on_the_same_company() -> None:
+    """The lines on the chart stay when the reader leaves the tab for another tab of the same
+    company and comes back, each in its slot, and when the same company's answer lands again; they
+    go when another company's tab opens, or its answer lands, which opens on its Revenue alone, and
+    the first company's tab opens on its Revenue alone after that."""
+    beta = ANSWER | {"symbol": "BETA"}
+    held = [GROSS | {"slot": 1}, EPS | {"slot": 2}]
+    trace = _drive(
+        None,
+        [
+            {"do": "mount", "answer": ANSWER},
+            {"do": "add", "text": "Gross profit"},
+            {"do": "add", "text": "EPS"},
+            {"do": "add", "text": "Revenue"},
+            {"do": "mount", "answer": ANSWER},
+            {"do": "land", "answer": ANSWER},
+            {"do": "mount", "answer": beta},
+            {"do": "mount", "answer": ANSWER},
+            {"do": "add", "text": "EPS"},
+            {"do": "land", "answer": beta},
+            {"do": "mount", "answer": ANSWER},
+        ],
+        CHARTED,
+    )
+    assert [step["threw"] for step in trace] == [False] * 11
+    assert [step["picks"] for step in trace] == [
+        [REVENUE],
+        [REVENUE, GROSS | {"slot": 1}],
+        [REVENUE, *held],
+        held,
+        held,  # the tab opens again on the same company: its lines, each in its slot
+        held,  # the same company's answer lands again
+        [REVENUE],  # another company's tab
+        [REVENUE],  # the first company's again, after another's
+        [REVENUE, EPS | {"slot": 1}],
+        [REVENUE],  # another company's answer lands
+        [REVENUE],
+    ]
+    assert trace[4]["on"] == ["Gross profit", "EPS"]
+
+
+def test_a_kept_pick_whose_line_is_gone_breaks_nothing() -> None:
+    """A line kept on the chart that the company's next answer no longer holds: the tab opens
+    again on the lines it held, draws, and the chart draws the lines the answer holds."""
+    gone = copy.deepcopy(ANSWER)
+    gone["statements"]["income"]["annual"]["rows"] = [
+        row for row in INCOME["rows"] if row["key"] != "grossProfit"
+    ]
+    trace = _drive(
+        None,
+        [
+            {"do": "mount", "answer": ANSWER},
+            {"do": "add", "text": "Gross profit"},
+            {"do": "mount", "answer": gone},
+        ],
+        CHARTED,
+    )
+    assert [step["threw"] for step in trace] == [False] * 3
+    assert trace[-1]["picks"] == [REVENUE, GROSS | {"slot": 1}]
+    assert trace[-1]["on"] == ["Revenue"]
+    chart = node(
+        "companyFinancialsChart.block",
+        [gone, trace[-1]["picks"], "annual", "m", None, 900, None],
+        *CHARTED,
+    )
+    [head] = classed(chart, "app-fin__chead")
+    assert text(head["props"]["children"][0]) == "Revenue"
 
 
 def test_a_row_on_the_chart_shows_its_colour() -> None:

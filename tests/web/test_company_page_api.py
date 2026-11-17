@@ -382,6 +382,20 @@ def test_a_half_year_reporter_s_cadence_and_labels(client: TestClient, db_path: 
     assert [column["label"] for column in columns] == ["2023", "2024", "2025"]
 
 
+def test_the_cadence_reads_each_period_end_once(client: TestClient, db_path: Path) -> None:
+    """The engine takes one end a date (``inputs_statements.cadence_of``): quarterly income rows
+    that end half a year apart, the newest stored twice, are a half-year reporter's, as the engine
+    reads them, and not a company whose cadence the rule cannot tell. The quarterly income
+    statement is the only quarterly answer stored, so the cadence is read from it."""
+    _store(db_path, "profile", pages.PROFILE, AT)
+    halves = ("2025-12-31", "2026-06-30")
+    rows = [row for row in FINANCIAL_ANSWERS["income-quarter"] if row["date"] in halves]
+    newest = max(rows, key=lambda row: row["date"])
+    _store(db_path, "income-quarter", [newest, *rows], AT)
+    body = _get(client, FINANCIALS)
+    assert body["cadence"] == "half-yearly"
+
+
 def test_the_currency_is_the_newest_annual_income_row_s(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:

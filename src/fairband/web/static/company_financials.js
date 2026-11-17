@@ -23,18 +23,20 @@
    from it. A label's x on the chart takes its line off too (drop). The chart holds MAX lines,
    four: at four every other row's + is disabled. A line keeps its slot while it stays on the
    chart; the last line cannot be taken off, and the one line left takes slot 0. A row on the
-   chart is marked with its slot. A section head takes no press and has no button. The tab opens
-   on its company's Revenue alone (first), and on no line where it has none, when its chart's
-   place stays empty.
+   chart is marked with its slot. A section head takes no press and has no button. A company's
+   tab opens on its Revenue alone (first), and on no line where it has none, when its chart's
+   place stays empty; it opens again on the lines it held when the reader left it for another tab
+   and comes back on the same company (opening).
 
    The state: the sub-tab and the period are kept in this script while the app is open, from one
-   company to the next; the unit is kept in the browser's localStorage under
-   fairband.financials.unit, read and written inside a try, Millions where it keeps nothing.
-   Financials, the tab's component, keeps the view and the picks in its state, drawn keyed on the
-   company of its answer, so another company's answer opens a new tab and drops the picks, and
-   draws it with block, a pure builder of the answer, the view and the picks. The pieces are pure
-   functions on FairbandPage.companyFinancials, for the tests, which read them in node, and
-   draw.financials hangs on the company page's draw (company.js). */
+   company to the next, and so are the picks, with the company they belong to; the unit is kept
+   in the browser's localStorage under fairband.financials.unit, read and written inside a try,
+   Millions where it keeps nothing. Financials, the tab's component, keeps the view and the picks
+   in its state, drawn keyed on the company of its answer, so another company's answer opens a
+   new tab, which opens on that company's first line, and draws it with block, a pure builder of
+   the answer, the view and the picks. The pieces are pure functions on
+   FairbandPage.companyFinancials, for the tests, which read them in node, and draw.financials
+   hangs on the company page's draw (company.js). */
 (function () {
   'use strict';
 
@@ -62,8 +64,9 @@
   var FULL = 'The chart holds 4 lines. Take one off first.';
   var BARS = { money: true, perShare: true, shares: true }; /* the units drawn as bars */
 
-  /* The sub-tab and the period a tab opens on: the last the reader chose while the app is open. */
-  var kept = { kind: 'income', period: 'annual' };
+  /* What a tab opens on, kept while the app is open: the sub-tab and the period the reader chose
+     last, and the picks of the company whose tab was drawn last, `symbol`. */
+  var kept = { kind: 'income', period: 'annual', symbol: null, picks: [] };
 
   function ok(v) { return typeof v === 'number' && isFinite(v); }
 
@@ -112,6 +115,19 @@
       });
     });
     return found;
+  }
+
+  /* The picks the tab of `answer` opens on: the picks kept where the tab drawn last was its
+     company's, so the reader who leaves the tab for another and comes back finds the lines as
+     they were; else its first line alone (first), or none, which are then kept as its company's.
+     A kept pick whose line the answer no longer holds stays; the chart draws no series for it. */
+  function opening(answer) {
+    if (kept.symbol !== answer.symbol) {
+      var line = first(answer);
+      kept.symbol = answer.symbol;
+      kept.picks = line ? alone(line) : [];
+    }
+    return kept.picks;
   }
 
   /* The picks of the line `line`, {kind, table, key}, alone on the chart: it at slot 0. */
@@ -190,9 +206,9 @@
 
   /* The first column's head, the unit of the table's figures in the tab's `currency`: USD,
      millions, except per share on the income statement; USD, millions on the other statements
-     and Segments; billions under Billions; as each row says on Ratios. */
+     and Segments; billions under Billions; as each row says; per share in USD on Ratios. */
   function caption(kind, currency, scale) {
-    if (kind === 'ratios') return 'as each row says';
+    if (kind === 'ratios') return 'as each row says; per share in ' + currency;
     return currency + ', ' + (scale === 'b' ? 'billions' : 'millions') +
       (kind === 'income' ? ', except per share' : '');
   }
@@ -387,21 +403,26 @@
 
   /* The tab: the block of `props.answer`, keeping its view, which opens at the sub-tab and the
      period kept while the app is open and at the unit the browser keeps, and its picks, which
-     open on the company's first line alone, or on none. A control's change is laid over the view
-     (step); the sub-tab and the period are kept for the next tab, and the unit, where it
-     changed, in the browser. A row's press sets the picks. */
+     open on those its company's tab held when the reader left it, else on the company's first
+     line alone, or on none (opening). A control's change is laid over the view (step); the
+     sub-tab and the period are kept for the next tab, and the unit, where it changed, in the
+     browser. A row's press sets the picks, and they are kept as the company's. */
   function Financials(props) {
     var view = React.useState({ kind: kept.kind, period: kept.period, scale: storedScale() });
-    var line = first(props.answer);
-    var picks = React.useState(line ? alone(line) : []);
+    var picks = React.useState(opening(props.answer));
     return block(props.answer, view[0], picks[0], {
       view: function (change) {
         var next = step(view[0], change);
-        kept = { kind: next.kind, period: next.period };
+        kept.kind = next.kind;
+        kept.period = next.period;
         if (next.scale !== view[0].scale) keepScale(next.scale);
         view[1](next);
       },
-      picks: picks[1]
+      picks: function (next) {
+        kept.symbol = props.answer.symbol;
+        kept.picks = next;
+        picks[1](next);
+      }
     });
   }
 

@@ -240,9 +240,9 @@ def head(label: str) -> dict[str, Any]:
 
 
 def year_row(year: int, **fields: Any) -> dict[str, Any]:
-    """An answer's row for fiscal year ``year``, ending 26 September, in US dollars."""
+    """An answer's row for fiscal year ``year``, ending 30 September, in US dollars."""
     return {
-        "date": f"{year}-09-26",
+        "date": f"{year}-09-30",
         "fiscalYear": str(year),
         "period": "FY",
         "reportedCurrency": "USD",
@@ -267,7 +267,7 @@ def segment_row(year: int, data: Any) -> dict[str, Any]:
         "fiscalYear": year,
         "period": "FY",
         "reportedCurrency": "USD",
-        "date": f"{year}-09-26",
+        "date": f"{year}-09-30",
         "data": data,
     }
 
@@ -329,22 +329,22 @@ def test_the_columns_by_year_and_by_quarter() -> None:
     table = statement(newest_first, "income", "USD")
     assert column_labels(table) == ["2024", "2025", "2026"]
     assert [column["end"] for column in table["columns"]] == [
-        "2024-09-26",
-        "2025-09-26",
-        "2026-09-26",
+        "2024-09-30",
+        "2025-09-30",
+        "2026-09-30",
     ]
     assert by_key(table)["revenue"]["values"] == [2024e9, 2025e9, 2026e9]  # units, not millions
 
     quarters = [
-        quarter_row("2026-09-26", "Q4", revenue=2.0),
-        quarter_row("2026-06-27", "Q3", revenue=1.0),
+        quarter_row("2026-09-30", "Q4", revenue=2.0),
+        quarter_row("2026-06-30", "Q3", revenue=1.0),
     ]
     by_quarter = statement(quarters, "income", "USD", quarterly=True)
     assert column_labels(by_quarter) == ["Q3 2026", "Q4 2026"]
     assert by_key(by_quarter)["revenue"]["values"] == [1.0, 2.0]
 
     for fiscal_year in (2026, "2026", MISSING):
-        row: dict[str, Any] = {"date": "2026-09-26", "period": "Q4", "revenue": 1.0}
+        row: dict[str, Any] = {"date": "2026-09-30", "period": "Q4", "revenue": 1.0}
         if fiscal_year is not MISSING:
             row["fiscalYear"] = fiscal_year
         assert column_labels(statement([row], "income", "USD")) == ["2026"]
@@ -359,8 +359,8 @@ def test_a_fiscal_year_that_is_not_a_year_reads_the_year_of_the_date() -> None:
 
 def test_a_quarter_with_no_period_is_labelled_by_its_year_alone() -> None:
     rows = [
-        quarter_row("2026-06-27", "", revenue=1.0),
-        {**quarter_row("2026-09-26", "Q4", revenue=1.0), "period": None},
+        quarter_row("2026-06-30", "", revenue=1.0),
+        {**quarter_row("2026-09-30", "Q4", revenue=1.0), "period": None},
     ]
     assert column_labels(statement(rows, "income", "USD", quarterly=True)) == ["2026", "2026"]
 
@@ -428,14 +428,14 @@ def test_a_column_carries_its_row_s_currency() -> None:
 
 def test_the_ratios_join_two_answers_by_date() -> None:
     answer = [
-        {**year_row(2025, grossProfitMargin=0.469, currentRatio=1.5), "date": "2025-09-27"},
+        {**year_row(2025, grossProfitMargin=0.469, currentRatio=1.5), "date": "2025-09-29"},
         year_row(2026, grossProfitMargin=0.488, currentRatio=1.25),
     ]
     metrics = [year_row(2026, returnOnInvestedCapital=0.53, grossProfitMargin=0.9, currentRatio=9)]
     table = ratios(answer, metrics, "USD", 11)
     assert table["columns"] == [
-        {"label": "2025", "end": "2025-09-27", "currency": "USD"},
-        {"label": "2026", "end": "2026-09-26", "currency": "USD"},
+        {"label": "2025", "end": "2025-09-29", "currency": "USD"},
+        {"label": "2026", "end": "2026-09-30", "currency": "USD"},
     ]
     lines = by_key(table)
     assert lines["returnOnInvestedCapital"]["values"] == [None, 0.53]
@@ -455,7 +455,7 @@ def test_the_ratios_join_two_answers_by_date() -> None:
     assert row_labels(alone) == ["MARGINS", "Gross", "FINANCIAL HEALTH", "Current ratio"]
 
     only_metrics = ratios(None, metrics, "EUR", 11)
-    assert only_metrics["columns"] == [{"label": "2026", "end": "2026-09-26", "currency": "USD"}]
+    assert only_metrics["columns"] == [{"label": "2026", "end": "2026-09-30", "currency": "USD"}]
     assert row_labels(only_metrics) == ["RETURNS", "ROIC"]
 
 
@@ -514,7 +514,7 @@ def test_the_segments_newest_years_and_their_order() -> None:
     assert len(rows) == 17
     table = segments(list(reversed(rows)), "USD", 11)
     assert column_labels(table) == [str(year) for year in range(2016, 2027)]
-    assert table["columns"][-1] == {"label": "2026", "end": "2026-09-26", "currency": "USD"}
+    assert table["columns"][-1] == {"label": "2026", "end": "2026-09-30", "currency": "USD"}
     assert row_labels(table) == ["B", "A", "Old"]
     early = [None] * 9
     assert table["rows"] == [
@@ -592,7 +592,7 @@ def test_the_newest_row_names_the_currency_and_the_ends_are_in_order() -> None:
         year_row(2025, reportedCurrency="EUR"),
     ]
     assert reported_currency(rows) == "USD"
-    assert period_ends(rows) == [date(2024, 9, 26), date(2025, 9, 26), date(2026, 9, 26)]
+    assert period_ends(rows) == [date(2024, 9, 30), date(2025, 9, 30), date(2026, 9, 30)]
     assert reported_currency([year_row(2026, reportedCurrency=None), *rows[1:]]) is None
 
 

@@ -57,7 +57,8 @@ lines and none is the point more than another. That chart, and only a chart like
 - Never a fifth colour: the chart holds four lines.
 - Lines of one unit share a plot and a scale. Another unit takes a plot of its own under it, on
   the same periods. Never two scales on one plot.
-- An amount is a column from zero; a rate is a line on an axis that fits its range.
+- An amount, a per-share figure or a share count is a column from zero; a rate is a line on an
+  axis that fits its range.
 - With one line, a figure below zero takes `chart-neg-3`, the polarity pair. With several, a
   column wears its line's colour above zero and below: colour is identity there.
 - The legend is the row of labels above the plot, each a swatch, a name and the newest figure.
@@ -73,9 +74,9 @@ lines and none is the point more than another. That chart, and only a chart like
   darker than it in the light one. Two pairs share a lightness, `chart-2` and `chart-4` in the
   dark theme and `chart-3` and `chart-4` in the light one: hue alone keeps them apart. Under
   simulated tritan sight, which the method reports and does not gate, the light theme's
-  `chart-3` and `chart-4` are 4.7 apart: the label beside each line names it. None is a
-  `phase-*`, `caution` or `critical` value. `chart-3` is a yellow near `caution`: it is a mark
-  in a plot, never a status.
+  `chart-3` and `chart-4` are 4.7 apart: the hover box names each line with its figure, and a
+  period's columns stand in the labels' order. None is a `phase-*`, `caution` or `critical`
+  value. `chart-3` is a yellow near `caution`: it is a mark in a plot, never a status.
 """
 
 
