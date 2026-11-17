@@ -94,7 +94,7 @@ def _finite(value: Any) -> bool:
 
 def test_each_range_keeps_the_rows_from_its_first_day() -> None:
     """A range runs from the day that many months before the newest row's day, that day kept
-    where it is a row; year to date from the last day of the year before the newest row's. A
+    where it is a row; year to date from the last close of the year before the newest row's. A
     first day that is not a row starts the range at the next row."""
     for range_id, first in (
         ("1M", "2026-10-13"),
@@ -114,6 +114,57 @@ def test_each_range_keeps_the_rows_from_its_first_day() -> None:
         "2026-11-10",
         "2026-11-13",
     ]
+
+
+def test_the_year_to_date_starts_at_the_last_close_of_the_year_before() -> None:
+    """YTD runs from the last row dated before 1 January of the newest row's year, whatever day
+    of the week 31 December was: 31 Dec 2022 was a Saturday, so 2023's year to date starts at
+    Friday 30 Dec 2022, and its change is over the year's last close, as FMP's is. A series that
+    starts in the newest row's year keeps every row."""
+    rows = [[day, 100.0 + i, 1_000] for i, day in enumerate(_weekdays(date(2023, 3, 15), 80))]
+    ytd = _chart("inRange", rows, "YTD")
+    assert ytd[0][0] == "2022-12-30"
+    assert ytd == [row for row in rows if row[0] >= "2022-12-30"]
+    assert _chart("lead", ytd, "YTD").endswith(" year to date")
+    listed = [row for row in rows if row[0] >= "2023-01-02"]
+    assert _chart("inRange", listed, "YTD") == listed
+
+
+def _calendar(first: date, last: date) -> list[list[Any]]:
+    """A row for every day from ``first`` to ``last``, weekends too, so each first day is a
+    row."""
+    return [
+        [(first + timedelta(days=n)).isoformat(), 100.0, 1_000]
+        for n in range((last - first).days + 1)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("newest", "range_id", "first"),
+    [
+        (date(2026, 3, 31), "1M", "2026-02-28"),
+        (date(2026, 3, 30), "1M", "2026-02-28"),
+        (date(2026, 3, 29), "1M", "2026-02-28"),
+        (date(2026, 3, 28), "1M", "2026-02-28"),
+        (date(2024, 3, 31), "1M", "2024-02-29"),
+        (date(2024, 3, 30), "1M", "2024-02-29"),
+        (date(2024, 3, 29), "1M", "2024-02-29"),
+        (date(2024, 3, 28), "1M", "2024-02-28"),
+        (date(2024, 2, 29), "1Y", "2023-02-28"),
+        (date(2026, 5, 31), "3M", "2026-02-28"),
+        (date(2026, 12, 31), "6M", "2026-06-30"),
+    ],
+)
+def test_a_range_from_a_day_its_first_month_lacks_starts_at_that_month_s_last_day(
+    newest: date, range_id: str, first: str
+) -> None:
+    """A range of months from the 29th, 30th or 31st starts on that day of the month that many
+    months back, or on that month's last day where it has no such day, so the range keeps that
+    day's close: 1M from 31 March 2026 starts at 28 February; from 29, 30 and 31 March 2024, a
+    leap year, at 29 February, and from 28 March at 28 February; 1Y from 29 February 2024 at
+    28 February 2023."""
+    rows = _calendar(newest - timedelta(days=400), newest)
+    assert _chart("inRange", rows, range_id)[0][0] == first
 
 
 def test_a_range_longer_than_the_series_keeps_every_row() -> None:
@@ -310,6 +361,53 @@ def test_the_y_tick_under_the_tag_is_left_out() -> None:
     [box] = classed(tree, "app-price__tagbox")
     assert box["props"]["fill"] == "var(--accent)"
     assert box["props"]["y"] == pytest.approx(g["lastY"] - 9)
+
+
+@pytest.mark.parametrize(
+    ("span", "step"),
+    [
+        (40, 10),
+        (20, 5),
+        (8, 2),
+        (0.8, 0.2),
+        (0.002, 0.0005),
+        (40.000000000000014, 10),
+        (41, 20),
+        (21, 10),
+        (83.32, 50),
+        (300, 100),
+        (0, 0.5),
+    ],
+)
+def test_a_clean_raw_step_is_kept_and_any_other_rounded_up(span: float, step: float) -> None:
+    """The close's step for a span in four steps: the raw step, the span over four, where it is
+    already 1, 2 or 5 times a power of ten, is kept, the noise of a float's last digits and all
+    (40 over 4 is 10, not 20; 0.002 over 4 is 0.0005, which a float reads as 5.000000000000001
+    ten-thousandths); any other is rounded up to the next (41 over 4 is 20). A flat span is taken
+    as 1."""
+    assert _chart("niceStep", span, 4) == pytest.approx(step)
+
+
+def test_a_span_of_a_clean_step_keeps_its_grid() -> None:
+    """Closes from 100 to 140 step by 10: five grid lines, each tick but the one the tag covers.
+    The series the other tests use keep their steps: 50 for ``TEN``, 5 for ``FALLING``, 0.5 for
+    a flat close and 20 for the past year of ``SERIES``."""
+    rows = [[f"2026-11-{9 + i:02d}", 100.0 + 10 * i, 1_000] for i in range(5)]
+    g = _chart("geometry", rows, WIDTH)
+    assert len(g["grid"]) == 5
+    assert [tick["text"] for tick in g["yTicks"]] == ["100", "110", "120", "130"]
+    assert [tick["text"] for tick in _chart("geometry", TEN, WIDTH)["yTicks"]] == [
+        "250",
+        "300",
+        "400",
+    ]
+    assert [tick["text"] for tick in _chart("geometry", FALLING, WIDTH)["yTicks"]] == [
+        "10",
+        "15",
+        "20",
+    ]
+    year = _chart("geometry", _chart("inRange", SERIES, "1Y"), WIDTH)
+    assert [tick["text"] for tick in year["yTicks"]] == ["120", "140", "160", "180", "200", "220"]
 
 
 def test_the_lead_carries_the_sign_the_percent_and_the_range_s_words() -> None:

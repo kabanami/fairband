@@ -951,8 +951,7 @@ def test_the_references_one_section_cites(
 ) -> None:
     """The company detail's report summary (spec 2026-11-06 Tier 2, 18.2): the refs section 1
     cites, each with the number the whole list gives it, so a number there matches the report
-    page; r,
-    cited in section 4 alone, is left out. A section past the last cites nothing."""
+    page; r, cited in section 4 alone, is left out. A section past the last cites nothing."""
     sid = snapshots["AAPL"]
     report = _stored(conn, sid, sections=_cited(sid))
     whole = references(conn, report, policy)

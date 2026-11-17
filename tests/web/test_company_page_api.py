@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 from refresh.vendor_double import FMP_KEY, Router
 from support import page_payloads as pages
@@ -36,6 +37,7 @@ from fairband.engine.route import value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
 from fairband.refresh.fetch import EARNINGS_ROWS, PAGE_ENDPOINTS, fetch_company, page_params
+from fairband.refresh.inputs_statements import YEAR_END_DRIFT
 from fairband.refresh.passthrough import Passthrough
 from fairband.store.db import connect
 from fairband.store.ledger import Writer
@@ -227,6 +229,27 @@ def test_an_estimate_dated_within_the_drift_of_the_newest_year_is_that_year(
     consensus = _get(client, ESTIMATES)["consensus"]
     assert consensus == page_fmp.consensus([upcoming], None, "USD")
     assert [row["fiscalYear"] for row in consensus] == [2026]
+
+
+@pytest.mark.parametrize(("dated", "drawn"), [("2026-01-03", False), ("2026-01-04", True)])
+def test_the_consensus_cut_s_exact_boundary(
+    client: TestClient, db_path: Path, dated: str, drawn: bool
+) -> None:
+    """The cut is the newest fiscal year's end, 27 Dec 2025, plus the drift of seven days: a row
+    dated on its last day, 3 Jan 2026, is the reported year and is not drawn; one dated a day
+    later is drawn."""
+    assert timedelta(days=7) == YEAR_END_DRIFT
+    _store(db_path, "profile", pages.PROFILE, AT)
+    income = [
+        {"symbol": SYMBOL, "date": day, "fiscalYear": year, "period": "FY", "revenue": 3.0e12}
+        for day, year in (("2025-12-27", "2025"), ("2024-12-28", "2024"))
+    ]
+    row = pages.ESTIMATES[-1] | {"date": dated}
+    _store(db_path, "estimates-annual", [row], AT)
+    with closing(connect(db_path)) as conn:
+        store_payloads(conn, SYMBOL, {"income-annual": income}, AT)
+    consensus = _get(client, ESTIMATES)["consensus"]
+    assert consensus == (page_fmp.consensus([row], None, "USD") if drawn else [])
 
 
 def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: Path) -> None:

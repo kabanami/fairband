@@ -1,8 +1,8 @@
 """The Methodology view (spec 2026-11-04 7): the fragment's fourteen sections, its diagram, its live
 spans and its examples; the script that fills the spans and wires the contents and the section
-hash; and the prose rule of 7.1, every sentence of the fragment's prose at 25 words or fewer. The repository runs no
-JavaScript tests, so the script is pinned by its content; the spans' names are checked against
-the policy route itself."""
+hash; and the prose rule of 7.1, every sentence of the fragment's prose at 25 words or fewer.
+The repository runs no JavaScript tests, so the script is pinned by its content; the spans'
+names are checked against the policy route itself."""
 
 import re
 from html import unescape

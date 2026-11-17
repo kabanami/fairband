@@ -361,31 +361,30 @@ def create_app(
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:
-        """The company's latest snapshot in full, with its latest universe row, two of the
-        effective policy's values: the designation edges, by which the drawer keeps its price ÷
-        value figure inside the word's band, and ``aging_fraction``, from which a validity window
-        reads aging where the screen's Freshness column does (no page draws the window since it
-        left the drawer, the company page's design 11); and the agents' records that the drawer,
-        the company page and the report page read (``research_api.agent_records``: ``review``,
-        ``secondary``, ``report``, ``item``), with ``moat``, the moat class in force, which the
-        drawer's head and the company page's head stamp (the company page's design, 7.2); and
-        ``noteCount``, the count of the company's notes, which the Notes control draws beside its
-        word (11.1); and the company brief (B-149), the latest stored profile's description, which
-        the drawer shows cut at six lines, the report page shows whole, and the MCP ``company``
-        tool carries; and ``logo`` (B-203), the address of the company's logo read where the
-        latest stored profile names a logo, which the drawer's head and the report page's draw,
-        ``None`` without one (``logo_api.logo_route``). And what the figures are in
-        (spec 2026-11-10 7.4), which the drawer's head and the report page name:
-        ``currency``, the reporting currency the snapshot was valued or refused in
-        (``types.money_of``: USD for a USD row, the code for a row refused for its currency);
-        ``isAdr``, the ADR flag as assembly reads it, the latest stored profile's, else the universe
-        row's, ``None`` with neither (``inputs.adr_flag``); ``adrRatio``, the ADR ratio the share
-        count was read by, the result's ``adr_ratio`` input, ``None`` without one; ``fxRate`` and
-        ``fxDate``, the rate the value was translated at and its close's date, ``None`` on a row
-        with no rate (``types.rated``). And ``launchReady`` (spec 2026-11-16 agent launch, 9),
-        whether launching is set up: the launch file in the config folder, read at each request,
-        can be used and its window command holds a word (``launch.settings``); the open item's
-        ``launch`` is read at the clock's time."""
+        """The company's latest snapshot in full, with its latest universe row, two of the effective
+        policy's values: the designation edges, by which the drawer keeps its price ÷ value figure
+        inside the word's band, and ``aging_fraction``, from which a validity window reads aging
+        where the screen's Freshness column does (no page draws the window since it left the drawer,
+        the company page's design 11); and the agents' records that the drawer, the company page and
+        the report page read (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
+        ``item``), with ``moat``, the moat class in force, which the drawer's head and the company
+        page's head stamp (the company page's design, 7.2); and ``noteCount``, the count of the
+        company's notes, which the Notes control draws beside its word (11.1); and the company brief
+        (B-149), the latest stored profile's description, which the drawer shows cut at six lines,
+        the report page shows whole, and the MCP ``company`` tool carries; and ``logo`` (B-203), the
+        address of the company's logo read where the latest stored profile names a logo, which the
+        heads of the drawer, the company page and the report page draw, ``None`` without one
+        (``logo_api.logo_route``). And what the figures are in (spec 2026-11-10 7.4), which the
+        drawer's head and the report page name: ``currency``, the reporting currency the snapshot
+        was valued or refused in (``types.money_of``: USD for a USD row, the code for a row refused
+        for its currency); ``isAdr``, the ADR flag as assembly reads it, the latest stored
+        profile's, else the universe row's, ``None`` with neither (``inputs.adr_flag``);
+        ``adrRatio``, the ADR ratio the share count was read by, the result's ``adr_ratio`` input,
+        ``None`` without one; ``fxRate`` and ``fxDate``, the rate the value was translated at and
+        its close's date, ``None`` on a row with no rate (``types.rated``). And ``launchReady``
+        (spec 2026-11-16 agent launch, 9), whether launching is set up: the launch file in the
+        config folder, read at each request, can be used and its window command holds a word
+        (``launch.settings``); the open item's ``launch`` is read at the clock's time."""
         now = clock()
         today = now.date()
         with closing(conn_factory()) as conn:

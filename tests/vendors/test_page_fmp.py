@@ -11,6 +11,7 @@ import pytest
 from support import page_payloads as p
 
 from fairband.refresh.fetch import PAGE_ENDPOINTS
+from fairband.vendors.normalize_fmp import price_closes
 from fairband.vendors.page_fmp import (
     company,
     consensus,
@@ -392,11 +393,33 @@ def test_prices() -> None:
 
 def test_a_day_without_a_close_is_left_out_and_one_without_a_volume_kept() -> None:
     history = [
-        {"date": "2026-11-13", "close": "180.25", "volume": 7650200},
+        {"date": "2026-11-13", "close": "a close", "volume": 7650200},
         {"date": "2026-11-12", "close": 178.9},
         {"date": "", "close": 177.3, "volume": 6904100},
+        {"date": "2026-11-11", "volume": 6904100},
     ]
     assert prices(history, None) == [["2026-11-12", 178.9, None]]
+
+
+def test_the_prices_are_the_rows_the_engine_reads_its_closes_from() -> None:
+    """The history's rows as the engine's ``price_closes`` finds them: FMP's flat list of rows, or
+    its older object ``{"historical": [...]}``, a close given as a JSON number or as numeric text,
+    each read the same. The volume beside it is a figure like any other: a volume in text is
+    none, as ``number`` reads every figure but the close."""
+    flat = prices(p.HISTORY, None)
+    assert [[day, close] for day, close, _ in flat] == [
+        [when.isoformat(), close] for when, close in price_closes(p.HISTORY)
+    ]
+    assert prices({"historical": p.HISTORY}, None) == flat
+    assert prices({"historical": p.HISTORY}, ROW) == prices(p.HISTORY, ROW)
+    texts = [row | {"close": str(row["close"])} for row in p.HISTORY]
+    assert prices(texts, None) == flat
+    assert prices({"historical": texts}, None) == flat
+    worded = [{"date": "2026-11-13", "close": " 180.25 ", "volume": "7650200"}]
+    assert prices(worded, None) == [["2026-11-13", 180.25, None]]
+    assert number("180.25") is None
+    for unusable in ({"historical": None}, {"historical": "rows"}, {"Error Message": "x"}):
+        assert prices(unusable, ROW) == []
 
 
 def test_the_quote_s_day_is_added_when_it_is_the_later_and_only_then() -> None:

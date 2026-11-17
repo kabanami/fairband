@@ -11,6 +11,7 @@ skipped and records nothing. Numbers parse to ``Decimal`` from a JSON number or 
 
 from fairband.vendors.normalize_fmp_observations import (
     ScreenerRow,
+    close_rows,
     earnings_observations,
     estimate_observations,
     fx_closes,
@@ -35,6 +36,7 @@ from fairband.vendors.normalize_fmp_statements import (
 __all__ = [
     "ScreenerRow",
     "as_reported_balance_facts",
+    "close_rows",
     "earnings_observations",
     "estimate_observations",
     "fx_closes",

@@ -122,9 +122,8 @@
 
   /* The published report's line, under a rule: its stance in the Stance column's chip classes,
      faded once the window of the snapshot it rests on has expired, with a title then that says so;
-     its mode and
-     its day in the reader's time zone (full report, 11 Nov 2026); who wrote it; and the link to
-     the report page, the symbol encoded as the report page's links encode it. */
+     its mode and its day in the reader's time zone (full report, 11 Nov 2026); who wrote it; and
+     the link to the report page, the symbol encoded as the report page's links encode it. */
   function reportLine(symbol, report) {
     return h('div', { key: 'report', className: 'app-company__research' },
       h('span', {

@@ -10,7 +10,9 @@ name is the page's own (camelCase), not FMP's.
   boolean, a text such as ``"12"``, ``NaN``, an infinity and a missing field are ``None``, which
   the page draws as a dash. A multiple or the interest cover at 0 stays 0: the page draws that
   dash too. The employee count, which FMP sends as a text of digits (``"167000"``), and the growth's
-  fiscal year (``"2025"``) are whole numbers read from a number or a text of digits.
+  fiscal year (``"2025"``) are whole numbers read from a number or a text of digits. A close of the
+  price history is read as the engine reads it (``normalize_fmp_observations.close_rows``), a
+  number or a numeric text, so the chart draws the closes the company is valued on.
 - Margins, returns, yields and growth are fractions as FMP gives them (0.4879); the free float and
   the price changes are percents as given (99.88).
 - A money figure is ``{"value", "currency"}`` (``money``), as the design's 14.2 states it: in the
@@ -36,6 +38,7 @@ from typing import Any
 
 from fairband.vendors._fmp_parse import dated, objects, parse_date, text
 from fairband.vendors.fmp import to_fmp_symbol
+from fairband.vendors.normalize_fmp import close_rows
 
 type Money = dict[str, Any]  # {"value": 182.4, "currency": "USD"}; a figure with no value is None
 
@@ -266,15 +269,13 @@ def price_change(payload: Any) -> dict[str, float | None]:
 
 
 def prices(history: Any, quote: Mapping[str, Any] | None) -> list[list[Any]]:
-    """``[day, close, volume]`` for each row of the price history with a date and a close, oldest
-    first, the volume ``None`` where the row has none; then the quote row's price and volume on
-    its day where that day is later than the history's newest (the design's 8.4). Without a
-    history the quote adds nothing."""
-    days: list[tuple[date, float, float | None]] = []
-    for row, when in dated(history):
-        close = number(row.get("close"))
-        if close is not None:
-            days.append((when, close, number(row.get("volume"))))
+    """``[day, close, volume]`` for each row of the price history with a date and a close, as the
+    engine finds its closes (``normalize_fmp_observations.close_rows``: the flat list or FMP's
+    older ``{"historical": [...]}`` object, a close given as a number or as numeric text), oldest
+    first, the volume read by ``number``, ``None`` where the row has none; then the quote row's
+    price and volume on its day where that day is later than the history's newest (the design's
+    8.4). Without a history the quote adds nothing."""
+    days = [(when, close, number(row.get("volume"))) for row, when, close in close_rows(history)]
     days.sort(key=lambda day: day[0])
     out: list[list[Any]] = [[when.isoformat(), close, volume] for when, close, volume in days]
     latest = _row(quote)

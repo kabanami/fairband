@@ -70,25 +70,31 @@
 
   /* --------------------------------------------------------------------------- the rows */
 
-  /* The day `months` months before the day `iso`, on its day of the month: 2025-11-13 for
-     2026-11-13 and twelve. A day past its month's end (2026-02-31) still sorts between its
-     neighbours. */
+  /* The day `months` months before the day `iso`, on its day of the month, or on that month's
+     last day where it has no such day: 2025-11-13 for 2026-11-13 and twelve, 2026-02-28 for
+     2026-03-31 and one. */
   function monthsBefore(iso, months) {
     var total = Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1 - months;
-    var month = String(total % 12 + 1);
-    return Math.floor(total / 12) + '-' + (month.length < 2 ? '0' + month : month) +
-      iso.slice(7, 10);
+    var year = Math.floor(total / 12);
+    var month = total % 12 + 1;
+    var last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return year + '-' + two(month) + '-' + two(Math.min(Number(iso.slice(8, 10)), last));
   }
 
+  function two(n) { return n < 10 ? '0' + n : String(n); }
+
   /* The rows of the range `id`: from the day that many months before the newest row's day, or,
-     for YTD, from the last day of the year before the newest row's; a range the series does not
-     fill keeps every row it has. */
+     for YTD, from the last close of the year before the newest row's, the last row dated before
+     its 1 January, whatever day of the week the year ended on, else from the year's first row; a
+     range the series does not fill keeps every row it has. */
   function inRange(prices, id) {
     var rows = prices || [];
     if (!rows.length) return [];
     var newest = rows[rows.length - 1][0];
-    var from = id === 'YTD' ? (Number(newest.slice(0, 4)) - 1) + '-12-31'
-      : monthsBefore(newest, MONTHS_BACK[id]);
+    var january = newest.slice(0, 4) + '-01-01';
+    var before = rows.filter(function (row) { return row[0] < january; });
+    var from = id !== 'YTD' ? monthsBefore(newest, MONTHS_BACK[id])
+      : before.length ? before[before.length - 1][0] : january;
     return rows.filter(function (row) { return row[0] >= from; });
   }
 
@@ -118,12 +124,15 @@
   /* ------------------------------------------------------------------------- the geometry */
 
   /* A clean step for `span` in about `count` steps: 1, 2, 5 or 10 times a power of ten, the raw
-     step rounded up. A span that is not above zero is taken as 1, so a flat series has a step. */
+     step where it is already one, else rounded up to the next. The raw step over its power of ten
+     is read to twelve figures, so a float's last digits (0.0005 reads 5.000000000000001
+     ten-thousandths) do not round a clean step up a size. A span that is not above zero is taken
+     as 1, so a flat series has a step. */
   function niceStep(span, count) {
     var raw = (span > 0 ? span : 1) / count;
     var power = Math.pow(10, Math.floor(Math.log10(raw)));
-    var unit = raw / power;
-    return (unit >= 5 ? 10 : unit >= 2 ? 5 : unit >= 1 ? 2 : 1) * power;
+    var unit = Number((raw / power).toPrecision(12));
+    return (unit > 5 ? 10 : unit > 2 ? 5 : unit > 1 ? 2 : 1) * power;
   }
 
   /* The decimals a tick at `step` needs to differ from its neighbours: none from 1 up. */

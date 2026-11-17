@@ -41,13 +41,15 @@ label or a date:
 
 The peers are not observations either: ``peer_symbols`` reads the ``stock-peers`` symbols from the
 stored payload, in the exchange form. Nor are a stock's closes or a pair's: ``price_closes`` and
-``fx_closes`` read them from the stored payload.
+``fx_closes`` read them from the stored payload, ``price_closes`` from the rows ``close_rows``
+finds, which the company page's prices read too.
 
 A row without a parseable ``date`` is skipped and records nothing; nothing here raises on vendor
 data.
 """
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -267,17 +269,23 @@ def split_observations(
     return out
 
 
-def price_closes(payload: Any) -> list[tuple[date, float]]:
-    """``(date, close)`` per row with a date and a numeric close, oldest first. Reads the stable
-    route's flat list of rows, or the legacy ``{"historical": [...]}`` object."""
+def close_rows(payload: Any) -> Iterator[tuple[dict[str, Any], date, float]]:
+    """Each row of a price history with a date and a numeric close (a JSON number or a numeric
+    text), with that date and close, in the payload's order. Reads the stable route's flat list
+    of rows, or the legacy ``{"historical": [...]}`` object. ``price_closes`` reads the engine's
+    closes from it, and the company page's prices their rows (``page_fmp.prices``)."""
     if isinstance(payload, dict):
         payload = payload.get("historical")
-    closes = []
     for row, when in dated(payload):
         close = number(row.get("close"))
         if close is not None:
-            closes.append((when, float(close)))
-    return sorted(closes)
+            yield row, when, float(close)
+
+
+def price_closes(payload: Any) -> list[tuple[date, float]]:
+    """``(date, close)`` per row with a date and a numeric close (``close_rows``), oldest
+    first."""
+    return sorted((when, close) for _, when, close in close_rows(payload))
 
 
 def fx_closes(payload: Any) -> list[tuple[date, float]]:
