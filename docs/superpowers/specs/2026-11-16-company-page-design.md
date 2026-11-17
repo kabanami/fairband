@@ -853,5 +853,5 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
     the trim zone. The founder: "keep as is, no strip".
 - 2026-11-17, the Financials tab (B-216): designed in
   `docs/superpowers/specs/2026-11-17-financials-tab-design.md` and built on the branch
-  `worktree-financials-tab`. When that branch is merged, 7.3's row of tabs gains Financials,
-  second: Overview, Financials, Estimates and Research.
+  `worktree-financials-tab`, which was merged to main the same day. 7.3's row of tabs now holds
+  Financials, second: Overview, Financials, Estimates and Research.

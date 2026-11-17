@@ -8,8 +8,9 @@ several lines, that the amounts read in millions or in billions, and the look (v
 mockup: "its right, proceed"). Every other choice below is Claude's, marked *my call* where it
 is more than a reading of those requests, and can be overturned as any other. The plan was
 built on the branch `worktree-financials-tab` on 2026-11-17; the decision log's entry of that
-day on the build records where the build differs from this design. The merge and the live steps
-of section 14 wait for the founder's word.
+day on the build records where the build differs from this design. It was merged to main and
+the live steps of section 14 ran on 2026-11-17, on the founder's word; the readout is the
+decision log's last entry.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -833,3 +834,43 @@ readout says which it measured: a whole refresh, or the four calls alone.
   kept line is gone the reader can take the last drawn line off. Neither raises. Claude's
   ruling on the case the review found unstated in 7.4: the lines kept are those of the company
   whose Financials tab was drawn last, and 7.4 now says so.
+- 2026-11-17, the founder, on the built branch and its three options: "1" (merge to main
+  locally, with the live steps). The live steps and the readout:
+  - The database was backed up with SQLite's backup API
+    (`fairband-before-financials-tab-2026-11-17.db`, 7,624,159,232 bytes, `quick_check` ok),
+    main moved forward to `72bd218`, and the server on port 8470 was started again from main.
+  - Refresh 67, full, ran from 15:44:31 to 15:50:53 UTC: 6 minutes 22 seconds. It ran inside
+    the reuse window of refresh 66, so it measured the four new calls and the calls whose last
+    answer had failed, not a whole refresh: 6,272 calls of the four (two companies' segment
+    answers were fresh and reused) and about 120 others. The minutes against 18.5 are not
+    comparable; the estimate of 21 to 22 minutes for a whole refresh (8.2) is not yet measured.
+  - 1,569 companies, 1,371 valued, one failed for its three annual statements (RML), as in
+    refresh 66. No failed call among the four, by any endpoint, and no 429.
+  - Bytes: the four answers hold 85.4 MB (the ratios 47.8, the key metrics 31.1, the segments by
+    product 3.7 and by region 2.8), against the 94 MB of 8.2. The database grew by 121 MB, to
+    7.75 GB.
+  - Every company's read answered. 1,431 companies report in US dollars and 138 in 21 other
+    currencies.
+  - Segments: FMP answers an empty list by product for 245 companies and by region for 482; 149
+    companies have neither table. One company has no ratios (RML, which has no statements).
+  - A change of currency inside a table: 21 companies in their annual statements and their
+    ratios, 10 or 11 in their quarterly statements, 11 in the segments by product and 16 by
+    region. Seen on CRH and DEO: the code stands on those columns, and they draw no bar.
+  - Half-year reporters by the engine's rule: 25 (DEO, RELX, UL, BHP). STLA reads Quarterly: its
+    quarterly answer holds half-years to 30 June 2026 and then a row that ends 30 September
+    2026, and the rule reads the two newest ends.
+  - A fiscal year that has not ended (B-238): two companies, CRH and STLA. The newest annual row
+    of each ends 30 September 2026, under eleven months after the one before.
+  - No table holds one label twice today (B-239's edge). 26 companies have no Revenue line,
+    most of them before their first sales; the tab opens on the first line (seen on BHVN).
+  - The universe holds no bank and no insurer (13 companies of Financial Services: exchanges,
+    data and payments), so that part of step 4 had no company.
+  - The foreign filers: TSM in TWD, ASML in EUR with `USD` on most of its segment years, NVO
+    in DKK. The per-share lines are in the reporting currency a listed share, as the page's
+    design 14.2 says: TSM's EPS of 331.25 is TWD a depositary share (5,186 million of them),
+    ASML's 24.71 EUR and NVO's 23.03 DKK a share.
+  - The look on the live server, twelve companies at 1,600 pixels: AAPL as version 3 of the
+    mockup; revenue, net income and operating margin on one chart; Quarterly; Billions kept
+    over a reload; the lines kept over a visit to Estimates; no page error.
+  - Still to do by hand: a research session starts its MCP server again, since the segments
+    pass-through changed.
