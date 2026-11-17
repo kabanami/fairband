@@ -428,7 +428,7 @@ LINE = "Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates."
 
 def _sections(read: dict[str, Any]) -> Any:
     """``draw``'s charts by the heading, on the financial tables' read settled as ``read``."""
-    return _call("reportCharts.draw", {}, {"tables": read}, False)
+    return _call("reportCharts.draw", {}, {"tables": read})
 
 
 def _body(**over: Any) -> dict[str, Any]:
@@ -466,8 +466,8 @@ def test_a_cell_with_no_value_is_left_out_and_shifts_no_kind() -> None:
 
 
 def test_a_quarter_s_tick_is_its_quarter_and_its_year_s_last_two_digits() -> None:
-    """A quarter's label stays whole for the tooltip and the table twin; a period the store names
-    otherwise, a half-year, takes its label, its year shortened, or the label as it is."""
+    """A quarter's label stays whole for the tooltip; a period the store names otherwise, a
+    half-year, takes its label, its year shortened, or the label as it is."""
     half = {"period": "2026-H1", "kind": "quarter", "label": "H1 2026"}
     odd = {"period": "2026-P1", "kind": "quarter", "label": "first period"}
     periods = ["2026-Q3", "2026-H1", "2026-P1"]

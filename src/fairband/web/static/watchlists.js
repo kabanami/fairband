@@ -3,9 +3,10 @@
    made, Request research (spec 2026-11-06 Tier 2, 18.6), Rename and Delete; under them the Add a
    company field, which matches the screen's rows as FIND does and lists up to eight, then the
    list's companies as a ScreenTable of the screen's rows under the screen's columns. A company's
-   mark opens the screen's popup, so a company leaves a list when its box there is unchecked; a
-   row opens the drawer on the Screen view. Every write goes through FairbandPage.api; after it
-   the rows and the lists load again, the screen's marks follow, and the view draws again with
+   mark opens the screen's popup, so a company leaves a list when its box there is unchecked; its
+   ticker, a link, opens its company page (spec 2026-11-16 company page, 12); the rest of a row
+   opens the drawer on the Screen view. Every write goes through FairbandPage.api; after it the
+   rows and the lists load again, the screen's marks follow, and the view draws again with
    them. */
 (function () {
   'use strict';
@@ -337,6 +338,7 @@
         chooser: false, dense: true,
         onOpen: function (row) { P.openRow(row.ticker); },
         onWatch: P.watch,
+        companyHref: P.companyHref,
         watchlists: P.watchlists() || []
       }));
     }

@@ -105,7 +105,7 @@ export interface ButtonProps {
   onClick?: (event: unknown) => void;
   /** fairband: a menu's toggle passes whether its menu is open; it reaches the button. */
   'aria-expanded'?: 'true' | 'false';
-  /** fairband: a toggle passes whether it is on, as the report page's Tables (18.4). */
+  /** fairband: a toggle passes whether it is on (spec 2026-11-06 Tier 2, 18.4). */
   'aria-pressed'?: 'true' | 'false';
   /** fairband: the control's name in full, where its text is short (Top ↑ is "Back to top"). */
   'aria-label'?: string;
@@ -619,6 +619,12 @@ export interface ScreenTableProps {
    * the row is `watched`; without it there is no mark (spec 2026-11-04 9.4).
    */
   onWatch?: (row: ScreenRow) => void;
+  /**
+   * fairband: the address of the row's company page. Given it, the ticker's text in the Ticker
+   * cell is a link to it, whose click, or Enter on it, stops at the link and never opens the row;
+   * without it the ticker is the cell's text (spec 2026-11-16 company page, 12).
+   */
+  companyHref?: (row: ScreenRow) => string;
   /**
    * fairband: the user's watchlists, whose names the Filters menu's WATCHLISTS section, the
    * watchlist chip and the Watchlists column read. Without it the menu has no such section.

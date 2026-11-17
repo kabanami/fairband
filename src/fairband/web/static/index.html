@@ -92,6 +92,12 @@
      frame, and the scrollbar it brings and takes away again is a ResizeObserver loop. */
   .app-main .fb-screen { width: fit-content; min-width: 100%; }
   .app-main .fb-screen__bar { left: 0; max-width: var(--scroller-width, none); }
+  /* The ticker's link to the company page in the screen's table and a watchlist's (the company
+     page's design, 12): it reads as the ticker the cell draws, an underline on hover and the
+     focus ring on focus. */
+  .fb-screen__company { color: inherit; text-decoration: none; }
+  .fb-screen__company:hover { text-decoration: underline; }
+  .fb-screen__company:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   /* Top, past one screen of the table: at the bottom right of the table's own grid cell (both
      lines named, since an absolute child's auto line is the grid's edge), over the table, so the
      drawer rail beside it never covers it. On the raised surface, as the bar and the header are,
@@ -453,10 +459,12 @@
   .app-notes-box__error { margin: var(--space-2) 0 0; color: var(--caution); }
   /* The report page (spec 2026-11-06 Tier 2, 18.4), in CompanyReport's order, one column: the
      head, the ticker, the name and the phase badge, then the one headline figure with the price
-     beside it; the meter under it, at the width it reads best, a refusal under it; the meta line
-     above the reader, its two buttons at its end, the other revisions under it; the reader; then
-     the references, Appendix A and Appendix B, each a panel on the raised surface with a hairline
-     border and no shadow, space-8 apart. Loading, the page keeps what it had, faded. */
+     beside it and Company page after them, as the company page's head sets its price and its
+     controls (spec 2026-11-16 company page, 13); the meter under it, at the width it reads best,
+     a refusal under it; the meta line above the reader, Download .md at its end, the other
+     revisions under it; the reader; then the references, Appendix A and Appendix B, each a panel
+     on the raised surface with a hairline border and no shadow, space-8 apart. Loading, the page
+     keeps what it had, faded. */
   #report { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
   .app-report { max-width: 72rem; padding: var(--space-2) 0 var(--space-8); }
   .app-report.is-loading { opacity: 0.5; }
@@ -470,6 +478,9 @@
   }
   .app-report__id, .app-report__figures {
     display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3);
+  }
+  .app-report__side {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-6);
   }
   .app-report__ticker, .app-report__name { margin: 0; }
   .app-report__logo { width: 32px; height: 32px; align-self: center; }

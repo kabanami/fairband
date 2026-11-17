@@ -4,15 +4,17 @@
    engine computes; this script asks for an order, remembers the chosen columns in the reader's
    order, narrows the loaded rows to the reader's find and filters and lays out what the engine
    produced, rounded for display only. Each row's watchlist mark opens a popup that puts the
-   company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The drawer is a short
-   card under its bar, the company, its value and two buttons: Company page, which opens the
-   company's page, and Request research, which posts a research request to the work inbox (the
-   company page's design, 11; spec 2026-11-06 Tier 2, 18.2). Where launching is set up, a request
-   also opens the window where Claude Code starts, and the line under the button follows its
-   launch (spec 2026-11-16 agent launch, 10). At the bar's left, Notes opens a box of the company's
-   notes, from /api/companies/{symbol}/notes, which takes a new one (the company page's design,
-   11.1); the company page's head draws it too. The header, the status line and the group view
-   are controls.js, loaded after this script; it reaches the screen through window.FairbandPage. */
+   company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4); its ticker is a link
+   to the company's page, and the rest of the row opens the drawer (the company page's design,
+   12). The drawer is a short card under its bar, the company, its value and two buttons: Company
+   page, which opens the company's page, and Request research, which posts a research request to
+   the work inbox (the company page's design, 11; spec 2026-11-06 Tier 2, 18.2). Where launching
+   is set up, a request also opens the window where Claude Code starts, and the line under the
+   button follows its launch (spec 2026-11-16 agent launch, 10). At the bar's left, Notes opens a
+   box of the company's notes, from /api/companies/{symbol}/notes, which takes a new one (the
+   company page's design, 11.1); the company page's head draws it too. The header, the status
+   line and the group view are controls.js, loaded after this script; it reaches the screen
+   through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -182,35 +184,36 @@
      a launch is followed (following), the phase numbers and a work item's open states; and the
      later views, find, the lists (null until they load), their reload, which settles once they are
      in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
-     where it is handed one (the company page's Watchlists ▾); the loaded rows (null until they
-     load), the chosen columns, openRow, which opens a row's drawer, reloadDetail, which reads the
-     drawer's company again after another view's write about it (the Inbox view's decline and a
-     watchlist's Request research, spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which
-     reads whichever company the drawer shows again when a run ends. controls.js adds show, onShow,
-     section, running and countInbox, the Inbox view onInbox, and agents.js adds agents, the
-     Settings view's Agents section; a view drawn from the rows or the lists sets onRender, which
-     runs after each draw of the screen, so it draws again as they load and change (the company
-     page's runs the Watchlists view's, set before it, then its own). The report page (report.js,
-     18.4) draws with this script's parts: the meter, the inputs table, a table of figures by
-     year, an input's figure in its unit, the secondary valuation's rows and path, the guidance
-     table, the phase evidence, pairs, a date, a total in a currency, an exchange rate, a count,
-     the line that says what the figures are in (currencyLine), a report's footnote numbers, and
-     Request research with a request of its own (asking), whose following of a launch the page
-     stops as it starts to read another company (stopLaunch) and starts as its read lands
-     (followItem). The company page (company.js; the company page's design, 7) draws its head
-     with the logo, the phase numbers, the moat stamp (moatStamp), the Notes control as the
-     drawer's bar draws it (notesControl, 11.1) and Request research as the report page keeps it,
-     opens the watchlists popup under its head's button (watch) on the company's row or, the
-     lists loaded, on the company alone (rows, watchlists), and says when it turns to another
-     company (notesShown), so a note drafted on another goes; its Fairband value block
-     (company_overview.js, 8.2) draws the meter, the four levels under it in the screen's words
-     (levelRows), the basis chip of the band they draw (bandBasis) and the local day of its report
-     (localIso). The Inbox view's row (inbox.js, B-210) keeps a request for each pending item too,
-     posts its launch (openLaunch) and draws the line's words (launchWords) from the item the line
-     is drawn from (lineItem). The drawer with its bar (drawer), its parts (sections), the Notes
-     box (notesBox), the open item's line (launchLine), an input's value (inputValue), a figure a
-     share in a currency (money) and a logo's ground (logoGround) are here for the tests, which
-     read them in node (tests/web/page.mjs). */
+     where it is handed one (the company page's Watchlists ▾); companyHref, the address a ticker
+     links to, which a watchlist's table hands ScreenTable as the screen's does (the company page's
+     design, 12); the loaded rows (null until they load), the chosen columns, openRow, which opens
+     a row's drawer, reloadDetail, which reads the drawer's company again after another view's
+     write about it (the Inbox view's decline and a watchlist's Request research, spec 2026-11-06
+     Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the drawer shows
+     again when a run ends. controls.js adds show, onShow, section, running and countInbox, the
+     Inbox view onInbox, and agents.js adds agents, the Settings view's Agents section; a view
+     drawn from the rows or the lists sets onRender, which runs after each draw of the screen, so
+     it draws again as they load and change (the company page's runs the Watchlists view's, set
+     before it, then its own). The report page (report.js, 18.4) draws with this script's parts:
+     the meter, the inputs table, a table of figures by year, an input's figure in its unit, the
+     secondary valuation's rows and path, the guidance table, the phase evidence, pairs, a date, a
+     total in a currency, an exchange rate, a count, the line that says what the figures are in
+     (currencyLine), a report's footnote numbers, and Request research with a request of its own
+     (asking), whose following of a launch the page stops as it starts to read another company
+     (stopLaunch) and starts as its read lands (followItem). The company page (company.js; the
+     company page's design, 7) draws its head with the logo, the phase numbers, the moat stamp
+     (moatStamp), the Notes control as the drawer's bar draws it (notesControl, 11.1) and Request
+     research as the report page keeps it, opens the watchlists popup under its head's button
+     (watch) on the company's row or, the lists loaded, on the company alone (rows, watchlists),
+     and says when it turns to another company (notesShown), so a note drafted on another goes;
+     its Fairband value block (company_overview.js, 8.2) draws the meter, the four levels under it
+     in the screen's words (levelRows), the basis chip of the band they draw (bandBasis) and the
+     local day of its report (localIso). The Inbox view's row (inbox.js, B-210) keeps a request
+     for each pending item too, posts its launch (openLaunch) and draws the line's words
+     (launchWords) from the item the line is drawn from (lineItem). The drawer with its bar
+     (drawer), its parts (sections), the Notes box (notesBox), the open item's line (launchLine),
+     an input's value (inputValue), a figure a share in a currency (money) and a logo's ground
+     (logoGround) are here for the tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
@@ -219,6 +222,7 @@
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
     watch: watch,
+    companyHref: companyHref,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
@@ -261,6 +265,13 @@
     var row = Object.assign({}, r, { watched: (r.watchlists || []).length > 0 });
     if (r.covered) row.covered = Object.assign({}, r.covered, { at: localIso(r.covered.at) });
     return r.enteredAt ? Object.assign(row, { enteredAt: localIso(r.enteredAt) }) : row;
+  }
+
+  /* The address a row's ticker links to in the screen's table and in a watchlist's
+     (ScreenTable's companyHref): the company's page, the symbol encoded as the drawer's Company
+     page encodes it (spec 2026-11-16 company page, 12). */
+  function companyHref(row) {
+    return '#company/' + encodeURIComponent(row.ticker);
   }
 
   /* A header click, or Enter or Space on a focused header: the sorted column turns its
@@ -673,6 +684,7 @@
         onSort: sortBy,
         onOpen: open,
         onWatch: watch,
+        companyHref: companyHref,
         watchlists: state.watchlists || [],
         chooser: true
       });

@@ -2352,16 +2352,17 @@ def test_the_report_view_opens_from_the_hash() -> None:
 def test_the_report_page_order_is_pinned() -> None:
     """Spec 18.4, in the CompanyReport layout: the head with the one headline figure, the reviewed
     value where the review on the latest snapshot has one, else the mechanical, the price beside
-    it in figure; the meter as the drawer draws it, its price under the head's figure-lg; above
-    the reader the stance, mode, date, writer, revision, Download .md, the table toggle, the
-    other revisions and Request research (plan 4); ReportReader with every section, its cites and
-    its footnote numbers; the references; Appendix A with the bridge; Appendix B; the link back to
-    the screen."""
+    it in figure, then Company page (spec 2026-11-16 company page, 13); the meter as the drawer
+    draws it, its price under the head's figure-lg; above the reader the stance, mode, date,
+    writer, revision, Download .md, the other revisions and Request research (plan 4);
+    ReportReader with every section, its cites and its footnote numbers; the references; Appendix
+    A with the bridge; Appendix B; the link back to the screen."""
     script = _code(_static_file("report.js"))
     _in_order(
         script,
         "h(F.ValueCell, {",
         "emphasis: 'strong'",
+        "'Company page')",
         "P.meter(d, false)",
         "'Download .md')",
         "h(F.ReportReader, {",
@@ -2402,7 +2403,6 @@ def test_the_report_page_order_is_pinned() -> None:
         "h(F.PrincipalChip, { principal: report.principal, actor: report.actor })",
         "'revision ' + report.revision",
         "'Download .md')",
-        "'Tables')",
         "revisions(report)",
         "P.requestResearch(state.request, d.item, render, load, d.launchReady)",
         "state.downloadError",
@@ -2444,8 +2444,6 @@ def test_the_report_page_order_is_pinned() -> None:
         "link.download = report.symbol + '-revision-' + report.revision + '.md';",
         "link.click();",
     )
-    # the Tables toggle is the page's one flag, which Task 4's charts read
-    assert "state.tables = !state.tables;" in _function(script, "toggleTables")
     back = _function(script, "back")
     assert "P.show('screen');" in back and "href: '#'" in back
 
@@ -2924,26 +2922,6 @@ def test_a_wide_table_prints_whole() -> None:
         assert token in tokens, token
 
 
-def _call(script: str, start: str) -> str:
-    """The text of the call that opens with ``start`` (an ``h(F.X, {``), to its closing brace."""
-    at = script.index(start)
-    depth = 0
-    for i in range(at + len(start) - 1, len(script)):
-        depth += {"{": 1, "}": -1}.get(script[i], 0)
-        if depth == 0:
-            return script[at : i + 1]
-    raise AssertionError(start)
-
-
-def _calls(script: str, start: str) -> list[str]:
-    """Every call that opens with ``start``."""
-    found, at = [], script.find(start)
-    while at != -1:
-        found.append(_call(script[at:], start))
-        at = script.find(start, at + 1)
-    return found
-
-
 # The page's section-4 charts by their table and row, each titled by its row's name in the export
 # (charts.row_name); buybacks and dividends, one measure, is the page's sum of two rows.
 FINANCIAL_CHARTS = {
@@ -3035,9 +3013,7 @@ def test_the_report_page_draws_the_charts_per_section(db_path: Path, policy: Pol
         "company + '/band-history'",
         "read('/api/sensitivities/' + id)",
     )
-    assert "charts: P.reportCharts.draw(report, state.series, state.tables)" in (
-        _function(report, "reader")
-    )
+    assert "charts: P.reportCharts.draw(report, state.series)" in _function(report, "reader")
     html = _static_file("index.html")
     scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
     assert scripts.index("charts.js") > scripts.index("report.js")
@@ -3096,38 +3072,6 @@ def test_a_missing_cell_is_a_gap() -> None:
     assert "if (!banded(d)) { run = null; return; }" in history
     assert "if (banded(d)) vals.push(d.fairLow, d.fairHigh);" in history
     assert "if (value == null) return 'none';" in _function(bundle, "sensStep")
-
-
-def test_the_tables_toggle_is_one_control() -> None:
-    """CompanyReport.md: the table toggle is one control for the page, flipping tableView on every
-    chart at once, and it says whether it is on (aria-pressed, a `// fairband:` patch on Button).
-    A SensitivityGrid is its own table twin and takes none."""
-    report = _code(_static_file("report.js"))
-    assert (
-        "h(F.Button, { size: 'sm', variant: 'quiet', onClick: toggleTables,"
-        " 'aria-pressed': state.tables ? 'true' : 'false' }, 'Tables')"
-    ) in " ".join(_function(report, "meta").split())
-    assert report.count("P.reportCharts.draw(") == 1
-    script = _code(_static_file("charts.js"))
-    assert "function draw(report, series, tables) {" in script
-    charts = [
-        call
-        for name in ("HistoryBars", "SpreadChart", "BandHistory", "MultipleHistory")
-        for call in _calls(script, f"h(F.{name}, {{")
-    ]
-    assert len(charts) == 4
-    for call in charts:
-        assert "tableView: tables" in call, call
-    assert script.count("tableView") == 4
-    for call in _calls(script, "h(F.SensitivityGrid, {"):
-        assert "tableView" not in call
-    button = _function(_component_file("bundle.js"), "Button")
-    assert "'aria-pressed': p['aria-pressed']," in button
-    assert "// fairband: a toggle says whether it is on" in button
-    props = re.search(
-        r"export interface ButtonProps \{\n(.*?)\n\}", _component_file("index.d.ts"), re.DOTALL
-    )
-    assert props is not None and "'aria-pressed'?: 'true' | 'false';" in props.group(1)
 
 
 def test_the_bundle_exports_multiple_history() -> None:
@@ -3396,15 +3340,15 @@ def test_each_series_lands_as_its_read_settles() -> None:
     script = _code(_static_file("charts.js"))
     draw = _function(script, "draw")
     for text in (
-        "s.tables ? financial(s.tables, tables) : null",
-        "s.tables ? byQuarter(s.tables, tables) : null",
+        "s.tables ? financial(s.tables) : null",
+        "s.tables ? byQuarter(s.tables) : null",
         "s.readings ? valuation(report, s.readings) : null",
-        "(s.closes && s.band) || s.multiples ? price(s, tables) : null",
+        "(s.closes && s.band) || s.multiples ? price(s) : null",
     ):
         assert text in draw, text
     price = _function(script, "price")
-    assert "series.closes && series.band ? band(series.closes, series.band, tables) : null" in price
-    assert "series.multiples ? multiples(series.multiples, tables) : null" in price
+    assert "series.closes && series.band ? band(series.closes, series.band) : null" in price
+    assert "series.multiples ? multiples(series.multiples) : null" in price
 
 
 def test_a_refused_or_empty_series_says_why() -> None:
@@ -3424,7 +3368,7 @@ def test_a_refused_or_empty_series_says_why() -> None:
     )
     assert "history.error)" not in band.split("var marks")[0]
     multiples = _function(script, "multiples")
-    assert "tables, (m.pe && m.pe.note) || m.peNote)," in multiples
+    assert "(m.peNote ? ' · ' + m.peNote : ''), (m.pe && m.pe.note) || m.peNote)," in multiples
     assert "}) : noData(title, why));" in _function(script, "multiple")
     assert "h('p', { className: 'caption app-muted' }, why || NO_DATA));" in (
         _function(script, "noData")
@@ -3474,9 +3418,7 @@ def test_the_spread_names_the_hurdle_as_the_export_does() -> None:
     )
     assert props is not None and "hurdleLabel?: string;" in props.group(1)
     script = _code(_static_file("charts.js"))
-    assert f"hurdleLabel: '{row_name('hurdle_rate')}', tableView: tables" in (
-        _function(script, "spread")
-    )
+    assert f"hurdleLabel: '{row_name('hurdle_rate')}'\n" in _function(script, "spread")
     assert "{ row: 'roic', title: 'ROIC', hurdle: 'hurdle_rate' }" in script
 
 

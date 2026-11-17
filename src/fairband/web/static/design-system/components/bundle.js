@@ -121,8 +121,7 @@
       disabled: !!p.disabled,
       // fairband: a menu's toggle says whether its menu is open (growth-routes spec 6.3).
       'aria-expanded': p['aria-expanded'],
-      // fairband: a toggle says whether it is on, as the report page's Tables is
-      // (spec 2026-11-06 Tier 2, 18.4).
+      // fairband: a toggle says whether it is on (spec 2026-11-06 Tier 2, 18.4).
       'aria-pressed': p['aria-pressed'],
       // fairband: a control can name itself in full, as Top ↑ is "Back to top"
       // (classifier-designation spec 8.3).
@@ -1246,7 +1245,14 @@
               if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
             }
           }, r.watched ? '▶' : '▸') : null,
-          r.ticker,
+          // fairband: given companyHref, the ticker's text is a link to the company page at the
+          // address it gives for the row (spec 2026-11-16 company page, 12). A click on it, or
+          // Enter on it, stops at the link, so the row does not open and the browser follows it.
+          p.companyHref ? h('a', {
+            className: 'fb-screen__company', href: p.companyHref(r),
+            onClick: function (e) { e.stopPropagation(); },
+            onKeyDown: function (e) { if (e.key === 'Enter') e.stopPropagation(); }
+          }, r.ticker) : r.ticker,
           // fairband: the coverage mark (spec 2026-11-06 Tier 2, 18.1): ◆, the write glyph, after
           // the ticker when the company has a published report, in prov-input, in ink-faint once
           // the report's snapshot window has expired; its title names the report's date and actor.

@@ -2,18 +2,19 @@
    #report/<symbol>, the company's latest published report, and #report/<symbol>/<id>, a revision,
    in the design system's CompanyReport order. The head: the ticker, the name, the phase badge and
    the page's one headline figure, the reviewed value where the review on the latest snapshot has
-   one, else the mechanical, with the price beside it; the meter as the drawer draws it. Above the
-   reader, the report's stance, mode, date, writer and revision, Download .md, the page's one table
-   toggle and the other revisions by number and by date and time. Then ReportReader with every
-   section, each cited number followed by its footnote number (13.1) and the charts of the
-   sections that have them above their sentences (18.4), the references those numbers name,
-   Appendix A, the audit of the records the report rests on, and Appendix B, the glossary, both
-   as the server generates them; a link back to the screen. The page shows Request research with
-   or without a report, as the drawer has it: under the revisions line, or under the head, the
-   meter and "No report yet." for a company with none. app.js's parts come through
-   window.FairbandPage; the head and the meter read the company's detail, as the drawer does, and
-   the rest the report. The charts read the series the sections cite once the report is in, and
-   charts.js draws them. */
+   one, else the mechanical, with the price beside it, then Company page, a link to the company
+   page (spec 2026-11-16 company page, 13); the meter as the drawer draws it. Above the reader,
+   the report's stance, mode, date, writer and revision, Download .md and the other revisions by
+   number and by date and time. Then ReportReader with every section, each cited number followed
+   by its footnote number (13.1) and the charts of the sections that have them above their
+   sentences (18.4), no chart with a table (spec 2026-11-16 company page, 8.4 and 13), the
+   references those numbers name, Appendix A, the audit of the records the report rests on, and
+   Appendix B, the glossary, both as the server generates them; a link back to the screen. The
+   page shows Request research with or without a report, as the drawer has it: under the
+   revisions line, or under the head, the meter and "No report yet." for a company with none.
+   app.js's parts come through window.FairbandPage; the head and the meter read the company's
+   detail, as the drawer does, and the rest the report. The charts read the series the sections
+   cite once the report is in, and charts.js draws them. */
 (function () {
   'use strict';
 
@@ -32,7 +33,6 @@
     report: null, /* the report shown, whole; null for a company with none */
     loading: false,
     error: null,
-    tables: false, /* the page's one table toggle (CompanyReport): every chart's table view */
     series: null, /* the series the charts read (readSeries), each by its key as it lands */
     request: null, /* Request research for the page's company (FairbandPage.asking) */
     downloadError: null
@@ -167,7 +167,10 @@
      are in (FairbandPage.currencyLine, spec 2026-11-10 6.2 and 7.4:
      "Reports in TWD; one ADS is five ordinary shares; every per-share figure here is per ADS;
      valued at TWD 32.96 per USD"); then the one headline figure, the page's only figure-lg
-     (CompanyReport's one hero), and the price beside it in figure, both in US dollars. */
+     (CompanyReport's one hero), and the price beside it in figure, both in US dollars; at the
+     head's right end, after them, Company page, a link in the button's look to the company page,
+     the symbol encoded as the screen's ticker link encodes it (spec 2026-11-16 company page, 13).
+     The figures fade while a refresh runs; the link stays as it is. */
   function head(d) {
     var r = d.result;
     var phase = P.PHASE_NUMBER[r.phase.phase];
@@ -181,14 +184,16 @@
         phase ? h(F.PhaseBadge, { phase: phase }) : null,
         P.currencyLine(d, true) ? h('p', { className: 'caption app-muted app-report__currency' },
           P.currencyLine(d, true)) : null),
-      h('div', { className: 'app-report__figures' },
-        value ? h(F.ValueCell, {
-          value: value.value, basis: value.basis, emphasis: 'strong', align: 'left'
-        }) : null,
-        value && value.note ? h('span', { className: 'caption app-muted' }, value.note) : null,
-        h('span', { className: 'app-report__price' },
-          h('span', { className: 'caption app-muted' }, 'price '),
-          h('span', { className: 'figure' }, F.formatMoney(r.price)))));
+      h('div', { className: 'app-report__side' },
+        h('div', { className: 'app-report__figures' },
+          value ? h(F.ValueCell, {
+            value: value.value, basis: value.basis, emphasis: 'strong', align: 'left'
+          }) : null,
+          value && value.note ? h('span', { className: 'caption app-muted' }, value.note) : null,
+          h('span', { className: 'app-report__price' },
+            h('span', { className: 'caption app-muted' }, 'price '),
+            h('span', { className: 'figure' }, F.formatMoney(r.price)))),
+        h(F.Button, { href: '#company/' + encodeURIComponent(r.symbol) }, 'Company page')));
   }
 
   /* The headline: the reviewed value where the review on the latest snapshot has one, else the
@@ -227,10 +232,10 @@
   /* Above the reader (18.4): the report's stance in the Stance column's chip classes, faded once
      the window of the snapshot it rests on has ended (rows.window_ended's rule), its title then
      saying so in the register's words (spec 2026-11-15 7); its mode, its date, who wrote it and
-     its revision; Download .md and the page's one table toggle. Under it, that a
-     valuation review has no full report to reuse, when it has none; the other revisions by number
-     and by date and time; Request research, the drawer's own with this page's request, as on a
-     company with no report (plan 4); a download's refusal. */
+     its revision; Download .md. Under it, that a valuation review has no full report to reuse,
+     when it has none; the other revisions by number and by date and time; Request research, the
+     drawer's own with this page's request, as on a company with no report (plan 4); a download's
+     refusal. */
   function meta(d, report) {
     var expired = report.appendixA.snapshot.validUntil < d.today;
     return h('div', { key: 'meta', className: 'app-report__meta' },
@@ -245,11 +250,7 @@
         h(F.PrincipalChip, { principal: report.principal, actor: report.actor }),
         h('span', { className: 'figure-sm' }, 'revision ' + report.revision),
         h('span', { className: 'app-report__actions' },
-          h(F.Button, { size: 'sm', onClick: download }, 'Download .md'),
-          h(F.Button, {
-            size: 'sm', variant: 'quiet', onClick: toggleTables,
-            'aria-pressed': state.tables ? 'true' : 'false'
-          }, 'Tables'))),
+          h(F.Button, { size: 'sm', onClick: download }, 'Download .md'))),
       report.mode === 'valuation review' && report.reusesFullReportOf == null
         ? h('p', { className: 'caption app-report__note' }, 'No full report to reuse.') : null,
       revisions(report),
@@ -307,7 +308,7 @@
         reusesFullReportOf: reusedDate(report)
       },
       sections: report.sections, footnotes: P.footnotes(report.references), appendixes: false,
-      charts: P.reportCharts.draw(report, state.series, state.tables)
+      charts: P.reportCharts.draw(report, state.series)
     });
   }
 
@@ -606,13 +607,6 @@
       });
   }
 
-  /* The page's one table toggle (CompanyReport): it flips every chart to its table and back, and
-     says whether it is on. */
-  function toggleTables() {
-    state.tables = !state.tables;
-    render();
-  }
-
   /* -------------------------------------------------------------------- the reads */
 
   /* A read whose refusal is the server's sentence, as it arrives. Every read carries the request
@@ -634,7 +628,9 @@
   function none(text) { return h('p', { className: 'caption app-muted' }, text); }
 
   /* Appendix A's overrides and its Snapshot line, which the node tests read
-     (tests/web/test_report_reader.py), as charts.js hangs its helpers. */
+     (tests/web/test_report_reader.py), as charts.js hangs its helpers, and the head
+     (tests/web/test_ticker_link.py). */
   P.reportAppendix = { overrides: overrides, snapshotLine: snapshotLine };
+  P.reportHead = head;
   P.onShow.report = load;
 })();

@@ -7,12 +7,17 @@
 // hangs on it ("reportCharts.roicPoints"); its arguments are a JSON list on stdin; its result is
 // JSON on stdout. Scripts named after the helper are loaded after app.js, as the page loads them
 // (charts.js; tests/web/test_report_charts.py; report.js, whose root is the stub's, and its
-// Appendix A's overrides, "reportAppendix.overrides"; tests/web/test_report_reader.py).
+// Appendix A's overrides, "reportAppendix.overrides"; tests/web/test_report_reader.py; and its
+// head, "reportHead"; tests/web/test_ticker_link.py).
 //
 // A bundle component is named as window names it ("Fairband.HistoryBars") and called with its
 // props, the one argument; the stub's hooks give it its first state, its refs and no effect, and
 // what comes back is the tree it draws, each component in it called with its props in turn, since
 // the stub draws nothing (tests/web/test_report_charts.py reads HistoryBars' bars).
+//
+// JSON holds no function, so an argument's value written {"$page": "<helper>"} is that helper of
+// window.FairbandPage, named as the helper is: a component can be handed one of the page's own
+// functions as a prop (ScreenTable's companyHref and onWatch; tests/web/test_ticker_link.py).
 //
 //   node page.mjs <bundle.js> <app.js> <helper> [<script.js> ...]  < arguments.json  > result.json
 import { readFileSync } from 'node:fs';
@@ -61,8 +66,20 @@ function drawn(node) {
   return { type: node.type, props: Object.assign({}, node.props, { children: drawn(node.props.children) }) };
 }
 
+function page(path) {
+  return path.split('.').reduce((held, key) => held[key], window.FairbandPage);
+}
+
+function revived(value) {
+  if (Array.isArray(value)) return value.map(revived);
+  if (value === null || typeof value !== 'object') return value;
+  const keys = Object.keys(value);
+  if (keys.length === 1 && keys[0] === '$page') return page(value.$page);
+  return Object.fromEntries(keys.map((key) => [key, revived(value[key])]));
+}
+
 const name = process.argv[4];
 const component = name.startsWith('Fairband.');
-const helper = name.split('.').reduce((held, key) => held[key], component ? window : window.FairbandPage);
-const result = helper(...args);
+const helper = component ? name.split('.').reduce((held, key) => held[key], window) : page(name);
+const result = helper(...revived(args));
 process.stdout.write(JSON.stringify(component ? drawn(result) : result));

@@ -3,8 +3,8 @@
    under its heading and above its sentences (its `charts`, by the heading). In the design
    system's look (charts.md, CompanyReport.md): one measure per chart, two to a row, each on a
    raised panel with a BasisChip in its header, mechanical for the tables and the series and
-   reviewed for a grid an agent's inputs move; every chart but a grid, its own twin, has its table
-   twin behind the page's one table toggle, `tables`. The titles are the export's
+   reviewed for a grid an agent's inputs move; no chart has a table, the hover giving a point's
+   figures (spec 2026-11-16 company page, 8.4 and 13). The titles are the export's
    (reports/charts.py), so the page and its Markdown never differ: a part of Financial
    performance and health under its table's title, each chart by its row's name; a reading's grid
    by its read's title, the secondary valuation's grid by its table's; the price against the band
@@ -16,7 +16,7 @@
    writes the note in the cell).
 
    Past the fiscal year (spec 2026-11-15 6.5, 6.6): a chart's bars stand under its table's
-   columns, the tooltip and the table twin naming each by the label the server gives its column.
+   columns, the tooltip naming each by the label the server gives its column.
    The trailing twelve months stand after the fiscal years in grey, marked "to date", and the
    analysts' estimates after them as outlines, marked by their period ("2026E"); under a chart
    with such a bar one line says which is which. The last earnings call draws the quarters table
@@ -83,13 +83,13 @@
      series it reads have landed: the six tables and the quarters once the financial tables have,
      the price against the band once the closes and the band's history have, the P/E series once
      the multiples history has. */
-  function draw(report, series, tables) {
+  function draw(report, series) {
     var s = series || {};
     return {
-      'Financial performance and health': s.tables ? financial(s.tables, tables) : null,
-      'The last earnings call': s.tables ? byQuarter(s.tables, tables) : null,
+      'Financial performance and health': s.tables ? financial(s.tables) : null,
+      'The last earnings call': s.tables ? byQuarter(s.tables) : null,
       'Valuation': s.readings ? valuation(report, s.readings) : null,
-      'Price and multiples': (s.closes && s.band) || s.multiples ? price(s, tables) : null
+      'Price and multiples': (s.closes && s.band) || s.multiples ? price(s) : null
     };
   }
 
@@ -97,37 +97,36 @@
 
   /* The six parts, each its table's title over its charts; the server's sentence in their place
      when the tables did not load (no statements on file, say). */
-  function financial(read, tables) {
+  function financial(read) {
     if (read.error) return refused('The financial tables', read.error);
     var body = read.body;
     var byName = {};
     body.tables.forEach(function (t) { byName[t.name] = t; });
     return h('div', { className: 'app-charts__parts' }, FINANCIAL.map(function (part) {
-      return charted(part, byName[part.table], body.currency, tables);
+      return charted(part, byName[part.table], body.currency);
     }));
   }
 
   /* The quarters table's part, its three charts with "No data on file." where no period is
      stored; the server's sentence when the tables did not load, and none on an answer from
      before the quarters were served. */
-  function byQuarter(read, tables) {
+  function byQuarter(read) {
     if (read.error) return refused('The figures by quarter', read.error);
     var body = read.body;
     return body.quarters ? h('div', { className: 'app-charts__parts' },
-      charted(QUARTERLY, body.quarters, body.currency, tables)) : null;
+      charted(QUARTERLY, body.quarters, body.currency)) : null;
   }
 
   /* A part: its title over a chart for each of its charts, from its table's rows and columns;
      with no table, every chart with "No data on file.". */
-  function charted(part, table, currency, tables) {
+  function charted(part, table, currency) {
     var rows = {};
     if (table) table.rows.forEach(function (r) { rows[r.name] = r; });
     var columns = table ? table.columns : null;
     return h(React.Fragment, { key: part.table },
       h('h5', { className: 'label app-charts__part' }, part.title),
       h('div', { className: 'app-charts' }, part.charts.map(function (c) {
-        return c.hurdle ? spread(c, rows, tables)
-          : bars(c, rows, columns, part.by, currency, tables);
+        return c.hurdle ? spread(c, rows) : bars(c, rows, columns, part.by, currency);
       })));
   }
 
@@ -135,7 +134,7 @@
      share of it, a percentage as one, a multiple or a score bare. Run by the part's `by`, a
      quarter; else by period where a bar is the trailing twelve months or an estimate, with the
      line that says which under the chart, and by fiscal year where none is (6.6). */
-  function bars(c, rows, columns, by, currency, tables) {
+  function bars(c, rows, columns, by, currency) {
     var row = c.rows ? returned(rows[c.rows[0]], rows[c.rows[1]]) : rows[c.row];
     var series = row ? points(row, columns) : [];
     if (!series.length) return panel(c.title, noData(c.title));
@@ -144,7 +143,7 @@
     var line = kindsLine(series); /* a point carries its column's kind and label */
     return panel(c.title, h(React.Fragment, null,
       h(F.HistoryBars, {
-        title: c.title, series: series, basis: 'mechanical', tableView: tables,
+        title: c.title, series: series, basis: 'mechanical',
         unit: unit === 'currency' ? currency : caption,
         format: unit === 'percent' ? F.formatPercent : undefined,
         inverse: !!c.inverse, by: by || (line ? 'period' : undefined)
@@ -155,10 +154,10 @@
   /* A row's cells as a chart's points, oldest first, each under its column of the table's
      `columns`: its tick (`period`) the year for a fiscal year, "to date" for the trailing twelve
      months, an estimate's period ("2026E") and a quarter's short name ("Q3 26"); its `kind`,
-     `trailing` or `estimate`, none otherwise; its `label`, the column's, which the tooltip and
-     the table twin read; and its cell's `note` where the cell has one, which the line under the
-     chart reads. A cell with no value is left out, a gap, never a zero (18.4). On a table served
-     without columns, an older answer, a point is its cell's period and value. */
+     `trailing` or `estimate`, none otherwise; its `label`, the column's, which the tooltip reads;
+     and its cell's `note` where the cell has one, which the line under the chart reads. A cell
+     with no value is left out, a gap, never a zero (18.4). On a table served without columns, an
+     older answer, a point is its cell's period and value. */
   function points(row, columns) {
     var under = {};
     (columns || []).forEach(function (column) { under[column.period] = column; });
@@ -223,13 +222,13 @@
   /* ROIC against the hurdle rate the returns table carries, the policy's r (restated into the
      reporting currency on a company in another currency, as its ROIC is in it), both percentages
      on one axis with the gap filled (SpreadChart); a year missing either is left out. */
-  function spread(c, rows, tables) {
+  function spread(c, rows) {
     var drawn = roicPoints(rows[c.row], rows[c.hurdle]);
     if (!drawn.series.length) return panel(c.title, noData(c.title, drawn.left));
     return panel(c.title, h(React.Fragment, null,
       h(F.SpreadChart, {
         title: c.title, subtitle: 'against the hurdle rate', series: drawn.series,
-        basis: 'mechanical', hurdleLabel: 'Hurdle rate', tableView: tables
+        basis: 'mechanical', hurdleLabel: 'Hurdle rate'
       }),
       drawn.left ? h('p', { className: 'caption app-muted' }, drawn.left) : null));
   }
@@ -302,17 +301,17 @@
 
   /* The price against the band, the full width, then the two P/E series side by side, each once
      its reads have landed. */
-  function price(series, tables) {
+  function price(series) {
     return h('div', { className: 'app-charts' },
-      series.closes && series.band ? band(series.closes, series.band, tables) : null,
-      series.multiples ? multiples(series.multiples, tables) : null);
+      series.closes && series.band ? band(series.closes, series.band) : null,
+      series.multiples ? multiples(series.multiples) : null);
   }
 
   /* BandHistory: the five years of closes a quarter each, the quarter's last close, with the band
      in force at the quarter's end, the newest snapshot priced on or before it: none before the
      first snapshot, none on a refusal's. The past year's high and low in the subtitle. When the
      band's history did not load, the price alone, with the server's sentence under it. */
-  function band(closes, history, tables) {
+  function band(closes, history) {
     if (closes.error) return panel(BAND_TITLE, refused('The price history', closes.error), true);
     var list = closes.body.closes;
     if (!list.length) return panel(BAND_TITLE, noData(BAND_TITLE), true);
@@ -327,7 +326,7 @@
     return panel(BAND_TITLE, [
       h(F.BandHistory, {
         key: 'chart', title: BAND_TITLE, subtitle: pastYear(list), series: series,
-        basis: 'mechanical', tableView: tables
+        basis: 'mechanical'
       }),
       history.error ? refused('The band\'s history', history.error, 'refused') : null
     ], true);
@@ -372,10 +371,10 @@
      it, the server's sentence, when it has one; the forward one a point a day logged, since the
      log began, once the log holds five readings (SHORT_LOG). A forward log of fewer is no chart:
      its newest reading as a figure and since when the log is kept (shortLog), no line and no
-     average, and no table twin. A trailing series with no point says why in the server's words
-     when it sends them, the series' note ("the series could not be read") or the read's; a
-     forward log with none, that nothing is on file. */
-  function multiples(read, tables) {
+     average. A trailing series with no point says why in the server's words when it sends them,
+     the series' note ("the series could not be read") or the read's; a forward log with none,
+     that nothing is on file. */
+  function multiples(read) {
     if (read.error) return panel('multiples', refused('The P/E history', read.error));
     var m = read.body;
     var forward = m.peForward;
@@ -383,19 +382,19 @@
     return [
       multiple('Trailing P/E', m.pe, m.pe ? byMonth(m.pe.points) : [],
         'the last P/E of each month against its ten-year average' +
-          (m.peNote ? ' · ' + m.peNote : ''), tables, (m.pe && m.pe.note) || m.peNote),
+          (m.peNote ? ' · ' + m.peNote : ''), (m.pe && m.pe.note) || m.peNote),
       0 < logged.length && logged.length < SHORT_LOG ? panel('forward', shortLog(forward)) :
         multiple('Forward P/E', forward, forward.points.map(function (p) {
           return { period: F.formatDate(p.day), value: p.value };
-        }), forward.since ? 'since ' + F.formatDate(forward.since) : undefined, tables)
+        }), forward.since ? 'since ' + F.formatDate(forward.since) : undefined)
     ];
   }
 
-  function multiple(title, found, series, subtitle, tables, why) {
+  function multiple(title, found, series, subtitle, why) {
     var drawn = series.some(function (p) { return p.value != null; });
     return panel(title, drawn ? h(F.MultipleHistory, {
       title: title, subtitle: subtitle, series: series, average: found.stats.avg10y.value,
-      basis: 'mechanical', tableView: tables
+      basis: 'mechanical'
     }) : noData(title, why));
   }
 
