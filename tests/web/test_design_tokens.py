@@ -107,11 +107,20 @@ def test_the_chart_rules_name_the_chart_with_several_series() -> None:
         "None is a `phase-*`, `caution` or `critical` value. `chart-3` is a yellow near "
         "`caution`: it is a mark in a plot, never a status." in section
     )
+    # what the four were held to, and the two checks they were not
     assert (
-        "\nNo other chart has a categorical palette, so the six categorical checks apply to that "
-        "one chart alone. `chart-context` is held to the 3:1 mark-contrast floor" in charts
+        "and each is 3:1 or more on `surface-raised`, in both themes. They are not held to one "
+        "lightness band or to the chroma floor: `chart-1` is the accent, which is lighter than the "
+        "band in the dark theme and under the chroma floor in the light one, and the others differ "
+        "in lightness, which is part of what keeps each pair apart. None is a `phase-*`" in section
+    )
+    assert (
+        "\nNo other chart has a categorical palette, so the six categorical checks do not apply to "
+        "them; *Several series the reader picks* says what its four colours were held to. "
+        "`chart-context` is held to the 3:1 mark-contrast floor" in charts
     )
     assert "Because there is no categorical palette" not in charts
+    assert "apply to that one chart alone" not in charts
 
 
 def test_the_rest_of_the_design_system_allows_the_one_chart() -> None:
