@@ -103,8 +103,8 @@
   /* ----------------------------------------------------------- Fairband value */
 
   /* The Fairband value block (8.2) of the company's detail `d`: the basis chip in its head, the
-     basis of the band the meter draws (FairbandPage.bandBasis); the meter as the report page
-     draws it (FairbandPage.meter), its price in figure, and the four levels of the value it draws
+     basis of the band the meter draws (FairbandPage.bandBasis); the meter as the drawer draws it
+     (FairbandPage.meter), its price in figure, and the four levels of the value it draws
      in two columns (FairbandPage.levelRows); a row with no band, its refusal's sentence in the
      meter's place where it is refused, and no levels. Then the report's line, where the company
      has a published report. */
@@ -123,7 +123,8 @@
   /* The published report's line, under a rule: its stance in the Stance column's chip classes,
      faded once the window of the snapshot it rests on has expired, with a title then that says so;
      its mode and its day in the reader's time zone (full report, 11 Nov 2026); who wrote it; and
-     the link to the report page, the symbol encoded as the report page's links encode it. */
+     the link to the report on the company page's Research tab (FairbandPage.researchHref, the
+     Research tab's design, 7.1). */
   function reportLine(symbol, report) {
     return h('div', { key: 'report', className: 'app-company__research' },
       h('span', {
@@ -133,9 +134,7 @@
       }, report.stance),
       h('p', { className: 'caption' }, report.mode + ', ' + C.day(P.localIso(report.createdAt))),
       h(F.PrincipalChip, { principal: report.principal, actor: report.actor }),
-      h('a', {
-        className: 'app-link', href: '#report/' + encodeURIComponent(symbol)
-      }, 'Open the report'));
+      h('a', { className: 'app-link', href: P.researchHref(symbol) }, 'Open the report'));
   }
 
   /* ----------------------------------------------------------- Key statistics */

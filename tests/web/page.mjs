@@ -7,8 +7,8 @@
 // hangs on it ("reportCharts.roicPoints"); its arguments are a JSON list on stdin; its result is
 // JSON on stdout. Scripts named after the helper are loaded after app.js, as the page loads them
 // (charts.js; tests/web/test_report_charts.py; report_parts.js and its Appendix A's overrides,
-// "reportAppendix.overrides"; tests/web/test_report_reader.py; report.js, whose root is the
-// stub's, and its head, "reportHead"; tests/web/test_ticker_link.py).
+// "reportAppendix.overrides"; tests/web/test_report_reader.py; inbox.js, whose root is the
+// stub's, and its row, "inbox.row"; tests/web/test_inbox_launch.py).
 //
 // A bundle component is named as window names it ("Fairband.HistoryBars") and called with its
 // props, the one argument; the stub's hooks give it its first state, its refs and no effect, and
@@ -50,8 +50,9 @@ new Function('window', 'React', bundle)(window, React);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app)(
   window, React, ReactDOM, window.Fairband, document, fetch);
 
-// The views' loaders, which controls.js holds on the page: a view's script (report.js) registers
-// its own there as it loads, and controls.js, which draws the header and polls, is not loaded here.
+// The views' loaders, which controls.js holds on the page: a view's script (inbox.js, company.js)
+// registers its own there as it loads, and controls.js, which draws the header and polls, is not
+// loaded here.
 window.FairbandPage.onShow = window.FairbandPage.onShow || {};
 for (const path of process.argv.slice(5)) {
   new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',

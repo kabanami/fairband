@@ -12,8 +12,11 @@
 //   {"do": "show", "symbol", "tab", "id"?}  a link or a tab's button opens the company page there,
 //                                           on the Research tab at the report `id` where given
 //                                           (FairbandPage.show, controls.js)
-//   {"do": "hash", "hash"}                  the browser's Back or Forward moves the hash to `hash`
-//                                           (#company/LFOX, # for the screen): controls.js reads it
+//   {"do": "hash", "hash"}                  the browser's Back or Forward, or a link, moves the hash
+//                                           to `hash` (#company/LFOX, # for the screen, a report's
+//                                           old address #report/LFOX): controls.js reads it
+//   {"do": "openReport", "symbol", "id"?}   FairbandPage.openReport opens the report `id` of the
+//                                           company, its latest where none is given
 //   {"do": "scroll", "top"}                 the reader scrolls the company page's panel down to
 //                                           `top` pixels
 //   {"do": "again"}                         the loader runs on the company and tab shown, as a
@@ -185,7 +188,8 @@ for (const step of steps) {
   else if (step.do === 'hash') {
     location.hash = step.hash;
     for (const listener of listeners.hashchange || []) listener();
-  } else if (step.do === 'scroll') panels.company.scrollTop = step.top;
+  } else if (step.do === 'openReport') P.openReport(step.symbol, step.id);
+  else if (step.do === 'scroll') panels.company.scrollTop = step.top;
   else if (step.do === 'again') P.onShow.company();
   else if (step.do === 'answer' || step.do === 'fail') answered(step);
   else if (step.do === 'notes') press('app-notes-open');

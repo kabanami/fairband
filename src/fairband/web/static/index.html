@@ -100,11 +100,13 @@
   }
   .app-details__row + .app-details__row { margin-top: var(--space-1); }
   /* A refresh is running: the old figures stay, at ink-faint, until the new ones land. No spinner,
-     no motion. A phase number keeps its colour on its fill. The report page's tables are its
-     appendixes, the records of the report's own snapshot, which no refresh changes: its own rule
-     fades today's figures instead. */
-  .is-recomputing:not(#report) .fb-table tbody td,
-  .is-recomputing:not(#report) .fb-table tbody td *:not(.fb-phase__n) { color: var(--ink-faint); }
+     no motion. A phase number keeps its colour on its fill. The Research tab's tables are a
+     report's appendixes, the records of the report's own snapshot, which no refresh changes: they
+     stay as they are. */
+  .is-recomputing .fb-table:not(.app-research .fb-table) tbody td,
+  .is-recomputing .fb-table:not(.app-research .fb-table) tbody td *:not(.fb-phase__n) {
+    color: var(--ink-faint);
+  }
 
   .app-groups__bar { margin-bottom: var(--space-2); }
   .app-by { color: var(--ink-muted); }
@@ -498,48 +500,13 @@
   }
   .app-notes-box__field { width: 100%; resize: vertical; font-family: var(--font-sans); }
   .app-notes-box__error { margin: var(--space-2) 0 0; color: var(--caution); }
-  /* The report page (spec 2026-11-06 Tier 2, 18.4), in CompanyReport's order, one column: the
-     head, the ticker, the name and the phase badge, then the one headline figure with the price
-     beside it and Company page after them, as the company page's head sets its price and its
-     controls (spec 2026-11-16 company page, 13); the meter under it, at the width it reads best,
-     a refusal under it; the meta line above the reader, Download .md at its end, the other
-     revisions under it; the reader; then the references, Appendix A and Appendix B, each a panel
-     on the raised surface with a hairline border and no shadow, space-8 apart. Loading, the page
-     keeps what it had, faded. */
-  #report { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
-  .app-report { max-width: 72rem; padding: var(--space-2) 0 var(--space-8); }
-  .app-report.is-loading { opacity: 0.5; }
-  /* While a refresh runs, today's figures, the head's and the meter, are held at reduced opacity
-     until the page reads the company again as the run ends (CompanyReport.md); the report and its
-     appendixes rest on their own snapshot and stay as they are. */
-  .is-recomputing .app-report__figures, .is-recomputing .app-report__band { opacity: 0.5; }
-  .app-report__head {
-    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
-    gap: var(--space-2) var(--space-6);
-  }
-  .app-report__id, .app-report__figures {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3);
-  }
-  .app-report__side {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-6);
-  }
-  .app-report__ticker, .app-report__name { margin: 0; }
-  .app-report__logo { width: 32px; height: 32px; align-self: center; }
-  .app-report__name { color: var(--ink-muted); }
-  .app-report__currency { margin: 0; flex-basis: 100%; }
-  .app-report__brief { max-width: 72ch; margin: var(--space-3) 0 0; }
-  .app-report__band { max-width: 40rem; margin-top: var(--space-4); }
-  .app-report__band .app-refusal { margin-top: var(--space-3); }
-  .app-report__meta { margin-top: var(--space-8); }
-  .app-report__line {
-    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
-  }
-  .app-report__mode { color: var(--ink-muted); text-transform: uppercase; }
-  .app-report__actions { display: flex; gap: var(--space-2); margin-left: auto; }
-  .app-report__revisions, .app-report__note { margin: var(--space-2) 0 0; color: var(--ink-muted); }
+  /* A report's parts after its sections (report_parts.js), which the Research tab draws in its
+     three closed parts (the Research tab's design, 7.8; its own rules below set each part's frame
+     and title aside): each a panel on the raised surface with a hairline border and no shadow;
+     the references numbered at the reading width; Appendix A's parts each under its heading,
+     their records space-3 apart, an override's scaling at a split under its record (spec
+     2026-11-15 8); the glossary. A read the server refused, its sentence in caution (charts.js). */
   .app-report__error { margin: var(--space-2) 0 0; color: var(--caution); }
-  .app-report__meta .app-request { margin-top: var(--space-2); }
-  .app-report .fb-report { margin-top: var(--space-3); }
   .app-report__panel {
     margin-top: var(--space-8); padding: var(--space-3) var(--space-4) var(--space-4);
     background: var(--surface-raised); border: 1px solid var(--hairline);
@@ -554,40 +521,15 @@
   .app-report__part > h4 { margin: 0 0 var(--space-2); }
   .app-report__part > p { max-width: 72ch; margin: 0; overflow-wrap: anywhere; }
   .app-report__part > p + * { margin-top: var(--space-2); }
-  .app-report .fb-rec + .fb-rec { margin-top: var(--space-3); }
-  /* The words of an override's scaling at a split, under its record (spec 2026-11-15 8). */
   .app-report__part > .app-report__entered { margin-top: var(--space-1); color: var(--ink-muted); }
-  .app-report .app-report__entered + .fb-rec { margin-top: var(--space-3); }
   .app-report__glossary { max-width: 72ch; margin: 0; }
   .app-report__glossary dd { margin: var(--space-1) 0 var(--space-3); }
-  .app-report__none { margin-top: var(--space-6); }
-  .app-report__none > .app-note { margin-bottom: var(--space-3); }
-  /* The report's charts (spec 18.4, CompanyReport.md): inside the reader, under a section's
-     heading and above its sentences, each on a raised panel with a hairline border and no shadow,
-     two to a row as small multiples, one to a row below 840px; the price against the band the
-     full width. A part of section 4 under its table's title. On the company page's Research tab
-     a chart has no panel of its own (app-charts__chart): it sits on its section's panel. */
-  .app-charts {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3);
-    margin: var(--space-2) 0 var(--space-4);
-  }
-  .app-chart {
-    min-width: 0; padding: var(--space-3) var(--space-4);
-    background: var(--surface-raised); border: 1px solid var(--hairline);
-    border-radius: var(--radius-lg);
-  }
-  .app-chart--wide { grid-column: 1 / -1; }
-  .app-charts__part {
-    margin: var(--space-4) 0 0; color: var(--ink-muted); text-transform: uppercase;
-  }
-  .app-charts__part:first-child { margin-top: var(--space-2); }
-  .app-chart .app-report__error { margin: 0; }
-  .app-chart .fb-c + .app-report__error { margin-top: var(--space-2); }
+  /* The report's charts (charts.js) on the Research tab: each with no panel of its own, on its
+     section's panel (app-charts__chart); a read the server refused, its sentence in the chart's
+     place. */
   .app-charts__chart { min-width: 0; }
   .app-charts__chart .app-report__error { margin: 0; }
   .app-charts__chart .fb-c + .app-report__error { margin-top: var(--space-2); }
-  .fb-report__section > .app-report__error { margin: var(--space-1) 0 var(--space-3); }
-  @media (width < 840px) { .app-charts { grid-template-columns: minmax(0, 1fr); } }
   /* The company page (the company page's design, 7), as its mockup lays it out, with no link back
      to the screen (the decision log of 2026-11-17): the head, the logo on the drawer's tile at
      40px, the name, the ticker, the phase badge and the moat stamp over the caption line at its
@@ -1053,15 +995,15 @@
      line in border, accent under the pointer and with the focus, with no line in an agent's
      table; its [n] hidden until Footnote marks is on; its source in a box on surface-raised over
      the page. The three parts kept closed, a head that opens each, + or − before its name;
-     inside, the report page's own parts, their panel's frame and title left to the head, the
-     references in two columns where the width allows. Records (7.10): its count after its name
-     in ink-faint; the panels in two columns, one below 980px, a panel with records across both,
-     each framed as a section's, its name and count in its head, the ledger's note at the right
-     in ink-faint; a table on hairlines that scrolls sideways where it must, its heads in label
-     and ink-muted, its figures set right in mono, its days and times in ink-muted, its states in
-     the outlined stamp and a review's word in the screen's chip; a review's row a press, on
-     surface-hover under the pointer and surface-selected while open, its bridge in a row under
-     it; "None on file." in ink-faint. */
+     inside, the report's parts (report_parts.js), their panel's frame and title left to the
+     head, the references in two columns where the width allows. Records (7.10): its count after
+     its name in ink-faint; the panels in two columns, one below 980px, a panel with records
+     across both, each framed as a section's, its name and count in its head, the ledger's note at
+     the right in ink-faint; a table on hairlines that scrolls sideways where it must, its heads
+     in label and ink-muted, its figures set right in mono, its days and times in ink-muted, its
+     states in the outlined stamp and a review's word in the screen's chip; a review's row a
+     press, on surface-hover under the pointer and surface-selected while open, its bridge in a
+     row under it; "None on file." in ink-faint. */
   .app-research {
     display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4);
   }
@@ -1334,22 +1276,14 @@
   @media (width < 980px) {
     .app-research__records { grid-template-columns: minmax(0, 1fr); }
   }
-  /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
-     reader, the references and the appendixes. No header chrome, no status line, no button or
-     menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
-     price and the meter, which move with the latest snapshot while the report rests on its own; a
-     panel another view would show is hidden already. The page runs its full length, not its
-     window's. */
+  /* Printed, as save-as-PDF serves (spec 13.6): no header chrome, no status line, no button or
+     menu, no Request research or its lines (plan 4); a panel another view would show is hidden
+     already. The page runs its full length, not its window's. */
   @media print {
-    #header, #controls, .fb-btn, .fb-menu, .app-dialog, .app-report__figures, .app-report__band,
-    .app-report__revisions, .app-request, .app-requested,
+    #header, #controls, .fb-btn, .fb-menu, .app-dialog, .app-request, .app-requested,
     .app-request__error { display: none !important; }
     html, body, .app-page { height: auto; }
     .app-page { display: block; }
-    section#report { overflow: visible; padding: 0; }
-    .app-report { max-width: none; padding: 0; }
-    .app-report h3, .app-report h4 { break-after: avoid; }
-    .app-chart { break-inside: avoid; }
     /* the agent's table and a list item stay on one page (spec 2026-11-06 Tier 2, 18.4) */
     .fb-report__table, .fb-report__list li { break-inside: avoid; }
     /* the agent's table prints whole (spec 2026-11-15 9): neither its scroller nor the reader's
@@ -1377,7 +1311,6 @@
   <section id="methodology" hidden></section>
   <section id="settings" hidden></section>
   <section id="inbox" hidden></section>
-  <section id="report" hidden></section>
   <section id="company" hidden></section>
 </main>
 <script src="/static/vendor/react.production.min.js"></script>
@@ -1392,7 +1325,6 @@
 <script src="/static/settings.js"></script>
 <script src="/static/methodology.js"></script>
 <script src="/static/report_parts.js"></script>
-<script src="/static/report.js"></script>
 <script src="/static/charts.js"></script>
 <script src="/static/company.js"></script>
 <script src="/static/company_overview.js"></script>

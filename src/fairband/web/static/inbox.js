@@ -4,9 +4,10 @@
    declined item's reason under it as written; the date and time it was posted, in the reader's
    time; who posted it, a compact PrincipalChip: the owner, an agent by its model identifier, or
    the system for the item it posts when a watched company's window ends; the agent that claimed
-   it, likewise; the requester's note as written; for a done item, a link to the report page of
-   the report it was completed with, named by its revision ("revision 2", its accessible name
-   "Open revision 2 of the report for QCOM"), or Open when the server sends none; and for a
+   it, likewise; the requester's note as written; for a done item, a link to the report it was
+   completed with on the company page's Research tab (FairbandPage.researchHref, the Research
+   tab's design, 7.1), named by its revision ("revision 2", its accessible name "Open revision 2
+   of the report for QCOM"), or Open when the server sends none; and for a
    pending or claimed item, Decline, which opens the reason line under the row: the reason field
    and Decline again, the owner's decline, and Cancel. A refused decline's sentence, the
    server's, stands on a line under its row. The view reads the inbox as it opens and after every
@@ -222,8 +223,7 @@
           : none()),
         h('td', { className: 'body app-inbox__wrap' }, item.note || none()),
         h('td', null, item.state === 'done' && item.reportId != null ? h('a', {
-          className: 'app-link',
-          href: '#report/' + encodeURIComponent(item.symbol) + '/' + item.reportId,
+          className: 'app-link', href: P.researchHref(item.symbol, item.reportId),
           'aria-label': item.reportRevision != null
             ? 'Open revision ' + item.reportRevision + ' of the report for ' + item.symbol
             : 'Open the report for ' + item.symbol
@@ -332,5 +332,6 @@
 
   P.onShow.inbox = load;
   P.onInbox = fromHeader;
-  P.inbox = { launchParts: launchParts }; /* for the tests, which read it in node */
+  /* For the tests, which read them in node: a pending item's launch parts and an item's row. */
+  P.inbox = { launchParts: launchParts, row: row };
 })();

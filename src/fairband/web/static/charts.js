@@ -1,34 +1,29 @@
-/* The report page's charts (spec 2026-11-06 Tier 2, 18.4), loaded after report.js, which reads
-   the series the sections cite and hands them here: ReportReader draws each section's charts
-   under its heading and above its sentences (its `charts`, by the heading). In the design
-   system's look (charts.md, CompanyReport.md): one measure per chart, two to a row, each on a
-   raised panel with a BasisChip in its header, mechanical for the tables and the series and
-   reviewed for a grid an agent's inputs move; no chart has a table, the hover giving a point's
-   figures (spec 2026-11-16 company page, 8.4 and 13). The titles are the export's
-   (reports/charts.py), so the page and its Markdown never differ: a part of Financial
-   performance and health under its table's title, each chart by its row's name; a reading's grid
-   by its read's title, the secondary valuation's grid by its table's; the price against the band
-   by its table's; each P/E series by its column's in the year-end table. A cell with no value is
-   left out, a gap, never a zero; a chart with no point shows its title and "No data on file.";
-   a read the server refused shows its sentence, as it arrives. A ROIC year on average invested
-   capital at or below zero, whose figure has the wrong sign and no meaning, is left out of the
-   ROIC chart, and a line under the chart names the years and why (B-8; the export's table
-   writes the note in the cell).
+/* The report's charts (spec 2026-11-06 Tier 2, 18.4), which the company page's Research tab
+   draws (the Research tab's design, 7.4 rules 3, 4, 6 and 7, and 7.9), loaded after
+   report_parts.js: the tab reads the series the sections cite and hands them here, and lays out
+   the lists it is given. groupCharts gives the charts of Financial performance and health by
+   their table's name, quarterCharts the last earnings call's three charts by quarter, gridCharts
+   the grids of Valuation and priceCharts the charts of Price and multiples, the first two at the
+   height the tab asks for. In the design system's look (charts.md): one measure per chart, each
+   with a BasisChip in its header, mechanical for the tables and the series and reviewed for a
+   grid an agent's inputs move, each with no raised panel of its own, on its section's panel; no
+   chart has a table, the hover giving a point's figures (spec 2026-11-16 company page, 8.4 and
+   13). The titles are the export's (reports/charts.py), so the page and its Markdown never
+   differ: each chart of a financial table by its row's name there; a reading's grid by its
+   read's title, the secondary valuation's grid by its table's; the price against the band by its
+   table's; each P/E series by its column's in the year-end table. A cell with no value is left
+   out, a gap, never a zero; a chart with no point shows its title and "No data on file."; a read
+   the server refused shows its sentence in the chart's place, as it arrives. A ROIC year on
+   average invested capital at or below zero, whose figure has the wrong sign and no meaning, is
+   left out of the ROIC chart, and a line under the chart names the years and why (B-8; the
+   export's table writes the note in the cell).
 
    Past the fiscal year (spec 2026-11-15 6.5, 6.6): a chart's bars stand under its table's
    columns, the tooltip naming each by the label the server gives its column.
    The trailing twelve months stand after the fiscal years in grey, marked "to date", and the
    analysts' estimates after them as outlines, marked by their period ("2026E"); under a chart
-   with such a bar one line says which is which. The last earnings call draws the quarters table
-   by quarter, under the export's title for it.
-
-   The company page's Research tab (the Research tab's design, 7.4 rules 3, 4, 6 and 7, and 7.9)
-   draws the same charts, on the same series, with the same titles, notes and rules, but on its
-   section's panel, each with no raised panel of its own (`bare`): groupCharts gives each group's
-   charts by its table's name, quarterCharts the three charts by quarter, gridCharts the grids of
-   Valuation and priceCharts the charts of Price and multiples, each a list the tab lays out, the
-   first two at the height the tab asks for. A read the server refused gives its sentence in the
-   chart's place, as here. */
+   with such a bar one line says which is which. The last earnings call's charts run by
+   quarter. */
 (function () {
   'use strict';
 
@@ -39,42 +34,40 @@
   var QUARTER_ENDS = { 1: '-03-31', 2: '-06-30', 3: '-09-30', 4: '-12-31' };
   var SHORT_LOG = 5; /* the fewest forward readings drawn as a line (13.7) */
 
-  /* Financial performance and health (18.4's table): the six tables in the export's order, each
-     under its title (charts.TITLES), its charts by its rows, each titled by its row's name there
+  /* Financial performance and health (18.4's table): the six tables in the export's order
+     (charts.TITLES), each its charts by its rows, each titled by its row's name there
      (charts.row_name). Buybacks and dividends is one measure, the cash returned (`returned`). A
      lower net debt over EBITDA and a falling share count are the better ones: crossing zero, they
      take the diverging pair the other way round (`inverse`). */
   var FINANCIAL = [
-    { table: 'growth', title: 'Growth and profitability', charts: [
+    { table: 'growth', charts: [
       { row: 'revenue', title: 'Revenue' },
       { row: 'operating_margin', title: 'Operating margin' },
       { row: 'eps', title: 'EPS' }
     ] },
-    { table: 'cash_flow', title: 'Cash flow', charts: [
+    { table: 'cash_flow', charts: [
       { row: 'free_cash_flow', title: 'Free cash flow' },
       { row: 'stock_compensation_to_revenue', title: 'Stock compensation to revenue' }
     ] },
-    { table: 'solvency', title: 'Balance sheet and solvency', charts: [
+    { table: 'solvency', charts: [
       { row: 'net_debt_to_ebitda', title: 'Net debt to EBITDA', inverse: true },
       { row: 'interest_coverage', title: 'Interest coverage' }
     ] },
-    { table: 'returns', title: 'Returns on capital', charts: [
+    { table: 'returns', charts: [
       { row: 'roic', title: 'ROIC', hurdle: 'hurdle_rate' }
     ] },
-    { table: 'capital_allocation', title: 'Capital allocation', charts: [
+    { table: 'capital_allocation', charts: [
       { rows: ['buybacks', 'dividends'], title: 'Buybacks and dividends' },
       { row: 'share_count_change', title: 'Share count change', inverse: true }
     ] },
-    { table: 'quality', title: 'Quality scores', charts: [
+    { table: 'quality', charts: [
       { row: 'altman_z', title: "Altman's Z″" },
       { row: 'piotroski_f', title: "Piotroski's F" }
     ] }
   ];
-  /* The last earnings call (spec 2026-11-15 6.5): the quarters table under its title in the
-     export (charts.QUARTERS_TITLE), its charts by its rows, each titled by its row's name there,
-     run by quarter. */
-  var QUARTERS_TITLE = 'By quarter';
-  var QUARTERLY = { table: 'quarters', title: QUARTERS_TITLE, by: 'quarter', charts: [
+  /* The last earnings call (spec 2026-11-15 6.5): the quarters table's charts by its rows, each
+     titled by its row's name in the export, run by quarter. */
+  var QUARTERLY = { table: 'quarters', by: 'quarter', charts: [
     { row: 'revenue', title: 'Revenue' },
     { row: 'operating_margin', title: 'Operating margin' },
     { row: 'eps', title: 'EPS' }
@@ -86,59 +79,14 @@
      the EPS's basis (the whole-branch review's I2). */
   var TO_DATE = 'to date';
   var OUTLINED = 'Outlined: analysts\' estimates';
-  /* How a chart is set: the report page's on its raised panel, at the bundle's own height; the
-     Research tab's with no panel (bare), at the height it asks for or the bundle's. */
-  var PANELED = { wrap: panel };
-
-  /* Each section's charts by its heading, as ReportReader places them, each drawn once the
-     series it reads have landed: the six tables and the quarters once the financial tables have,
-     the price against the band once the closes and the band's history have, the P/E series once
-     the multiples history has. */
-  function draw(report, series) {
-    var s = series || {};
-    return {
-      'Financial performance and health': s.tables ? financial(s.tables) : null,
-      'The last earnings call': s.tables ? byQuarter(s.tables) : null,
-      'Valuation': s.readings ? valuation(report, s.readings) : null,
-      'Price and multiples': (s.closes && s.band) || s.multiples ? price(s) : null
-    };
-  }
 
   /* ------------------------------------------------------- the financial tables */
-
-  /* The six parts, each its table's title over its charts; the server's sentence in their place
-     when the tables did not load (no statements on file, say). */
-  function financial(read) {
-    if (read.error) return refused('The financial tables', read.error);
-    var body = read.body;
-    var byName = tablesByName(body);
-    return h('div', { className: 'app-charts__parts' }, FINANCIAL.map(function (part) {
-      return charted(part, byName[part.table], body.currency);
-    }));
-  }
 
   /* The financial tables of the read's body by their names. */
   function tablesByName(body) {
     var byName = {};
     body.tables.forEach(function (t) { byName[t.name] = t; });
     return byName;
-  }
-
-  /* The quarters table's part, its three charts with "No data on file." where no period is
-     stored; the server's sentence when the tables did not load, and none on an answer from
-     before the quarters were served. */
-  function byQuarter(read) {
-    if (read.error) return refused('The figures by quarter', read.error);
-    var body = read.body;
-    return body.quarters ? h('div', { className: 'app-charts__parts' },
-      charted(QUARTERLY, body.quarters, body.currency)) : null;
-  }
-
-  /* A part: its title over a chart for each of its charts, each on its raised panel. */
-  function charted(part, table, currency) {
-    return h(React.Fragment, { key: part.table },
-      h('h5', { className: 'label app-charts__part' }, part.title),
-      h('div', { className: 'app-charts' }, chartsOf(part, table, currency, PANELED)));
   }
 
   /* A part's charts, each set as `look` sets it, from its table's rows and columns; with no
@@ -285,16 +233,10 @@
   /* ------------------------------------------------------------------ the grids */
 
   /* Valuation (13.8, 11): each sensitivity reading the sections cite, in the order first cited,
-     as its read words it, reviewed when the report rests on a review; then the grid of the
-     secondary valuation the report rests on, reviewed, an agent's inputs. Each against the price
-     of the report's snapshot. None without either. */
-  function valuation(report, readings) {
-    var drawn = grids(report, readings, PANELED);
-    return drawn.length ? h('div', { className: 'app-charts' }, drawn) : null;
-  }
-
-  /* Valuation's grids in their order, each set as `look` sets it: each reading's, a reading the
-     server refused its sentence in its place, then the secondary valuation's. */
+     as its read words it, reviewed when the report rests on a review, a reading the server
+     refused its sentence in its place; then the grid of the secondary valuation the report rests
+     on, reviewed, an agent's inputs. Each against the price of the report's snapshot, each set
+     as `look` sets it. None without either. */
   function grids(report, readings, look) {
     var a = report.appendixA;
     var drawn = readings.map(function (read, i) {
@@ -333,25 +275,17 @@
 
   /* ----------------------------------------------------------- price and multiples */
 
-  /* The price against the band, the full width, then the two P/E series side by side, each once
-     its reads have landed. */
-  function price(series) {
-    return h('div', { className: 'app-charts' },
-      series.closes && series.band ? band(series.closes, series.band, PANELED) : null,
-      series.multiples ? multiples(series.multiples, PANELED) : null);
-  }
-
   /* BandHistory: the five years of closes a quarter each, the quarter's last close, with the band
      in force at the quarter's end, the newest snapshot priced on or before it: none before the
      first snapshot, none on a refusal's. The past year's high and low in the subtitle. When the
      band's history did not load, the price alone, with the server's sentence under it. Set as
-     `look` sets it, the full width on a panel. */
+     `look` sets it. */
   function band(closes, history, look) {
     if (closes.error) {
-      return look.wrap(BAND_TITLE, refused('The price history', closes.error), true);
+      return look.wrap(BAND_TITLE, refused('The price history', closes.error));
     }
     var list = closes.body.closes;
-    if (!list.length) return look.wrap(BAND_TITLE, noData(BAND_TITLE), true);
+    if (!list.length) return look.wrap(BAND_TITLE, noData(BAND_TITLE));
     var marks = history.error ? [] : history.body.points;
     var series = quarters(list).map(function (q) {
       var p = inForce(marks, q.end);
@@ -366,7 +300,7 @@
         basis: 'mechanical'
       }),
       history.error ? refused('The band\'s history', history.error, 'refused') : null
-    ], true);
+    ]);
   }
 
   /* The closes a calendar quarter each, oldest first: its last close and its end. */
@@ -474,7 +408,7 @@
     }
   }
 
-  /* -------------------------------------------------------- the Research tab's charts */
+  /* ------------------------------------------------------------- the exports */
 
   /* Rule 3 (the Research tab's design, 7.4, 7.9): each group's charts by its table's name, from
      growth to quality, each with no panel, at `height` where given; the server's sentence alone,
@@ -500,7 +434,7 @@
     return chartsOf(QUARTERLY, body.quarters, body.currency, { wrap: bare, height: height });
   }
 
-  /* Rule 6: Valuation's grids, as the report page draws them, each with no panel. */
+  /* Rule 6: Valuation's grids, each with no panel. */
   function gridCharts(report, readings) {
     return grids(report, readings, { wrap: bare });
   }
@@ -516,13 +450,7 @@
 
   /* --------------------------------------------------------------------- the parts */
 
-  /* A chart on its raised panel; the price chart takes the full width. */
-  function panel(key, chart, wide) {
-    return h('div', { key: key, className: wide ? 'app-chart app-chart--wide' : 'app-chart' },
-      chart);
-  }
-
-  /* A chart with no panel of its own, on the panel of its section (the Research tab). */
+  /* A chart with no panel of its own, on the panel of its section. */
   function bare(key, chart) {
     return h('div', { key: key, className: 'app-charts__chart' }, chart);
   }
@@ -543,9 +471,10 @@
       what + ' did not load: ' + sentence + '.');
   }
 
+  /* What the Research tab and the tests use: the four exports, and the points of the ROIC chart,
+     of a row and the line under a chart, which the tests read in node. */
   P.reportCharts = {
-    draw: draw, roicPoints: roicPoints, points: points, kindsLine: kindsLine,
     groupCharts: groupCharts, quarterCharts: quarterCharts, gridCharts: gridCharts,
-    priceCharts: priceCharts
+    priceCharts: priceCharts, roicPoints: roicPoints, points: points, kindsLine: kindsLine
   };
 })();

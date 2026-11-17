@@ -121,7 +121,7 @@ def _rule(selector: str) -> str:
 
 def test_the_bar_s_line() -> None:
     """In the Report view, the report's line: its stance in the Stance column's chip, faded with
-    the report page's title once its validity ended before the detail's day; its mode; its
+    a title that says so once its validity ended before the detail's day; its mode; its
     revision; its date and time as the page writes them; who wrote it; valid until and the
     date."""
     answer = answers.answer()
@@ -200,7 +200,7 @@ def test_the_list() -> None:
     assert "is-on" in _classes(shown) and shown["type"] != "a" and "href" not in shown["props"]
     assert text(shown) == "11 Nov 2026, revision 2Full report, hold"
     assert other["type"] == "a" and "is-on" not in _classes(other)
-    assert other["props"]["href"] == node("companyPage.researchHref", ["LFOX", 19], *SCRIPTS)
+    assert other["props"]["href"] == node("researchHref", ["LFOX", 19])
     assert other["props"]["href"] == "#company/LFOX/research/19"
     assert text(other) == "2 Oct 2026, revision 1Full report, trim"
 
@@ -454,8 +454,8 @@ def test_the_marks_are_hidden_until_asked_for_and_a_cite_reads_as_the_text() -> 
 
 def test_the_closed_parts() -> None:
     """After the sections, three details, closed: References with their count, Appendix A and
-    Appendix B with the glossary's count, each opened drawing what the report page draws (the
-    references, Appendix A's nine parts and the glossary, P.reportParts)."""
+    Appendix B with the glossary's count, each opened drawing the report's part (the references,
+    Appendix A's nine parts and the glossary, P.reportParts)."""
     report = answers.answer()["report"]
     report["references"] = _references(185)
     parts = _research("closed", report)
@@ -603,5 +603,5 @@ def test_the_tab_hangs_on_the_page_s_draw_keyed_on_the_company() -> None:
     assert drawn["props"]["detail"] == page_answers.DETAIL
     html = _static_file("index.html")
     scripts = re.findall(r'<script src="/static/([\w.]+)"></script>', html)
-    assert scripts.index("report_parts.js") == scripts.index("report.js") - 1
+    assert scripts.index("report_parts.js") == scripts.index("charts.js") - 1
     assert scripts.index("company_research.js") == scripts.index("company_research_text.js") + 1

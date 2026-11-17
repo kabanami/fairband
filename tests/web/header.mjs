@@ -83,8 +83,8 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
   'history', 'location', 'setTimeout', 'clearTimeout', controls)(
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location,
   quiet.setTimeout, quiet.clearTimeout);
-// The views that read as they open have no script here: their loaders do nothing.
-for (const view of ['report', 'company']) P.onShow[view] = P.onShow[view] || (() => {});
+// The view that reads as it opens, the company page, has no script here: its loader does nothing.
+P.onShow.company = P.onShow.company || (() => {});
 
 function* elements(tree) {
   if (Array.isArray(tree)) { for (const child of tree) yield* elements(child); return; }

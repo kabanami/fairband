@@ -1,8 +1,7 @@
 """The header and the status line under it across the views (the company page's design, the
 founder's rulings of 2026-11-17). The line of the last refresh and its Details describe the whole
-universe, so the Screen and the other views of many companies keep them; the company page and the
-report page, each a page of one company, draw neither: the header's stamp already says when the
-engine ran. A refresh that runs still draws its bar there, and a notice its sentence, since the
+universe, so the Screen and the other views of many companies keep them; the company page, a page
+of one company, draws neither: the header's stamp already says when the engine ran. A refresh that runs still draws its bar there, and a notice its sentence, since the
 header has neither. The header's finder stands in its right slot on every view but the Screen,
 whose table has a field of its own. The bundle, app.js, finder.js and controls.js run in node
 (``tests/web/header.mjs``) on steps the test gives, and the tests read the trace."""
@@ -83,11 +82,10 @@ def test_the_screen_keeps_the_last_refreshs_line_its_details_and_no_finder() -> 
     assert landed["actions"] == ["Refresh prices", "Refresh all"]
 
 
-@pytest.mark.parametrize("view", ["company", "report"])
-def test_a_page_of_one_company_draws_no_last_line_and_no_details(view: str) -> None:
+def test_a_page_of_one_company_draws_no_last_line_and_no_details() -> None:
     """The status region stays, empty, so a run that starts is announced from a region the page
     already had; the header marks no view; back on the Screen the line and Details return."""
-    _, page, screen = _trace([LANDED, _show(view, "AAPL"), _show("screen")])
+    _, page, screen = _trace([LANDED, _show("company", "AAPL"), _show("screen")])
     assert page["view"] == ""
     assert page["status"] == "" and page["details"] is False
     assert page["run"] is False and page["notice"] is None
@@ -106,12 +104,11 @@ def test_a_view_of_many_companies_keeps_the_line_and_has_the_finder(view: str) -
     assert shown["finder"] is True
 
 
-@pytest.mark.parametrize("view", ["company", "report"])
-def test_a_running_refresh_draws_its_bar_on_a_page_of_one_company(view: str) -> None:
+def test_a_running_refresh_draws_its_bar_on_a_page_of_one_company() -> None:
     """The header has no bar of its own, so the run's progress and its Cancel stay where they
     are on every view."""
     _, page = _trace(
-        [{"do": "answer", "url": CURRENT, "status": 200, "body": RUNNING}, _show(view, "AAPL")]
+        [{"do": "answer", "url": CURRENT, "status": 200, "body": RUNNING}, _show("company", "AAPL")]
     )
     assert page["run"] is True and page["details"] is False and page["bar"] == "app-bar"
     assert page["actions"] == ["Cancel"]
@@ -149,19 +146,18 @@ def _ended(status: str, message: str) -> dict[str, Any]:
     return {"do": "answer", "url": CURRENT, "status": 200, "body": body}
 
 
-@pytest.mark.parametrize("view", ["company", "report"])
 @pytest.mark.parametrize(
     ("status", "message"),
     [("failed", "no company was admitted"), ("cancelled", "cancelled after 40 companies")],
 )
 def test_a_run_that_did_not_end_done_says_so_on_a_page_of_one_company(
-    view: str, status: str, message: str
+    status: str, message: str
 ) -> None:
     """The header's stamp is the latest run's finish whatever its status, and the line under the
     header is what says how the run ended. Without the line a failed or cancelled run would read
-    there as a fresh one, over figures it did not renew: such a run keeps its line on the two
-    pages, with no Details."""
-    _, page = _trace([_ended(status, message), _show(view, "AAPL")])
+    there as a fresh one, over figures it did not renew: such a run keeps its line on the company
+    page, with no Details."""
+    _, page = _trace([_ended(status, message), _show("company", "AAPL")])
     assert page["status"].startswith(f"full {status} ")
     assert page["status"].endswith(" · " + message)
     assert page["details"] is False and page["bar"] == "app-bar"
@@ -169,7 +165,7 @@ def test_a_run_that_did_not_end_done_says_so_on_a_page_of_one_company(
 
 def test_details_left_open_is_shut_when_the_reader_comes_back_to_the_screen() -> None:
     """The browser's Back and Forward change the view with no press and no focus to close the
-    menu; the two pages draw no Details, and it must not stand open on the Screen again."""
+    menu; the company page draws no Details, and it must not stand open on the Screen again."""
     _, opened, page, back = _trace(
         [LANDED, {"do": "details"}, _show("company", "AAPL"), _show("screen")]
     )
@@ -186,8 +182,8 @@ def test_the_bare_bar_has_no_margins() -> None:
 
 def test_no_page_draws_a_link_back_to_the_screen() -> None:
     """The header's Screen view is the way back from every page, and the browser's Back returns
-    to the view left: the company page and the report page draw no link of their own, and the
-    stylesheet keeps no rule for one."""
+    to the view left: the company page draws no link of its own, and the stylesheet keeps no
+    rule for one."""
     for script in sorted(STATIC.glob("*.js")):
         assert "Back to the screen" not in script.read_text(), script.name
     page = _static_file("index.html")

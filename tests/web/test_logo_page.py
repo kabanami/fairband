@@ -1,4 +1,4 @@
-"""The company logo on the page (B-203): the drawer's head and the report page's head draw the
+"""The company logo on the page (B-203): the drawer's head and the company page's head draw the
 detail read's ``logo`` before the ticker, on a tile, and nothing without one. The tile is white
 unless the logo's marks are light where they meet its clear ground, when it is dark (B-206).
 The page's own script runs in node (``support.page``) and the tests read what ``logo`` and
@@ -130,7 +130,7 @@ def test_the_logo_is_an_image_of_the_logo_read() -> None:
 
 def test_a_company_without_a_logo_draws_none() -> None:
     assert node("logo", [{"logo": None}, "app-drawer__logo"]) is None
-    assert node("logo", [{}, "app-report__logo"]) is None
+    assert node("logo", [{}, "app-company__logo"]) is None
 
 
 def test_an_image_that_does_not_load_hides_itself() -> None:
@@ -153,8 +153,8 @@ def test_each_head_draws_the_logo_before_the_ticker() -> None:
     sections = _function(_static_file("app.js"), "sections")
     head = sections[sections.index("className: 'app-drawer__head'") :]
     assert head.index("logo(body, 'app-drawer__logo'),") < head.index("app-drawer__ticker")
-    report = _function(_static_file("report.js"), "head")
-    assert report.index("P.logo(d, 'app-report__logo'),") < report.index("app-report__ticker")
+    company = _function(_static_file("company.js"), "head")
+    assert company.index("P.logo(d, 'app-company__logo'),") < company.index("'ticker'")
 
 
 def test_the_tile_is_white_in_both_themes_unless_the_logo_needs_a_dark_one() -> None:
@@ -170,5 +170,4 @@ def test_the_tile_is_white_in_both_themes_unless_the_logo_needs_a_dark_one() -> 
     ):
         assert declaration in tile, declaration
     assert "width: 24px; height: 24px;" in tile
-    assert "width: 32px; height: 32px;" in _rule(".app-report__logo")
-    assert "align-self: center;" in _rule(".app-report__logo")
+    assert "width: 40px; height: 40px;" in _rule(".app-company__logo")

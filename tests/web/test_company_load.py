@@ -231,6 +231,52 @@ def test_an_id_that_is_not_a_whole_number_names_no_report() -> None:
     assert detail["fetched"] == _get(RESEARCH)
 
 
+def test_a_report_s_old_address_opens_the_research_tab_on_the_same_report() -> None:
+    """#report/<symbol> and #report/<symbol>/<id>, the addresses of the report page, which left
+    (the Research tab's design, 7.1 and 9), open the company page's Research tab on the same
+    report, a link or a bookmark of the old form still opening the report, and the hash is
+    replaced by the tab's: the company's latest report, read with no query, or the report with
+    that id; the symbol upper-cased as the store keeps it. #report with no symbol is the Screen,
+    as it was."""
+    aapl = "/api/companies/AAPL"
+    latest, detail, landed = _drive(
+        [
+            {"do": "hash", "hash": "#report/AAPL"},
+            _answer(aapl, _detail(182.4, "AAPL")),
+            _answer(aapl + "/page/research", _tab("the latest report", "AAPL")),
+        ]
+    )
+    assert latest["hash"] == "#company/AAPL/research" and latest["shows"] is True
+    assert latest["fetched"] == _get(aapl)
+    assert detail["fetched"] == _get(aapl + "/page/research")
+    assert landed["page"] == OPENED | {
+        "ticker": "AAPL",
+        "tab": "Research",
+        "drawn": _drawn("research", "the latest report", 182.4),
+    }
+    revision, detail = _drive(
+        [{"do": "hash", "hash": "#report/aapl/9"}, _answer(aapl, _detail(182.4, "AAPL"))]
+    )
+    assert revision["hash"] == "#company/AAPL/research/9" and revision["shows"] is True
+    assert detail["fetched"] == _get(aapl + "/page/research?report=9")
+    screen = _drive(OPEN + [{"do": "hash", "hash": "#report"}])[-1]
+    assert screen["hash"] == "" and screen["shows"] is False and screen["fetched"] == []
+
+
+def test_open_report_opens_the_research_tab_on_the_report() -> None:
+    """``FairbandPage.openReport(symbol, id)`` opens the tab as the old address does: on the
+    report with that id, or on the company's latest report where none is given."""
+    aapl = "/api/companies/AAPL"
+    opened, detail = _drive(
+        [{"do": "openReport", "symbol": "AAPL", "id": 9}, _answer(aapl, _detail(182.4, "AAPL"))]
+    )
+    assert opened["hash"] == "#company/AAPL/research/9" and opened["shows"] is True
+    assert opened["fetched"] == _get(aapl)
+    assert detail["fetched"] == _get(aapl + "/page/research?report=9")
+    [latest] = _drive([{"do": "openReport", "symbol": "AAPL", "id": None}])
+    assert latest["hash"] == "#company/AAPL/research"
+
+
 def test_another_report_of_the_tab_shown_drops_the_first_s_late_answer() -> None:
     """Another id of the tab reads the tab again, the detail kept; the answer of the report asked
     for first, landing after the second was asked for, is dropped, and the page stays faded on

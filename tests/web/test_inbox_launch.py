@@ -9,7 +9,7 @@ import re
 from typing import Any
 
 import pytest
-from support.page import NODE, STATIC, node, text
+from support.page import NODE, STATIC, elements, node, text
 from support.web import _static_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -187,7 +187,28 @@ def test_the_row_draws_the_parts_and_a_refused_launchs_sentence() -> None:
         "state.errors[item.id] ? refused(state.errors[item.id]) : null,",
         "ask && ask.error ? refused(ask.error) : null);",
     )
-    assert "P.inbox = { launchParts: launchParts };" in _static_file("inbox.js")
+    assert "P.inbox = { launchParts: launchParts, row: row };" in _static_file("inbox.js")
+
+
+@pytest.mark.parametrize(
+    ("symbol", "revision", "href", "words", "name"),
+    [
+        ("AAPL", 2, "#company/AAPL/research/9", "revision 2", "Open revision 2 of the report"),
+        ("A&B", None, "#company/A%26B/research/9", "Open", "Open the report"),
+    ],
+)
+def test_a_done_item_links_to_its_report_on_the_research_tab(
+    symbol: str, revision: int | None, href: str, words: str, name: str
+) -> None:
+    """A done item's Report cell links to the report it was completed with on the company page's
+    Research tab (the Research tab's design, 7.1), the address ``researchHref`` gives, the symbol
+    encoded; named by its revision, or Open where the server sends none."""
+    done = _item("done") | {"symbol": symbol, "reportId": 9, "reportRevision": revision}
+    tree = node("inbox.row", [done], INBOX)
+    [link] = [e for e in elements(tree) if e.get("type") == "a" and e["props"]["href"] != "#"]
+    assert link["props"]["href"] == href == node("researchHref", [symbol, 9])
+    assert text(link) == words
+    assert link["props"]["aria-label"] == f"{name} for {symbol}"
 
 
 def test_the_button_posts_the_items_launch_as_the_drawers_does() -> None:

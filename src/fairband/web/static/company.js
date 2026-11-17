@@ -12,9 +12,10 @@
    at the row's right end.
    Under the row the open tab's blocks, which the later scripts hang on companyPage.draw by tab;
    nothing is drawn there while a tab's function is missing. The head reads the company's
-   detail, as the drawer and the report page do; each tab its own read of the store, which
-   carries the head's quote too; and the Overview, where its stored news is stale, one read of
-   the news pass-through after it draws them, the page's one read that may call a vendor (10.5).
+   detail, as the drawer does; each tab its own read of the store, which carries the head's
+   quote too; and the Overview, where its stored news is stale, one read of the news
+   pass-through after it draws them, which may call a vendor (10.5), as the Research tab's read
+   of the multiples history may (company_research.js).
    The parts the blocks are built from, a panel, a list of names and figures, a group, a small
    table, and the formatters of their figures (14.1), are on FairbandPage.companyPage with the
    head and the tabs' row, for those scripts and for the tests, which read them in node. */
@@ -140,9 +141,9 @@
 
   /* The page shows the company's detail it holds, as a read lands or a tab read before is shown
      again. The page's request for the company (FairbandPage.asking) is made as the company's
-     first read lands, as the report page's is, and kept until the page shows another; at every
-     landing it follows the open item's launch (FairbandPage.followItem), so a following that a
-     read of another company stopped starts again when the reader comes back before it lands. */
+     first read lands, and kept until the page shows another; at every landing it follows the
+     open item's launch (FairbandPage.followItem), so a following that a read of another company
+     stopped starts again when the reader comes back before it lands. */
   function shown() {
     if (!state.request || state.request.symbol !== state.symbol) {
       state.request = P.asking(state.symbol);
@@ -229,9 +230,9 @@
      company's notes (FairbandPage.notesControl, 11.1), whose box opens under it and, once a note
      is taken, reads the page again (load); the watchlists control, which opens the screen's
      popup for this company under itself, on the row watchRow gives, disabled without one; and
-     Request research, the report page's: its menu, its line and the following of its launch,
-     with the request the page keeps for its company (shown), or, where it keeps none for it, as
-     in the tests, which draw a head with no read, a new one it keeps nowhere. */
+     Request research, the drawer's: its menu, its line and the following of its launch, with
+     the request the page keeps for its company (shown), or, where it keeps none for it, as in
+     the tests, which draw a head with no read, a new one it keeps nowhere. */
   function head(d, quote) {
     var r = d.result;
     var c = d.company || {};
@@ -306,13 +307,6 @@
         })),
       dataDate ? h('p', { className: 'caption app-company__asof' }, 'data ' + day(dataDate))
         : null);
-  }
-
-  /* The Research tab's address on the report `id`, the symbol encoded as the hash encodes it
-     (controls.js, companyPath): #company/AAPL/research/12, or #company/AAPL/research, the
-     company's latest report, where no id is given. */
-  function researchHref(symbol, id) {
-    return '#company/' + encodeURIComponent(symbol) + '/research' + (id == null ? '' : '/' + id);
   }
 
   /* ---------------------------------------------------------- the blocks' parts */
@@ -467,9 +461,9 @@
   }
 
   /* Newer news (10.5): the news pass-through's stories (GET /api/vendor/news/{symbol}), the
-     symbol encoded as the page's reads encode it, at `limit`. The page's one read that may call a
-     vendor, so it carries the header a write carries, as the report page's reads do, without
-     which the server refuses it. Its payload's stories in the overview read's shape
+     symbol encoded as the page's reads encode it, at `limit`. A read that may call a vendor, so
+     it carries the header a write carries, as the Research tab's reads do, without which the
+     server refuses it. Its payload's stories in the overview read's shape
      (newsStories); a refusal is the server's sentence (refused), and a payload that is not a
      list, FMP's error body, which the pass-through answers and stores as unusable, or an answer
      that is not JSON at all, a sentence of its own. */
@@ -509,8 +503,8 @@
   }
 
   /* What the tabs' scripts and the tests use: the head, the tabs' row, a panel, a list of names
-     and figures, a group, a small table and the formatters; the Research tab's address on a
-     report (researchHref); redraw(), which draws the page again with what it holds, for a tab
+     and figures, a group, a small table and the formatters; redraw(), which draws the page again
+     with what it holds, for a tab
      whose own reads land after its answer; and draw, which each tab's script fills with its tab's
      function, draw.overview(answer, detail), draw.financials(answer, detail),
      draw.estimates(answer, detail) and draw.research(answer, detail), each returning the tab's
@@ -520,8 +514,7 @@
     head: head, tabs: tabs, panel: panel, kv: kv, group: group, table: table,
     money: money, big: big, percent: percent, points: points, signed: signed,
     multiple: multiple, decimal: decimal, day: day, count: count,
-    watchRow: watchRow, failure: failure, freshNews: freshNews,
-    researchHref: researchHref, redraw: render,
+    watchRow: watchRow, failure: failure, freshNews: freshNews, redraw: render,
     draw: {}
   };
   P.onShow.company = load;

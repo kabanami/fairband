@@ -6,27 +6,23 @@ click. The link is ScreenTable's ``companyHref``, a ``fairband:`` patch of the v
 without it the cell is drawn as it was. It reads as the ticker does, takes an underline on hover
 and the focus ring on focus.
 
-And the report page (13): its head gains Company page, a link to the company page, and it loses its
-Tables button, its state and the ``tableView`` it handed each chart; the vendored components keep
-the prop, unset.
+And the report's charts (13): no Tables button, no state for one and no ``tableView`` handed to a
+chart; the vendored components keep the prop, unset.
 
 The bundle and the page's scripts run in node (``support.page``), and the tests read the trees
-ScreenTable and the report page's head draw; a prop written ``{"$page": <helper>}`` is the page's
-own function (``tests/web/page.mjs``). The handlers and the shell are read as text."""
+ScreenTable draws; a prop written ``{"$page": <helper>}`` is the page's own function
+(``tests/web/page.mjs``). The handlers and the shell are read as text."""
 
-import copy
 import re
 from pathlib import Path
 from typing import Any
 
 import pytest
-from support import page_answers as answers
 from support.page import NODE, STATIC, classed, elements, node
 from support.web import _component_file, _static_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
-REPORT = STATIC / "report.js"
 LINK = "fb-screen__company"
 # A screen row on a list and with a published report, so its Ticker cell holds both marks.
 ROW: dict[str, Any] = {
@@ -220,44 +216,16 @@ def test_the_link_reads_as_the_ticker() -> None:
         assert not token.findall(script.read_text(encoding="utf-8")), script.name
 
 
-# ------------------------------------------------------------------------------- the report page
+# ------------------------------------------------------------------------------- the report's charts
 
 
-def test_the_report_page_links_to_the_company_page() -> None:
-    """The head's right end: the one headline figure and the price, then Company page, a link in
-    the button's look to the company page, the symbol encoded as the screen's link encodes it.
-    The page draws no link back to the screen: the header's Screen view is the way back."""
-    detail = copy.deepcopy(answers.DETAIL)
-    detail["result"]["symbol"] = "BRK.B"
-    head = node("reportHead", [detail], REPORT)
-    assert head["props"]["className"] == "app-report__head"
-    ident, side = head["props"]["children"]
-    assert ident["props"]["className"] == "app-report__id"
-    assert side["props"]["className"] == "app-report__side"
-    figures, link = side["props"]["children"]
-    assert figures["props"]["className"] == "app-report__figures"
-    assert link["props"] == {"href": "#company/BRK.B", "children": ["Company page"]}
-    assert "h(F.Button, { href: '#company/' + encodeURIComponent(r.symbol) }, 'Company page')" in (
-        " ".join(_function(_static_file("report.js"), "head").split())
-    )
-    assert "function back(" not in _static_file("report.js")
-    assert "align-items: baseline;" in _rule(".app-report__side {")
-
-
-def test_the_report_page_has_no_tables_button() -> None:
-    """No Tables button above the reader, no state for it and no toggle; the page hands the charts
-    the report and the series alone, and no chart is handed tableView. The bundle's charts keep
-    the prop, unset."""
-    report = _static_file("report.js")
-    charts = _static_file("charts.js")
-    for name, script in (("report.js", report), ("charts.js", charts)):
+def test_no_chart_has_a_tables_button() -> None:
+    """No Tables button beside the charts, no state for it and no toggle; the Research tab hands
+    the charts the report and the series alone, and no chart is handed tableView. The bundle's
+    charts keep the prop, unset."""
+    for name in ("charts.js", "company_research.js"):
+        script = _static_file(name)
         for gone in ("Tables", "toggleTables", "tableView", "table toggle"):
             assert gone not in script, (name, gone)
-    assert "state.tables" not in report
-    assert "charts: P.reportCharts.draw(report, state.series)" in _function(report, "reader")
-    assert "function draw(report, series) {" in charts
-    assert "h(F.Button, { size: 'sm', onClick: download }, 'Download .md')" in (
-        _function(report, "meta")
-    )
     assert _component_file("bundle.js").count("show: p.tableView,") == 4
     assert _component_file("index.d.ts").count("tableView?: boolean;") == 4

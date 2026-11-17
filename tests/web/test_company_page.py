@@ -190,7 +190,7 @@ def test_no_change_where_the_quote_is_not_the_snapshot_s_price() -> None:
 
 def test_the_head_s_controls() -> None:
     """At the right of the head, after the quote: Notes (``test_notes_control.py``), Watchlists ▾,
-    then Request research as the report page draws it, with the open item's line."""
+    then Request research as the drawer draws it, with the open item's line."""
     item = {
         "id": 5,
         "state": "pending",
@@ -336,9 +336,11 @@ def test_a_tab_replaces_the_hash() -> None:
     ],
 )
 def test_a_report_s_address_on_the_tab(symbol: str, report: int | None, href: str) -> None:
-    """``researchHref`` names the tab on a report, the symbol encoded as the hash encodes it; on
-    the company's latest report where no id is given."""
-    assert _page("researchHref", symbol, report) == href
+    """``researchHref`` (app.js, the first script, so the Inbox view and the Overview find it as
+    the tab does) names the tab on a report, the symbol encoded as the hash encodes it; on the
+    company's latest report where no id is given. The company page keeps no copy of it."""
+    assert node("researchHref", [symbol, report]) == href
+    assert "researchHref" not in _static_file("company.js")
 
 
 def test_the_page_draws_again_on_asking() -> None:
@@ -567,8 +569,8 @@ def test_a_failed_read_s_sentence(err: dict[str, Any], detail: bool, shown: str)
 
 
 def test_the_request_is_made_where_the_read_lands_and_follows_at_every_landing() -> None:
-    """The page's request for its company is made as the company's read lands, as the report
-    page's is, and kept until the page shows another; every landing, a tab read before or a tab
+    """The page's request for its company is made as the company's read lands, and kept until
+    the page shows another; every landing, a tab read before or a tab
     read alone among them, hands the open item to ``followItem``, so a following that a read of
     another company stopped starts again when the reader comes back first. The head reads the
     request and writes nothing."""
@@ -603,14 +605,13 @@ def test_the_view_is_one_of_controls_js_s() -> None:
     assert show.startswith("  function show(tab, section, id, report) {")
     _in_order(
         show,
-        "if (VIEWS.indexOf(tab) === -1 || ((tab === 'report' || tab === 'company') && !section)) {",
-        "tab = 'screen';",
-        "(tab === 'company' && keepCompany(section, id, report));",
+        "if (VIEWS.indexOf(tab) === -1 || (tab === 'company' && !section)) tab = 'screen';",
+        "var moved = tab === 'company' && keepCompany(section, id, report);",
         "(tab === 'company' ? companyPath() : '')",
         "if (P.onShow[tab]) P.onShow[tab]();",
     )
-    assert "show(parts[0], parts[1], parts[2], parts[3]);" in _function(js, "fromHash")
-    assert "view: state.tab === 'report' || state.tab === 'company' ? '' : state.tab," in js
+    assert "else show(parts[0], parts[1], parts[2], parts[3]);" in _function(js, "fromHash")
+    assert "view: state.tab === 'company' ? '' : state.tab," in js
     assert "P.company = null;" in js
     html = _static_file("index.html")
     assert '<section id="company" hidden></section>' in html
@@ -621,22 +622,17 @@ def test_the_view_is_one_of_controls_js_s() -> None:
 
 
 def test_the_page_reads_again_when_a_refresh_ends() -> None:
-    """When a run ends while the company page shows, the page reads the company shown again, as
-    the report page does: its loader on the same company and tab reads the detail and the open
-    tab's answer afresh, the page shown staying, faded, until they land. While that read is out,
-    a tab the page holds from before the run is not shown at once: the page reads the detail and
-    that tab, so the reread is never dropped for the figures of before the run. A tab whose read
-    is out, not yet shown, asked for again (a run that ends while the reader's tab loads) is read
-    whole too, so the detail and the other tab do not keep the figures of before the run."""
+    """When a run ends while the company page shows, the page reads the company shown again: its
+    loader on the same company and tab reads the detail and the open tab's answer afresh, the
+    page shown staying, faded, until they land. While that read is out, a tab the page holds from
+    before the run is not shown at once: the page reads the detail and that tab, so the reread is
+    never dropped for the figures of before the run. A tab whose read is out, not yet shown, asked
+    for again (a run that ends while the reader's tab loads) is read whole too, so the detail and
+    the other tab do not keep the figures of before the run."""
     js = _static_file("controls.js")
     ended = js[js.index("if (ended) {") :]
     ended = ended[: ended.index("\n        }\n")]
-    _in_order(
-        ended,
-        "P.reload();",
-        "if (state.tab === 'report') P.onShow.report();",
-        "if (state.tab === 'company') P.onShow.company();",
-    )
+    _in_order(ended, "P.reload();", "if (state.tab === 'company') P.onShow.company();")
     script = _static_file("company.js")
     load = _function(script, "load")
     landed, failed = load.split(".catch(function (err) {")
@@ -659,14 +655,13 @@ def test_the_page_reads_again_when_a_refresh_ends() -> None:
     assert "whole: false," in script and "reading: null," in script
 
 
-def test_the_symbol_is_coded_as_the_report_page_codes_it() -> None:
-    """Decoded and upper-cased where the hash is read, encoded where the hash is written, in
-    keepCompany and companyPath as in keepReport and reportPath."""
+def test_the_symbol_is_decoded_where_the_hash_is_read_and_encoded_where_written() -> None:
+    """Decoded and upper-cased where the hash is read, in keepCompany, encoded where the hash is
+    written, in companyPath, as the links encode it."""
     js = _static_file("controls.js")
-    for keep, path in (("keepReport", "reportPath"), ("keepCompany", "companyPath")):
-        assert "decodeURIComponent(symbol)" in _function(js, keep)
-        assert "toUpperCase()" in _function(js, keep)
-        assert "encodeURIComponent(P." in _function(js, path)
+    assert "decodeURIComponent(symbol)" in _function(js, "keepCompany")
+    assert "toUpperCase()" in _function(js, "keepCompany")
+    assert "encodeURIComponent(P." in _function(js, "companyPath")
 
 
 def test_the_hash_both_ways() -> None:

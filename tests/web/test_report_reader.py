@@ -1,9 +1,9 @@
-"""The line under a report's title on the report page (spec 2026-11-15 7): the bundle's
-``ReportReader`` draws the ``cites`` line from the dates the page passes, the data's, the price's,
-the end of the validity window and the full report a valuation review reuses, each in words and
-joined by the reader's ``·``, and names no part of Fairband and no record's id. A caller that
-passes no ``cites`` draws no line. The harness (``page.mjs``) calls the component with
-its props and the tests read the tree it draws (``support.page``).
+"""The line under a report's title in the bundle's ``ReportReader`` (spec 2026-11-15 7): it draws
+the ``cites`` line from the dates its caller passes, the data's, the price's, the end of the
+validity window and the full report a valuation review reuses, each in words and joined by the
+reader's ``·``, and names no part of Fairband and no record's id. A caller that passes no
+``cites`` draws no line. The harness (``page.mjs``) calls the component with its props and the
+tests read the tree it draws (``support.page``).
 
 And Appendix A's record of an override the review applied at a split (spec 2026-11-15 8): the
 page's script, report_parts.js, builds it with the pair in force and the words of the scaling under it,
@@ -24,7 +24,7 @@ from support.page import NODE, STATIC, classed, elements, node, text
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 SECTIONS = [{"heading": "Summary", "parts": ["Plain words."]}]
-# The report's parts after its sections, which the report page and the Research tab draw.
+# The report's parts after its sections, which the Research tab draws in its closed parts.
 PARTS = STATIC / "report_parts.js"
 
 
@@ -181,7 +181,7 @@ def test_appendix_a_s_snapshot_line_names_another_currency_last() -> None:
 
 
 def test_appendix_a_s_guidance_writes_each_record_in_its_currency() -> None:
-    """Spec 2026-11-15 9.5: on the report page, Appendix A's "Guidance on file" writes each figure
+    """Spec 2026-11-15 9.5: on the Research tab, Appendix A's "Guidance on file" writes each figure
     in its record's currency as the server sends it (``render._guidance``): a record in USD with
     `$`, one with none stored in the report's snapshot's SEK, which the server sends as its code,
     and a percent as before. report_parts.js passes the snapshot's currency as the code
@@ -240,7 +240,7 @@ def _override(override_id: int, tag: str, unit: str, old: float, new: float) -> 
 
 
 def test_an_override_scaled_at_a_split_shows_the_figures_in_force_and_the_words() -> None:
-    """Spec 2026-11-15 8: on the report page, Appendix A's record of an override the review applied
+    """Spec 2026-11-15 8: on the Research tab, Appendix A's record of an override the review applied
     at a split, $30.00 entered before a 2-for-1 split, shows the pair in force, $5.90 → $15.00,
     both on the new basis, with the words of the scaling under it as the server sends them; one
     applied as entered shows its stored pair and no words (report_parts.js's ``overrides``, its

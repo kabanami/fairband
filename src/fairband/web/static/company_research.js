@@ -21,7 +21,7 @@
    layout gives (FairbandPage.researchText.lay), each block drawn by the design system's reader
    (Fairband.reportText.draw), and the cards beside its first run of text, the named blocks its
    layout makes cards and the records' cards the tab hands it by heading. Then the references,
-   Appendix A and Appendix B (7.8), each closed, each opened drawing what the report page draws
+   Appendix A and Appendix B (7.8), each closed, each opened drawing the report's part
    (FairbandPage.reportParts). A company with no report draws "No report yet." alone.
 
    The cards by heading (7.4 rules 1 and 6 to 10): Summary, the report's call (7.5), its value,
@@ -30,13 +30,13 @@
    the price against the band and the two P/E; Recent news, the sources on file, newest first;
    Risks and kill criteria, the kill criteria; Key judgments, one card a judgment in a row under
    the text. A card draws the read's fields and stored records, and computes no figure. The
-   charts (7.9) are the report page's (FairbandPage.reportCharts) with no panel of their own: in
+   charts (7.9) are charts.js's (FairbandPage.reportCharts) with no panel of their own: in
    Financial performance and health a paragraph stands beside its group's charts and a group no
    paragraph names in a row of its own (rule 3); the last earnings call opens with its three
    charts by quarter (rule 4); those of a pair and of the quarters' row drawn smaller.
 
-   The series the charts read (8.2) are read as the report page reads them, each on its own after
-   the report lands, each with the request header: the financial tables, the multiples history,
+   The series the charts read (8.2) are read each on its own after the report lands, each with
+   the request header: the financial tables, the multiples history,
    five years of closes, the band's history and each sensitivity reading the references name.
    They are kept by the report's id outside the tab, the report shown's alone, read when a
    report's answer lands, again when a new answer of the same report lands (the charts drawn
@@ -150,8 +150,8 @@
     }, words, n == null ? null : h('span', { className: 'figure-sm app-research__n' }, C.count(n)));
   }
 
-  /* The report's line: its stance in the Stance column's chip, faded with the report page's
-     title where the window of the snapshot it rests on ended before `today`; its mode; its
+  /* The report's line: its stance in the Stance column's chip, faded with a title that says so
+     (EXPIRED) where the window of the snapshot it rests on ended before `today`; its mode; its
      revision; its date and time; who wrote it; valid until; and the full report a valuation
      review reuses, by that report's date. */
   function line(answer, today) {
@@ -244,7 +244,7 @@
     if (r.id === shownId) {
       return h('span', { className: 'app-research__file is-on', 'aria-current': 'page' }, words);
     }
-    return h('a', { className: 'app-research__file', href: C.researchHref(symbol, r.id) }, words);
+    return h('a', { className: 'app-research__file', href: P.researchHref(symbol, r.id) }, words);
   }
 
   /* ---------------------------------------------------------------------------- the sections */
@@ -635,8 +635,8 @@
      id, { of, got }: the report the reads were started for and what has landed. The reads start
      when the tab is handed a report it has not read them for: the first time, and again when a
      new answer of the tab's read lands for the same report (a new report object: after a
-     refresh ends, after a note is taken), as the report page reads them at every landing; what
-     landed before stays drawn until each new series takes its place. Starting them, it lets go
+     refresh ends, after a note is taken), so the charts follow each answer; what landed before
+     stays drawn until each new series takes its place. Starting them, it lets go
      of every other report's, so `held` keeps the report shown alone. Drawn again with the same
      answer, it starts no read and gives what has landed. */
   function series(report, held) {
@@ -651,8 +651,8 @@
     return kept.got;
   }
 
-  /* The report's series, each on its own, its body or the server's sentence why not, as the
-     report page reads them: the six financial tables, the multiples history, the closes of the
+  /* The report's series, each on its own, its body or the server's sentence why not: the six
+     financial tables, the multiples history, the closes of the
      five years, the band's history and each sensitivity reading the references name, once, in
      the order first cited, the company's own. Each lands under the report's id, taking the place
      of the one before it, and the page draws again; one of a report no longer shown, or of an
@@ -722,7 +722,8 @@
   /* --------------------------------------------------------------------------- the closed parts */
 
   /* The references, Appendix A and Appendix B (7.8), each a panel closed until the reader opens
-     it, its head its name and one line, each opened drawing what the report page draws. */
+     it, its head its name and one line, each opened drawing the report's part
+     (report_parts.js). */
   function closed(report) {
     return [
       fold(CLOSED[0], 'References',

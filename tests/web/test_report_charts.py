@@ -1,4 +1,4 @@
-"""The report page's ROIC chart on a year whose average invested capital is at or below zero
+"""The report's ROIC chart on a year whose average invested capital is at or below zero
 (B-8, the founder's ruling of 2026-11-15; method 16.6): the year's figure has the wrong sign and
 no meaning, so the chart leaves it out and a line under it names the years and why. charts.js
 runs in node after the bundle and app.js (``page.mjs``), and the test reads what its
@@ -12,17 +12,17 @@ the tree it draws.
 
 And the page's charts past the fiscal year and by quarter (spec 2026-11-15 6.5, 6.6): charts.js's
 ``points`` makes a point of each cell under its column, its tick, its kind and its label;
-``kindsLine`` the line under a chart with a bar that is not a fiscal year; ``draw`` section 4's
-charts with those bars and that line, and section 5's three charts by quarter. ``draw``'s tree
-comes back as the page's script builds it, a bundle component's props unread by the stub.
+``kindsLine`` the line under a chart with a bar that is not a fiscal year; ``groupCharts`` the
+charts of Financial performance and health with those bars and that line, and ``quarterCharts``
+the last earnings call's three charts by quarter. Their trees come back as the page's script
+builds them, a bundle component's props unread by the stub.
 
 And the company page's Research tab's charts (the Research tab's design, 7.4 rules 3, 4, 6 and 7,
-and 7.9): ``groupCharts``, ``quarterCharts``, ``gridCharts`` and ``priceCharts`` give the report
-page's charts with no raised panel, the charts of a pair and of the quarters' row at a height of
-their own, and a read the server refused as its sentence in the chart's place; on
+and 7.9): ``groupCharts``, ``quarterCharts``, ``gridCharts`` and ``priceCharts`` give the report's
+charts with no raised panel, the charts of a pair and of the quarters' row at a height of their
+own, and a read the server refused as its sentence in the chart's place; on
 ``support.research_answers``' series of LFOX."""
 
-import copy
 from typing import Any
 
 import pytest
@@ -434,9 +434,16 @@ QUARTERS = _table(
 LINE = "Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates."
 
 
-def _sections(read: dict[str, Any]) -> Any:
-    """``draw``'s charts by the heading, on the financial tables' read settled as ``read``."""
-    return _call("reportCharts.draw", {}, {"tables": read})
+def _groups(read: dict[str, Any]) -> list[Any]:
+    """The charts ``groupCharts`` gives on the financial tables' read settled as ``read``, every
+    group's in their order."""
+    drawn: dict[str, list[Any]] = _call("reportCharts.groupCharts", read)
+    return [chart for charts in drawn.values() for chart in charts]
+
+
+def _quarters(read: dict[str, Any]) -> Any:
+    """The charts by quarter ``quarterCharts`` gives on the read settled as ``read``."""
+    return _call("reportCharts.quarterCharts", read)
 
 
 def _body(**over: Any) -> dict[str, Any]:
@@ -446,9 +453,10 @@ def _body(**over: Any) -> dict[str, Any]:
 
 
 def _panel(tree: Any, title: str) -> tuple[dict[str, Any] | None, list[str]]:
-    """The panel of the chart titled ``title`` in a drawn section: the chart's props, none where
-    the panel shows that nothing is on file, and the captions in the panel."""
-    for panel in classed(tree, "app-chart"):
+    """The place of the chart titled ``title`` among drawn charts, each with no panel of its own
+    (``app-charts__chart``): the chart's props, none where it shows that nothing is on file, and
+    the captions under it."""
+    for panel in classed(tree, "app-charts__chart"):
         charts = [e["props"] for e in elements(panel) if "series" in e["props"]]
         heads = [text(e) for e in classed(panel, "fb-c__title")]
         if [c["title"] for c in charts] == [title] or heads == [title]:
@@ -489,26 +497,27 @@ def test_a_quarter_s_tick_is_its_quarter_and_its_year_s_last_two_digits() -> Non
 
 def test_a_table_served_without_columns_draws_its_cells_as_today() -> None:
     """A page loaded against an older answer: the points from the cells' own periods, no kind and
-    no label, the accessible name by fiscal year and no line under the chart; no section 5."""
+    no label, the accessible name by fiscal year and no line under the chart; no charts by
+    quarter."""
     row = GROWTH["rows"][0]
     assert _call("reportCharts.points", row) == [
         {"period": cell["period"], "value": cell["value"]} for cell in row["cells"]
     ]
     older = {k: v for k, v in GROWTH.items() if k != "columns"}
-    sections = _sections({"body": {"symbol": "ACME", "currency": "USD", "tables": [older]}})
-    chart, captions = _panel(sections["Financial performance and health"], "Revenue")
+    body = {"symbol": "ACME", "currency": "USD", "tables": [older]}
+    chart, captions = _panel(_groups({"body": body}), "Revenue")
     assert chart is not None and "by" not in chart
     assert all("kind" not in p and "label" not in p for p in chart["series"])
     assert captions == []
-    assert sections["The last earnings call"] is None
+    assert _quarters({"body": body}) is None
 
 
-def test_section_4_draws_the_trailing_and_the_estimate_bars_with_the_line_under() -> None:
+def test_the_financial_charts_mark_the_trailing_and_the_estimate_bars() -> None:
     """Spec 2026-11-15 6.5, 6.6: a chart with a bar that is not a fiscal year runs by period and
     says which bar is which under it, once, from the columns of the bars it draws; buybacks and
     dividends, the page's sum of two rows, gets its trailing bar; a chart whose trailing cell
     holds no figure, the share count's change, draws its fiscal years alone, as before."""
-    part = _sections({"body": _body()})["Financial performance and health"]
+    part = _groups({"body": _body()})
     revenue, captions = _panel(part, "Revenue")
     assert revenue is not None and revenue["by"] == "period"
     assert _ticks(revenue) == ["2024", "2025", "to date", "2026E", "2027E"]
@@ -530,7 +539,7 @@ def test_section_4_draws_the_trailing_and_the_estimate_bars_with_the_line_under(
         ["2024", "2025", "ttm"],
         {"dividends": ("currency", [-10.0, -11.0, None]), "buybacks": ("currency", [-50.0] * 3)},
     )
-    alone = _sections({"body": _body(tables=[GROWTH, unpaid])})["Financial performance and health"]
+    alone = _groups({"body": _body(tables=[GROWTH, unpaid])})
     returned, captions = _panel(alone, "Buybacks and dividends")
     assert returned is not None and "by" not in returned and captions == []
     assert _ticks(returned) == ["2024", "2025"]  # no trailing dividends, no trailing sum
@@ -563,7 +572,7 @@ def test_the_eps_chart_says_its_estimates_basis_under_it() -> None:
             for r in GROWTH["rows"]
         ],
     }
-    part = _sections({"body": _body(tables=[noted, CAPITAL])})["Financial performance and health"]
+    part = _groups({"body": _body(tables=[noted, CAPITAL])})
     _, captions = _panel(part, "EPS")
     assert captions == [
         f"Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates, {ANALYSTS_BASIS}."
@@ -571,12 +580,11 @@ def test_the_eps_chart_says_its_estimates_basis_under_it() -> None:
     assert _panel(part, "Revenue")[1] == [LINE]
 
 
-def test_section_5_draws_three_charts_by_quarter() -> None:
-    """Spec 2026-11-15 6.5: under the export's title for its table, "By quarter", the revenue, the
-    operating margin and the EPS of the stored periods, titled by their rows' names and run by
-    quarter, each tick the quarter short and each point its column's label; no line under them."""
-    section = _sections({"body": _body()})["The last earnings call"]
-    assert [text(e) for e in elements(section) if e.get("type") == "h5"] == ["By quarter"]
+def test_the_last_earnings_call_draws_three_charts_by_quarter() -> None:
+    """Spec 2026-11-15 6.5: the revenue, the operating margin and the EPS of the stored periods,
+    titled by their rows' names and run by quarter, each tick the quarter short and each point
+    its column's label; no line under them."""
+    section = _quarters({"body": _body()})
     charts = [e["props"] for e in elements(section) if "series" in e["props"]]
     assert [c["title"] for c in charts] == ["Revenue", "Operating margin", "EPS"]
     for chart in charts:
@@ -590,28 +598,17 @@ def test_section_5_draws_three_charts_by_quarter() -> None:
     assert _ticks(margin) == ["Q4 25", "Q1 26", "Q3 26"]  # a gap, never a zero
 
 
-def test_section_5_with_no_stored_period_says_nothing_is_on_file() -> None:
+def test_the_quarters_with_no_stored_period_say_nothing_is_on_file() -> None:
     """A company with no stored period: the quarters table has no column and its rows no cells,
-    so the section shows its three panels with "No data on file.", as section 4 does for a table
-    without statements."""
+    so its three charts show "No data on file.", as a financial table's do without statements."""
     rows: dict[str, tuple[str, list[float | None]]] = {
         "revenue": ("currency", []),
         "operating_margin": ("percent", []),
         "eps": ("per-share", []),
     }
-    section = _sections({"body": _body(quarters=_table("quarters", [], rows))})
+    section = _quarters({"body": _body(quarters=_table("quarters", [], rows))})
     for title in ("Revenue", "Operating margin", "EPS"):
-        assert _panel(section["The last earnings call"], title) == (None, ["No data on file."])
-
-
-def test_section_5_says_why_when_the_read_was_refused() -> None:
-    sections = _sections({"error": "no financial statements for ACME"})
-    assert text(sections["The last earnings call"]) == (
-        "The figures by quarter did not load: no financial statements for ACME."
-    )
-    assert text(sections["Financial performance and health"]) == (
-        "The financial tables did not load: no financial statements for ACME."
-    )
+        assert _panel(section, title) == (None, ["No data on file."])
 
 
 # ---------------------------------------------------------------- the Research tab's charts
@@ -629,8 +626,8 @@ def _charts(tree: Any) -> list[dict[str, Any]]:
 
 def test_group_charts_give_each_group_s_charts_at_the_height_asked_with_no_panel() -> None:
     """Rule 3: the six groups by their tables' names, 3, 2, 2, 1, 2 and 2 charts, each the
-    report page's chart, HistoryBars or SpreadChart, at the height given, on no raised panel;
-    with no height, the bundle's own."""
+    report's chart, HistoryBars or SpreadChart, at the height given, on no raised panel; with no
+    height, the bundle's own."""
     drawn = _call("reportCharts.groupCharts", {"body": answers.TABLES}, SMALL)
     assert list(drawn) == GROUPS
     assert [len(drawn[key]) for key in GROUPS] == [3, 2, 2, 1, 2, 2]
@@ -746,23 +743,3 @@ def test_price_charts_give_the_band_and_the_two_p_e_or_a_refusal_in_their_place(
         ["Trailing P/E"],
         ["Forward P/E"],
     ]
-
-
-def test_draw_still_sets_each_chart_on_its_raised_panel() -> None:
-    """``draw`` stays as the report page reads it: each chart on its raised panel, at the
-    bundle's own height."""
-    landed = {
-        "tables": {"body": answers.TABLES},
-        "readings": [{"body": answers.READING}],
-        "closes": {"body": answers.CLOSES},
-        "band": {"body": answers.BAND},
-        "multiples": {"body": answers.MULTIPLES},
-    }
-    sections = _call("reportCharts.draw", _report(secondary=True), copy.deepcopy(landed))
-    counts = {"Financial performance and health": 12, "The last earnings call": 3}
-    counts |= {"Valuation": 2, "Price and multiples": 3}
-    for heading, count in counts.items():
-        panels = classed(sections[heading], "app-chart")
-        assert len(panels) == count, heading
-        assert all(len(_charts(p)) == 1 for p in panels), heading
-        assert all("height" not in props for props in _charts(sections[heading])), heading

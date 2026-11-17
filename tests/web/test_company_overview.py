@@ -275,7 +275,8 @@ def test_the_value_block_valued() -> None:
 def test_the_value_block_reviewed_and_with_a_report() -> None:
     """The review counts: the chip says reviewed and the meter and the levels are the review's.
     The published report's line stands under a rule: the stance chip in the Stance column's
-    classes, the mode and the day, the principal chip, and the link to the report page."""
+    classes, the mode and the day, the principal chip, and the link to the report on the company
+    page's Research tab, the address ``researchHref`` gives."""
     detail = answers.reviewed_detail()
     detail["report"] |= {"createdAt": "2026-11-11T12:00:00+00:00"}
     tree = _page("value", detail)
@@ -299,7 +300,8 @@ def test_the_value_block_reviewed_and_with_a_report() -> None:
     [chip] = [e for e in elements(line) if "principal" in e["props"]]
     assert (chip["props"]["principal"], chip["props"]["actor"]) == ("agent", "claude-opus-5-5")
     [link] = _links(line)
-    assert link["props"]["href"] == "#report/LFOX"
+    # the company page's Research tab on the latest report (the Research tab's design, 7.1)
+    assert link["props"]["href"] == "#company/LFOX/research" == node("researchHref", ["LFOX"])
     assert text(link) == "Open the report"
     found = list(elements(line))
     assert found.index(stance) < found.index(when) < found.index(chip) < found.index(link)
@@ -318,7 +320,7 @@ def test_the_report_s_line_of_an_expired_report_and_a_symbol_to_encode() -> None
     [when] = [e for e in elements(line) if e.get("type") == "p"]
     assert text(when).startswith("valuation review, ")
     [link] = _links(line)
-    assert link["props"]["href"] == "#report/A%26B"
+    assert link["props"]["href"] == "#company/A%26B/research" == node("researchHref", ["A&B"])
 
 
 def test_the_value_block_of_a_refused_row() -> None:
@@ -915,7 +917,7 @@ def test_the_news_classes_are_the_company_page_s_alone() -> None:
         "company_financials_chart.js",
     }
     scripts = {p.name: p.read_text() for p in STATIC.rglob("*.js") if p.name not in page}
-    assert {"app.js", "report.js", "inbox.js", "charts.js", "bundle.js"} <= set(scripts)
+    assert {"app.js", "report_parts.js", "inbox.js", "charts.js", "bundle.js"} <= set(scripts)
     for name in sorted(own):
         assert name.startswith("app-company__"), name
         assert [script for script, body in scripts.items() if name in body] == [], name

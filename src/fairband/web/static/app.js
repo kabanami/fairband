@@ -185,34 +185,36 @@
      later views, find, the lists (null until they load), their reload, which settles once they are
      in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
      where it is handed one (the company page's Watchlists ▾); closePopups, which closes the popup
-     and the Notes box as controls.js shows a view; companyHref, the address a ticker
-     links to, which a watchlist's table hands ScreenTable as the screen's does (the company page's
-     design, 12); the loaded rows (null until they load), the chosen columns, openRow, which opens
-     a row's drawer, reloadDetail, which reads the drawer's company again after another view's
-     write about it (the Inbox view's decline and a watchlist's Request research, spec 2026-11-06
-     Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the drawer shows
-     again when a run ends. controls.js adds show, onShow, section, running and countInbox, the
-     Inbox view onInbox, and agents.js adds agents, the Settings view's Agents section; a view
-     drawn from the rows or the lists sets onRender, which runs after each draw of the screen, so
-     it draws again as they load and change (the company page's runs the Watchlists view's, set
-     before it, then its own). The report page (report.js, 18.4) draws with this script's parts:
-     the meter, the inputs table, a table of figures by year, an input's figure in its unit, the
-     secondary valuation's rows and path, the guidance table, the phase evidence, pairs, a date, a
-     total in a currency, an exchange rate, a count, the line that says what the figures are in
-     (currencyLine), a report's footnote numbers, and Request research with a request of its own
-     (asking), whose following of a launch the page stops as it starts to read another company
-     (stopLaunch) and starts as its read lands (followItem). The company page (company.js; the
-     company page's design, 7) draws its head with the logo, the phase numbers, the moat stamp
-     (moatStamp), the Notes control as the drawer's bar draws it (notesControl, 11.1) and Request
-     research as the report page keeps it, opens the watchlists popup under its head's button
+     and the Notes box as controls.js shows a view; companyHref, the address a ticker links to,
+     which a watchlist's table hands ScreenTable as the screen's does (the company page's design,
+     12); researchHref, the address of a report, on the company page's Research tab (the Research
+     tab's design, 7.1); the loaded rows (null until they load), the chosen columns, openRow,
+     which opens a row's drawer, reloadDetail, which reads the drawer's company again after
+     another view's write about it (the Inbox view's decline and a watchlist's Request research,
+     spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the
+     drawer shows again when a run ends. controls.js adds show, onShow, section, openReport,
+     running and countInbox, the Inbox view onInbox, and agents.js adds agents, the Settings
+     view's Agents section; a view drawn from the rows or the lists sets onRender, which runs
+     after each draw of the screen, so it draws again as they load and change (the company page's
+     runs the Watchlists view's, set before it, then its own). A report's parts after its sections
+     (report_parts.js, 18.4) draw with this script's parts: the inputs table, a table of figures
+     by year, an input's figure in its unit, the secondary valuation's rows and path, the guidance
+     table, the phase evidence, pairs, a date, a total in a currency, an exchange rate and a
+     count; the line that says what the figures are in (currencyLine) is the drawer's. The company
+     page (company.js; the company page's design, 7) draws its head with the logo, the phase
+     numbers, the moat stamp (moatStamp), the Notes control as the drawer's bar draws it
+     (notesControl, 11.1) and Request research with a request of its own (asking), whose
+     following of a launch the page stops as it starts to read another company (stopLaunch) and
+     starts as its read lands (followItem), opens the watchlists popup under its head's button
      (watch) on the company's row or, the lists loaded, on the company alone (rows, watchlists),
      and says when it turns to another company (notesShown), so a note drafted on another goes;
      its Fairband value block (company_overview.js, 8.2) draws the meter, the four levels under it
      in the screen's words (levelRows), the basis chip of the band they draw (bandBasis) and the
-     local day of its report (localIso); its Research tab's value card (company_research.js, the
-     Research tab's design, 7.5) writes the meter's gap as every meter does (gapText), and its
-     Records (company_research_records.js, 7.10) a guidance record's figures and a store word as
-     the guidance table writes them (guided, words). The Inbox view's row (inbox.js, B-210) keeps
+     local day of its report (localIso); its Research tab (company_research.js, the Research tab's
+     design) numbers a report's cites by its references (footnotes), its value card (7.5) writes
+     the meter's gap as every meter does (gapText), and its Records (company_research_records.js,
+     7.10) a guidance record's figures and a store word as the guidance table writes them
+     (guided, words). The Inbox view's row (inbox.js, B-210) keeps
      a request for each pending item too, posts its launch (openLaunch) and draws the line's
      words (launchWords) from the item the line is drawn from (lineItem). The header's finder
      (finder.js) finds the rows the Screen's field finds (finds). The drawer with its bar
@@ -227,7 +229,7 @@
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
     watch: watch, closePopups: closePopups,
-    companyHref: companyHref,
+    companyHref: companyHref, researchHref: researchHref,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
@@ -278,6 +280,15 @@
      page encodes it (spec 2026-11-16 company page, 12). */
   function companyHref(row) {
     return '#company/' + encodeURIComponent(row.ticker);
+  }
+
+  /* The address of a report (the Research tab's design, 7.1): the company page's Research tab on
+     the report `id`, the symbol encoded as companyHref encodes it, #company/AAPL/research/12, or
+     #company/AAPL/research, the company's latest report, where no id is given. The Inbox view's
+     link to an item's report, the Overview's link to the latest and the tab's reports on file
+     name it; it is here, in the first script, so each of them finds it whatever its own place. */
+  function researchHref(symbol, id) {
+    return '#company/' + encodeURIComponent(symbol) + '/research' + (id == null ? '' : '/' + id);
   }
 
   /* A header click, or Enter or Space on a focused header: the sorted column turns its

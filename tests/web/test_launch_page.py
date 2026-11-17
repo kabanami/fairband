@@ -1,9 +1,9 @@
-"""The request button's launch (spec 2026-11-16 agent launch, 10): in the drawer and on the report
+"""The request button's launch (spec 2026-11-16 agent launch, 10): in the drawer and on the company
 page, Request research's menu ticks Open Claude Code where launching is set up, a post taken then
 opens a window for its item, and the line under the button says where the launch is, with Open
 Claude Code or Open again after it. ``launchLine``, ``asking`` and ``requestResearch``'s drawing
 run in node (``support.page``) and the tests read what they return; the menu, the posts, the
-following and its clears, report.js's calls and the page's styles are read from the files, as
+following and its clears, company.js's calls and the page's styles are read from the files, as
 ``tests/web/test_agents_page.py`` reads the Agents section's; ``tests/web/test_launch_following.py``
 runs the posts and the following with a fetch and timers of its own."""
 
@@ -486,8 +486,9 @@ def test_the_following_reads_the_launch_every_2_seconds_and_reads_the_company_on
 
 def test_the_following_stops_when_the_drawer_closes_or_another_company_shows() -> None:
     """The timer is cleared when the drawer closes, when it turns to another company, and when
-    the report page starts to read another company, before the read, so a read that fails leaves
-    no following of the company shown before."""
+    the company page starts to read another company, before the read, so a read that fails leaves
+    no following of the company shown before (``tests/web/test_company_page.py`` pins the order
+    of the page's read)."""
     script = _static_file("app.js")
     assert "if (state.request) stopLaunch(state.request);" in _function(script, "close")
     _in_order(
@@ -496,19 +497,18 @@ def test_the_following_stops_when_the_drawer_closes_or_another_company_shows() -
         "if (state.request && state.request.symbol !== row.ticker) stopLaunch(state.request);",
         "getJson('/api/companies/' + encodeURIComponent(row.ticker))",
     )
-    load = _code(_function(_static_file("report.js"), "load"))
+    load = _code(_function(_static_file("company.js"), "load"))
     _in_order(
         load,
-        "var want = P.report;",
+        "var want = P.company;",
         "if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);",
-        "Promise.all([read(company), read(company + '/reports')])",
-        "if (state.symbol !== want.symbol) state.request = P.asking(want.symbol);",
+        "(whole ? read(company) : Promise.resolve(state.detail))",
     )
     assert load.count("P.stopLaunch(") == 1
 
 
 def test_a_view_that_loads_with_a_launch_in_flight_follows_it() -> None:
-    """Each read of the drawer's company and of the report page's goes through ``followItem``:
+    """Each read of the drawer's company and of the company page's goes through ``followItem``:
     the followed launch goes once the read holds no open item, another item or a newer launch,
     or no following runs; and where none runs and the open item's launch is followed, the
     following starts from it."""
@@ -535,12 +535,10 @@ def test_a_view_that_loads_with_a_launch_in_flight_follows_it() -> None:
     assert "landed(row.ticker, body);" in _function(script, "open")
     assert "landed(symbol, body);" in _function(script, "reloadDetail")
     assert "return function () { reloadDetail(symbol); };" in _function(script, "reread")
-    load = _function(_static_file("report.js"), "load")
-    landing = load[load.index("state.detail = found.detail;") :]
     _in_order(
-        landing,
-        "state.detail = found.detail;",
-        "P.followItem(state.request, found.detail.item, render, load);",
+        _function(_static_file("company.js"), "shown"),
+        "state.request = P.asking(state.symbol);",
+        "P.followItem(state.request, state.detail.item, render, load);",
         "render();",
     )
 
@@ -548,15 +546,15 @@ def test_a_view_that_loads_with_a_launch_in_flight_follows_it() -> None:
 # ------------------------------------------------------------------------- the page around it
 
 
-def test_the_drawer_and_the_report_page_pass_whether_launching_is_set_up() -> None:
+def test_the_drawer_and_the_company_page_pass_whether_launching_is_set_up() -> None:
     sections = _function(_static_file("app.js"), "sections")
     assert "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)" in (
         sections
     )
-    report = _code(_static_file("report.js"))
-    call = "P.requestResearch(state.request, d.item, render, load, d.launchReady)"
-    assert report.count("P.requestResearch(") == 2 == report.count(call)
-    assert call in _function(report, "meta") and call in _function(report, "noReport")
+    company = _code(_static_file("company.js"))
+    call = "P.requestResearch(ask, d.item, render, load, d.launchReady)"
+    assert company.count("P.requestResearch(") == 1 == company.count(call)
+    assert call in _function(company, "head")
 
 
 def test_the_page_hangs_the_launch_helpers_on_fairband_page() -> None:
