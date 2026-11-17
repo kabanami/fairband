@@ -7,7 +7,9 @@ figure and no block names a vendor or carries a cite, the layout (version 3 of t
 drawer's new form (form A of the mockup), that a click on the ticker opens the page, the moat
 stamp, the Notes control, and that no chart has a Table button, the report page's among them. Every
 other choice below is Claude's, marked *my call* where it is more than a reading of those
-requests, and can be overturned as any other. Not built.
+requests, and can be overturned as any other. Plan 1 was built on the branch `company-page` on
+2026-11-17; the decision log's entries of that day record where the build differs from this
+design. The live acceptance of section 17 is still to come.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -735,3 +737,30 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
 - 2026-11-17, the build, Claude's call: the plan
   (`docs/superpowers/plans/2026-11-16-company-page-plan.md`) is not rewritten. Its Task 4 and
   Task 5 blocks give the shapes as planned; this log gives them as built.
+- 2026-11-17, the whole-branch review (8.7, goal 3): the rule as designed worked in one
+  direction only. The right column took the row's height and added none of its own, so the left
+  column set the row; where the left column was the shorter, as on a refused company with no
+  meter and no levels, the right column ran 70px past the row at a width of 1,600. The built rule
+  holds both ways: the row is as tall as the taller column, and the news list has no height of
+  its own, so its stories never size the row. Where the left column is the taller, News fills
+  what is left and its list scrolls inside it; where the right column's least height (the chart,
+  Price facts and News at its floor of 260px) is the greater, the left column's last block, Key
+  statistics, grows to the row, blank at its foot, and News stands at its floor.
+- 2026-11-17, the build, the controller's sentence (11.1): a failed read of the notes draws
+  `The notes did not load: <message>. Open Notes again to retry.` in the list's place, a sentence
+  the Words table lacked.
+- 2026-11-17, the whole-branch review, Claude's call (8.3, 8.7): inside a block, three columns
+  become two under 810px of block width, not 700px, and the table `Growth a year, per share`
+  draws its rates in `figure-sm`. Just above 700px a column is about 215px wide, and the table
+  with its rates in `figure` needs about 245px with negative rates (8px past its column at a
+  width of 1,600) and 272px with `−134.4%` in every cell; in `figure-sm` it needs 247px, which
+  each of three columns has from 810px. Three columns stand from a window about 1,750px wide;
+  below it Key statistics and Price facts stand in two. A word or a name in a list (a Company
+  fact, Paid) wraps inside its half of the row, so a long industry
+  (`Drug Manufacturers - Specialty & Generic`) stays in its list; a figure stays on one line.
+- 2026-11-17, the whole-branch review, Claude's call (8.4): the year-to-date range starts at the
+  last close of the year before, the last row dated before 1 January of the newest row's year,
+  or at that year's first row where there is none, so it starts at Friday 30 December when 31
+  December is a Saturday, and its change is over the close that FMP's year to date in Price facts
+  is over. This replaces the entry above that has the range include 31 December as the mockup's
+  filter does.
