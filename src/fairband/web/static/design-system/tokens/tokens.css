@@ -34,6 +34,9 @@
   --phase-6: #cf7264;
   --focus-ring: var(--accent);
   --chart-1: var(--accent);
+  --chart-2: #437dde;
+  --chart-3: #f3c530;
+  --chart-4: #c05296;
   --chart-context: var(--border-strong);
   --chart-grid: #22272c;
   --chart-band: #4bc0b029;
@@ -93,6 +96,9 @@
   --phase-6: #99392e;
   --focus-ring: var(--accent);
   --chart-1: var(--accent);
+  --chart-2: #1b3d9c;
+  --chart-3: #b5820c;
+  --chart-4: #c562b2;
   --chart-context: var(--border-strong);
   --chart-grid: #eceff2;
   --chart-band: #0f7a6e1f;
@@ -153,6 +159,9 @@
     --phase-6: #99392e;
     --focus-ring: var(--accent);
     --chart-1: var(--accent);
+    --chart-2: #1b3d9c;
+    --chart-3: #b5820c;
+    --chart-4: #c562b2;
     --chart-context: var(--border-strong);
     --chart-grid: #eceff2;
     --chart-band: #0f7a6e1f;
