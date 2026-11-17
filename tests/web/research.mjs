@@ -5,14 +5,16 @@
 // state from one draw of the tab to the next, as financials.mjs's does; a document whose
 // elements, found by id, are those the tab drew, each recording whether it was opened and
 // scrolled to; a fetch that answers an address from the input's answers, at once or, for an
-// answer marked held, when a release step lets it land, and never answers any other; a
+// answer marked held, when a release step lets it land, an address given a list of answers
+// taking the next at each fetch, the last for every fetch after, and never answers any other; a
 // companyPage.redraw that draws the tab again, as the page draws it when a series lands; and a
 // window whose localStorage is the driver's: none, as page.mjs has and as a browser that keeps
 // nothing has; one whose every read and write throws, as a private window's may; or one holding
 // the items given.
 //
 // The input, a JSON object on stdin: {"store": null | "throws" | {<key>: <value>, ...},
-// "answers"?: {<url>: {"status", "body", "held"?}}, "steps"}. The steps, a list, each one object:
+// "answers"?: {<url>: <answer> | [<answer>, ...]}, "steps"}, an answer {"status", "body", "held"?}.
+// The steps, a list, each one object:
 //   {"do": "stored"}                     storedMarks() is read
 //   {"do": "keep", "on"}                 keepMarks(on) is called
 //   {"do": "mount", "answer", "detail"}  the tab opens on `answer` and the company's `detail`,
@@ -89,10 +91,13 @@ let fetched = []; // the requests the current step made
 let headers = []; // the headers each of them was sent with, null for none
 const held = []; // the fetches of held answers not yet released, oldest first: { url, land }
 const answers = input.answers || {};
+const asked = {}; // the fetches of each address so far, for an address given a list of answers
 const fetch = (url, init) => {
   fetched.push([(init && init.method) || 'GET', url]);
   headers.push((init && init.headers) || null);
-  const given = answers[url];
+  const entry = answers[url];
+  const turn = asked[url] = (asked[url] || 0) + 1;
+  const given = Array.isArray(entry) ? entry[Math.min(turn, entry.length) - 1] : entry;
   if (!given) return new Promise(() => {});
   const response = {
     ok: given.status >= 200 && given.status < 300,

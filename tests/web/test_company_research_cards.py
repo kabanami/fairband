@@ -636,19 +636,83 @@ def _report_19() -> dict[str, Any]:
     return answer
 
 
-def test_the_series_are_read_once_a_report_with_the_request_header() -> None:
+def _urls(step: dict[str, Any]) -> list[str]:
+    return sorted(url for _, url in step["fetched"])
+
+
+def test_the_series_are_read_once_an_answer_with_the_request_header() -> None:
     """After the report lands, its series are read, each on its own with the request header: the
     financial tables, the multiples history, five years of closes, the band's history and each
-    sensitivity reading the references name; once for the report, so the tab drawn again reads
-    none; each landing draws the page again."""
+    sensitivity reading the references name; each landing draws the page again. The tab drawn
+    again with the same answer reads none; a new answer of the same report, as after a refresh
+    ends or a note is taken, reads them all again."""
     press = {"do": "press", "class": "app-research__marks", "text": "Footnote marks"}
-    mounted, waited, pressed = _drive(
-        [_mount(_with_reading()), {"do": "wait"}, press], answers.series_replies()
-    )
-    assert sorted(url for _, url in mounted["fetched"]) == sorted(answers.SERIES)
+    steps = [_mount(_with_reading()), {"do": "wait"}, press]
+    steps += [_mount(_with_reading(), "land"), {"do": "wait"}, press]
+    mounted, waited, pressed, again, settled, redrawn = _drive(steps, answers.series_replies())
+    assert _urls(mounted) == sorted(answers.SERIES)
     assert mounted["headers"] == [HEADER] * len(answers.SERIES)
     assert waited["redrawn"] == 5 and waited["fetched"] == []
     assert pressed["fetched"] == []
+    assert _urls(again) == sorted(answers.SERIES)
+    assert again["headers"] == [HEADER] * len(answers.SERIES)
+    assert settled["redrawn"] == 5 and settled["fetched"] == []
+    assert redrawn["fetched"] == []
+
+
+def test_the_charts_drawn_stay_until_the_new_answer_s_series_land() -> None:
+    """A new answer of the report shown keeps the charts the first run drew until its own series
+    land, each taking the old one's place: here the second run's tables, which carry no quarters,
+    leave the earnings call without its row of charts."""
+    older = {k: v for k, v in answers.TABLES.items() if k != "quarters"}
+    replies = {
+        TABLES: [
+            {"status": 200, "body": answers.TABLES},
+            {"status": 200, "body": older, "held": True},
+        ]
+    }
+    steps = [_mount(), {"do": "wait"}, _mount(answers.answer(), "land")]
+    _, first, again, second = _drive([*steps, {"do": "release", "url": TABLES}], replies)
+    assert len(_titles(first["tree"])) == 12 + 3
+    assert [url for _, url in again["fetched"]].count(TABLES) == 1
+    assert again["tree"] == first["tree"]
+    assert len(_titles(second["tree"])) == 12
+    earnings = _panel(second["tree"], HEADINGS.index("The last earnings call"))
+    assert classed(earnings, "app-research__minis") == []
+
+
+def test_a_failed_read_is_read_again_with_the_next_answer() -> None:
+    """A series the server refused draws its sentence until a new answer of the report lands and
+    its own read of that series lands: the sentence gives way to the charts."""
+    replies = {
+        TABLES: [
+            {"status": 404, "body": {"detail": "no financial statements for LFOX"}},
+            {"status": 200, "body": answers.TABLES, "held": True},
+        ]
+    }
+    steps = [_mount(), {"do": "wait"}, _mount(answers.answer(), "land")]
+    _, failed, again, landed = _drive([*steps, {"do": "release", "url": TABLES}], replies)
+    sentence = "The financial tables did not load: no financial statements for LFOX."
+    assert sentence in [text(e) for e in classed(failed["tree"], "app-report__error")]
+    assert _titles(failed["tree"]) == []
+    assert again["tree"] == failed["tree"]
+    assert classed(landed["tree"], "app-report__error") == []
+    assert len(_titles(landed["tree"])) == 12 + 3
+
+
+def test_a_late_series_of_an_older_run_is_dropped() -> None:
+    """The first run's financial tables, landing after a new answer of the same report started a
+    second run, change nothing drawn and draw nothing again; the second run's draw the charts."""
+    replies = {TABLES: {"status": 200, "body": answers.TABLES, "held": True}}
+    steps = [_mount(), _mount(answers.answer(), "land"), {"do": "wait"}]
+    steps += [{"do": "release", "url": TABLES}, {"do": "release", "url": TABLES}]
+    _, again, waited, late, own = _drive(steps, replies)
+    assert [url for _, url in again["fetched"]].count(TABLES) == 1
+    assert _titles(waited["tree"]) == []
+    assert late["redrawn"] == 0
+    assert late["tree"] == waited["tree"]
+    assert own["redrawn"] == 1
+    assert len(_titles(own["tree"])) == 12 + 3
 
 
 def test_a_refused_series_draws_the_server_s_sentence_in_the_charts_place() -> None:
