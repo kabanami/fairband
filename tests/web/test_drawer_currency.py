@@ -1,10 +1,10 @@
-"""The drawer's and the report page's words for a company in another currency, or an ADR (spec
-2026-11-10 6.2, 7.4 and 10): a USD figure with `$` as before, any other with its code before the
-number, a total to whole units and a figure a share to two decimals; the rate, the differential and
-the ADR ratio among the inputs, each in its own form; and the line under the head that says what
-the figures are in. A finding's and a guidance record's money in the record's own currency (spec
-2026-11-15 9.5). The page's own script runs in node after the bundle (``page.mjs``), and the
-tests read what its helpers return."""
+"""The page's words for a company in another currency, or an ADR (spec 2026-11-10 6.2, 7.4 and
+10): a USD figure with `$` as before, any other with its code before the number, a total to whole
+units and a figure a share to two decimals; the rate, the differential and the ADR ratio among the
+inputs, each in its own form; and the line under the drawer's and the report page's heads that
+says what the figures are in. A guidance record's money in the record's own currency (spec
+2026-11-15 9.5). The page's own script runs in node after the bundle (``page.mjs``), and the tests
+read what its helpers return."""
 
 import json
 import shutil
@@ -20,7 +20,6 @@ HARNESS = Path(__file__).with_name("page.mjs")
 STATIC = Path(str(resources.files("fairband.web").joinpath("static")))
 BUNDLE = STATIC / "design-system" / "components" / "bundle.js"
 APP = STATIC / "app.js"
-GOLDEN = Path(__file__).parent.parent / "fixtures" / "golden"
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
@@ -52,11 +51,6 @@ def _texts(node: Any) -> list[str]:
     if isinstance(node, dict):
         return _texts(node.get("props", {}).get("children", []))
     return []
-
-
-def _after(texts: list[str], label: str) -> str:
-    """The text that follows ``label``: a figure after its name."""
-    return texts[texts.index(label) + 1]
 
 
 @pytest.mark.parametrize(
@@ -151,8 +145,8 @@ def test_the_report_page_says_every_figure_a_share_is_per_ads() -> None:
 
 
 def test_a_figure_in_the_currency_takes_its_code() -> None:
-    """The drawer's tables print a total and a figure a share in the row's currency: the code
-    before the number, or `$` for USD and for none named."""
+    """The page's tables print a total and a figure a share in the row's currency: the code before
+    the number, or `$` for USD and for none named."""
     assert _call("whole", 3_809_054_300_000, "TWD") == "TWD 3,809,054,300,000"
     assert _call("whole", -5e9) == "−$5,000,000,000"
     assert _call("whole", -5e9, "USD") == "−$5,000,000,000"
@@ -161,25 +155,6 @@ def test_a_figure_in_the_currency_takes_its_code() -> None:
     assert _call("money", -1.5, "SEK") == "−SEK 1.50"
     assert _call("money", 104.6427) == "$104.64"
     assert _call("money", None, "SEK") == "—"
-
-
-def test_the_intermediates_of_a_row_in_another_currency_name_its_code() -> None:
-    """FXCO's golden, valued in SEK: the route's figures are in SEK (the value a share before
-    translation, the earnings a share, the total value), the price facts in USD, as the closes
-    are; the rate in units of the currency a dollar and the differential a percentage."""
-    im = json.loads((GOLDEN / "FXCO.json").read_text())["intermediates"]
-    texts = _texts(_call("intermediates", im))
-    assert _after(texts, "value_per_share") == "SEK 837.14"
-    assert _after(texts, "value_in_currency") == "SEK 837.14"
-    assert _after(texts, "value_total") == "SEK 83,714,149,943"
-    assert _after(texts, "clean") == "SEK 42.00"  # the eps group
-    assert _after(texts, "high_52w") == "$50.00"
-    assert _after(texts, "fx_rate") == "8.00"
-    assert _after(texts, "inflation_differential") == "2.0%"
-    assert _after(texts, "currency") == "SEK"
-    mgco = json.loads((GOLDEN / "MGCO.json").read_text())["intermediates"]
-    usd = _texts(_call("intermediates", mgco))
-    assert _after(usd, "value_per_share").startswith("$")
 
 
 def test_the_secondary_path_and_the_guidance_read_in_the_currency() -> None:
@@ -222,7 +197,7 @@ def test_the_secondary_path_and_the_guidance_read_in_the_currency() -> None:
 
 def _guided(record_id: int, metric: str, low: float, high: float, currency: str | None) -> Any:
     """A guidance record as the research read sends it, its ``currency`` that of its money (spec
-    2026-11-15 9.1), with the state and the citing overrides Details gives it."""
+    2026-11-15 9.1), with the state and the citing overrides Appendix A gives it."""
     return {
         "id": record_id,
         "metric": metric,
@@ -262,39 +237,3 @@ def test_the_guidance_table_writes_each_record_in_its_own_currency() -> None:
     us = [_guided(1, "eps", 4.2, 4.4, "USD"), _guided(2, "revenue", 2.1e9, 2.1e9, "EUR")]
     texts = _texts(_call("guidanceTable", us, "USD"))
     assert "$4.20 – $4.40" in texts and "EUR 2,100,000,000" in texts
-
-
-def _finding(finding_id: int, value: float, unit: str, currency: str | None) -> Any:
-    """A finding as the research read sends it (``agents_api.finding_json``)."""
-    return {
-        "id": finding_id,
-        "symbol": "FXCO",
-        "asOf": "2026-10-30",
-        "text": "Segment revenue.",
-        "value": value,
-        "unit": unit,
-        "period": "2026",
-        "principal": "agent",
-        "actor": "claude-opus-5-5",
-        "client": "claude-code/2.1",
-        "at": "2026-11-01T09:30:00+00:00",
-        "currency": currency,
-        "source": {"kind": "filing", "ref": "10-K 2026, p. 41", "note": None},
-    }
-
-
-def test_the_findings_block_writes_each_finding_in_its_own_currency() -> None:
-    """Spec 2026-11-15 9.5: Details' Findings block writes a finding's money in its currency, a
-    USD finding with `$` and one with no currency named in the company's code; a percent as
-    before. A US company's findings read as before, and one in EUR with EUR."""
-    findings = [
-        _finding(1, 1.5e9, "currency", "USD"),
-        _finding(2, 4.2, "per-share", None),
-        _finding(3, 0.12, "percent", None),
-    ]
-    texts = _texts(_call("findingsList", findings, "SEK"))
-    for figure in (" $1,500,000,000", " SEK 4.20", " 12.0%"):
-        assert figure in texts, figure
-    us = [_finding(1, 1.5e9, "currency", "USD"), _finding(2, 2e9, "currency", "EUR")]
-    texts = _texts(_call("findingsList", us, "USD"))
-    assert " $1,500,000,000" in texts and " EUR 2,000,000,000" in texts

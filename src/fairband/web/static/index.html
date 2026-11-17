@@ -322,7 +322,6 @@
   .app-flags__what { display: block; margin-top: var(--space-1); }
   .app-link { color: var(--accent); }
   .app-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-  .app-more { margin: var(--space-2) 0 0; }
   /* A header that also drags keeps the bundle's grab cursor. */
   .fb-table thead th[tabindex]:not([draggable="true"]), .fb-table tbody tr[tabindex] {
     cursor: pointer;
@@ -365,39 +364,48 @@
     white-space: nowrap;
   }
   .app-drawer__name { margin: 0; flex-basis: 100%; color: var(--ink-muted); }
-  .app-drawer__brief, .app-drawer__currency { margin: 0; flex-basis: 100%; }
-  .app-section { margin: var(--space-6) 0 0; }
-  .app-section > h3 { margin: 0 0 var(--space-2); }
+  .app-drawer__currency { margin: 0; flex-basis: 100%; }
+  /* The drawer's form A (the company page's design, 11): under the head the sector's caption and
+     the company brief, cut at six lines with an ellipsis, the whole of it on the company page;
+     the value band under a rule, the levels clear of the meter's caption, or a refused row's
+     sentence in its place; then Company page and Request research on one line, the server's
+     refusal and the open item's line under them. */
+  .app-drawer__sector { margin: var(--space-2) 0 0; }
+  .app-drawer__brief {
+    margin: var(--space-1) 0 0; color: var(--ink-muted); display: -webkit-box;
+    -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden;
+  }
+  .app-drawer__band {
+    margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--hairline);
+  }
+  .app-drawer__band .app-pairs { margin-top: var(--space-3); }
+  .app-drawer__actions {
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2);
+    margin-top: var(--space-4);
+  }
+  .app-drawer__actions > p { flex-basis: 100%; margin: 0; }
   .app-pairs {
     display: grid; grid-template-columns: max-content minmax(0, 1fr);
     gap: var(--space-1) var(--space-3); margin: 0; align-items: baseline;
   }
   .app-pairs dt { color: var(--ink-muted); }
   .app-pairs dd { margin: 0; overflow-wrap: anywhere; }
-  /* The levels under the band meter, clear of its caption. */
-  .app-levels { margin-top: var(--space-3); }
   .app-group + .app-group { margin-top: var(--space-3); }
   .app-group__head { margin: 0 0 var(--space-1); color: var(--ink-muted); }
   .app-list { list-style: none; margin: 0; padding: 0; }
   .app-list li + li { margin-top: var(--space-2); }
   .app-list p { margin: 0; }
-  /* Piotroski's signals, a line each, each led by met, not met or not read in a box as wide as
-     the longest, so the signals' names line up, a name that wraps included. */
-  .app-signals { margin-top: var(--space-2); }
-  .app-signals li { display: flex; align-items: baseline; }
-  .app-signals li + li { margin-top: 0; }
-  .app-mark { flex: none; min-width: 8ch; }
   .app-inputs th, .app-inputs td { padding: var(--space-2) var(--space-1); }
   .app-inputs td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
   .app-inputs td.fb-num { white-space: nowrap; }
-  /* A table of figures wider than the rail, the growth route's ten years, scrolls sideways on its
-     own; the drawer does not. */
+  /* A table of figures wider than its column, a secondary valuation's years, scrolls sideways on
+     its own; the page does not. */
   .app-scroll { overflow-x: auto; }
   .app-scroll:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .app-scroll + .app-pairs { margin-top: var(--space-2); }
   .app-figures th, .app-figures td { padding: 0 var(--space-2); }
-  /* The first column, the year or the peer, stays in view while the table scrolls sideways; on
-     the drawer's surface, above the header cells that scroll under it. */
+  /* The first column, the year, stays in view while the table scrolls sideways; on the panel's
+     raised surface, above the header cells that scroll under it. */
   .app-figures th:first-child, .app-figures td:first-child {
     position: sticky; left: 0; background: var(--surface-raised);
   }
@@ -406,18 +414,11 @@
   .app-nowrap { white-space: nowrap; }
   .app-muted { color: var(--ink-faint); }
   .app-refusal { margin: 0; color: var(--caution); }
-  /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2): the stance line, the report's word as
-     the row's chip with who published it, close over the Summary; Open the report under it.
-     Request research's menu opens under its button from the button's left edge, the menu's note
-     line as wide as the menu, the box Open Claude Code a little under it; the server's refusal
-     and the open item's line follow the button, the line's Open Claude Code or Open again set a
-     little after its text (spec 2026-11-16 agent launch, 10). Details ▾ closes the main view. */
-  .app-stance {
-    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
-    margin: var(--space-6) 0 0;
-  }
-  .app-stance + .app-section { margin-top: var(--space-3); }
-  .app-open { margin: var(--space-3) 0 0; }
+  /* Request research (spec 2026-11-06 Tier 2, 18.2): its menu opens under its button from the
+     button's left edge, the menu's note line as wide as the menu, the box Open Claude Code a
+     little under it; the server's refusal and the open item's line follow the button, the line's
+     Open Claude Code or Open again set a little after its text (spec 2026-11-16 agent launch,
+     10). */
   .app-request { position: relative; display: inline-block; }
   .app-request .fb-menu { left: 0; right: auto; }
   .app-request__line { display: block; }
@@ -426,21 +427,15 @@
   .app-requested { margin: var(--space-2) 0 0; color: var(--ink-muted); }
   .app-request__launch { margin-top: var(--space-2); }
   .app-request__open { margin-left: var(--space-2); }
-  .app-disclosure { margin-left: calc(-1 * var(--space-2)); }
-  /* Details (18.3): the overrides one record under another; a chip on a line of its own under the
-     text it signs; a note's text as written, its lines kept; Add a note's field the rail's width,
-     a refusal under it; a source or a ref wraps anywhere rather than widen the rail. */
-  .app-drawer .fb-rec + .fb-rec { margin-top: var(--space-3); }
   .app-secondary__path { margin-top: var(--space-2); }
-  .app-chipline { margin: var(--space-1) 0 0; }
-  .app-notes__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* Add a note, kept for the Notes control (the company page's design, 11.1): the field as wide as
+     its box, a refusal under it. */
   .app-notes__new {
     display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2);
     margin-top: var(--space-3);
   }
   .app-notes__field { width: 100%; resize: vertical; font-family: var(--font-sans); }
   .app-notes__error { margin: var(--space-2) 0 0; color: var(--caution); }
-  .app-source { overflow-wrap: anywhere; }
   /* The report page (spec 2026-11-06 Tier 2, 18.4), in CompanyReport's order, one column: the
      head, the ticker, the name and the phase badge, then the one headline figure with the price
      beside it; the meter under it, at the width it reads best, a refusal under it; the meta line

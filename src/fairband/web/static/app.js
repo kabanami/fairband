@@ -4,13 +4,13 @@
    engine computes; this script asks for an order, remembers the chosen columns in the reader's
    order, narrows the loaded rows to the reader's find and filters and lays out what the engine
    produced, rounded for display only. Each row's watchlist mark opens a popup that puts the
-   company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The drawer leads with
-   the valuation and the agents' report and puts the rest behind Details ▾; without a report it
-   posts a research request to the work inbox, and Details takes the owner's notes (spec 2026-11-06
-   Tier 2, 18.2 and 18.3). Where launching is set up, a request also opens the window where Claude
-   Code starts, and the line under the button follows its launch (spec 2026-11-16 agent launch,
-   10). The header, the status line and the group view are controls.js, loaded after this script;
-   it reaches the screen through window.FairbandPage. */
+   company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4). The drawer is a short
+   card, the company, its value and two buttons: Company page, which opens the company's page, and
+   Request research, which posts a research request to the work inbox (the company page's design,
+   11; spec 2026-11-06 Tier 2, 18.2). Where launching is set up, a request also opens the window
+   where Claude Code starts, and the line under the button follows its launch (spec 2026-11-16
+   agent launch, 10). The header, the status line and the group view are controls.js, loaded after
+   this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -27,19 +27,11 @@
     'Start-up': 1, 'Young Growth': 2, 'High Growth': 3,
     'Mature Growth': 4, 'Mature Stable': 5, 'Decline': 6
   };
-  var ROUTES = {
-    'mature-growth': 'Mature growth route', 'mature-stable': 'Mature stable route',
-    'revenue-growth': 'Revenue growth route', 'decline': 'Decline route',
-    'start-up': 'Start-up route'
-  };
   /* A work item's two modes, as the inbox takes them (spec 2026-11-06 Tier 2, 8). */
   var REQUEST_MODES = ['valuation review', 'full report'];
   /* A work item's open states: work not yet done, which the header's Inbox count counts and the
      owner may decline (spec 2026-11-06 Tier 2, 8 and 18.5). */
   var OPEN_STATES = ['pending', 'claimed'];
-  /* An applied override's Result row in Details when no valued review on the latest snapshot
-     holds it (spec 2026-11-06 Tier 2, 18.3). */
-  var NO_EFFECT = 'No effect to show: not inside a valued review on the latest snapshot';
 
   var mount = document.getElementById('screen');
   var root = ReactDOM.createRoot(mount);
@@ -57,16 +49,11 @@
     watchlistsError: null,
     watch: null, /* { symbol, anchor, ids, name, error } while a mark's popup is open */
     pastFirstScreen: false, /* the table is scrolled more than one screen down: Top shows */
-    /* The drawer's Details ▾ (spec 2026-11-06 Tier 2, 18.2): closed until the reader opens it,
-       then as the reader left it, whichever company the drawer shows, for the page's life. */
-    detailsOpen: false,
-    research: null, /* Details' records of one company: { symbol, body, error } */
     request: null, /* Request research of one company: { symbol, open, mode, note, error, … } */
     noteDraft: null /* Add a note of one company: { symbol, text, error, posting } */
   };
   var latest = 0;
   var latestDetail = 0;
-  var latestResearch = 0;
 
   function loadColumns() {
     try {
@@ -197,29 +184,28 @@
      drawer's company again after another view's write about it (the Inbox view's decline and a
      watchlist's Request research, spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which
      reads whichever company the drawer shows again when a run ends. controls.js adds show, onShow,
-     section, running and countInbox, the Inbox view onInbox, agents.js adds agents, the Settings
-     view's Agents section, and methodology.js adds methodologySection, which the drawer's link
-     reads; a view drawn from the rows or the lists sets onRender, which runs after each draw of the
-     screen, so it draws again as they load and change (the company page's runs the Watchlists
-     view's, set before it, then its own). The report page (report.js, 18.4) draws with
-     the drawer's own parts: the meter, the inputs table, a table of figures by year, an input's
-     figure in its unit, the secondary valuation's rows and path, the guidance table, the phase
-     evidence, pairs, a date, a total, a figure a share and a rate in a currency, a count, the line
-     that says what the figures are in (currencyLine), a report's footnote numbers, and Request
-     research with a request of its own (asking), whose following of a launch the page stops as it
-     starts to read another company (stopLaunch) and starts as its read lands (followItem). The
-     company page (company.js; the company page's design, 7) draws its head with the logo, the
-     phase numbers, the moat stamp (moatStamp) and Request research as the report page keeps it,
-     and opens the watchlists popup under its head's button (watch) on the company's row or, the
-     lists loaded, on the company alone (rows, watchlists); its Fairband value block
-     (company_overview.js, 8.2) draws the meter, the four levels under it in the screen's words
-     (levelRows), the basis chip of the band they draw (bandBasis) and the local day of its
-     report (localIso). The Inbox view's row (inbox.js, B-210) keeps a request for each pending
-     item too, posts its launch
-     (openLaunch) and draws the line's words (launchWords) from the item the line is drawn from
-     (lineItem). The open item's line (launchLine), the drawer's route sections, the charge's
-     rows, an input's value, the intermediates, the flags it lists and Details' findings are here
-     for the tests, which read them in node (tests/web/page.mjs). */
+     section, running and countInbox, the Inbox view onInbox, and agents.js adds agents, the
+     Settings view's Agents section; a view drawn from the rows or the lists sets onRender, which
+     runs after each draw of the screen, so it draws again as they load and change (the company
+     page's runs the Watchlists view's, set before it, then its own). The report page (report.js,
+     18.4) draws with this script's parts: the meter, the inputs table, a table of figures by
+     year, an input's figure in its unit, the secondary valuation's rows and path, the guidance
+     table, the phase evidence, pairs, a date, a total in a currency, an exchange rate, a count,
+     the line that says what the figures are in (currencyLine), a report's footnote numbers, and
+     Request research with a request of its own (asking), whose following of a launch the page
+     stops as it starts to read another company (stopLaunch) and starts as its read lands
+     (followItem). The company page (company.js; the company page's design, 7) draws its head
+     with the logo, the phase numbers, the moat stamp (moatStamp) and Request research as the
+     report page keeps it, and opens the watchlists popup under its head's button (watch) on the
+     company's row or, the lists loaded, on the company alone (rows, watchlists); its Fairband
+     value block (company_overview.js, 8.2) draws the meter, the four levels under it in the
+     screen's words (levelRows), the basis chip of the band they draw (bandBasis) and the local
+     day of its report (localIso). The Inbox view's row (inbox.js, B-210) keeps a request for each
+     pending item too, posts its launch (openLaunch) and draws the line's words (launchWords) from
+     the item the line is drawn from (lineItem). The drawer's parts (sections), the open item's
+     line (launchLine), an input's value (inputValue), a figure a share in a currency (money) and
+     a logo's ground (logoGround) are here for the tests, which read them in node
+     (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
@@ -240,11 +226,8 @@
     footnotes: footnotes, asking: asking, requestResearch: requestResearch,
     launchLine: launchLine, launchWords: launchWords, lineItem: lineItem,
     openLaunch: openLaunch, stopLaunch: stopLaunch, followItem: followItem,
-    chargeRows: chargeRows, matureRoute: matureRoute, revenueRoute: revenueRoute,
-    declineRoute: declineRoute, startUpRoute: startUpRoute, intermediates: intermediates,
-    briefLine: briefLine, firstSentence: firstSentence, currencyLine: currencyLine,
-    logo: logo, logoGround: logoGround, moatStamp: moatStamp,
-    drawerFlags: drawerFlags, findingsList: findingsList
+    currencyLine: currencyLine, logo: logo, logoGround: logoGround, moatStamp: moatStamp,
+    sections: sections
   };
 
   function load() {
@@ -266,9 +249,8 @@
   }
 
   /* A row with its entered time in the reader's offset, so the Entered cell shows the local date
-     (the local-offset ISO in datetime) and agrees with the drawer's ValidityWindow, and its
-     report's time likewise, so the coverage mark's title gives the local date; watched when the
-     company is on a list, which fills its mark. */
+     (the local-offset ISO in datetime), and its report's time likewise, so the coverage mark's
+     title gives the local date; watched when the company is on a list, which fills its mark. */
   function localRow(r) {
     var row = Object.assign({}, r, { watched: (r.watchlists || []).length > 0 });
     if (r.covered) row.covered = Object.assign({}, r.covered, { at: localIso(r.covered.at) });
@@ -285,8 +267,7 @@
   }
 
   /* A row click, or Enter or Space on a focused row. The previous company stays in the drawer,
-     faded, until the new one lands. Details stays as the reader left it; open, its records are
-     read for the company beside its detail. */
+     faded, until the new one lands. */
   function open(row) {
     var d = state.drawer;
     if (d && d.symbol === row.ticker && !d.error) return;
@@ -295,7 +276,6 @@
     if (state.request && state.request.symbol !== row.ticker) stopLaunch(state.request);
     var request = ++latestDetail;
     state.drawer = { symbol: row.ticker, body: d && d.body, loading: true, error: null };
-    if (state.detailsOpen) readResearch(row.ticker);
     render();
     getJson('/api/companies/' + encodeURIComponent(row.ticker))
       .then(function (body) {
@@ -709,96 +689,43 @@
         content));
   }
 
-  /* The drawer's main view (spec 2026-11-06 Tier 2, 18.2), in this order and nothing else: the
-     head, with one line on the company under its name (B-149: the sector and industry, then the
-     first sentence of the company brief, briefLine), and for a company in another currency or an
-     ADR the line that says what its figures are in (currencyLine, spec 2026-11-10 7.4); the
-     meter with its levels and the route's lines under it, the review's band and levels where the
-     review counts and has a value, the mechanical value named in its caption (plan 3), or in its
-     place the refusal, as before; the
-     stance line when a report exists, the report's word in the row's chip classes, faded once
-     the window of the snapshot it rests on has expired, then who published it and when; the
-     report's Summary, its first section, then Open the report, a link to the report page; then
-     Request research with its menu, the server's refusal under it and the open item's line, with
-     or without a report (plan 4: the founder found none on a company with a report); then
-     Details ▾, a disclosure over everything else (details). */
+  /* The drawer under its bar, form A (the company page's design, 11), in this order and nothing
+     else: the head, the logo, the ticker, the phase badge, the moat stamp (moatStamp), the name
+     and, for a company in another currency or an ADR, the line that says what its figures are in
+     (currencyLine, spec 2026-11-10 7.4); one caption, the sector and the industry (sectorLine);
+     the company brief whole, which the page's style cuts at six lines; the value band, the meter
+     and under it the four levels in the screen's words (levelRows), or where the meter draws no
+     band a refused row's sentence in its place; then Company page, a link to the company page,
+     and Request research with its menu, the server's refusal under it and the open item's line.
+     The rest of what a company has is on its page. */
   function sections(body) {
     var r = body.result;
-    var im = r.intermediates;
     var phase = PHASE_NUMBER[r.phase.phase];
-    var valued = isValued(r);
-    var growth = r.route === 'revenue-growth';
-    var report = body.report;
-    var reviewBanded = isReviewBanded(body);
-    var banded = isBanded(body);
+    var sector = sectorLine(body.company);
+    var rows = levelRows(body);
     var ask = asked(r.symbol);
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
         logo(body, 'app-drawer__logo'),
         h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
         phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,
+        moatStamp(body),
         body.company && body.company.name
           ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null,
-        briefLine(body.company, body.brief)
-          ? h('p', { className: 'caption app-muted app-drawer__brief' },
-            briefLine(body.company, body.brief)) : null,
         currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },
           currencyLine(body)) : null),
-      valued ? section('band', null, meter(body),
-        levels(drawnLevels(body)),
-        h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route),
-        youngGrowth(im.failure_probability),
-        crossCheck(im.growth_route, im.currency),
-        growth ? discountedAt(r.inputs) : null) : null,
-      /* A refused row shows in the screen's Reviewed column (spec 2026-11-06 Tier 2, 11 and
-         18.1) the value of its review on the latest snapshot, else of its secondary valuation
-         there, so the drawer draws that value's band against the price, its word at today's
-         price, and the refusal stays under it: the review's when it has a value (the ruling of
-         2026-11-08), else the secondary's (the ruling of 2026-11-07). A refused row with neither
-         has the refusal alone. */
-      reviewBanded ? section('review-band', null, meter(body)) : null,
-      banded ? section('secondary-band', null, meter(body)) : null,
-      /* A refusal takes the band's place: it is the answer when there is no value. A growth row
-         refused with its revenue path still shows the margin the price needs (spec 5.11). A
-         Mature Stable row refused for its trailing earnings shows the growth-route cross-check
-         under the refusal, as a valued row shows it under the band (spec 2026-11-06 9); a
-         revenue-growth refusal's cross-check does not move with the price, so it shows only among
-         the intermediates. */
-      r.refusal ? section('refusal', 'Refusal',
-        h('p', { className: 'body app-refusal' }, r.refusal),
-        'implied_margin' in im ? pairs([
-          ['Margin the price needs', F.formatPercent(im.implied_margin), true]
-        ]) : null,
-        'e_trailing' in im ? crossCheck(im.growth_route, im.currency) : null) : null,
-      report ? h('p', { key: 'stance', className: 'app-stance' },
-        h('span', {
-          className: 'fb-stance fb-stance--' + report.stance +
-            (report.expired ? ' fb-stance--expired' : '') + ' label',
-          title: report.expired ? 'The snapshot window of this report has expired' : null
-        }, report.stance),
-        h(F.PrincipalChip, {
-          principal: report.principal, actor: report.actor, at: localIso(report.createdAt)
-        })) : null,
-      report ? section('summary', null,
-        h(F.ReportReader, {
-          mode: report.mode, state: 'published', revision: 'revision ' + report.revision,
-          sections: [report.summary], appendixes: false,
-          /* the Summary's cites numbered as the report page's references list numbers them, so
-             a number reads the same in both (13.1, 18.4) */
-          footnotes: footnotes(report.references)
-        }),
-        h('p', { className: 'app-open' },
-          h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')))
+      sector ? h('p', { key: 'sector', className: 'caption app-muted app-drawer__sector' }, sector)
         : null,
-      section('request', null,
-        requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)),
-      h('div', { key: 'disclosure', className: 'app-section app-disclosure' },
-        h(F.Button, {
-          variant: 'quiet', size: 'sm',
-          'aria-expanded': state.detailsOpen ? 'true' : 'false',
-          onClick: toggleDetails
-        }, 'Details ▾')),
-      state.detailsOpen ? details(body) : null
+      body.brief ? h('p', { key: 'brief', className: 'body app-drawer__brief' }, body.brief)
+        : null,
+      rows ? h('section', { key: 'band', className: 'app-drawer__band' }, meter(body),
+        pairs(rows.map(function (row) { return [row[0], row[1], true]; })))
+        : r.refusal ? h('section', { key: 'band', className: 'app-drawer__band' },
+          h('p', { className: 'body app-refusal' }, r.refusal)) : null,
+      h('div', { key: 'actions', className: 'app-drawer__actions' },
+        h(F.Button, { variant: 'primary', href: '#company/' + encodeURIComponent(r.symbol) },
+          'Company page'),
+        requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady))
     ];
   }
 
@@ -870,25 +797,6 @@
     return isValued(body.result) && !!v && v.value != null && !!v.levels;
   }
 
-  /* The levels a valued row's meter draws, in the shape levels() reads (spec 2026-11-06 Tier 2,
-     18.1 and 18.2, plan 3): the review's where it counts and has a value, the margin's moat the
-     one its moat override sets, as the review's levels read the reviewed moat (method 14.5); else
-     the engine's. The engine's own levels stay on the snapshot and in the report's Appendix A. */
-  function drawnLevels(body) {
-    var r = body.result;
-    var v = body.review;
-    if (!isReviewed(body)) return r;
-    var moat = (v.bridge || []).filter(function (line) { return line.tag === 'moat.class'; })[0];
-    return {
-      value: v.value,
-      levels: {
-        buy: v.levels.buy, fair_low: v.levels.fairLow, fair_high: v.levels.fairHigh,
-        trim: v.levels.trim
-      },
-      intermediates: { moat: moat ? moat.new : r.intermediates.moat }
-    };
-  }
-
   /* A refused row whose review, which the detail carries only while it counts on the latest
      snapshot, has a value, its levels, and a price to draw them against: its meter is the
      review's, as the row's Reviewed cell and the report page's headline show that value. */
@@ -912,18 +820,20 @@
 
   /* The four levels under the meter in the screen's words, as [name, text] pairs (the company
      page's design, 8.2 and 11): Fair value, Buy level, Fair band and Trim level of the value the
-     meter draws (meter). On a valued row the review's where it counts and has a value, else the
-     snapshot's (drawnLevels); on a refused row the review's band or the secondary valuation's
-     that the meter draws; null where the meter draws no band. */
+     meter draws (meter). The review's where it counts and has a value, on a valued row (spec
+     2026-11-06 Tier 2, 18.1 and 18.2, plan 3) or a refused one; else a valued row's own, the
+     snapshot's; else a refused row's secondary valuation's; null where the meter draws no band.
+     The engine's own levels stay on the snapshot and in the report's Appendix A. */
   function levelRows(body) {
-    var d = isValued(body.result) ? drawnLevels(body) : null;
+    var r = body.result;
     var v = body.review;
     var s = body.secondary;
-    var band = d ? {
-      value: d.value, buy: d.levels.buy, fairLow: d.levels.fair_low,
-      fairHigh: d.levels.fair_high, trim: d.levels.trim
-    } : isReviewBanded(body) ? Object.assign({ value: v.value }, v.levels)
-      : isBanded(body) ? Object.assign({ value: s.valuePerShare }, s.levels) : null;
+    var band = isReviewed(body) || isReviewBanded(body)
+      ? Object.assign({ value: v.value }, v.levels)
+      : isValued(r) ? {
+        value: r.value, buy: r.levels.buy, fairLow: r.levels.fair_low,
+        fairHigh: r.levels.fair_high, trim: r.levels.trim
+      } : isBanded(body) ? Object.assign({ value: s.valuePerShare }, s.levels) : null;
     if (!band) return null;
     return [
       ['Fair value', F.formatMoney(band.value)],
@@ -940,210 +850,15 @@
     return isReviewed(body) || isReviewBanded(body) || isBanded(body) ? 'reviewed' : 'mechanical';
   }
 
-  /* The flags the drawer lists, { flags, reviewed } (spec 2026-11-13 8a): the review's, which the
-     detail carries only while the review counts on the latest snapshot, where it has a value and
-     its flags, as the screen row's Flags and Warnings read them; else the snapshot's. reviewed
-     says they are the review's. */
-  function drawerFlags(body) {
-    var v = body.review;
-    if (v && v.value != null && v.flags) return { flags: v.flags, reviewed: true };
-    return { flags: body.result.flags, reviewed: false };
-  }
-
   /* A report's references, [{ n, ref, source }], as ReportReader's footnotes, ref → n (spec 13.1):
-     the drawer's Summary and the report page number a cite alike, by the full report's list. */
+     the report page numbers a cite by the full report's list. */
   function footnotes(references) {
     var marks = {};
     (references || []).forEach(function (e) { marks[e.ref] = e.n; });
     return marks;
   }
 
-  /* Details (spec 2026-11-06 Tier 2, 18.3), in order: About, the company brief whole (B-149),
-     the stored profile's description; the review, its bridge from the mechanical value when it
-     has a value, each line under its input's label, or its refusal; the secondary valuation; the
-     overrides, each a record, read-only; the guidance on file; the latest report's judgments;
-     the kill criteria; the news items; the notes, with Add a note; the findings; the company's
-     ledger rows; then what the drawer showed before Details, in its order, the inputs led by the
-     line that says what the figures are in (currencyLine), and the flags, the review's under a
-     line that says so where the review has a value (drawerFlags, spec 2026-11-13 8a). The review
-     and the secondary come with the detail; the rest is its own read (readResearch). A list with
-     nothing in it is left out, but for the notes, which carry the owner's field. The money
-     figures of the records are in the company's reporting currency (spec 2026-11-10 7.3 and
-     7.6), but a finding's and a guidance record's, each in its own currency (spec 2026-11-15
-     9.5); the head's value and levels and the secondary valuation's value a share in USD. */
-  function details(body) {
-    var r = body.result;
-    var im = r.intermediates;
-    var code = body.currency; /* the reporting currency, a record's that names none */
-    var phase = PHASE_NUMBER[r.phase.phase];
-    var growth = r.route === 'revenue-growth';
-    var estimates = r.inputs.filter(function (i) { return i.kind === 'estimate'; });
-    var review = body.review;
-    var secondary = body.secondary;
-    var flagged = drawerFlags(body);
-    var found = state.research && state.research.symbol === r.symbol ? state.research : null;
-    var rs = found && found.body;
-    var draft = drafted(r.symbol);
-    return h('div', { key: 'details', className: 'app-drawer__details' },
-      body.brief ? section('about', 'About',
-        h('p', { className: 'body' }, body.brief)) : null,
-      review && review.value != null ? section('bridge', 'Review',
-        h(F.ValueBridge, {
-          mechanical: review.mechanical, reviewed: review.value,
-          overrides: review.bridge.map(function (line) {
-            return {
-              tag: line.label,
-              from: inputFigure(line.old, line.unit), to: inputFigure(line.new, line.unit),
-              delta: line.delta == null ? undefined : line.delta,
-              principal: line.principal, actor: line.actor, reason: line.reason
-            };
-          }),
-          note: isReviewed(body) ? mechanicalLevels(r.levels) : undefined
-        })) : null,
-      review && review.refusal ? section('review', 'Review',
-        h('p', { className: 'body app-refusal' }, review.refusal)) : null,
-      secondary ? block('app-secondary', 'Secondary valuation',
-        notFallback(body) ? h('p', { className: 'caption app-muted' }, notFallback(body)) : null,
-        pairs(secondaryRows(secondary)),
-        secondaryPath(secondary, code),
-        h('p', { className: 'app-chipline' }, h(F.PrincipalChip, {
-          principal: secondary.principal, actor: secondary.actor,
-          at: localIso(secondary.createdAt)
-        }))) : null,
-      found && found.error ? h('p', {
-        key: 'unread', className: 'caption app-section app-notes__error'
-      }, found.error) : null,
-      rs || (found && found.error) ? null : h('p', {
-        key: 'reading', className: 'caption app-muted app-section'
-      }, 'Reading the research records.'),
-      rs && rs.overrides.length ? block('app-overrides', 'Overrides',
-        rs.overrides.map(function (o) {
-          /* Its step in the valued review on the latest snapshot gives an applied override its
-             effect; a step that refused, its refusal (a later step may still value the review);
-             outside one (no review there, after a revalue, or one that refused) its Result row
-             says so instead. */
-          var line = review ? review.bridge.filter(function (l) {
-            return l.overrideId === o.id;
-          })[0] : null;
-          var effect = line && line.delta != null && review.value != null ? line.delta : undefined;
-          return h(F.OverrideRecord, {
-            key: o.id, tag: o.tag, from: inputFigure(o.old, o.unit),
-            to: inputFigure(o.new, o.unit),
-            lifetime: o.lifetime, period: o.period, reason: o.reason, evidence: o.evidence,
-            principal: o.principal, actor: o.actor,
-            state: o.state,
-            message: o.state === 'dropped' ? o.dropReason : o.message,
-            effect: effect,
-            reviewed: effect === undefined ? undefined : review.value,
-            validUntil: effect === undefined ? undefined : r.valid_until,
-            resultNote: effect === undefined ? (line && line.refusal) || NO_EFFECT : undefined
-          });
-        })) : null,
-      rs && rs.guidance.length ? block('app-guidance', 'Guidance on file',
-        guidanceTable(rs.guidance.map(function (g) {
-          return Object.assign({}, g, {
-            state: g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy,
-            citedBy: citedBy(rs.overrides, g.id)
-          });
-        }), code)) : null,
-      rs && rs.judgments.length ? block('app-judgments', 'Judgments',
-        h('ul', { className: 'app-list' }, rs.judgments.map(function (j) {
-          return h('li', { key: j.id },
-            h('span', { className: 'label' }, words(j.judgment)),
-            h('p', { className: 'body' }, j.decision));
-        }))) : null,
-      rs && rs.killCriteria.length ? block('app-kill-criteria', 'Kill criteria',
-        h('ul', { className: 'app-list' }, rs.killCriteria.map(function (k) {
-          return h('li', { key: k.id },
-            h('span', { className: 'label' }, k.state),
-            h('p', { className: 'body' }, k.text),
-            k.stateReason ? h('p', { className: 'caption app-muted' },
-              k.stateReason, ' · ', when(k.stateAt)) : null);
-        }))) : null,
-      rs && rs.newsItems.length ? block('app-news', 'News items',
-        h('ul', { className: 'app-list' }, rs.newsItems.map(function (n) {
-          return h('li', { key: n.id },
-            h('span', { className: 'caption app-line' }, when(n.date),
-              n.killCriterionId != null ? ' · touches kill criterion ' + n.killCriterionId : null),
-            h('p', { className: 'body' }, n.headline),
-            h('p', { className: 'caption app-muted' }, n.text),
-            h('p', { className: 'caption app-muted app-source' }, n.source));
-        }))) : null,
-      block('app-notes', 'Notes',
-        rs ? (rs.notes.length ? h('ul', { className: 'app-list' }, rs.notes.map(function (n) {
-          return h('li', { key: n.id },
-            h('p', { className: 'body app-notes__text' }, n.text),
-            h('p', { className: 'app-chipline' },
-              h(F.PrincipalChip, { principal: n.principal, actor: n.actor, at: localIso(n.at) }),
-              n.overrideId != null ? h('span', { className: 'caption app-muted' },
-                ' on override ' + n.overrideId) : null));
-        })) : h('p', { className: 'caption app-muted' }, 'none')) : null,
-        h('form', {
-          className: 'app-notes__new',
-          onSubmit: function (event) { event.preventDefault(); postNote(r.symbol); }
-        },
-          h('textarea', {
-            className: 'control app-field app-notes__field', rows: 3, value: draft.text,
-            placeholder: 'A note on ' + r.symbol, 'aria-label': 'A note on ' + r.symbol,
-            onChange: function (event) { draft.text = event.target.value; render(); }
-          }),
-          h(F.Button, {
-            type: 'submit', size: 'sm', disabled: draft.posting || !draft.text.trim()
-          }, 'Add a note')),
-        draft.error ? h('p', { className: 'caption app-notes__error' }, draft.error) : null),
-      rs && rs.findings.length ? block('app-findings', 'Findings',
-        findingsList(rs.findings, code)) : null,
-      rs && rs.ledger.length ? block('app-ledger', 'Ledger',
-        h('ul', { className: 'app-list' }, rs.ledger.map(function (e) {
-          return h('li', { key: e.id },
-            h('p', { className: 'app-chipline' },
-              h(F.PrincipalChip, { principal: e.principal, actor: e.actor, at: localIso(e.at) })),
-            h('p', { className: 'body' }, h('span', { className: 'label' }, e.kind), ' ',
-              e.summary));
-        }))) : null,
-      /* What the drawer showed before Details, in its order. The window reads aging from the
-         effective aging_fraction, as the Freshness column does (spec 2026-11-04 8.2). */
-      section('window', null, h(F.ValidityWindow, {
-        asOf: r.data_date, observedAt: r.data_date,
-        enteredAt: localIso(body.snapshot.createdAt),
-        validFrom: r.data_date, validUntil: r.valid_until, today: body.today,
-        agingFraction: body.agingFraction
-      })),
-      section('phase', 'Phase evidence', pairs(evidence(r.phase, phase)),
-        methodologyLink(r, phase)),
-      growth ? revenueRoute(r) : null,
-      /* Only the two mature routes write the charge, and a row they refuse for a value at or
-         below zero keeps it without a route: the reader most needs it there. */
-      'charge' in im ? matureRoute(r) : null,
-      /* A Decline row refused for a value at or below zero keeps its figures but has no route,
-         and a Start-up row is always a refusal with its figures: each draws from the
-         intermediates only its route writes. */
-      'runoff_path' in im ? declineRoute(r) : null,
-      'requirement' in im ? startUpRoute(r) : null,
-      section('inputs', 'Inputs',
-        currencyLine(body) ? h('p', { className: 'caption app-muted' }, currencyLine(body)) : null,
-        inputsTable(r.inputs)),
-      section('intermediates', 'Intermediate results', intermediates(r.intermediates)),
-      section('flags', 'Flags',
-        flagged.reviewed
-          ? h('p', { className: 'caption app-muted' }, 'The review\'s flags.') : null,
-        flagged.flags.length ? h('ul', { className: 'app-list' },
-          flagged.flags.map(function (f) {
-            return h('li', { key: f.code },
-              h('span', { className: 'label' }, f.word),
-              h('p', { className: 'body' }, f.sentence));
-          })) : h('p', { className: 'caption app-muted' }, 'none')),
-      estimates.length ? section('estimates', 'Estimates', h('ul', { className: 'app-list' },
-        estimates.map(function (i) {
-          return h('li', { key: i.name },
-            h('span', { className: 'figure-sm' }, i.name),
-            h('p', { className: 'body' }, i.estimate_method || 'no method recorded'));
-        }))) : null,
-      h('p', { key: 'versions', className: 'caption app-muted app-section' },
-        'Policy ' + r.policy_version + ' · method ' + r.method_version));
-  }
-
-  /* ------------------------------------------------- the drawer's requests and Details' reads */
+  /* ----------------------------------------------------------- the drawer's requests */
 
   /* Request research's state for the drawer's company, kept until the drawer shows another. */
   function asked(symbol) {
@@ -1515,51 +1230,15 @@
       .then(render);
   }
 
-  /* The company the drawer shows read again when a run ends (controls.js), since a run may
-     follow its review, post its expiry item or drop an override (method 14.6): the detail in
-     place, and Details' records while Details is open. */
+  /* The company the drawer shows read again in place when a run ends (controls.js), since a run
+     may follow its review, post its expiry item or drop an override (method 14.6). */
   function reloadDrawer() {
     var d = state.drawer;
     if (!d) return;
-    if (state.detailsOpen) readResearch(d.symbol);
     reloadDetail(d.symbol);
   }
 
-  /* Details ▾: open or closed for the page's life; opening it reads the records of a company not
-     yet read, or whose read failed. */
-  function toggleDetails() {
-    state.detailsOpen = !state.detailsOpen;
-    var d = state.drawer;
-    if (state.detailsOpen && d && needsResearch(d.symbol)) readResearch(d.symbol);
-    render();
-  }
-
-  function needsResearch(symbol) {
-    var found = state.research;
-    return !found || found.symbol !== symbol || found.error != null;
-  }
-
-  /* Details' records (GET /api/companies/{symbol}/research), the latest read winning. A read again
-     for the same company, after a note, keeps the records on show until the new ones land. */
-  function readResearch(symbol) {
-    var request = ++latestResearch;
-    var kept = state.research && state.research.symbol === symbol ? state.research.body : null;
-    state.research = { symbol: symbol, body: kept, error: null };
-    getJson('/api/companies/' + encodeURIComponent(symbol) + '/research')
-      .then(function (body) {
-        if (request !== latestResearch) return;
-        state.research = { symbol: symbol, body: body, error: null };
-        render();
-      })
-      .catch(function (err) {
-        if (request !== latestResearch) return;
-        state.research = {
-          symbol: symbol, body: kept, error: 'The research records did not load: ' +
-            err.message + '. Close Details and open it again to retry.'
-        };
-        render();
-      });
-  }
+  /* Nothing draws Add a note yet: the Notes control (the company page's design, 11.1) will. */
 
   /* Add a note's field for the drawer's company, kept until the drawer shows another. */
   function drafted(symbol) {
@@ -1571,8 +1250,8 @@
 
   /* Add a note: the note, as the owner, with the request header every page write carries; a
      refusal shows the server's sentence under the field, the text kept. Taken, the field clears
-     and, while the drawer still shows the company, the records are read again, the new note
-     first among them. */
+     and, while the drawer still shows the company, its detail is read again (reloadDetail), so
+     its count of notes follows. */
   function postNote(symbol) {
     var draft = drafted(symbol);
     var text = draft.text.trim();
@@ -1585,7 +1264,7 @@
         if (!r.ok) throw new Error(r.body && r.body.detail ? String(r.body.detail)
           : 'the server answered ' + r.status);
         draft.text = '';
-        if (state.drawer && state.drawer.symbol === symbol) readResearch(symbol);
+        reloadDetail(symbol);
       })
       .catch(function (err) { draft.error = err.message; })
       .then(function () {
@@ -1594,30 +1273,13 @@
       });
   }
 
-  /* --------------------------------------------------------- Details' figures */
-
-  /* A section of Details with a class of its own beside app-section. */
-  function block(className, title) {
-    var head = title ? h('h3', { className: 'heading' }, title) : null;
-    return h.apply(null, ['section', { key: className, className: 'app-section ' + className },
-      head].concat(Array.prototype.slice.call(arguments, 2)));
-  }
+  /* --------------------------------------------- the parts the report page draws too */
 
   /* An override's or a bridge line's value in its input's unit (overrides.TAGS): a word as it
      is, a multiple to two decimals with x, any other figure as the inputs table reads its unit. */
   function inputFigure(v, unit) {
     if (typeof v === 'string') return v;
     return unit === 'multiple' ? times(v) : inputValue({ value: v, unit: unit });
-  }
-
-  /* The bridge's note: the engine's own levels, the snapshot's, which the meter and the levels
-     named under it no longer show where they draw the review's (spec 2026-11-06 Tier 2, 18.1 and
-     18.2, plan 3); none on a refused row, where the engine has no levels. */
-  function mechanicalLevels(l) {
-    if (!l) return undefined;
-    return 'Mechanical levels: margin of safety ' + F.formatMoney(l.buy) + ' · fair band ' +
-      F.formatMoney(l.fair_low) + ' – ' + F.formatMoney(l.fair_high) + ' · trim ' +
-      F.formatMoney(l.trim);
   }
 
   /* The secondary valuation: its form, its value a share and its levels where it has them. */
@@ -1665,17 +1327,6 @@
     return list.map(function (v) { return F.formatPercent(v); }).join(', ');
   }
 
-  /* The ids of the overrides whose evidence cites guidance record `id`, guidance:<id>, as the
-     server reads such a ref (refs.guidance_cited). */
-  function citedBy(overrides, id) {
-    return overrides.filter(function (o) {
-      return (o.evidence || []).some(function (e) {
-        var found = /^guidance:(\d+)$/.exec(String(e.ref).trim());
-        return e.kind === 'guidance' && found !== null && Number(found[1]) === id;
-      });
-    }).map(function (o) { return o.id; });
-  }
-
   /* A guidance figure in its metric's unit (store.guidance.UNITS): EPS to cents, a margin or a
      growth rate as a percent, any other a total in whole units. A point is one figure. The money
      figures are in `code`, the record's currency (spec 2026-11-10 7.3, spec 2026-11-15 9.5). */
@@ -1697,8 +1348,8 @@
      midpoint in the metric's unit, a money figure in the record's own currency, `g.currency`,
      `$` for USD and the code before the number otherwise, else in `code`, the reporting currency
      (spec 2026-11-15 9.5). Each record brings its state, the ids citing it and its currency,
-     which Details reads from the research records and the report page from Appendix A, whose
-     record naming none is in the report's snapshot's currency. */
+     which the report page reads from Appendix A, whose record naming none is in the report's
+     snapshot's currency. */
   function guidanceTable(guidance, code) {
     return h('table', { className: 'fb-table app-inputs' },
       h('thead', null, h('tr', null,
@@ -1721,35 +1372,6 @@
       })));
   }
 
-  /* Details' findings (spec 18.3): each with its date and period, its text and its figure, its
-     source and who wrote it; a money figure in the finding's own currency, `f.currency`, else in
-     `code`, the reporting currency (spec 2026-11-15 9.5). */
-  function findingsList(findings, code) {
-    return h('ul', { className: 'app-list' }, findings.map(function (f) {
-      return h('li', { key: f.id },
-        h('span', { className: 'caption app-line' }, 'as of ', when(f.asOf),
-          f.period ? ' · ' + f.period : null),
-        h('p', { className: 'body' }, f.text, f.value != null ? h('span',
-          { className: 'figure-sm' }, ' ' + findingFigure(f.value, f.unit, f.currency || code))
-          : null),
-        h('p', { className: 'caption app-muted app-source' }, f.source.kind + ' ',
-          h('code', { className: 'fb-tag figure-sm' }, f.source.ref),
-          f.source.note ? ' — ' + f.source.note : null),
-        h('p', { className: 'app-chipline' },
-          h(F.PrincipalChip, { principal: f.principal, actor: f.actor, at: localIso(f.at) })));
-    }));
-  }
-
-  /* A finding's value in its unit (store.research.UNITS), a total or a figure a share in `code`,
-     the finding's currency, `$` for USD and the code before the number otherwise. */
-  function findingFigure(v, unit, code) {
-    if (unit === 'currency') return whole(v, code);
-    if (unit === 'per-share') return money(v, code);
-    if (unit === 'percent') return F.formatPercent(v);
-    if (unit === 'multiple') return times(v);
-    return plain(v);
-  }
-
   /* A store word in a reader's words: target_margin is target margin. */
   function words(name) { return String(name).replace(/_/g, ' '); }
 
@@ -1758,16 +1380,6 @@
      value"; '' where there is no ratio (a row valued before the designation), which draws none. */
   function gapText(ratio, edges, of) {
     return ratio == null ? '' : ratioFigure(ratio, edges) + ' × ' + of;
-  }
-
-  /* Why a secondary valuation on file is not the row's fallback (spec 2026-11-06 Tier 2, 11, plan
-     3): the route values the company, or the review on the latest snapshot does, as Appendix A
-     says of a report; null where it is the fallback. */
-  function notFallback(body) {
-    if (body.result.value != null) return 'not the fallback: the route values the company';
-    var v = body.review;
-    if (v && v.value != null) return 'not the fallback: the review values the company';
-    return null;
   }
 
   /* Price ÷ value to two decimals, unless they would land on one of the policy's designation
@@ -1783,79 +1395,6 @@
     return three.toFixed(3);
   }
 
-  /* The levels under the band meter, each named for what sets it (spec 7.3): the value less the
-     moat's margin of safety, the fair band, the trim multiple × the value. The margin and the
-     multiple are read from the levels, so each follows the settings the row was valued under:
-     1.5 × value at the default, 1.75 × value under a trim multiple of 1.75. The meter's own scale
-     is off: in the drawer's rail these names would run into each other. `r` is the meter's
-     levels (drawnLevels): the review's where its band is drawn, else the engine's. */
-  function levels(r) {
-    var moat = r.intermediates.moat;
-    var margin = Math.round((1 - r.levels.buy / r.value) * 100);
-    var multiple = Number((r.levels.trim / r.value).toFixed(2));
-    var basis = moat === 'None' ? 'value less the ' + margin + '% margin for no moat'
-      : 'value less the ' + moat + ' moat\'s ' + margin + '%';
-    return h('div', { className: 'app-levels' }, pairs([
-      ['Fair value', F.formatMoney(r.value), true],
-      ['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy),
-        moat ? h('span', { className: 'caption app-muted app-line' }, basis) : null), true],
-      ['Fair band', F.formatMoney(r.levels.fair_low) + ' – ' +
-        F.formatMoney(r.levels.fair_high), true],
-      [multiple + ' × value', F.formatMoney(r.levels.trim), true]
-    ]));
-  }
-
-  /* A Mature Stable or growth row's growth-route value, under the band (calibration spec 5.7,
-     growth-routes spec 5.12), or under a Mature Stable refusal; a refused cross-check shows only
-     among the intermediates. The route computes it in `code`, the reporting currency. */
-  function crossCheck(g, code) {
-    if (!g || g.value_per_share == null) return null;
-    return h('p', { className: 'caption app-muted' }, 'Growth-route cross-check: ' +
-      money(g.value_per_share, code) + ' (implied growth ' + F.formatPercent(g.implied_growth) +
-      ')');
-  }
-
-  /* A Young Growth row, under the band: the failure probability is unavailable in tier 1, with
-     its reason, and the value is one figure, not a range (growth-routes spec 5.13). */
-  function youngGrowth(failure) {
-    if (!failure) return null;
-    return h(React.Fragment, null,
-      h('p', { className: 'caption' }, 'Failure probability: ' +
-        (failure.value == null ? 'unavailable' : F.formatPercent(failure.value)) +
-        (failure.reason ? ' (' + failure.reason + ')' : '')),
-      h('p', { className: 'caption' }, 'The value range is not computed in tier 1'));
-  }
-
-  /* Every row of the revenue growth route discounts at the flat required return, the row's RULE
-     input, where Damodaran's template starts higher; the drawer says so (growth-routes spec
-     5.9). */
-  function discountedAt(inputs) {
-    var r = ruleValue(inputs, 'required_return');
-    if (r == null) return null;
-    return h('p', { className: 'caption app-muted' }, 'Discounted at the required return of ' +
-      F.formatPercent(r) + ' in every year; Damodaran\'s template starts higher and falls to it ' +
-      'by year 10');
-  }
-
-  /* The value of the row's RULE input `name`; null when the row has none. */
-  function ruleValue(inputs, name) { return taggedValue(inputs, name, 'RULE'); }
-
-  /* The value of the row's DATA input `name`; null when the row has none. */
-  function dataValue(inputs, name) { return taggedValue(inputs, name, 'DATA'); }
-
-  function taggedValue(inputs, name, tag) {
-    for (var i = 0; i < inputs.length; i++) {
-      if (inputs[i].name === name && inputs[i].tag === tag) return inputs[i].value;
-    }
-    return null;
-  }
-
-  function section(key, title) {
-    var head = title ? h('h3', { className: 'heading' }, title) : null;
-    return h.apply(null, ['section', { key: key, className: 'app-section' }, head]
-      .concat(Array.prototype.slice.call(arguments, 2)));
-  }
-
   /* [label, value, numeric] rows as a two-column list; numbers in mono, words in sans. */
   function pairs(rows) {
     return h('dl', { className: 'app-pairs' }, rows.map(function (row) {
@@ -1863,16 +1402,6 @@
         h('dt', { className: 'caption' }, row[0]),
         h('dd', { className: row[2] ? 'figure-sm' : 'body' }, row[1]));
     }));
-  }
-
-  /* Under the phase evidence, the link to the Methodology view's section on the row's route,
-     named by its phase (spec 2026-11-04 7.7). A row refused before its route has none. */
-  function methodologyLink(r, phase) {
-    var P = window.FairbandPage;
-    if (!r.route || !phase) return null;
-    return h('p', { className: 'caption app-more' }, h('a', {
-      className: 'app-link', href: '#methodology/' + P.methodologySection(r.route)
-    }, 'How Fairband values a ' + r.phase.phase + ' company'));
   }
 
   function evidence(p, phase) {
@@ -1893,16 +1422,13 @@
     ]);
   }
 
-  /* A result's classifier evidence, as Phase evidence lists it, for the report page's
-     Appendix A (18.4). */
+  /* A result's classifier evidence, a row a reading, for the report page's Appendix A
+     (18.4). */
   function phaseEvidence(p) {
     return pairs(evidence(p, PHASE_NUMBER[p.phase]));
   }
 
-  /* ------------------------------------------- the Mature Growth and Mature Stable routes */
-
-  /* The route of a mature phase, for a refused row, which has none. */
-  var MATURE = { 'Mature Growth': 'mature-growth', 'Mature Stable': 'mature-stable' };
+  /* -------------------------------------------------------------------- the head */
 
   /* The company's logo before its ticker (B-203), in the drawer's head and the report page's:
      an image of the detail read's `logo`, the address of the logo read, which the server names
@@ -1998,269 +1524,17 @@
     return words ? h('span', { className: 'label app-moat' }, words) : null;
   }
 
-  /* The head's one line on the company (B-149): the universe row's sector and industry, then
-     the first sentence of the company brief, the stored profile's description, joined by middle
-     dots; the parts it has, nothing without any. The full brief is behind Details, under About,
-     and whole on the report page. */
-  function briefLine(company, brief) {
-    var parts = [];
-    if (company && company.sector) parts.push(company.sector);
-    if (company && company.industry) parts.push(company.industry);
-    var first = firstSentence(brief);
-    if (first) parts.push(first);
-    return parts.join(' · ');
+  /* The drawer's caption under its head (the company page's design, 11): the universe row's
+     sector and industry, joined by a middle dot; the parts it has, '' without either. */
+  function sectorLine(company) {
+    return [company && company.sector, company && company.industry]
+      .filter(function (part) { return !!part; }).join(' · ');
   }
 
-  /* The words a period follows without ending a sentence, as the live briefs have them: "KKR &
-     Co. Inc.", "Eaton Corp. PLC", "Dr. Reddy's", "St. Louis". */
-  var ABBREVIATIONS = ['co', 'corp', 'inc', 'ltd', 'st', 'dr', 'mr', 'mrs', 'ms', 'mt', 'jr', 'sr'];
-
-  /* The first sentence of a text: to the first period that white space and a capital letter
-     follow, where the word before the period is more than one letter, holds no period of its
-     own and is not one of ABBREVIATIONS, so "Apple Inc. designs", "the U.S. The", "Plan B. The"
-     and "St. Joe" do not end it; the whole text, trimmed, without such a period. */
-  function firstSentence(text) {
-    var s = (text == null ? '' : String(text)).trim();
-    var ends = /\.\s+(?=[A-Z])/g;
-    var found;
-    while ((found = ends.exec(s)) !== null) {
-      var word = s.slice(0, found.index).split(/\s+/).pop();
-      if (word.length > 1 && word.indexOf('.') === -1 &&
-          ABBREVIATIONS.indexOf(word.toLowerCase()) === -1) {
-        return s.slice(0, found.index + 1);
-      }
-    }
-    return s;
-  }
-
-  /* A row on its earnings path (method 4.8, 5 and 6), valued or refused for a value at or below
-     zero: the charge, in words (spec 2026-11-09 12), then the count under shares.committed, under
-     the route's name, a refused row's by its phase. The figures behind it are among the
-     intermediates. */
-  function matureRoute(r) {
-    return section('mature', ROUTES[r.route || MATURE[r.phase.phase]],
-      annualAnchor(r.intermediates.anchor, r.intermediates.currency),
-      group('charge', 'Charge', pairs(chargeRows(r.intermediates))),
-      shareCount(r.intermediates));
-  }
-
-  /* A mature route's count in force under shares.committed (spec 2026-11-14 4), with the
-     committed shares it holds: the route's section has no count of its own, so the group shows
-     only under the override. */
-  function shareCount(im) {
-    if (!('shares_committed' in im)) return null;
-    return group('shares', 'Share count',
-      pairs([['Shares', plain(im.shares), true]].concat(committedShares(im))));
-  }
-
-  /* Year 1 on a thin NTM window, the periods' sum corrected by the annual consensus of the last
-     fiscal year the window reaches (spec 2026-11-13 9a): "Year 1 from the periods, corrected by
-     the annual consensus of fiscal 2027: +$0.12 a share.", the correction signed, in `code`, the
-     row's currency; nothing on the window's periods, on a Mature Stable row, or on an anchor
-     stored before method 1.4. */
-  function annualAnchor(anchor, code) {
-    var gap = anchor && anchor.source === 'annual' ? anchor.annual : null;
-    if (!isTable(gap) || typeof gap.correction !== 'number') return null;
-    return h('p', { className: 'caption' }, 'Year 1 from the periods, corrected by the annual ' +
-      'consensus of fiscal ' + gap.fiscal_year + ': ' + (gap.correction > 0 ? '+' : '') +
-      money(gap.correction, code) + ' a share.');
-  }
-
-  /* The charge's rows (spec 2026-11-09 6.2 and 6.3): the return each year's reinvestment pays
-     at; the growth it pays for in years 2 and 3 beside the earnings growth, or on a Mature Stable
-     row the terminal growth in every year; and the newest year's marginal return and the
-     five-year marginal return at a constant margin (method 4.6), each shown and never used,
-     when there is one. Where the measure was below the hurdle rate and the charge
-     read the return without goodwill (method 4.6 rule 5), both measures follow: the one below
-     the hurdle rate, then the same measure on capital without goodwill and intangibles, or the
-     words for a business with no capital without them. The return by year shows the start. */
-  function chargeRows(im) {
-    var c = im.charge, rr = im.runway_return || {};
-    var organic = rr.used === 'without-goodwill' ? rr.without_goodwill : null;
-    var rows = [
-      ['Return by year', returnByYear(c.return_by_year, c.hold_years, im.charge_off === true),
-        false],
-      ['Growth the charge pays for', 'stable_growth' in im
-        ? F.formatPercent(c.growth_by_year[c.growth_by_year.length - 1]) +
-          ' a year, the terminal growth'
-        : paidFor(c, im.growth_rates), false]
-    ];
-    if (rr.one_year != null) {
-      rows.push(['Newest year\'s marginal return', F.formatPercent(rr.one_year), true]);
-    }
-    if (rr.constant_margin != null) {
-      rows.push(['Five-year return at a constant margin', F.formatPercent(rr.constant_margin),
-        true]);
-    }
-    if (organic) {
-      rows.push(['Return with goodwill',
-        F.formatPercent(rr.marginal_usable ? rr.marginal : rr.three_year) +
-        ', below the hurdle rate', true]);
-      rows.push(organic.measure == null
-        ? ['Return without goodwill', 'no capital without goodwill', false]
-        : ['Return without goodwill', F.formatPercent(organic.measure), true]);
-    }
-    return rows;
-  }
-
-  /* The return by year from its ends and the hold (method 4.8): years 1 to N - 1 uncharged when
-     the charge is off (4.6 rule 4; the row's charge_off, never the measure's word, since a
-     return.runway override charges a row whose measure was off); one figure when both ends read
-     the same; with no hold, a straight line from year 1; with the hold at N - 1 or more, held to
-     year N - 1, the shape before method 1.0; else held through the hold, then a straight line to
-     year N. The line falls, or rises where an override starts it below the terminal return, so
-     the words say neither. */
-  function returnByYear(returns, hold, off) {
-    var n = returns.length, first = F.formatPercent(returns[0]);
-    var end = F.formatPercent(returns[n - 1]), last = end + ' in year ' + n;
-    if (n === 1) return last;
-    if (off) return 'no charge in years 1 to ' + (n - 1) + ', then ' + last;
-    if (first === end) return first + ' in every year';
-    if (hold === 0) return 'from ' + first + ' in year 1 to ' + last;
-    if (hold >= n - 1) return first + ' through year ' + (n - 1) + ', then ' + last;
-    return first + ' through year ' + hold + ', then to ' + last;
-  }
-
-  /* Years 2 and 3's growth the charge pays for beside the earnings growth as the path resolved
-     it, and where each year's comes from (method 4.8, spec 2026-11-14 6.3): the consensus revenue
-     step, an agent's override of it, or the year's earnings growth, where the consensus gives no
-     revenue step or a thin one; one phrase for both years where they come from one place. */
-  function paidFor(c, earnings) {
-    var h = c.growth_by_year, source = stepSources(c);
-    var paid = F.formatPercent(h[0]) + ' then ' + F.formatPercent(h[1]);
-    var against = ', against earnings of ' + F.formatPercent(earnings[0]) + ' then ' +
-      F.formatPercent(earnings[1]);
-    var both = source[0] === source[1] ? source[0] : null;
-    if (both === 'consensus') return paid + ' on revenue' + against;
-    if (both === 'agent') return paid + ' on revenue from overrides' + against;
-    if (both === 'none') {
-      return paid + ', the earnings growth: years 2 and 3 have no revenue consensus';
-    }
-    return paid + against + ': ' + [0, 1].map(function (k) {
-      if (source[k] === 'thin') return 'year ' + (k + 2) + thinStep(c.revenue_steps_found[k]);
-      return 'year ' + (k + 2) + STEP_FROM[source[k]];
-    }).join(', ');
-  }
-
-  /* Each year's source, as the charge records it; on a result stored before it was recorded,
-     from the steps the charge read: a step the consensus's, none the earnings growth. */
-  function stepSources(c) {
-    return c.revenue_step_source || c.revenue_steps.map(function (step) {
-      return step == null ? 'none' : 'consensus';
-    });
-  }
-
-  /* What a year's growth is, by its source, after "year 2". */
-  var STEP_FROM = {
-    consensus: ' is on revenue',
-    agent: ' is on revenue from an override',
-    none: ' has no revenue consensus and takes its earnings growth'
-  };
-
-  /* A thin year (spec 2026-11-14 6.2): its consensus revenue step as found, above the most read
-     on fewer revenue analysts than the analyst minimum, or no count, is not read. The drawer
-     holds neither limit, so the words name them without figures. */
-  function thinStep(step) {
-    return ' has too few analysts on file for a revenue consensus as high as ' +
-      F.formatPercent(step) + ' and takes its earnings growth';
-  }
-
-  /* ---------------------------------------------------- the revenue growth route */
-
-  /* A row valued on the revenue DCF (growth-routes spec 5): the ten years, the peers that set
-     the target margin, the sales-to-capital, the terminal and the bridge to equity, then the two
-     solves at the price, so the arithmetic reproduces from the drawer. */
-  function revenueRoute(r) {
-    var im = r.intermediates;
-    var code = im.currency;
-    var held = heldYears(ruleValue(r.inputs, 'high_growth_years'));
-    return section('revenue', ROUTES[r.route],
-      group('years', 'Ten years', yearsTable(im)),
-      group('peers', 'Target margin', peersTable(im.target_margin.peers),
-        pairs(peerSummary(im.target_margin))),
-      group('capital', 'Sales-to-capital', pairs(salesToCapital(im.sales_to_capital))),
-      group('bridge', 'Terminal and bridge to equity', pairs([
-        ['Terminal return', F.formatPercent(im.terminal_roic), true],
-        ['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat, code), true],
-        ['Terminal value', whole(im.terminal_value, code), true],
-        ['Firm value', whole(im.firm_value, code), true],
-        ['Less debt', whole(im.debt, code), true]
-      ].concat(lessMinority(im), [
-        ['Plus cash', whole(im.cash, code), true],
-        ['Equity', whole(im.equity, code), true],
-        ['Shares', plain(im.shares), true]
-      ], committedShares(im), [
-        ['Value a share', money(im.value_per_share, code), true]
-      ])), sheetPeriod(im)),
-      group('solves', 'At the price', pairs([
-        [held ? 'Implied growth held in ' + held : 'Implied growth held after year 3',
-          F.formatPercent(im.implied_growth), true],
-        ['Margin the price needs', F.formatPercent(im.implied_margin), true]
-      ])));
-  }
-
-  function group(key, title) {
-    return h.apply(null, ['div', { key: key, className: 'app-group' },
-      h('h4', { className: 'label app-group__head' }, title)]
-      .concat(Array.prototype.slice.call(arguments, 2)));
-  }
-
-  /* Whether the revenue-growth, Decline or Start-up row takes a minority interest off the owners'
-     claim (spec 2026-11-13 13): above zero only, so a company with none, and a result stored
-     before method 1.4, reads as before. */
-  function hasMinority(im) { return im.minority_interest > 0; }
-
-  /* The minority interest's row, after the debt, where there is one; none where there is not. */
-  function lessMinority(im) {
-    return hasMinority(im)
-      ? [['Less minority interest', whole(im.minority_interest, im.currency), true]] : [];
-  }
-
-  /* The committed shares' row, right after the count, which holds them (spec 2026-11-14 4): an
-     agent's shares.committed, on any of the five routes; none without the override. */
-  function committedShares(im) {
-    return 'shares_committed' in im ? [['Committed shares',
-      noted(plain(im.shares_committed), 'in the shares above'), true]] : [];
-  }
-
-  /* The newest balance sheet the debt, the cash and the minority interest were read from (spec
-     2026-11-13 12.2), under their rows: "Balance sheet of fiscal 2026 Q3."; nothing without a
-     sheet, or on a result stored before method 1.4. */
-  function sheetPeriod(im) {
-    var sheet = im.balance_sheet;
-    if (!sheet || !sheet.label) return null;
-    return h('p', { className: 'caption' }, 'Balance sheet of ' + sheet.label + '.');
-  }
-
-  /* The implied growth is held from year 4 to the last high-growth year, the row's RULE input;
-     null when the row has none, and the label then says only where the hold starts. */
-  function heldYears(last) {
-    if (last == null) return null;
-    if (last === 4) return 'year 4';
-    return last === 5 ? 'years 4 and 5' : 'years 4 to ' + last;
-  }
-
-  /* One row a year: the revenue, the margin, EBIT, tax, NOPAT, the reinvestment and the free cash
-     flow, totals to whole units of the row's currency. On the dollar ramp the margin is each
-     year's operating income over its revenue, the income moving in dollars (method 5a.4), or in
-     the currency of a row in another, and its head says so. */
-  function yearsTable(im) {
-    var ramp = im.margin_path.ramp === 'dollars'
-      ? 'ramp in ' + (foreign(im.currency) ? im.currency : 'dollars') : null;
-    var total = wholeIn(im.currency);
-    return figuresTable([
-      ['Revenue', im.revenue_by_year, total],
-      ['Margin', im.margin_path.by_year, F.formatPercent, ramp],
-      ['EBIT', im.ebit_by_year, total],
-      ['Tax', im.tax_by_year, total],
-      ['NOPAT', im.nopat_by_year, total],
-      ['Reinvestment', im.reinvestment_by_year, total],
-      ['Free cash flow', im.fcff_by_year, total]
-    ]);
-  }
+  /* -------------------------------------------------------- a table of figures by year */
 
   /* A row a year from year 1, a column for each [head, the figures by year, their format, and a
-     note on the head when there is one]. Wider than the rail, the table scrolls on its own, by
+     note on the head when there is one]. Wider than its column, the table scrolls on its own, by
      keyboard too: its box takes focus. */
   function figuresTable(columns) {
     return h('div', { className: 'app-scroll', tabIndex: 0 },
@@ -2280,354 +1554,9 @@
         }))));
   }
 
-  /* The mature peers counted for the target margin, each with its ten-year margin and its market
-     cap. */
-  function peersTable(peers) {
-    return h('div', { className: 'app-scroll', tabIndex: 0 },
-      h('table', { className: 'fb-table app-figures' },
-        h('thead', null, h('tr', null,
-          h('th', { className: 'label' }, 'Peer'),
-          h('th', { className: 'label fb-num' }, 'Margin'),
-          h('th', { className: 'label fb-num' }, 'Market cap'))),
-        h('tbody', null, peers.map(function (p) {
-          return h('tr', { key: p.symbol },
-            h('td', { className: 'figure-sm' }, p.symbol),
-            h('td', { className: 'fb-num figure-sm' }, F.formatPercent(p.margin)),
-            h('td', { className: 'fb-num figure-sm' }, whole(p.market_cap)));
-        }))));
-  }
-
-  /* The median is the target; the largest peer by market cap is the success scenario and sets
-     nothing (spec 5.5). */
-  function peerSummary(t) {
-    return [
-      ['Median, the target', F.formatPercent(t.value), true],
-      ['Peers counted', plain(t.count), true],
-      ['Largest peer', t.largest_symbol == null ? '—' : noted(t.largest_symbol + ' ' +
-        F.formatPercent(t.largest_margin), 'the success scenario'), true]
-    ];
-  }
-
-  /* The measure used, own or peers, and both figures (spec 5.6). */
-  function salesToCapital(s) {
-    return [
-      ['Measure used', s.used || 'none', false],
-      ['Own five-year marginal', s.own_usable ? times(s.own)
-        : noted(times(s.own), 'not usable'), true],
-      ['Mature peers\' median', times(s.peers), true]
-    ];
-  }
-
   /* A figure with words after it, in sans and in brackets; the figure stays mono. */
   function noted(text, note) {
     return h(React.Fragment, null, text, h('span', { className: 'caption' }, ' (' + note + ')'));
-  }
-
-  /* A line in place of a figure the route could not compute, saying why. */
-  function missing(text) { return h('p', { className: 'caption app-muted' }, text); }
-
-  /* -------------------------------------------------------------- the Decline route */
-
-  /* A row valued on the run-off (spec 2026-11-03 section 10): the ten years, the margin held in
-     each, the rating that sets π, the floor and the distress weighting, then Altman Z″ and
-     Piotroski F, which decide nothing. A row refused for a value at or below zero shows all of
-     it but the decline rate at the price. Its money figures are in the row's currency. */
-  function declineRoute(r) {
-    var im = r.intermediates;
-    return section('decline', ROUTES.decline,
-      group('runoff', 'Run-off', runoffTable(im), pairs(runoffSummary(im))),
-      group('margin', 'Normalized margin', pairs(normalizedMargin(im.margin))),
-      group('rating', 'Rating', pairs(rating(im.rating, im.currency))),
-      group('floor', 'Floor and distress', pairs(floorAndDistress(im)), sheetPeriod(im),
-        weighting(im)),
-      group('altman', 'Altman Z″', altmanZ(im.altman_z)),
-      group('piotroski', 'Piotroski F', piotroskiF(im.piotroski_f)));
-  }
-
-  /* A fall in revenue releases the capital it needed, recovered in part; a rise reinvests in
-     full; each in the year of the change, so no year has both (spec 10.4). */
-  function runoffTable(im) {
-    var total = wholeIn(im.currency);
-    return figuresTable([
-      ['Revenue', im.revenue_by_year, total],
-      ['EBIT', im.ebit_by_year, total],
-      ['NOPAT', im.nopat_by_year, total],
-      ['Release', im.release_by_year, total],
-      ['Reinvestment', im.reinvestment_by_year, total],
-      ['Free cash flow', im.fcff_by_year, total]
-    ]);
-  }
-
-  /* The decline rate, after the years the consensus gives (K, 3 to N) or the three years that
-     shrink at it without a usable consensus, fading to zero by year N (method 6a.2); when the
-     consensus reaches year N - 1 or N no year reads the rate (at K = N - 1 the one fade year, N,
-     is at zero), so the note says where the consensus ends instead, and that year N is flat; the
-     sales-to-capital the release and the reinvestment read; the terminal value, flat on year N's
-     revenue (6a.5), and the firm value; and, on a valued row, the decline rate at which the value
-     is the price. */
-  function runoffSummary(im) {
-    var path = im.runoff_path, s = im.sales_to_capital;
-    var years = path.ntm_revenue == null ? 'years 1 to 3 at the decline rate'
-      : 'years 1 to ' + path.consensus_years + ' from the consensus';
-    var fade = path.consensus_years < path.runoff_years - 1
-      ? years + '; fades to zero by year ' + path.runoff_years
-      : path.consensus_years < path.runoff_years
-        ? 'the consensus runs to year ' + path.consensus_years + '; year ' + path.runoff_years
-          + ' is flat'
-        : 'the consensus runs to year ' + path.runoff_years;
-    var rows = [
-      ['Decline rate', noted(F.formatPercent(path.d), fade), true],
-      ['Sales-to-capital', noted(times(s.value), s.used === 'own-latest'
-        ? 'own, newest year' : 'mature peers\' median'), true],
-      ['Terminal value', noted(whole(im.terminal_value, im.currency), 'flat'), true],
-      ['Firm value', whole(im.firm_value, im.currency), true]
-    ];
-    if ('implied_decline_rate' in im) {
-      rows.push(['Implied decline rate', im.implied_decline_rate == null
-        ? noted('—', 'none from −50% to 0') : F.formatPercent(im.implied_decline_rate), true]);
-    }
-    return rows;
-  }
-
-  /* The one margin held (spec 10.3): the median of the last five fiscal years' margins when
-     three or more are read, else the trailing margin; the one used is marked. */
-  function normalizedMargin(m) {
-    function used(text, which) { return m.used === which ? noted(text, 'used') : text; }
-    return [
-      ['Median', used(m.median == null ? noted('—', 'fewer than three years')
-        : F.formatPercent(m.median), 'median'), true],
-      ['Trailing', used(F.formatPercent(m.trailing), 'trailing'), true],
-      ['Years read', m.years.length ? m.years.map(function (year, k) {
-        return year + ' ' + F.formatPercent(m.margins[k]);
-      }).join(' · ') : 'none', true]
-    ];
-  }
-
-  /* The synthetic rating on EBIT at the normalized margin over the trailing interest, and its
-     ten-year probability of default (spec 10.7): with no net debt there is nothing to default
-     on; with no debt line on file, or net debt and no interest expense on file, no rating and
-     no π, the note saying which. EBIT and the interest are in `code`, the row's currency. */
-  function rating(g, code) {
-    var pi = 'π, ten-year default probability';
-    if (g.note === 'no net debt') {
-      return [['Rating', 'no net debt', false], [pi, F.formatPercent(g.pi), true]];
-    }
-    if (g.rating == null) {
-      return [['Rating', 'unavailable: ' + (g.note || 'no interest expense on file'), false],
-        [pi, 'unavailable', false]];
-    }
-    return [
-      ['Rating', g.rating, false],
-      ['EBIT at the normalized margin', whole(g.ebit, code), true],
-      ['Interest expense, trailing', whole(g.interest, code), true],
-      ['Coverage', times(g.coverage), true],
-      [pi, F.formatPercent(g.pi), true]
-    ];
-  }
-
-  /* The firm value to the going-concern value a share; the net current asset value a share, which
-     floors it when above zero and above it (spec 10.6): no floor without one or at or below zero,
-     and above zero a floor that binds or does not; the distress-sale value a share. A minority
-     interest comes off all three (spec 2026-11-13 13): its row follows the debt, and the floor's
-     row and the distress-sale value's words name it. Committed shares follow the count. */
-  function floorAndDistress(im) {
-    var ncav = im.ncav_per_share, code = im.currency, minority = hasMinority(im);
-    var floor = ncav == null || ncav <= 0 ? 'no floor'
-      : im.floored_per_share > im.going_concern_per_share ? 'the floor binds'
-        : 'the floor does not bind';
-    return [['Less debt', whole(im.debt, code), true]].concat(lessMinority(im), [
-      ['Plus cash', whole(im.cash, code), true],
-      ['Shares', plain(im.shares), true]
-    ], committedShares(im), [
-      ['Going concern a share', money(im.going_concern_per_share, code), true],
-      [minority ? 'NCAV less minority interest, a share' : 'NCAV a share',
-        noted(money(ncav, code), floor), true],
-      ['Distress-sale value a share', noted(money(im.distress_per_share, code),
-        F.formatPercent(im.distress_sale_fraction) + ' of firm value + cash − debt' +
-        (minority ? ' − minority interest' : '')), true]
-    ]);
-  }
-
-  /* The value a share (spec 10.7): the floored value weighted against the distress-sale value at
-     π, or the floored value alone when π is unavailable. */
-  function weighting(im) {
-    var pi = im.pi.value, code = im.currency;
-    var floored = money(im.floored_per_share, code);
-    if (pi == null) {
-      return h('p', { className: 'caption' }, 'π unavailable: the value is the floored value, ' +
-        floored);
-    }
-    return h('p', { className: 'caption' },
-      h('span', { className: 'app-line' }, 'value = floored × (1 − π) + distress × π'),
-      h('span', { className: 'app-line' }, '= ' + floored + ' × (1 − ' + F.formatPercent(pi) +
-        ') + ' + money(im.distress_per_share, code) + ' × ' + F.formatPercent(pi) + ' = ' +
-        money(im.value_per_share, code)));
-  }
-
-  /* Altman Z″ on the newest annual balance sheet (spec 10.8): its four ratios, the score and the
-     zone. */
-  function altmanZ(z) {
-    if (!z) {
-      return missing('No score: a line it reads is missing, or total assets or total ' +
-        'liabilities is not above zero');
-    }
-    return pairs([
-      ['Fiscal year', plain(z.year), true],
-      ['X1, working capital ÷ assets', decimals(z.x1, 3), true],
-      ['X2, retained earnings ÷ assets', decimals(z.x2, 3), true],
-      ['X3, operating income ÷ assets', decimals(z.x3, 3), true],
-      ['X4, equity ÷ liabilities', decimals(z.x4, 3), true],
-      ['Score', noted(decimals(z.score, 2), z.zone + ' zone'), true]
-    ]);
-  }
-
-  /* Piotroski's nine signals, the newest fiscal year against the one before (spec 10.8). */
-  var SIGNALS = {
-    roa_positive: 'Return on assets above zero',
-    cfo_positive: 'Operating cash flow above zero',
-    roa_up: 'Return on assets up',
-    accrual: 'Operating cash flow above net income',
-    leverage_down: 'Long-term debt to assets down',
-    liquidity_up: 'Current ratio up',
-    no_issuance: 'No common stock issued',
-    gross_margin_up: 'Gross margin up',
-    turnover_up: 'Asset turnover up'
-  };
-
-  /* The score of the signals read, then each signal, met, not met or not read for a missing line,
-     the word in a box of its own so the signals line up. */
-  function piotroskiF(f) {
-    if (!f) return missing('No score: fewer than two annual balance sheets');
-    return h(React.Fragment, null,
-      pairs([
-        ['Fiscal year', plain(f.year) + ' against ' + plain(f.prior_year), true],
-        ['Score', f.score + ' of ' + f.read + (f.read < f.signals.length ? ' read' : ''), true]
-      ]),
-      h('ul', { className: 'app-list app-signals' }, f.signals.map(function (s) {
-        var mark = s.value === true ? 'met' : s.value === false ? 'not met' : 'not read';
-        return h('li', { key: s.name },
-          h('span', { className: 'caption app-mark' }, mark),
-          h('span', { className: 'body' }, SIGNALS[s.name] || s.name));
-      })));
-  }
-
-  /* ------------------------------------------------------------- the Start-up route */
-
-  /* A Start-up row (spec 2026-11-03 section 9), a refusal by design: the revenue in year 10 the
-     price needs at the mature peers' margin, the net cash a share as a floor and the years the
-     cash covers the burn. Its money figures are in the row's currency. */
-  function startUpRoute(r) {
-    var im = r.intermediates;
-    return section('start-up', ROUTES['start-up'],
-      group('requirement', 'Revenue the price needs',
-        requirement(im.requirement, im.currency, hasMinority(im)), movedCap(im, r.inputs)),
-      group('floor', 'Cash floor', pairs(cashFloor(im)), sheetPeriod(im), belowFloor(r)),
-      group('burn', 'Burn cover', pairs(burnCover(im))));
-  }
-
-  /* The year-10 revenue at which the straight ramp from today's revenue and operating income to
-     the target margin is worth the enterprise value the price implies (spec 9.2), and the ramp,
-     totals in `code`, the row's currency; or the reason the requirement is not computed. Where
-     the row has a `minority` interest, the enterprise value adds it (spec 2026-11-13 13), and its
-     words say so. */
-  function requirement(req, code, minority) {
-    var target = req.target_margin, s = req.sales_to_capital;
-    var total = wholeIn(code);
-    var rows = req.reason ? [['Not computed', req.reason, false]]
-      : [['Year-10 revenue', total(req.revenue_y10), true]];
-    if (!req.reason && req.revenue_0 > 0) {
-      rows.push(['Against today', h(React.Fragment, null,
-        decimals(req.revenue_y10 / req.revenue_0, 1),
-        h('span', { className: 'caption' }, ' × the trailing revenue')), true]);
-    }
-    rows = rows.concat([
-      ['Trailing revenue', total(req.revenue_0), true],
-      ['Enterprise value at the price', enterpriseValue(req.ev_price, total, minority), true],
-      ['Target margin', target == null ? '—'
-        : noted(F.formatPercent(target.value), peersBehind(target)), true],
-      ['Sales-to-capital', s == null ? '—' : noted(times(s.value), 'mature peers\' median'), true]
-    ]);
-    return h(React.Fragment, null, pairs(rows), req.path ? figuresTable([
-      ['Revenue', req.path.revenue, total],
-      ['EBIT', req.path.ebit, total],
-      ['NOPAT', req.path.nopat, total],
-      ['Reinvestment', req.path.reinvestment, total],
-      ['Free cash flow', req.path.fcff, total]
-    ]) : null, req.path ? pairs([
-      ['Terminal value', total(req.terminal_value), true],
-      ['Terminal return', F.formatPercent(req.terminal_roic), true]
-    ]) : null);
-  }
-
-  /* The enterprise value the price implies, `total` its format: at or below zero, net cash
-     covers the price; with a `minority` interest, the words name the sum, which adds it. */
-  function enterpriseValue(ev, total, minority) {
-    var covered = ev != null && ev <= 0 ? 'net cash covers the price' : null;
-    if (minority && ev != null) {
-      var sum = 'market cap + debt + minority interest − cash';
-      return noted(total(ev), covered ? sum + '; ' + covered : sum);
-    }
-    return covered ? noted(total(ev), covered) : total(ev);
-  }
-
-  /* The peers' count and where they came from: FMP's list, or the industry's on the fallback. */
-  function peersBehind(t) {
-    return 'median of ' + t.count + ' mature peers' + (t.source === 'industry'
-      ? ' of the ' + t.industry + ' industry' : ' on FMP\'s list');
-  }
-
-  /* A repriced row's market cap moved with the price at the share count it was read at (method
-     6b.5), while its market-cap input keeps the one read: both show when they differ. */
-  function movedCap(im, inputs) {
-    var read = dataValue(inputs, 'market_cap');
-    if (im.market_cap == null || read == null || im.market_cap === read) return null;
-    return h('p', { className: 'caption' }, 'The market cap moved with the price: ' +
-      dollars(im.market_cap, im.currency) + ' at this price, ' + dollars(read, im.currency) +
-      ' as read');
-  }
-
-  /* The net cash a share (spec 9.4; method 6b.4): (cash − debt − minority interest) ÷ diluted
-     shares, with any committed shares, the minority interest's row only where there is one and
-     the committed shares' only under the override. */
-  function cashFloor(im) {
-    var code = im.currency;
-    return [
-      ['Net cash a share', money(im.cash_floor, code), true],
-      ['Cash', whole(im.cash, code), true],
-      ['Less debt', whole(im.debt, code), true]
-    ].concat(lessMinority(im), [
-      ['Shares', plain(im.shares), true]
-    ], committedShares(im));
-  }
-
-  /* The caption reads the row's `below-net-cash` flag, the one test (method 6b.4): the market
-     cap at or below the net cash, cash less debt and any minority interest, which is the price
-     at or below the cash floor only when the market cap is the price times the diluted shares. */
-  function belowFloor(r) {
-    var below = r.flags.some(function (f) { return f.code === 'below-net-cash'; });
-    if (!below) return null;
-    return h('p', { className: 'caption' },
-      'The price is covered by net cash: the market cap is at or below the cash less the debt' +
-      (hasMinority(r.intermediates) ? ' and the minority interest' : ''));
-  }
-
-  /* The years the cash covers the trailing burn (spec 9.4); "not burning" when the trailing free
-     cash flow is zero or above; none without the trailing cash flows, or without a cash figure,
-     when the burn shows and the cover is unknown. */
-  function burnCover(im) {
-    var cover = im.burn_cover_years;
-    if (cover === 'not burning') return [['Trailing burn', 'not burning', false]];
-    if (cover == null && im.burn != null && im.cash_known === false) {
-      return [
-        ['Cash covers', 'unknown: no cash line on file', false],
-        ['Burn a year', whole(im.burn, im.currency), true]
-      ];
-    }
-    if (cover == null) return [['Trailing burn', noted('—', 'no trailing cash flows'), true]];
-    return [
-      ['Cash covers', decimals(cover, 1) + ' years', true],
-      ['Burn a year', whole(im.burn, im.currency), true]
-    ];
   }
 
   /* ---------------------------------------------------------------- the inputs */
@@ -2673,9 +1602,6 @@
   /* A total in whole units of `code`, USD when none; an em dash for none. */
   function whole(v, code) { return v == null ? '—' : dollars(v, code); }
 
-  /* whole, in `code`, as a table's column format (figuresTable). */
-  function wholeIn(code) { return function (v) { return whole(v, code); }; }
-
   /* A figure a share to cents: $104.64, or in another currency `code` SEK 837.14; an em dash for
      none. */
   function money(v, code) {
@@ -2720,7 +1646,7 @@
   }
 
   /* What a company's figures are in (spec 2026-11-10 6.2, 7.4 and 10), the line under the head of
-     the drawer and of the report page and at the head of Details' inputs, from the company read:
+     the drawer and of the report page, from the company read:
      the reporting currency, the ordinary shares an ADS stands for, and the rate its value was
      translated at, "Reports in TWD; one ADS is five ordinary shares; valued at TWD 32.96 per
      USD". The report page (`perAds`) adds that every figure a share is per ADS. A company in USD
@@ -2761,8 +1687,8 @@
     return Number.isInteger(n) && n <= 10 ? NUMBER_WORDS[n] : shares(n);
   }
 
-  /* Each input on one row, its nine fields stacked so they fit the rail: the name, tag, kind and
-     source, then the three dates in caption, and the value with its unit on the right. */
+  /* Each input on one row, its nine fields stacked so they fit a narrow column: the name, tag,
+     kind and source, then the three dates in caption, and the value with its unit on the right. */
   function inputsTable(inputs) {
     return h('table', { className: 'fb-table app-inputs' },
       h('thead', null, h('tr', null,
@@ -2787,118 +1713,6 @@
             h('span', { className: 'figure-sm app-line' }, inputValue(i)),
             h('span', { className: 'caption app-muted app-line' }, i.unit)));
       })));
-  }
-
-  /* ---------------------------------------------------------- the intermediates */
-
-  /* A number's key says what it is. A key ending in one of these names a fraction, which reads
-     as a percentage; so do the fractions those endings miss (the implied-growth maps, the price
-     changes, the drawdown, the path steps, the growth rates, the growth share, the charge's
-     revenue steps as read and as found). A dollar amount or a count whose key happens to end the
-     same way (value_by_roic, stable_growth, roic's years) does not. A map keyed by runway years
-     or by ROIC values takes its own key's reading, and so does a bare value (runway_return's).
-     The inflation differential is a fraction too. */
-  var PERCENT = /(_growth|_yield|_return|margin|roic|belief)$/;
-  var ALSO_PERCENT =
-    /^(implied_|change_|drawdown|path_steps$|growth_rates$|growth_share$|inflation_differential$)/;
-  var REVENUE_STEPS = /^revenue_steps(_found)?$/;  /* spec 2026-11-14 6.3 */
-  var NOT_PERCENT = /^(value_|stable_growth|years?$)/;
-  /* Counts and years read whole, the committed shares too. P/E multiples to one decimal with x. A
-     figure a share (EPV, the value, the value in the reporting currency, EPS, the non-recurring
-     gap, the one-time item in the NTM consensus, the 52-week prices, the value maps by runway and
-     by ROIC, whatever the entry's key) reads to cents; a total (NOPAT, invested capital, net
-     income, earnings, the trailing stock pay and the minority interest, nil or not, anything at a
-     million or more) to whole units. The rate reads as a rate. Any other number to two
-     decimals. */
-  var COUNT = /^(years?|base_year|runway|fade_years|analysts|shares|shares_committed)$/;
-  var MULTIPLE = /^pe_/;
-  var PER_SHARE =
-    /^(epv|value_per_share|value_in_currency|stable_growth|nri_gap|ntm_eps.*|.*_per_share|.*_52w)$/;
-  var ONE_TIME = /^ntm_nri$/;  /* spec 2026-11-14 5 */
-  var PER_SHARE_GROUP = /^(eps$|value_by_)/;
-  var TOTAL = /(_total|nopat|average_capital|net_income|sbc_ttm|minority_interest)$|^e_/;
-  /* The NTM anchor's correction by the annual consensus (spec 2026-11-13 9a): the fiscal year
-     whole and the window's share of its periods plain; the sum of the window's periods, the
-     year's annual EPS, the sum of its periods and the correction a share. */
-  var ANCHOR_PLAIN = /^(fiscal_year|share)$/;
-  var ANCHOR_PER_SHARE = /^(periods_sum|eps|year_sum|correction)$/;
-  /* On a row in another currency every money figure is in it (spec 2026-11-10 7.2) but the price
-     facts, read from the USD closes, and the peers' market caps, which rank the peers. */
-  var USD_GROUPS = /^(price_facts|peers)$/;
-
-  /* A number by its key, a money figure in `code`, the row's reporting currency. */
-  function figure(v, key, group, code) {
-    var own = USD_GROUPS.test(group || '') ? null : code;
-    if (key === 'fx_rate') return rate(v);
-    if (isPercent(key, group)) return F.formatPercent(v);
-    if (PER_SHARE_GROUP.test(group || '')) return money(v, own);  /* value_by_roic's runway */
-    if (ANCHOR_PLAIN.test(key)) return plain(v);
-    if (ANCHOR_PER_SHARE.test(key)) return money(v, own);
-    if (COUNT.test(key)) return plain(v);
-    if (MULTIPLE.test(key)) return decimals(v, 1) + 'x';
-    if (PER_SHARE.test(key) || ONE_TIME.test(key)) return money(v, own);
-    if (TOTAL.test(key) || Math.abs(v) >= 1e6) return dollars(v, own);
-    return decimals(v, 2);
-  }
-
-  function isPercent(key, group) {
-    if (NOT_PERCENT.test(key)) return false;
-    if (PERCENT.test(key) || ALSO_PERCENT.test(key) || REVENUE_STEPS.test(key)) return true;
-    return !!group && !NOT_PERCENT.test(group) && (PERCENT.test(group) || ALSO_PERCENT.test(group));
-  }
-
-  function isTable(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
-
-  /* One value as text: null an em dash, a number by its key, a list inline (a list of tables one
-     table a line, its year first), a deeper table inline; a money figure in `code`. */
-  function shown(v, key, group, code) {
-    if (v == null) return '—';
-    if (typeof v === 'number') return figure(v, key, group, code);
-    if (Array.isArray(v)) {
-      if (!v.some(isTable)) {
-        return v.map(function (x) { return shown(x, key, group, code); }).join(', ');
-      }
-      return v.map(function (x, n) {
-        return h('span', { key: n, className: 'app-line' }, shown(x, key, group, code));
-      });
-    }
-    if (isTable(v)) {
-      return Object.keys(v).sort(function (a, b) { return (b === 'year') - (a === 'year'); })
-        .map(function (k) { return k + ' ' + shown(v[k], k, key, code); }).join(' · ');
-    }
-    return String(v);
-  }
-
-  /* One group per top-level key: a table's entries, with a nested table flattened one level, an
-     empty table left out (a margin record with no year). EPV below zero capitalises a trailing
-     loss, which also puts the growth share above 100%; its line says so, so the reader is not
-     misled. The money figures are in the row's currency, its `currency`, USD on a row that names
-     none. A nested table reads by its own key, except the margin record's (`margin_history`'s
-     `operating` and `net`), which reads as a margin: its medians percentages, its years whole. */
-  function intermediates(im) {
-    var code = im.currency;
-    return Object.keys(im).map(function (key) {
-      var v = im[key];
-      var rows = [];
-      if (isTable(v) && !Object.keys(v).length) return null;
-      if (key === 'epv' && v < 0) {
-        rows.push([key, noted(shown(v, key, null, code), 'negative: trailing earnings are a loss'),
-          true]);
-      } else if (!isTable(v)) {
-        rows.push([key, shown(v, key, null, code), true]);
-      } else {
-        Object.keys(v).forEach(function (k) {
-          if (!isTable(v[k])) return rows.push([k, shown(v[k], k, key, code), true]);
-          var group = key === 'margin_history' ? 'margin' : k;
-          Object.keys(v[k]).forEach(function (kk) {
-            rows.push([k + '.' + kk, shown(v[k][kk], kk, group, code), true]);
-          });
-        });
-      }
-      return h('div', { key: key, className: 'app-group' },
-        isTable(v) ? h('h4', { className: 'label app-group__head' }, key) : null,
-        pairs(rows));
-    });
   }
 
   render();

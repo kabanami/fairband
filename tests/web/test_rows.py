@@ -323,8 +323,8 @@ def test_a_secondary_stands_in_where_the_route_refuses(
     secondaries: dict[str, int],
 ) -> None:
     """Spec 11: a secondary valuation stands in on the row where the route refuses, the fallback.
-    One made before plan 3 on a valued snapshot stays on file for the drawer's Details and fills
-    nothing: a valued row with a secondary and no review has no reviewed value."""
+    One made before plan 3 on a valued snapshot stays on file and fills nothing: a valued row
+    with a secondary and no review has no reviewed value."""
     with closing(connect(db_path)) as conn:
         secondary = secondary_row(conn, secondaries["AAL"])
         hgco = secondary_row(conn, secondaries["HGCO"])

@@ -248,8 +248,8 @@ def test_the_value_block_valued() -> None:
 
 def test_the_value_block_reviewed_and_with_a_report() -> None:
     """The review counts: the chip says reviewed and the meter and the levels are the review's.
-    The published report's line stands under a rule: the stance chip in the drawer's classes, the
-    mode and the day, the principal chip, and the link to the report page."""
+    The published report's line stands under a rule: the stance chip in the Stance column's
+    classes, the mode and the day, the principal chip, and the link to the report page."""
     detail = answers.reviewed_detail()
     detail["report"] |= {"createdAt": "2026-11-11T12:00:00+00:00"}
     tree = _page("value", detail)
@@ -856,8 +856,8 @@ TYPE_STYLES = {"heading", "body", "caption", "figure-sm"}  # the design system's
 def test_the_news_classes_are_the_company_page_s_alone() -> None:
     """Every class the News block draws but the design system's type styles is the company
     page's own: under its prefix, and in no script but the company page's, so none of the block's
-    rules can style an element another view draws. The drawer's News items section carries
-    ``app-news`` (app.js), which no rule of the page's styles."""
+    rules can style an element another view draws; and no rule of the page's styles names
+    ``app-news``, the class of the drawer's News items section before it left the drawer."""
     linked = STORIES[0] | {"url": "https://harborstreet.example/a"}
     tree = _page("news", {"stories": [linked, STORIES[2]], "note": "no FMP key"})
     drawn = {

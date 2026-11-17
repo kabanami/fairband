@@ -1159,8 +1159,7 @@ def test_page_hands_the_design_system_local_time() -> None:
     assert "String(iso).indexOf('T') < 0" in app  # a plain date is a day, not an instant
     assert "getTimezoneOffset()" in app
     assert "localIso: localIso" in app  # on window.FairbandPage, for controls.js
-    assert "var local = localIso(iso);" in app  # when(): the drawer's observed and entered
-    assert "enteredAt: localIso(body.snapshot.createdAt)" in app  # the ValidityWindow
+    assert "var local = localIso(iso);" in app  # when(): the inputs table's observed and entered
     assert "state.rows = body.rows.map(localRow);" in app  # the table's Entered cell
     assert "{ enteredAt: localIso(r.enteredAt) }" in app
     controls = _static_file("controls.js")
@@ -1181,7 +1180,7 @@ def test_app_js_find_and_filters() -> None:
         assert prop in script, prop
     assert "var rows = narrow(state.rows, state.query, state.filters);" in script
     # the screen's script draws no footnote of its own: ReportReader numbers a cite from the
-    # footnotes the drawer's Summary hands it (spec 2026-11-06 Tier 2, 13.1)
+    # footnotes its caller hands it (spec 2026-11-06 Tier 2, 13.1)
     assert "'sup'" not in script and "[^" not in script
 
 
@@ -1545,36 +1544,21 @@ def test_the_report_page_shows_the_brief_under_the_head() -> None:
     assert ": null" in brief
 
 
-def test_the_head_details_and_the_report_page_say_what_the_figures_are_in() -> None:
+def test_the_drawer_s_head_and_the_report_page_say_what_the_figures_are_in() -> None:
     """Spec 2026-11-10 7.4 and 10: the line that names the reporting currency, the ADS and the rate
     (``currencyLine``, its words in ``tests/web/test_drawer_currency.py``) is in the drawer's head
-    under the company's one line, at the head of Details' inputs, and in the report page's head
-    under the name, where it adds that every figure a share is per ADS (6.2); none on a domestic
-    row. The report page's line is under the name and the phase badge. The secondary valuation's
-    totals, its parts and the guidance read in the currency, and Appendix A names the rate where
-    it states the secondary valuation."""
+    under the company's name, and in the report page's head under the name, where it adds that
+    every figure a share is per ADS (6.2); none on a domestic row. The report page's line is under
+    the name and the phase badge. Appendix A's secondary valuation reads its totals and its parts
+    in the currency and names the rate."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
         main,
-        "className: 'caption app-muted app-drawer__brief'",
+        "className: 'body app-drawer__name' }, body.company.name) : null,",
         "currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },",
-        "valued ? section('band', null, meter(body),",
+        "sector ? h('p', { key: 'sector',",
     )
-    details = _function(script, "details")
-    _in_order(
-        details,
-        "section('inputs', 'Inputs',",
-        "currencyLine(body) ? h('p', { className: 'caption app-muted' }, currencyLine(body)) : null,",
-        "inputsTable(r.inputs)",
-    )
-    for call in (
-        "pairs(secondaryRows(secondary))",
-        "secondaryPath(secondary, code)",
-        "guidanceTable(rs.guidance.map(function (g) {",
-    ):
-        assert call in details, call
-    assert "}), code)) : null," in details  # the guidance table in the row's currency
     report = _code(_static_file("report.js"))
     head = _function(report, "head")
     _in_order(
@@ -1620,12 +1604,12 @@ def test_bundle_confirm_dialog_takes_a_danger_confirm() -> None:
     assert "targetRevision" not in view and "onReject" not in view
 
 
-def test_the_drawer_window_judges_aging_as_the_screen_does() -> None:
+def test_the_validity_window_judges_aging_as_the_screen_does() -> None:
     """ValidityWindow takes ``agingFraction``, 0.6667 by default, and judges its state by the
     server's rule (``validity_state``): on whole days, aging from that fraction of the window,
-    expired after its last day. The drawer passes the route's figure, so after a change of
-    ``aging_fraction`` a row reads the same in the drawer as in the Freshness column (spec
-    2026-11-04 8.2)."""
+    expired after its last day, so a caller that passes the route's figure reads as the Freshness
+    column does after a change of ``aging_fraction`` (spec 2026-11-04 8.2). A `// fairband:`
+    patch the bundle keeps, though no page draws the window since it left the drawer."""
     bundle = _component_file("bundle.js")
     window = bundle[bundle.index("  function ValidityWindow(props) {") :]
     window = window[: window.index("\n  }\n")]
@@ -1649,9 +1633,7 @@ def test_the_drawer_window_judges_aging_as_the_screen_does() -> None:
     assert props is not None
     assert "agingFraction?: number;" in props.group(1)
     assert "(spec 2026-11-04 8.2)" in props.group(1)
-    script = _static_file("app.js")
-    assert "validFrom: r.data_date, validUntil: r.valid_until, today: body.today," in script
-    assert "agingFraction: body.agingFraction" in script
+    assert "ValidityWindow" not in _code(_static_file("app.js"))
 
 
 def test_settings_view_form_and_notices() -> None:
@@ -1772,28 +1754,20 @@ def test_settings_view_keeps_one_primary_and_a_true_note() -> None:
     assert "note?: string;" in props.group(1)
 
 
-def test_app_js_drawer_states_the_ratio_and_the_level_labels() -> None:
+def test_app_js_meter_states_the_ratio_and_has_no_scale() -> None:
     """Spec 7.3 and spec 2026-11-06 Tier 2, 18.2 item 2 (plan 4): the band meter's head says the
-    word and price ÷ value over the value's name, "the mechanical value"; the levels below
-    it read Margin of safety (the value less the moat's margin), Fair band and the trim multiple
-    × value, the multiple read from the levels as the margin is, so 1.75 under a setting of 1.75
-    and 1.5 at the default; and the meter's own scale, whose words would collide in the rail, is
-    off."""
+    word and price ÷ value over the value's name, "the mechanical value"; the meter's own scale,
+    whose words would collide in the rail, is off. The four levels under it are in the screen's
+    words (``levelRows``; ``tests/web/test_drawer_form.py``), with no caption of the margin and
+    no multiple of the value, and no route's name under them (the company page's design, 11)."""
     script = _static_file("app.js")
     assert "buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation," in script
     assert (
         "designation: r.designation,\n        showScale: false,\n"
         "        gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value'),"
     ) in _function(script, "meter")
-    assert "var margin = Math.round((1 - r.levels.buy / r.value) * 100);" in script
-    assert "['Margin of safety', h(React.Fragment, null, F.formatMoney(r.levels.buy)," in script
-    assert "'value less the ' + moat + ' moat\\'s ' + margin + '%'" in script
-    assert "['Fair band', F.formatMoney(r.levels.fair_low) + ' – ' +" in script
-    assert "var multiple = Number((r.levels.trim / r.value).toFixed(2));" in script
-    assert "[multiple + ' × value', F.formatMoney(r.levels.trim), true]" in script
-    assert "'1.5 × value'" not in script
-    # the route's name, the meter's caption before, keeps a line of its own under the levels
-    assert "h('p', { className: 'caption app-muted' }, ROUTES[r.route] || r.route)," in script
+    for gone in ("Margin of safety', h(", "' × value'", "value less the", "ROUTES"):
+        assert gone not in script, gone
 
 
 def test_app_js_keeps_the_ratio_figure_inside_the_band() -> None:
@@ -1816,18 +1790,6 @@ def test_app_js_keeps_the_ratio_figure_inside_the_band() -> None:
     assert "r.price_to_value.toFixed(2)" not in script
 
 
-def test_app_js_words_the_margin_for_no_moat() -> None:
-    """The moat class "None" is no moat: its margin reads "value less the 45% margin for no
-    moat", not "the None moat's 45%"; a Wide or Narrow moat keeps the moat's own wording."""
-    script = _static_file("app.js")
-    assert (
-        "var basis = moat === 'None' ? 'value less the ' + margin + '% margin for no moat'"
-        in script
-    )
-    assert "moat ? h('span', { className: 'caption app-muted app-line' }, basis) : null" in script
-    assert "None moat" not in script
-
-
 def test_app_js_normalises_a_saved_column_list() -> None:
     """A saved list keeps its order; a list saved under method 0.5 names the Stance column,
     and Price vs value takes its place, where `stance` stood."""
@@ -1844,52 +1806,10 @@ def test_app_js_normalises_a_saved_column_list() -> None:
     assert "if (Array.isArray(saved)) return normalise(saved);" in script
 
 
-def test_app_js_names_the_revenue_route_and_draws_its_tables() -> None:
+def test_figure_tables_scroll_by_keyboard_with_the_year_in_view() -> None:
+    """The table of figures by year the report page draws (``figuresTable``)."""
     script = _static_file("app.js")
-    assert "'revenue-growth': 'Revenue growth route'" in script
-    for key in (
-        "revenue_by_year",
-        "margin_path",
-        "ebit_by_year",
-        "tax_by_year",
-        "nopat_by_year",
-        "reinvestment_by_year",
-        "fcff_by_year",
-        "target_margin",
-        "largest_margin",
-        "sales_to_capital",
-        "terminal_roic",
-        "terminal_nopat",
-        "terminal_value",
-        "firm_value",
-        "failure_probability",
-        "implied_growth",
-        "implied_margin",
-    ):
-        assert key in script, key
-    # the terminal value is the fully taxed year-10 NOPAT times the multiple: both lines show
-    assert "['Year-10 NOPAT, fully taxed', whole(im.terminal_nopat, code), true]," in script
-    # spec 5.9: the flat required return, read from the row's RULE input, on every row of the
-    # route; spec 5.13: a Young Growth row has no range in tier 1
-    assert "'Discounted at the required return of ' +" in script
-    assert "' in every year; Damodaran\\'s template starts higher and falls to it ' +" in script
-    assert "ruleValue(inputs, 'required_return')" in script
-    assert "growth ? discountedAt(r.inputs) : null" in script
-    assert "The value range is not computed in tier 1" in script
-    assert "youngGrowth(im.failure_probability)" in script
-    # the solves, and the one figure of a row refused for its target margin
-    assert "held ? 'Implied growth held in ' + held : 'Implied growth held after year 3'," in script
-    assert "if (last == null) return null;" in script  # no high_growth_years RULE input
-    assert "['Margin the price needs', F.formatPercent(im.implied_margin), true]" in script
-    assert "'implied_margin' in im ? pairs([" in script
-    # a loss makes EPV negative and the growth share above 100%: the EPV line says why
-    assert "key === 'epv' && v < 0" in script
-    assert "'negative: trailing earnings are a loss'" in script
-
-
-def test_drawer_figure_tables_scroll_by_keyboard_with_the_year_in_view() -> None:
-    script = _static_file("app.js")
-    assert script.count("h('div', { className: 'app-scroll', tabIndex: 0 },") == 2
+    assert script.count("h('div', { className: 'app-scroll', tabIndex: 0 },") == 1
     page = _static_file("index.html")
     assert (
         ".app-scroll:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }"
@@ -1910,156 +1830,6 @@ def test_app_js_escape_closes_an_open_menu_before_the_drawer() -> None:
     ) in script
 
 
-def test_app_js_drawer_draws_the_run_off_table() -> None:
-    """Spec 10.10: a Decline row's drawer draws the run-off's ten years, a fall in revenue
-    releasing capital and a rise reinvesting it, then the terminal; the margin it holds; the
-    rating and π; the floor, the distress-sale value and the weighting; Z″ and F. A row refused
-    for a value at or below zero keeps its figures without a route, so the drawer reads its
-    intermediates."""
-    script = _static_file("app.js")
-    assert "'decline': 'Decline route'" in script
-    assert "'runoff_path' in im ? declineRoute(r) : null," in script
-    for text in (
-        "'Run-off'",
-        # a total in the row's currency (spec 2026-11-10 7.4)
-        "var total = wholeIn(im.currency);",
-        "['Release', im.release_by_year, total],",
-        "['Reinvestment', im.reinvestment_by_year, total],",
-        "['Free cash flow', im.fcff_by_year, total]",
-        "['Terminal value', noted(whole(im.terminal_value, im.currency), 'flat'), true],",
-        "rows.push(['Implied decline rate', im.implied_decline_rate == null",
-        "'Normalized margin'",
-        "'Rating'",
-        "'no net debt'",
-        # no rating says why: no debt line on file, or no interest expense on file
-        "['Rating', 'unavailable: ' + (g.note || 'no interest expense on file'), false],",
-        "'π, ten-year default probability'",
-        "'Floor and distress'",
-        "'Going concern a share'",
-        "'NCAV a share'",
-        "var floor = ncav == null || ncav <= 0 ? 'no floor'",
-        ": im.floored_per_share > im.going_concern_per_share ? 'the floor binds'",
-        ": 'the floor does not bind';",
-        "'Distress-sale value a share'",
-        "'value = floored × (1 − π) + distress × π'",
-        "'Altman Z″'",
-        "'Piotroski F'",
-        "var mark = s.value === true ? 'met' : s.value === false ? 'not met' : 'not read';",
-        "h('span', { className: 'caption app-mark' }, mark),",
-    ):
-        assert text in script, text
-    # each signal's outcome in words, in a box so the signals line up: no dingbat the vendored
-    # Plex subset lacks, and nothing like the × that means expired (the brand book's glyph rules)
-    assert "✓" not in script and "✗" not in script
-    page = _static_file("index.html")
-    assert ".app-signals li { display: flex; align-items: baseline; }" in page
-    assert ".app-mark { flex: none; min-width: 8ch; }" in page
-    for key in (
-        "going_concern_per_share",
-        "ncav_per_share",
-        "floored_per_share",
-        "distress_per_share",
-        "altman_z",
-        "piotroski_f",
-        "implied_decline_rate",
-    ):
-        assert key in script, key
-
-
-def test_app_js_drawer_says_the_fade_the_ramp_and_the_stable_cross_check() -> None:
-    """Spec 2026-11-06 12: the run-off's decline rate names the years the consensus gives, K, or the
-    three years on trend, and the fade to zero by year N, or, when the consensus reaches year N - 1
-    or N and no year reads the rate, where the consensus ends, and at N - 1 that year N is flat; its
-    terminal is flat (6.4); a growth row on the dollar ramp says so over its margins (7.2); a Mature
-    Stable row refused for its trailing earnings shows the growth-route cross-check under the
-    refusal, as a valued row shows it under the band (9). A revenue-growth refusal's cross-check
-    does not move with the price, so it shows only among the intermediates."""
-    script = _static_file("app.js")
-    summary = script[script.index("function runoffSummary(") :]
-    summary = summary[: summary.index("\n  }\n")]
-    for text in (
-        "var years = path.ntm_revenue == null ? 'years 1 to 3 at the decline rate'",
-        ": 'years 1 to ' + path.consensus_years + ' from the consensus';",
-        "var fade = path.consensus_years < path.runoff_years - 1",
-        "? years + '; fades to zero by year ' + path.runoff_years",
-        # at K = N - 1 the one fade year, N, is at zero: no year reads the rate (final review)
-        ": path.consensus_years < path.runoff_years",
-        "? 'the consensus runs to year ' + path.consensus_years + '; year ' + path.runoff_years",
-        "+ ' is flat'",
-        # no year reads the rate when the consensus reaches year N (review of task 7)
-        ": 'the consensus runs to year ' + path.runoff_years;",
-        "['Decline rate', noted(F.formatPercent(path.d), fade), true],",
-        "['Terminal value', noted(whole(im.terminal_value, im.currency), 'flat'), true],",
-    ):
-        assert text in summary, text
-    assert "from year 4" not in summary and "every year: no usable consensus" not in summary
-    years = script[script.index("function yearsTable(") :]
-    years = years[: years.index("\n  }\n")]
-    # the ramp moves in dollars, or in the currency of a row in another (spec 2026-11-10 7.4)
-    assert "var ramp = im.margin_path.ramp === 'dollars'" in years
-    assert "? 'ramp in ' + (foreign(im.currency) ? im.currency : 'dollars') : null;" in years
-    assert "['Margin', im.margin_path.by_year, F.formatPercent, ramp]," in years
-    assert "c[3] ? noted(c[0], c[3]) : c[0]" in script
-    refusal = script[script.index("r.refusal ? section('refusal', 'Refusal',") :]
-    refusal = refusal[: refusal.index("section('window'")]
-    assert "'e_trailing' in im ? crossCheck(im.growth_route, im.currency) : null" in refusal
-    assert script.count("crossCheck(im.growth_route, im.currency)") == 2
-
-
-def test_app_js_drawer_draws_the_charge_of_a_mature_row() -> None:
-    """Spec 2026-11-09 12: a Mature Growth or Mature Stable row's Details draw the route's section,
-    named as the meter's caption names the route, with a group, Charge, of ``chargeRows``'s rows
-    (``tests/web/test_drawer_charge.py`` reads their words), and under ``shares.committed`` a
-    second, Share count (spec 2026-11-14 4). Only the two mature routes write
-    ``charge`` at the top of the intermediates, and a row they refuse for a value at or below zero
-    keeps it without a route, so the section draws on the key and a refused row's takes the name
-    of its phase's route."""
-    script = _static_file("app.js")
-    assert "'charge' in im ? matureRoute(r) : null," in _function(script, "details")
-    mature = "var MATURE = { 'Mature Growth': 'mature-growth', 'Mature Stable': 'mature-stable' };"
-    assert mature in script
-    route = _function(script, "matureRoute")
-    assert "return section('mature', ROUTES[r.route || MATURE[r.phase.phase]]," in route
-    # the charge, then the share count under shares.committed only (spec 2026-11-14 4 and 11;
-    # tests/web/test_drawer_intermediates.py reads its rows)
-    _in_order(
-        route,
-        "group('charge', 'Charge', pairs(chargeRows(r.intermediates))),",
-        "shareCount(r.intermediates));",
-    )
-    count = _function(script, "shareCount")
-    assert "if (!('shares_committed' in im)) return null;" in count
-
-
-def test_app_js_drawer_draws_the_requirement() -> None:
-    """Spec 9.2 and 9.4: a Start-up row's drawer, under its refusal, states the revenue its price
-    needs in year 10 (a multiple of the trailing revenue when there is one), the target margin
-    and the ramp behind it, the cash floor and the burn cover. A repriced row's market cap moved
-    with the price from the one its input read: both show. The caption under the cash floor reads
-    the row's ``below-net-cash`` flag, the one test (method 6b.4), never the price against the
-    cash floor; a burn without a cash figure has no cover."""
-    script = _static_file("app.js")
-    assert "'start-up': 'Start-up route'" in script
-    assert "'requirement' in im ? startUpRoute(r) : null," in script
-    for text in (
-        "'Revenue the price needs'",
-        "if (!req.reason && req.revenue_0 > 0) {",
-        "' × the trailing revenue'",
-        "'Cash floor'",
-        "'Net cash a share'",
-        "'Burn cover'",
-        "if (cover === 'not burning')",
-        "var read = dataValue(inputs, 'market_cap');",
-        "'The market cap moved with the price: '",
-        "var below = r.flags.some(function (f) { return f.code === 'below-net-cash'; });",
-        "'The price is covered by net cash: the market cap is at or below the cash less the debt'",
-        "if (cover == null && im.burn != null && im.cash_known === false) {",
-        "['Cash covers', 'unknown: no cash line on file', false],",
-    ):
-        assert text in script, text
-    assert "r.price >= floor" not in script and "is below the net cash a share" not in script
-
-
 def _function(script: str, name: str) -> str:
     """The text of the script's ``function <name>(``, to its closing brace."""
     start = script.index(f"  function {name}(")
@@ -2072,73 +1842,31 @@ def _in_order(text: str, *parts: str) -> None:
     assert at == sorted(at), [parts[i] for i in range(len(parts) - 1) if at[i] > at[i + 1]]
 
 
-def test_the_drawers_main_view_order_is_pinned() -> None:
-    """Spec 2026-11-06 Tier 2, 18.2, in this order and nothing else before Details: the head; the
-    meter with its levels, the review's where it counts and has a value (plan 3), or a refusal in
-    its place as before; the stance line, the report's word in its chip classes, faded once the report's window
-    has expired, then the principal's chip; the report's Summary by ReportReader and Open the
-    report, a link to the report page; then Request research and the open item's line, with or
-    without a report (plan 4); then Details ▾, a quiet disclosure. Everything else is behind it.
-    The meter and Request research are the drawer's own parts, which the report page draws too
-    (18.4)."""
+def test_the_drawers_order_is_pinned() -> None:
+    """The company page's design, 11: the drawer's form A, in this order and nothing else: the
+    head, the moat stamp after the phase badge; the caption of the sector and the industry; the
+    brief; the value band, the meter and its levels, or a refused row's sentence in its place;
+    then Company page and Request research with its menu and the open item's line
+    (``tests/web/test_drawer_form.py`` reads what it draws). The stance, the report's Summary,
+    Open the report and Details left it. Request research is the drawer's own part, which the
+    report page and the company page draw too (18.4)."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
         main,
         "className: 'app-drawer__head'",
-        "valued ? section('band', null, meter(body),",
-        "r.refusal ? section('refusal', 'Refusal',",
-        "className: 'app-stance'",
-        "h(F.ReportReader, {",
-        "'Open the report')",
+        "phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,",
+        "moatStamp(body),",
+        "className: 'caption app-muted app-drawer__sector'",
+        "className: 'body app-drawer__brief'",
+        "rows ? h('section', { key: 'band', className: 'app-drawer__band' }, meter(body),",
+        ": r.refusal ? h('section', { key: 'band', className: 'app-drawer__band' },",
+        "href: '#company/' + encodeURIComponent(r.symbol)",
+        "'Company page'",
         "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)",
-        "'Details ▾')",
-        "state.detailsOpen ? details(body) : null",
     )
-    head = main[: main.index("'Details ▾')")]
-    for gone in ("F.ValidityWindow", "'Phase evidence'", "inputsTable(", "intermediates("):
-        assert gone not in head, gone
-    # The company brief (B-149): one line in the head after the name, the sector and industry
-    # and the brief's first sentence (briefLine); the full text is behind Details, under About.
-    _in_order(
-        main,
-        "className: 'body app-drawer__name' }, body.company.name) : null,",
-        "briefLine(body.company, body.brief)",
-        "className: 'caption app-muted app-drawer__brief'",
-        "valued ? section('band', null, meter(body),",
-    )
-    assert "body.brief" not in head.replace("briefLine(body.company, body.brief)", "")
-    meter = _function(script, "meter")
-    assert "gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value')" in meter
-    assert "levels(drawnLevels(body))," in main and "levels(r)" not in main
-    assert "var valued = isValued(r);" in main
-    assert "return r.value != null && r.levels != null && r.price != null;" in (
-        _function(script, "isValued")
-    )
-    stance = main[main.index("className: 'app-stance'") : main.index("h(F.ReportReader, {")]
-    assert "'fb-stance fb-stance--' + report.stance +" in stance
-    assert "(report.expired ? ' fb-stance--expired' : '') + ' label'" in stance
-    assert "h(F.PrincipalChip, {" in stance
-    assert "principal: report.principal, actor: report.actor, at: localIso(report.createdAt)" in (
-        stance
-    )
-    reader = main[main.index("h(F.ReportReader, {") : main.index("'Open the report')")]
-    assert "sections: [report.summary]" in reader and "appendixes: false" in reader
-    # the Summary's cites numbered as the report page's references list numbers them (18.4)
-    assert "footnotes: footnotes(report.references)" in reader
-    assert "cites:" not in reader  # the report page carries the cites line
-    assert (
-        "h(F.Button, { href: '#report/' + encodeURIComponent(r.symbol) }, 'Open the report')"
-        in (main)
-    )
-    toggle = main[main.index("requestResearch(ask, body.item") : main.index("'Details ▾')")]
-    _in_order(
-        toggle,
-        "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)",
-        "variant: 'quiet'",
-        "'aria-expanded': state.detailsOpen ? 'true' : 'false'",
-        "onClick: toggleDetails",
-    )
+    for gone in ("'Details ▾')", "detailsOpen", "app-stance", "F.ReportReader", "Open the report"):
+        assert gone not in script, gone
     ask = _function(script, "requestResearch")
     assert "disabled: !!item || ask.opening," in ask
     assert "'aria-expanded': ask.open ? 'true' : 'false'" in ask
@@ -2172,76 +1900,16 @@ def test_the_drawers_main_view_order_is_pinned() -> None:
         "text: 'pending'",
     )
     page = _static_file("index.html")
-    assert ".app-stance {" in page and ".app-request .fb-menu { left: 0; right: auto; }" in page
+    assert ".app-stance" not in page and ".app-disclosure" not in page
+    assert ".app-request .fb-menu { left: 0; right: auto; }" in page
     assert ".app-request__error { margin: var(--space-2) 0 0; color: var(--caution); }" in page
 
 
-def test_details_order_is_pinned() -> None:
-    """Spec 2026-11-06 Tier 2, 18.3, in order: the review's bridge, each line under its input's
-    label, or its refusal; the secondary valuation; the overrides, read-only; the guidance on
-    file; the judgments; the kill criteria; the news items; the notes with Add a note; the
-    findings; the ledger; then what the drawer showed before, in its order."""
+def test_the_guidance_table_reads_each_record_s_call_state_and_currency() -> None:
+    """The guidance table the report page's Appendix A draws (18.4): each record's call, its state
+    and the overrides citing it as the record brings them, its range and midpoint in its own
+    currency, the company's where it names none (spec 2026-11-15 9.5)."""
     script = _static_file("app.js")
-    details = _function(script, "details")
-    _in_order(
-        details,
-        "body.brief ? section('about', 'About',",
-        "h(F.ValueBridge, {",
-        "review && review.refusal ? section('review', 'Review',",
-        "'app-secondary'",
-        "h(F.OverrideRecord, {",
-        "'app-guidance'",
-        "'app-judgments'",
-        "'app-kill-criteria'",
-        "'app-news'",
-        "'app-notes'",
-        "'Add a note')",
-        "'app-findings'",
-        "'app-ledger'",
-        "h(F.ValidityWindow, {",
-        "'Phase evidence'",
-        "growth ? revenueRoute(r) : null",
-        "'charge' in im ? matureRoute(r) : null,",
-        "section('inputs', 'Inputs'",
-        "'Intermediate results'",
-        "section('flags', 'Flags'",
-        "estimates.length ? section('estimates', 'Estimates'",
-        "'Policy ' + r.policy_version + ' · method ' + r.method_version",
-    )
-    bridge = details[details.index("h(F.ValueBridge, {") : details.index("'app-secondary'")]
-    assert "review && review.value != null ? section('bridge', 'Review'," in details
-    assert "mechanical: review.mechanical, reviewed: review.value," in bridge
-    # the note names the engine's own levels, the snapshot's, since the meter and the levels under
-    # it draw the review's (plan 3); none on a refused row, which has no mechanical levels
-    assert "note: isReviewed(body) ? mechanicalLevels(r.levels) : undefined" in bridge
-    note = _function(script, "mechanicalLevels")
-    _in_order(
-        note,
-        "if (!l) return undefined;",
-        "return 'Mechanical levels: margin of safety ' + F.formatMoney(l.buy) + ' · fair band ' +",
-        "F.formatMoney(l.fair_low) + ' – ' + F.formatMoney(l.fair_high) + ' · trim ' +",
-        "F.formatMoney(l.trim);",
-    )
-    assert "Reviewed levels" not in script and "reviewedLevels" not in script
-    assert "tag: line.label," in bridge
-    assert "from: inputFigure(line.old, line.unit), to: inputFigure(line.new, line.unit)," in bridge
-    # an override is a record: no Drop, and the page sends no drop (the owner neither adds nor
-    # drops an override, spec 3)
-    record = details[details.index("h(F.OverrideRecord, {") : details.index("'app-guidance'")]
-    for text in ("state: o.state,", "message: o.state === 'dropped' ? o.dropReason : o.message,"):
-        assert text in record, text
-    for gone in ("Drop", "onClick", "Button"):
-        assert gone not in record, gone
-    assert "/overrides" not in script and "api.del" not in script
-    # the guidance's range, midpoint, call, current or superseded and the overrides citing it, in
-    # the guidance table the report page's Appendix A draws too (18.4)
-    guidance = details[details.index("'app-guidance'") : details.index("'app-judgments'")]
-    for text in (
-        "guidanceTable(rs.guidance.map(function (g) {",
-        "state: g.supersededBy == null ? 'current' : 'superseded by record ' + g.supersededBy,",
-        "citedBy: citedBy(rs.overrides, g.id)",
-    ):
-        assert text in guidance, text
     table = _function(script, "guidanceTable")
     for text in (
         "'call ', when(g.asOf), ' · ', g.state",
@@ -2253,75 +1921,34 @@ def test_details_order_is_pinned() -> None:
         "'cited by override ' + g.citedBy.join(', ')",
     ):
         assert text in table, text
-    assert "var found = /^guidance:(\\d+)$/.exec(String(e.ref).trim());" in script
-    # the findings, each figure in the finding's own currency (spec 2026-11-15 9.5)
-    findings = details[details.index("'app-findings'") : details.index("'app-ledger'")]
-    assert "findingsList(rs.findings, code)" in findings
-    listed = _function(script, "findingsList")
-    assert "findingFigure(f.value, f.unit, f.currency || code)" in listed
-    # the ledger: the date, the principal and actor, the kind and the summary
-    ledger = details[details.index("'app-ledger'") : details.index("h(F.ValidityWindow, {")]
-    assert "h(F.PrincipalChip, { principal: e.principal, actor: e.actor, at: localIso(e.at) })" in (
-        ledger
-    )
-    assert "e.kind" in ledger and "e.summary" in ledger
 
 
-def test_details_is_a_disclosure_whose_research_is_read_when_it_opens() -> None:
-    """Spec 18.2 and 18.3: Details ▾ is closed until the reader opens it, and stays as the reader
-    left it for the page's life, whichever company the drawer shows; the research read runs when
-    Details opens for a company (the drawer opening a company while Details is open, or Details
-    opening on a company not yet read) and again after a note is posted."""
+def test_the_note_s_post_waits_for_the_notes_control() -> None:
+    """Details and its research read left the drawer (the company page's design, 11); Add a note's
+    draft and its post stay for the Notes control (11.1): the note posted as the owner, a refusal's
+    sentence kept with the text, and the company's detail read again once it is taken, so its
+    count of notes follows. The server's research read stays (B-218 reads it)."""
     script = _static_file("app.js")
-    assert "detailsOpen: false," in script
-    open_row = _function(script, "open")
-    assert "state.detailsOpen = " not in open_row  # read, never reset: the reader's choice stands
-    assert "if (state.detailsOpen) readResearch(row.ticker);" in open_row
-    toggle = _function(script, "toggleDetails")
-    assert "state.detailsOpen = !state.detailsOpen;" in toggle
-    assert (
-        "if (state.detailsOpen && d && needsResearch(d.symbol)) readResearch(d.symbol);" in toggle
-    )
-    read = _function(script, "readResearch")
-    assert "getJson('/api/companies/' + encodeURIComponent(symbol) + '/research')" in read
-    assert "if (request !== latestResearch) return;" in read
+    for gone in ("detailsOpen", "readResearch", "toggleDetails", "/research'"):
+        assert gone not in script, gone
     post = _function(script, "postNote")
     assert (
         "api.post('/api/companies/' + encodeURIComponent(symbol) + '/notes', { text: text })"
         in post
     )
-    _in_order(post, "if (!r.ok) throw new Error(", "readResearch(symbol);")
+    _in_order(post, "if (!r.ok) throw new Error(", "draft.text = '';", "reloadDetail(symbol);")
     assert "draft.error = err.message;" in post
-    # the records are read again only while the drawer still shows the note's company, so a
-    # company opened meanwhile never shows the first one's records
-    assert "if (state.drawer && state.drawer.symbol === symbol) readResearch(symbol);" in post
+    assert "state.noteDraft = { symbol: symbol, text: '', error: null, posting: false };" in (
+        _function(script, "drafted")
+    )
 
 
-def test_details_lists_the_secondarys_parts_or_drivers() -> None:
-    """Spec 18.3, the secondary valuation "with its parts, value and date": under its value and
-    levels, on the parts form each part's name, its value and its note; on the drivers form the
-    drivers in words, the years, the growth and margin lists as percentages, the tax rate,
-    sales-to-capital and the terminal growth; then who made it and when."""
+def test_the_secondary_path_lists_its_parts_or_drivers() -> None:
+    """Spec 18.3, the secondary valuation "with its parts, value and date", as the report page's
+    Appendix A draws it: on the parts form each part's name, its value and its note; on the
+    drivers form the drivers in words, the years, the growth and margin lists as percentages, the
+    tax rate, sales-to-capital and the terminal growth."""
     script = _static_file("app.js")
-    details = _function(script, "details")
-    block = details[details.index("'app-secondary'") : details.index("h(F.OverrideRecord, {")]
-    _in_order(
-        block,
-        "notFallback(body) ? h('p', { className: 'caption app-muted' }, notFallback(body)) : null,",
-        "pairs(secondaryRows(secondary))",
-        "secondaryPath(secondary, code)",
-        "h(F.PrincipalChip, {",
-    )
-    # on a company the route or the review values, the record on file is not the fallback, as
-    # Appendix A says of a report (method 15.4 and 16.6, plan 3)
-    why = _function(script, "notFallback")
-    _in_order(
-        why,
-        "if (body.result.value != null) return 'not the fallback: the route values the company';",
-        "var v = body.review;",
-        "if (v && v.value != null) return 'not the fallback: the review values the company';",
-        "return null;",
-    )
     path = _function(script, "secondaryPath")
     _in_order(
         path,
@@ -2347,14 +1974,13 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
     counts on the latest snapshot, and whose review has no value there, shows the secondary's
     value in the screen's Reviewed column, so its drawer draws the secondary's band against the
     price, its head the word and price ÷ value over the secondary valuation at today's price
-    (plan 4), and the refusal stays under it. A refused row with a valued review draws the
-    review's band instead (the ruling of 2026-11-08); a refused row with neither stays as it was;
-    the valued row's meter is the review's where its review counts and has a value, else the
-    mechanical one (plan 3). The meter is the drawer's own part, which the report page draws too
-    (18.4)."""
+    (plan 4), and its levels under it in the refusal's place (the company page's design, 11). A
+    refused row with a valued review draws the review's band instead (the ruling of 2026-11-08);
+    a refused row with neither has its refusal alone; the valued row's meter is the review's where
+    its review counts and has a value, else the mechanical one (plan 3). The meter is the drawer's
+    own part, which the report page draws too (18.4); ``tests/web/test_drawer_form.py`` reads the
+    drawer's band."""
     script = _static_file("app.js")
-    main = _function(script, "sections")
-    assert "var banded = isBanded(body);" in main
     banded = _function(script, "isBanded")
     assert "var s = body.secondary;" in banded
     assert "var v = body.review;" in banded
@@ -2362,13 +1988,6 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
         "return !isValued(r) && !!r.refusal && !(v && v.value != null) && !!s && !!s.levels &&"
         " r.price != null;"
     ) in " ".join(banded.split())
-    _in_order(
-        main,
-        "valued ? section('band', null, meter(body),",
-        "reviewBanded ? section('review-band', null, meter(body)) : null,",
-        "banded ? section('secondary-band', null, meter(body)) : null,",
-        "r.refusal ? section('refusal', 'Refusal',",
-    )
     meter = _function(script, "meter")
     _in_order(
         meter,
@@ -2391,10 +2010,9 @@ def test_a_refused_row_with_a_valued_review_draws_the_reviews_band() -> None:
     headline show that value, so the drawer's meter draws the review's band against the price:
     its levels and value, the reviewed marker on the value itself, the meter's head the word and
     price ÷ value over the reviewed value at today's price, which the detail carries, and its
-    caption "reviewed" and the value (plan 4). The refusal stays under it."""
+    caption "reviewed" and the value (plan 4). Its levels stand under it, in the refusal's place
+    (the company page's design, 11)."""
     script = _static_file("app.js")
-    main = _function(script, "sections")
-    assert "var reviewBanded = isReviewBanded(body);" in main
     reviewed = _function(script, "isReviewBanded")
     assert "var v = body.review;" in reviewed
     assert (
@@ -2423,8 +2041,8 @@ def test_a_valued_row_with_a_counting_review_draws_the_reviews_band() -> None:
     today's price, its head the word and price ÷ value over the reviewed value, its caption the
     mechanical value in words ("mechanical $342", plan 4); the reviewed second marker is no longer
     drawn on a valued row. Without such a review the meter is the mechanical band as before. The
-    levels named under the meter are the ones it draws: the review's, the margin read on the moat
-    its moat override sets, else the engine's. The report page draws the same meter (18.4)."""
+    levels named under the meter are the ones it draws (``levelRows``, read in
+    ``tests/web/test_company_overview.py``). The report page draws the same meter (18.4)."""
     script = _static_file("app.js")
     reviewed = _function(script, "isReviewed")
     assert "var v = body.review;" in reviewed
@@ -2446,19 +2064,6 @@ def test_a_valued_row_with_a_counting_review_draws_the_reviews_band() -> None:
         "gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value'), hero: hero",
     )
     assert "reviewedValue" not in valued
-    # the levels under the meter are the ones it draws
-    drawn = _function(script, "drawnLevels")
-    _in_order(
-        drawn,
-        "if (!isReviewed(body)) return r;",
-        "var moat = (v.bridge || []).filter(function (line) { return line.tag === 'moat.class'; })",
-        "value: v.value,",
-        "buy: v.levels.buy, fair_low: v.levels.fairLow, fair_high: v.levels.fairHigh,",
-        "trim: v.levels.trim",
-        "intermediates: { moat: moat ? moat.new : r.intermediates.moat }",
-    )
-    main = _function(script, "sections")
-    assert "valued ? section('band', null, meter(body),\n        levels(drawnLevels(body))," in main
     # the report page draws the drawer's meter, so its band is the review's too
     assert "P.meter(d, false)," in _static_file("report.js")
 
@@ -2483,8 +2088,8 @@ def test_the_meter_says_the_ratio_and_the_values_name_once() -> None:
 
 def test_the_drawer_is_read_again_when_a_run_ends() -> None:
     """A run may follow the drawer's company's review, post its expiry item or drop an override
-    (method 14.6): when a run ends, the drawer's company is read again in place, and Details'
-    records too while Details is open, as the report page is (controls.js's run-end branch)."""
+    (method 14.6): when a run ends, the drawer's company is read again in place, as the report
+    page is (controls.js's run-end branch)."""
     js = _static_file("controls.js")
     ended = js[js.index("if (ended) {") :]
     ended = ended[: ended.index("\n        }\n")]
@@ -2496,31 +2101,15 @@ def test_the_drawer_is_read_again_when_a_run_ends() -> None:
         drawer,
         "var d = state.drawer;",
         "if (!d) return;",
-        "if (state.detailsOpen) readResearch(d.symbol);",
         "reloadDetail(d.symbol);",
     )
 
 
 def test_an_applied_override_outside_a_valued_review_says_so() -> None:
-    """Spec 18.3: an applied override with no effect to show (no review on the latest snapshot,
-    after a revalue, or a review that refused) reads a caption in its Result row, never an empty
-    figure: a `// fairband:` patch, ``OverrideRecord.resultNote``."""
-    script = _static_file("app.js")
-    details = _function(script, "details")
-    record = details[details.index("h(F.OverrideRecord, {") : details.index("'app-guidance'")]
-    assert (
-        "var effect = line && line.delta != null && review.value != null ? line.delta : undefined;"
-    ) in details
-    for text in (
-        "effect: effect,",
-        "reviewed: effect === undefined ? undefined : review.value,",
-        "validUntil: effect === undefined ? undefined : r.valid_until,",
-        # an override whose own step refused inside a valued review: its step's refusal, as the
-        # report page says it
-        "resultNote: effect === undefined ? (line && line.refusal) || NO_EFFECT : undefined",
-    ):
-        assert text in record, text
-    assert "var NO_EFFECT = 'No effect to show: not inside a valued review on the latest" in script
+    """Spec 18.3: an applied override with no effect to show (a review that refused) reads a
+    caption in its Result row, never an empty figure: a `// fairband:` patch,
+    ``OverrideRecord.resultNote``, which the report page's Appendix A passes
+    (``test_the_report_page_draws_the_appendixes_from_the_records``)."""
     bundle = _component_file("bundle.js")
     override = _function(bundle, "OverrideRecord")
     assert "// fairband: an applied override with no effect to show" in override
@@ -2657,11 +2246,10 @@ def test_the_meter_takes_a_reviewed_value() -> None:
 
 def test_the_bundle_links_a_button_and_reads_every_override_state() -> None:
     """Spec 2026-11-06 Tier 2, 18.2 and 18.3, `// fairband:` patches: a Button given ``href`` is a
-    link in the button's look (Open the report goes to the report page, and Button.md keeps a link
-    a link); ReportReader draws its cites line only when the caller passes cites (the drawer's
-    Summary leaves it to the report page); OverrideRecord knows the store's two other states, an
-    input off the row's route, refused, and a dropped override, in a neutral tone of its own,
-    never drawn as applied."""
+    link in the button's look (Company page goes to the company page, and Button.md keeps a link
+    a link); ReportReader draws its cites line only when the caller passes cites; OverrideRecord
+    knows the store's two other states, an input off the row's route, refused, and a dropped
+    override, in a neutral tone of its own, never drawn as applied."""
     bundle = _component_file("bundle.js")
     button = _function(bundle, "Button")
     assert "// fairband: given href, the button is a link" in button
@@ -2863,9 +2451,9 @@ def test_the_report_page_order_is_pinned() -> None:
 
 
 def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
-    """Spec 13.1 and 18.4: Appendix A as the server generates it, drawn with the drawer's parts
-    (window.FairbandPage) rather than copies of them: the snapshot line; the inputs table as the
-    drawer draws it; the bridge, each line under its input's label, when the review has a value,
+    """Spec 13.1 and 18.4: Appendix A as the server generates it, drawn with app.js's parts
+    (window.FairbandPage) rather than copies of them: the snapshot line; the inputs table; the
+    bridge, each line under its input's label, when the review has a value,
     else its refusal; the overrides inside the review, each a record, read-only; the secondary
     valuation's figures, its drivers or parts and its projection; the guidance on file; the checks
     that ran; the versions; the classifier's evidence. Appendix B, a definition list. The owner
@@ -2890,7 +2478,7 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
         "estimate_method: i.estimateMethod,",
         "source: i.source, as_of: i.asOf, observed_at: i.observedAt, entered_at: i.enteredAt",
         # a date input's note, the next earnings date as an ISO day, in words, as the export
-        # writes it (spec 2026-11-15 7); the drawer's Details keeps its note as it is
+        # writes it (spec 2026-11-15 7); the inputs table keeps a note as it is
         r"var day = i.unit === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(i.note));",
         "note: day ? F.formatDate(i.note) : i.note,",
     ):
@@ -2958,8 +2546,6 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
         "footnotes: footnotes",
         "asking: asking",
         "requestResearch: requestResearch",
-        "chargeRows: chargeRows",
-        "matureRoute: matureRoute",
     ):
         assert name in exposed, name
 
@@ -2995,11 +2581,13 @@ def test_the_report_page_without_a_report() -> None:
 
 def test_request_research_shows_with_a_report_too() -> None:
     """Spec 18.2 item 4 and 18.4 (plan 4): Request research with its menu and the open item's line
-    on a company with a report, under Open the report in the drawer and under the revisions line
-    on the report page, as on a company without one."""
+    on a company with a report, after Company page in the drawer (the company page's design, 11)
+    and under the revisions line on the report page, as on a company without one."""
     sections = _function(_code(_static_file("app.js")), "sections")
-    assert "section('request', null," in sections
-    assert ": section('request', null," not in sections  # no longer the Summary's alternative
+    assert "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)" in (
+        sections
+    )
+    assert "report" not in sections  # drawn whether the company has a report or not
     meta = _function(_code(_static_file("report.js")), "meta")
     assert "P.requestResearch(state.request, d.item, render, load, d.launchReady)" in meta
     no_report = _function(_code(_static_file("report.js")), "noReport")
@@ -3036,8 +2624,7 @@ def test_the_reader_numbers_its_footnotes() -> None:
     """Spec 13.1: a cite shows as its text followed by its footnote number; ReportReader keeps the
     dotted underline and the ref in the title and adds the number as a superscript, from the
     caller's ``footnotes`` (ref → n), a `// fairband:` patch. The report page numbers its cites
-    by its references; the drawer's Summary by the full report's numbers, so a number reads the
-    same in both."""
+    by its references (``footnotes``)."""
     bundle = _component_file("bundle.js")
     reader = _function(bundle, "ReportReader")
     assert "// fairband: a cited number keeps its dotted underline" in reader
@@ -3064,7 +2651,6 @@ def test_the_reader_numbers_its_footnotes() -> None:
     props = re.search(r"export interface ReportReaderProps \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert props is not None and "footnotes?: Record<string, number>;" in props.group(1)
     app = _static_file("app.js")
-    assert "footnotes: footnotes(report.references)" in _function(app, "sections")
     marks = _function(app, "footnotes")
     assert "(references || []).forEach(function (e) { marks[e.ref] = e.n; });" in marks
     assert "footnotes: P.footnotes(report.references)" in _static_file("report.js")
@@ -3075,8 +2661,8 @@ def test_the_line_under_the_title_is_in_the_reader_s_words() -> None:
     report rests on, the data's date, the price's ("priced that day" where it is the same day,
     none without one), the end of the validity window and the full report a valuation review
     reuses, each date the bundle's ``DateText``, joined by `·`, and names no record's id;
-    ``index.d.ts`` declares the four dates with a `fairband:` note. The drawer's Summary still
-    passes no cites. ``tests/web/test_report_reader.py`` draws the line."""
+    ``index.d.ts`` declares the four dates with a `fairband:` note. A caller that passes no cites
+    draws no line. ``tests/web/test_report_reader.py`` draws the line."""
     bundle = _component_file("bundle.js")
     reader = _function(bundle, "ReportReader")
     patch = reader[reader.index("// fairband: the line under the title says what the report") :]
@@ -4105,7 +3691,8 @@ def test_no_derived_stance_remains() -> None:
     """Spec 7.2: the engine gives no stance, and the page derives none. The one stance the page
     names is the agent's, the word of the company's latest published report (spec 2026-11-06 Tier
     2, 18.1): the row's ``agentStance``, its column, the STANCE filter group and the chip's
-    classes, and the drawer's stance line (18.2), and no other name in the code."""
+    classes, and no other name in the code. The drawer's stance line left it (the company page's
+    design, 11)."""
     files = {
         "app.js": _static_file("app.js"),
         "controls.js": _static_file("controls.js"),
@@ -4126,18 +3713,7 @@ def test_no_derived_stance_remains() -> None:
         name: set(word.findall(_code(files[name])))
         for name in ("app.js", "bundle.js", "index.d.ts")
     }
-    # the drawer's stance line (18.2): the report's word in the same chip classes
-    assert named["app.js"] == {
-        "stance",
-        "agentStance",
-        "filters.stance",
-        "r.agentStance",
-        "app-stance",
-        "report.stance",
-        "fb-stance",
-        "fb-stance--",
-        "fb-stance--expired",
-    }
+    assert named["app.js"] == {"stance", "agentStance", "filters.stance", "r.agentStance"}
     assert named["bundle.js"] == {
         "AGENT_STANCES",
         "stance",
@@ -4151,7 +3727,7 @@ def test_no_derived_stance_remains() -> None:
         "fb-stance--expired",
     }
     assert named["index.d.ts"] == {"AgentStance", "agentStance", "stance"}
-    # the report page's stance (18.4): the report's own word in the drawer's chip classes
+    # the report page's stance (18.4): the report's own word in the column's chip classes
     page = set(word.findall(_code(_static_file("report.js"))))
     assert page == {"report.stance", "fb-stance", "fb-stance--", "fb-stance--expired"}
 

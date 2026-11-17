@@ -2,7 +2,7 @@
 "The text's shape" and 18.4): a blank line between paragraphs, bullet and numbered lists, a table
 whose ``|---|`` row sets its header, ``**bold**``, and the cites with their footnote numbers inline
 in any of them. The bundle runs in node with a stub React (``render.mjs``), so the test
-reads the HTML ``ReportReader`` builds. The drawer's Summary renders through the same component."""
+reads the HTML ``ReportReader`` builds."""
 
 import json
 import re

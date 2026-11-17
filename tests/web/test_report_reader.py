@@ -1,8 +1,8 @@
 """The line under a report's title on the report page (spec 2026-11-15 7): the bundle's
 ``ReportReader`` draws the ``cites`` line from the dates the page passes, the data's, the price's,
 the end of the validity window and the full report a valuation review reuses, each in words and
-joined by the reader's ``·``, and names no part of Fairband and no record's id. The drawer's
-Summary passes no ``cites`` and draws no line. The harness (``page.mjs``) calls the component with
+joined by the reader's ``·``, and names no part of Fairband and no record's id. A caller that
+passes no ``cites`` draws no line. The harness (``page.mjs``) calls the component with
 its props and the tests read the tree it draws (``support.page``).
 
 And Appendix A's record of an override the review applied at a split (spec 2026-11-15 8): the
@@ -92,9 +92,8 @@ def test_the_line_writes_each_date_as_a_time() -> None:
     ]
 
 
-def test_the_drawer_s_summary_draws_no_line() -> None:
-    """Without ``cites``, as the drawer's Summary passes it, the reader draws no line under the
-    title and the section as before."""
+def test_a_reader_without_cites_draws_no_line() -> None:
+    """Without ``cites``, the reader draws no line under the title and the section as before."""
     tree = _draw(appendixes=False)
     assert classed(tree, "fb-report__cites") == []
     [section] = classed(tree, "fb-report__section")

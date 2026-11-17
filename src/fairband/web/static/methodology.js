@@ -6,19 +6,13 @@
    keeps its em dash. Then it scrolls to the section the hash named. The contents, the bracketed
    sources and the Settings link open their place through FairbandPage.show; an example's Open
    today's row puts its symbol in FIND. The script draws nothing: the prose, the tables and the
-   diagram are the fragment's. FairbandPage.methodologySection names the section of a route, for
-   the drawer's link (spec 7.7). */
+   diagram are the fragment's. */
 (function () {
   'use strict';
 
   var F = Fairband;
   var P = FairbandPage;
   var DASH = '—';
-  /* The section that explains each of the engine's routes. */
-  var SECTIONS = {
-    'mature-growth': 'mature-growth', 'mature-stable': 'mature-stable',
-    'revenue-growth': 'growth', 'decline': 'decline', 'start-up': 'start-up'
-  };
   /* A value by its unit, as the page's prose reads it: a fraction as a percentage to one decimal,
      points and spans of time with their word, a multiple with ×, dollars in billions or millions,
      a count or a score as a plain number, a list of exchanges or symbols in words. A figure and
@@ -237,9 +231,5 @@
         '. Open the view again to retry.';
       panel.replaceChildren(note);
     });
-  };
-
-  P.methodologySection = function (route) {
-    return SECTIONS[route] || null;
   };
 })();

@@ -10,7 +10,7 @@
    Appendix A, the audit of the records the report rests on, and Appendix B, the glossary, both
    as the server generates them; a link back to the screen. The page shows Request research with
    or without a report, as the drawer has it: under the revisions line, or under the head, the
-   meter and "No report yet." for a company with none. The drawer's own parts come through
+   meter and "No report yet." for a company with none. app.js's parts come through
    window.FairbandPage; the head and the meter read the company's detail, as the drawer does, and
    the rest the report. The charts read the series the sections cite once the report is in, and
    charts.js draws them. */
@@ -206,8 +206,8 @@
     return null;
   }
 
-  /* The company brief (B-149) under the head: the stored profile's description, whole, as the
-     drawer shows it under About; nothing without one. */
+  /* The company brief (B-149) under the head: the stored profile's description, whole; nothing
+     without one. */
   function brief(d) {
     return d.brief ? h('p', { key: 'brief', className: 'body app-report__brief' }, d.brief)
       : null;
@@ -224,10 +224,10 @@
 
   /* --------------------------------------------------------- the line above it */
 
-  /* Above the reader (18.4): the report's stance in the drawer's chip classes, faded once the
-     window of the snapshot it rests on has ended (rows.window_ended's rule), its title then saying
-     so in the register's words (spec 2026-11-15 7); its mode, its date,
-     who wrote it and its revision; Download .md and the page's one table toggle. Under it, that a
+  /* Above the reader (18.4): the report's stance in the Stance column's chip classes, faded once
+     the window of the snapshot it rests on has ended (rows.window_ended's rule), its title then
+     saying so in the register's words (spec 2026-11-15 7); its mode, its date, who wrote it and
+     its revision; Download .md and the page's one table toggle. Under it, that a
      valuation review has no full report to reuse, when it has none; the other revisions by number
      and by date and time; Request research, the drawer's own with this page's request, as on a
      company with no report (plan 4); a download's refusal. */
@@ -334,7 +334,7 @@
   /* ------------------------------------------------------------- the appendixes */
 
   /* Appendix A, the audit, as the server generates it from the records (13.1): the snapshot the
-     report rests on; every input, as the drawer's inputs table draws one; the review's bridge;
+     report rests on; every input, as the inputs table draws one; the review's bridge;
      the overrides inside the review; the secondary valuation; the guidance on file; the checks
      that ran; the versions; the classifier's evidence. */
   function appendixA(report) {
@@ -380,7 +380,7 @@
       code ? ' · in ' + code : null);
   }
 
-  /* An Appendix A input as the drawer's inputs table reads a result's: its provenance's source
+  /* An Appendix A input as the inputs table reads a result's: its provenance's source
      and its three dates; a date input's note, its date as an ISO day (the next earnings date), in
      words, as the page writes its dates and the export that note (spec 2026-11-15 7). */
   function input(i) {
@@ -458,7 +458,7 @@
     });
   }
 
-  /* The secondary valuation (spec 11): its form and value a share as Details lists them; for a
+  /* The secondary valuation (spec 11): its form, its value a share and its levels; for a
      company in another currency, the rate it ran at (spec 2026-11-10 7.6), its totals being in the
      currency and its value a share in US dollars; the walk to equity, the agent's reason, its
      drivers in words or its parts, then its projection year by year. Without one, the server's
@@ -538,7 +538,7 @@
     return h('p', { className: 'caption app-muted' }, named.join(' · '));
   }
 
-  /* Appendix A's classifier evidence as the drawer's Phase evidence reads a result's phase. */
+  /* Appendix A's classifier evidence as phaseEvidence reads a result's phase. */
   function classifier(c) {
     return {
       phase: c.phase, reason: c.reason, growth_3y: c.growth3Y, growth_word: c.growthWord,

@@ -1,7 +1,6 @@
 """The Methodology view (spec 2026-11-04 7): the fragment's fourteen sections, its diagram, its live
-spans and its examples; the script that fills the spans, wires the contents and the section hash
-and maps a route to its section; the drawer's link to the row's route section; and the prose rule
-of 7.1, every sentence of the fragment's prose at 25 words or fewer. The repository runs no
+spans and its examples; the script that fills the spans and wires the contents and the section
+hash; and the prose rule of 7.1, every sentence of the fragment's prose at 25 words or fewer. The repository runs no
 JavaScript tests, so the script is pinned by its content; the spans' names are checked against
 the policy route itself."""
 
@@ -675,26 +674,12 @@ def test_prose_sentences_are_short() -> None:
     assert long == [], "\n".join(long)
 
 
-def test_drawer_links_to_the_route_section() -> None:
-    js = _static_file("app.js")
-    assert "'How Fairband values a ' + " in js and "'#methodology/' + P.methodologySection(" in js
-    link = js[js.index("function methodologyLink(") :]
-    link = link[: link.index("\n  }\n")]
-    assert "if (!r.route || !phase) return null;" in link
-    assert "methodologyLink(r, phase)" in js
-
-
-def test_methodology_js_fills_the_spans_and_maps_the_routes() -> None:
+def test_methodology_js_fills_the_spans() -> None:
     js = _static_file("methodology.js")
     assert "P.onShow.methodology = " in js
     assert "fetch('/static/methodology.html')" in js and "panel.innerHTML = " in js
     for route in ("/api/policy", "/api/deciles", "/api/groups?by=phase", "/api/screen"):
         assert f"P.getJson('{route}" in js, route
-    assert (
-        "var SECTIONS = {\n    'mature-growth': 'mature-growth', 'mature-stable': 'mature-stable',\n"
-        "    'revenue-growth': 'growth', 'decline': 'decline', 'start-up': 'start-up'\n  };"
-    ) in js
-    assert "P.methodologySection = function (route) {" in js
     formats = js[js.index("var FORMATS = {") : js.index("\n  };\n", js.index("var FORMATS = {"))]
     for unit in ("fraction", "points", "years", "days", "times", "usd", "count", "exchanges"):
         assert f"\n    {unit}: " in formats, unit

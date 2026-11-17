@@ -1,5 +1,5 @@
 // The screen page's own script run in node, for the tests that read what a drawer helper returns:
-// tests/web/test_drawer_charge.py reads chargeRows (spec 2026-11-09 12). The bundle and app.js are
+// tests/web/test_drawer_form.py reads the drawer's parts (sections). The bundle and app.js are
 // loaded as the page loads them, with a stub React and the few browser objects app.js touches as
 // it loads: the screen's mount and the watchlist popup's, the listeners, no storage, a root that
 // draws nothing and a fetch that never answers, so the screen and the lists never arrive. The

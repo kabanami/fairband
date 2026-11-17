@@ -35,8 +35,8 @@
   };
 
   /* The views in the header's order, each with its panel, a section of the page; then the report
-     page's panel and the company page's, which no header view names: the drawer's Open the report
-     opens the first, a company's link the second. */
+     page's panel and the company page's, which no header view names: the company page's Open the
+     report opens the first, the drawer's Company page the second. */
   var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox', 'report',
     'company'];
   /* The company page's tabs, the Overview first: the tab of a hash that names none, or one the page
