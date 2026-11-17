@@ -333,6 +333,24 @@ export interface ReportSection {
   parts: ReportPart[];
 }
 
+/**
+ * fairband: one piece of a section's text, a run of plain text with no line break or a cite
+ * (spec 2026-11-17 research tab, 9). A line, an item and a cell are each a list of pieces.
+ */
+export type ReportPiece = ReportPart;
+
+/**
+ * fairband: one block of a section's text as `reportText.read` gives it
+ * (spec 2026-11-17 research tab, 9): a paragraph's `items` are its lines; a list's its items, a
+ * numbered list's from `start`; a table's its rows of cells, under its `head` rows (none without
+ * a `|---|` row).
+ */
+export type ReportBlock =
+  | { kind: 'p'; items: ReportPiece[][] }
+  | { kind: 'ul'; items: ReportPiece[][] }
+  | { kind: 'ol'; items: ReportPiece[][]; start: number }
+  | { kind: 'table'; items: ReportPiece[][][]; head: ReportPiece[][][] };
+
 export interface ReportFinding {
   /** Section, paragraph and citation index — the agent has to find the one number. */
   where: string;
@@ -782,6 +800,16 @@ export declare function ValidityWindow(props: ValidityWindowProps): unknown;
 export declare function TaggedInput(props: TaggedInputProps): unknown;
 export declare function OverrideRecord(props: OverrideRecordProps): unknown;
 export declare function ReportReader(props: ReportReaderProps): unknown;
+/**
+ * fairband: the reader of a section's text in the two steps `ReportReader` takes, for a page that
+ * lays a section's blocks out itself (spec 2026-11-17 research tab, 9): `read` gives the parts'
+ * blocks, as `ReportPart` says; `draw` gives one block's element, under `key` when given, each
+ * cite with its footnote number from `footnotes` (ref → n), as `ReportReaderProps.footnotes`.
+ */
+export declare const reportText: {
+  read(parts: ReportPart[]): ReportBlock[];
+  draw(block: ReportBlock, footnotes: Record<string, number>, key?: string | number): unknown;
+};
 export declare function ProposalCard(props: ProposalCardProps): unknown;
 export declare function ConfirmDialog(props: ConfirmDialogProps): unknown;
 export declare function ScreenTable(props: ScreenTableProps): unknown;

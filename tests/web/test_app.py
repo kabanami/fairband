@@ -2710,22 +2710,35 @@ def test_the_reader_renders_the_text_as_blocks() -> None:
     agent wrote them, through ``blocks``, a `// fairband:` patch naming 13.1: paragraphs, bullet
     and numbered lists, a table with a header row in a scroller, bold in ink; the cites inline in
     any of them. ``index.d.ts`` notes the shape on the part; ``tests/web/test_reader_blocks.py``
-    renders it."""
+    renders it. ``blocks`` reads the parts with ``readBlocks`` and draws each block with
+    ``drawBlock``, the two steps the bundle exports as ``reportText`` (spec 2026-11-17 research
+    tab, 9), a `// fairband:` patch that ``index.d.ts`` declares."""
     bundle = _component_file("bundle.js")
     reader = _function(bundle, "ReportReader")
     assert "blocks(s.parts, footnotes)" in reader
     assert "fb-report__prose" not in reader
-    blocks = _function(bundle, "blocks")
-    patch = bundle[: bundle.index("  function blocks(")]
-    patch = patch[patch.rindex("  // fairband:") :]
+    assert (
+        "return readBlocks(parts).map(function (b, k) { return drawBlock(b, footnotes, k); });"
+    ) in _function(bundle, "blocks")
+    draw = _function(bundle, "drawBlock")
+    patch = bundle[: bundle.index("  function readBlocks(")]
+    patch = patch[patch.rindex("  // fairband: the section's text as blocks") :]
     assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in patch
+    assert "(spec 2026-11-17 research tab, 9)" in patch
     for text in (
-        "h('p', { className: 'fb-report__prose body', key: k }",
+        "h('p', { className: 'fb-report__prose body', key: key }",
         "className: 'fb-report__list body'",
-        "h('div', { className: 'fb-report__scroll', key: k },",
+        "h('div', { className: 'fb-report__scroll', key: key },",
         "h('table', { className: 'fb-report__table' },",
     ):
-        assert text in blocks, text
+        assert text in draw, text
+    exported = bundle[bundle.index("global.Fairband = {") :]
+    mark = exported[: exported.index("reportText: { read: readBlocks, draw: drawBlock },")]
+    assert "(spec 2026-11-17 research tab, 9)" in mark[mark.rindex("// fairband:") :]
+    declarations = _component_file("index.d.ts")
+    doc = declarations[: declarations.index("export declare const reportText: {")]
+    doc = doc[doc.rindex("/**") :]
+    assert "fairband:" in doc and "(spec 2026-11-17 research tab, 9)" in doc
     css = _component_file("bundle.css")
     comment = css[css.index("/* fairband: the text's") :]
     assert "(spec 2026-11-06 Tier 2, 13.1 and 18.4)" in comment[: comment.index("*/")]
@@ -2792,18 +2805,18 @@ def test_a_cite_s_number_stays_with_its_figure_in_a_table() -> None:
     inline = _function(bundle, "inlineNodes")
     assert "function inlineNodes(pieces, footnotes, inCell) {" in inline
     assert "put(cited(piece, footnotes, 'c' + key++, inCell));" in inline
-    blocks = _function(bundle, "blocks")
+    draw = _function(bundle, "drawBlock")
     # a table's row, its header's and its body's, draws its cells as cells, under its mark; a
     # paragraph and a list item do not
     assert (
         "// fairband: a table's cell keeps a cite with its number (spec 2026-11-15 9)\n"
         "          inlineNodes(pieces, footnotes, true));"
-    ) in blocks
+    ) in draw
     assert (
-        "h('p', { className: 'fb-report__prose body', key: k },\n"
-        "          inlineNodes(pieces, footnotes));"
-    ) in blocks
-    assert "inlineNodes(trimPieces(item), footnotes));" in blocks
+        "h('p', { className: 'fb-report__prose body', key: key },\n"
+        "        inlineNodes(pieces, footnotes));"
+    ) in draw
+    assert "inlineNodes(trimPieces(item), footnotes));" in draw
     css = _component_file("bundle.css")
     comment = css[css.index("/* fairband: a cite's number stays with its figure") :]
     assert "(spec 2026-11-15 9)" in comment[: comment.index("*/")]

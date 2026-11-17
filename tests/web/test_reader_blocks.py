@@ -2,7 +2,13 @@
 "The text's shape" and 18.4): a blank line between paragraphs, bullet and numbered lists, a table
 whose ``|---|`` row sets its header, ``**bold**``, and the cites with their footnote numbers inline
 in any of them. The bundle runs in node with a stub React (``render.mjs``), so the test
-reads the HTML ``ReportReader`` builds."""
+reads the HTML ``ReportReader`` builds.
+
+And the bundle's reader of a section's text in its two steps (spec 2026-11-17 research tab, 6
+and 9): ``Fairband.reportText.read`` gives the blocks, ``Fairband.reportText.draw`` one block's
+element, the two ``ReportReader`` calls, so a page that lays the blocks out itself draws what the
+reader draws. The harness (``page.mjs``) calls them and the tests read what they give
+(``support.page``)."""
 
 import json
 import re
@@ -13,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from support.page import elements, node
 
 NODE = shutil.which("node")
 HARNESS = Path(__file__).with_name("render.mjs")
@@ -38,6 +45,17 @@ PARTS = [
     ),
 ]
 FOOTNOTES = {"snapshot:1/price": 1, "table:QCOM/growth/revenue_growth/2026": 2}
+BULLETS = [
+    "Risks:\n\n- **Licensing.** A renewal could fail.\n- Cars may slow.\n\n",
+    "3. The third reason.\n4. The fourth.\n\n",
+    "**Revenue of ",
+    {"cite": "$10.44 billion", "ref": "fact:QCOM/revenue/2026Q4"},
+    " fell.** Growth ** slowed.\nThe next line joins.\n\n",
+    "By quarter:\n| | Revenue |\n| :--- | ---: |\n| The quarter | ",
+    {"cite": "$10.44 billion", "ref": "fact:QCOM/revenue/2026Q4"},
+    " |\n\n| alone",
+]
+BULLETS_FOOTNOTES = {"fact:QCOM/revenue/2026Q4": 3}
 PROSE = '<p class="fb-report__prose body">'
 
 
@@ -119,17 +137,7 @@ def test_bullets_bold_leads_and_cites_in_cells() -> None:
     one, a bold run across a cite, an unpaired ``**``, a numbered list's own start, a paragraph's
     lines joined with a space, a table under a paragraph line with no blank line, and a line that
     opens with ``|`` and holds no second one, which stays prose."""
-    parts = [
-        "Risks:\n\n- **Licensing.** A renewal could fail.\n- Cars may slow.\n\n",
-        "3. The third reason.\n4. The fourth.\n\n",
-        "**Revenue of ",
-        {"cite": "$10.44 billion", "ref": "fact:QCOM/revenue/2026Q4"},
-        " fell.** Growth ** slowed.\nThe next line joins.\n\n",
-        "By quarter:\n| | Revenue |\n| :--- | ---: |\n| The quarter | ",
-        {"cite": "$10.44 billion", "ref": "fact:QCOM/revenue/2026Q4"},
-        " |\n\n| alone",
-    ]
-    html = _section(parts, {"fact:QCOM/revenue/2026Q4": 3})
+    html = _section(BULLETS, BULLETS_FOOTNOTES)
     assert _blocks(html) == ["prose", "list", "list", "prose", "prose", "scroll", "prose"]
     bullets = _between(html, '<ul class="fb-report__list body">', "</ul>")
     assert re.findall(r"<li>(.*?)</li>", bullets) == [
@@ -156,3 +164,62 @@ def test_bullets_bold_leads_and_cites_in_cells() -> None:
         f'<span class="fb-cite__pair">{cite}</span>',
     ]
     assert ":---" not in html
+
+
+def _reader_blocks(parts: list[Any], footnotes: dict[str, int]) -> list[Any]:
+    """The elements ``ReportReader`` draws for one published section holding ``parts``, after its
+    heading and its charts, as the harness gives the tree."""
+    props = {
+        "state": "published",
+        "revision": "revision 1",
+        "sections": [{"heading": "Summary", "parts": parts}],
+        "footnotes": footnotes,
+        "appendixes": False,
+    }
+    tree = node("Fairband.ReportReader", [props])
+    [section] = [e for e in elements(tree) if e.get("type") == "section"]
+    heading, charts, drawn = section["props"]["children"]
+    assert heading["type"] == "h4" and charts is None
+    return list(drawn)
+
+
+@pytest.mark.parametrize(
+    ("parts", "footnotes", "kinds"),
+    [
+        (PARTS, FOOTNOTES, ["p", "p", "p", "ol", "table", "p"]),
+        (BULLETS, BULLETS_FOOTNOTES, ["p", "ul", "ol", "p", "p", "table", "p"]),
+    ],
+)
+def test_read_and_draw_give_what_the_reader_drew(
+    parts: list[Any], footnotes: dict[str, int], kinds: list[str]
+) -> None:
+    """Each fixture's section, read into blocks with ``reportText.read`` and each block drawn with
+    ``reportText.draw`` under its index as its key, is the tree ``ReportReader`` draws for it."""
+    blocks = node("Fairband.reportText.read", [parts])
+    assert [block["kind"] for block in blocks] == kinds
+    drawn = [
+        node("Fairband.reportText.draw", [block, footnotes, k]) for k, block in enumerate(blocks)
+    ]
+    assert drawn == _reader_blocks(parts, footnotes)
+
+
+def test_read_gives_the_blocks_kinds() -> None:
+    """A paragraph, a bullet list, a numbered list from 3 and a table read as four blocks in the
+    shape the reader builds: a paragraph's lines, a list's items, the numbered list's start, the
+    table's one head row and its rows of cells, each a list of pieces, a text or a cite."""
+    cite = {"cite": "$10.44 billion", "ref": "fact:QCOM/revenue/2026Q4"}
+    parts = [
+        "A paragraph.\n\n- One.\n- Two.\n\n3. Third.\n4. Fourth.\n\n",
+        "| Line | Figure |\n|---|---|\n| Revenue | ",
+        cite,
+        " |",
+    ]
+    blocks = node("Fairband.reportText.read", [parts])
+    assert [block["kind"] for block in blocks] == ["p", "ul", "ol", "table"]
+    paragraph, bullets, numbered, table = blocks
+    assert paragraph["items"] == [["A paragraph."]]
+    assert bullets["items"] == [["One."], ["Two."]]
+    assert numbered["start"] == 3
+    assert numbered["items"] == [["Third."], ["Fourth."]]
+    assert table["head"] == [[["Line"], ["Figure"]]]
+    assert table["items"] == [[["Revenue"], [cite]]]

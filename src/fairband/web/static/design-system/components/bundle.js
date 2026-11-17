@@ -835,7 +835,12 @@
   // and `:` cells is the separator, which makes the rows above it the header and shows nowhere.
   // Any other line joins the paragraph with a space. In any block `**` sets bold and a cite keeps
   // its mark and its [n].
-  function blocks(parts, footnotes) {
+  // fairband: the reading and the drawing are two steps, which a page that lays a section's blocks
+  // out itself calls as `reportText.read` and `reportText.draw` (spec 2026-11-17 research tab, 9).
+  // A block is { kind: 'p' | 'ul' | 'ol' | 'table', items, head?, start? }: a paragraph's items are
+  // its lines; a list's its items, a numbered list's from `start`; a table's its rows of cells,
+  // under its `head` rows. A line, an item and a cell are each a list of pieces, a text or a cite.
+  function readBlocks(parts) {
     var lines = [[]];
     (parts || []).forEach(function (part) {
       if (part && typeof part === 'object') { lines[lines.length - 1].push(part); return; }
@@ -885,7 +890,13 @@
       }
     });
     if (block) found.push(block);
+    return found;
+  }
 
+  // fairband: one block's element under `key`, the cites numbered from the caller's footnotes
+  // (ref → n): a paragraph's lines joined with a space, a list's items, a table in its scroller
+  // (spec 2026-11-17 research tab, 9).
+  function drawBlock(b, footnotes, key) {
     function row(cells, cell, i) {
       return h('tr', { key: i }, cells.map(function (pieces, j) {
         return h(cell, { key: j, className: cell === 'th' ? 'label' : 'body' },
@@ -893,28 +904,32 @@
           inlineNodes(pieces, footnotes, true));
       }));
     }
-    return found.map(function (b, k) {
-      if (b.kind === 'p') {
-        var pieces = [];
-        b.items.forEach(function (line, i) {
-          pieces = pieces.concat(i ? [' '] : [], trimPieces(line));
-        });
-        return h('p', { className: 'fb-report__prose body', key: k },
-          inlineNodes(pieces, footnotes));
-      }
-      if (b.kind === 'table') {
-        return h('div', { className: 'fb-report__scroll', key: k },
-          h('table', { className: 'fb-report__table' },
-            b.head.length ? h('thead', null, b.head.map(function (cells, i) {
-              return row(cells, 'th', i);
-            })) : null,
-            h('tbody', null, b.items.map(function (cells, i) { return row(cells, 'td', i); }))));
-      }
-      return h(b.kind, { className: 'fb-report__list body', start: b.start, key: k },
-        b.items.map(function (item, i) {
-          return h('li', { key: i }, inlineNodes(trimPieces(item), footnotes));
-        }));
-    });
+    if (b.kind === 'p') {
+      var pieces = [];
+      b.items.forEach(function (line, i) {
+        pieces = pieces.concat(i ? [' '] : [], trimPieces(line));
+      });
+      return h('p', { className: 'fb-report__prose body', key: key },
+        inlineNodes(pieces, footnotes));
+    }
+    if (b.kind === 'table') {
+      return h('div', { className: 'fb-report__scroll', key: key },
+        h('table', { className: 'fb-report__table' },
+          b.head.length ? h('thead', null, b.head.map(function (cells, i) {
+            return row(cells, 'th', i);
+          })) : null,
+          h('tbody', null, b.items.map(function (cells, i) { return row(cells, 'td', i); }))));
+    }
+    return h(b.kind, { className: 'fb-report__list body', start: b.start, key: key },
+      b.items.map(function (item, i) {
+        return h('li', { key: i }, inlineNodes(trimPieces(item), footnotes));
+      }));
+  }
+
+  // fairband: a section's text as the reader draws it, the blocks read and each drawn under its
+  // index (spec 2026-11-17 research tab, 9).
+  function blocks(parts, footnotes) {
+    return readBlocks(parts).map(function (b, k) { return drawBlock(b, footnotes, k); });
   }
 
   function ReportReader(props) {
@@ -2402,6 +2417,10 @@
     BasisChip: BasisChip,
     OverrideRecord: OverrideRecord,
     ReportReader: ReportReader,
+    // fairband: the reader of a section's text in the two steps ReportReader takes, the blocks
+    // and one block's element, for a page that lays the blocks out itself
+    // (spec 2026-11-17 research tab, 9).
+    reportText: { read: readBlocks, draw: drawBlock },
     ProposalCard: ProposalCard,
     ConfirmDialog: ConfirmDialog,
     TaggedInput: TaggedInput,
