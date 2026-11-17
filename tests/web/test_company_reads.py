@@ -145,8 +145,8 @@ def test_financials(client: TestClient) -> None:
 
 def test_the_detail_read_carries_the_brief(client: TestClient) -> None:
     """B-149: the company brief is the latest stored profile's description, read whole, so the
-    drawer, the report page and the MCP ``company`` tool show it; a company without a stored
-    profile has none."""
+    drawer shows it and the MCP ``company`` tool carries it; a company without a stored profile
+    has none."""
     assert _get(client, "/api/companies/AAPL")["brief"] == BRIEF
     assert _get(client, "/api/companies/AAL")["brief"] is None
 

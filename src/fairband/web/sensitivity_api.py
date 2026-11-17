@@ -25,7 +25,7 @@ columns". The answer and ``GET /api/sensitivities/{id}`` (404 without it) carry 
 camelCase, the pair in force as ``current``, ``[i, j]`` counted from 1 as the ref
 ``sensitivity:<id>/<i>/<j>`` counts the row and the column, ``null`` when no pair is in force;
 and the words the report's Markdown writes the reading's table in (``charts.reading_axes``), which
-the report page draws its grid with (spec 18.4): ``title``, "Sensitivity 7: the belief by the
+the Research tab draws its grid with (spec 18.4): ``title``, "Sensitivity 7: the belief by the
 runway return", ``rowLabel`` and ``colLabel``, each input's label, and ``rowWords`` and
 ``colWords``, each value as a cite of it reads, a money input's in the snapshot's reporting
 currency with its code (spec 2026-11-10 7.4).

@@ -1,9 +1,10 @@
 /* A report's parts after its sections (spec 2026-11-06 Tier 2, 13.1 and 18.4), loaded after
-   methodology.js and before report.js, for the report page (report.js) and the company page's
-   Research tab (company_research.js), which draw them alike (the Research tab's design, 7.8 and
-   9): the references those numbers name, Appendix A, the audit of the records the report rests
-   on, and Appendix B, the glossary, both as the server generates them; and Download .md, the
-   report's Markdown saved as a file. Each is a pure builder of the report, apart from the
+   methodology.js and before charts.js, for the company page's Research tab
+   (company_research.js), which draws each in a closed panel of its own (the Research tab's
+   design, 7.8 and 9): the references those numbers name, Appendix A, the audit of the records
+   the report rests on, and Appendix B, the glossary, both as the server generates them; and
+   Download .md, the report's Markdown saved as a file. They moved here from the report page's
+   script, which left with the page. Each is a pure builder of the report, apart from the
    download, which fetches; app.js's parts come through window.FairbandPage. */
 (function () {
   'use strict';
@@ -287,10 +288,10 @@
 
   function none(text) { return h('p', { className: 'caption app-muted' }, text); }
 
-  /* What the report page and the Research tab draw: the references, Appendix A and Appendix B of
-     a report, each its element, and download(report, failed); and Appendix A's overrides and its
-     Snapshot line, which the node tests read (tests/web/test_report_reader.py), as charts.js
-     hangs its helpers, also as reportAppendix, their name before this script. */
+  /* What the Research tab draws: the references, Appendix A and Appendix B of a report, each its
+     element, and download(report, failed); and Appendix A's overrides and its Snapshot line,
+     which the node tests read (tests/web/test_report_reader.py), as charts.js hangs its helpers,
+     also as reportAppendix, their name before this script. */
   P.reportParts = {
     references: references, appendixA: appendixA, appendixB: appendixB, download: download,
     overrides: overrides, snapshotLine: snapshotLine

@@ -533,9 +533,11 @@ def test_the_records_carry_the_reviews_the_secondary_valuations_and_the_ledger_s
     results: dict[str, ValuationResult],
     secondaries: dict[str, int],
 ) -> None:
-    """The research read's lists as it answers them, the company's reviews and secondary
-    valuations as their own reads serve them, and the count of every ledger row of the company,
-    where the ledger's list is cut at the newest twenty."""
+    """The research read's lists as it answers them, the company's reviews as their own read
+    serves them but for each bridge line, which carries its label, unit, reason and writer as the
+    company detail's does (a review here has no line), its secondary valuations as their read
+    serves them, and the count of every ledger row of the company, where the ledger's list is cut
+    at the newest twenty."""
     sid = snapshot_id(client)
     mechanical = results["AAPL"]
     with closing(connect(db_path)) as conn:

@@ -3,7 +3,7 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
 (``agents_api``), the guidance routes (``guidance_api``), the override and review routes
 (``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
-Methodology section read and the report routes (``reports_api``), the company page's three reads
+Methodology section read and the report routes (``reports_api``), the company page's four reads
 (``company_api``), the research read (``research_api``), the multiples history read
 (``multiples_api``), the band's history read (``history_api``), the vendor pass-through route
 (``vendor_api``), the filing reads (``filings_api``), the company logo's read (``logo_api``), and
@@ -11,7 +11,7 @@ the policy values and growth deciles the Methodology page cites (spec 2026-11-04
 Agents section's settings routes (``launch_api``) read and write ``launch.json`` in the config
 folder, not the ``settings`` table; its launch routes (``launch_api``) store a launch, open its
 window and take its launcher's reports. The company detail carries the agents' records that the
-drawer, the company page and the report page read (``research_api.agent_records``).
+drawer and the company page read (``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -365,17 +365,17 @@ def create_app(
         policy's values: the designation edges, by which the drawer keeps its price ÷ value figure
         inside the word's band, and ``aging_fraction``, from which a validity window reads aging
         where the screen's Freshness column does (no page draws the window since it left the drawer,
-        the company page's design 11); and the agents' records that the drawer, the company page and
-        the report page read (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
-        ``item``), with ``moat``, the moat class in force, which the drawer's head and the company
-        page's head stamp (the company page's design, 7.2); and ``noteCount``, the count of the
-        company's notes, which the Notes control draws beside its word (11.1); and the company brief
-        (B-149), the latest stored profile's description, which the drawer shows cut at six lines,
-        the report page shows whole, and the MCP ``company`` tool carries; and ``logo`` (B-203), the
-        address of the company's logo read where the latest stored profile names a logo, which the
-        heads of the drawer, the company page and the report page draw, ``None`` without one
+        the company page's design 11); and the agents' records that the drawer and the company page
+        read (``research_api.agent_records``: ``review``, ``secondary``, ``report``, ``item``), with
+        ``moat``, the moat class in force, which the drawer's head and the company page's head
+        stamp (the company page's design, 7.2); and ``noteCount``, the count of the company's
+        notes, which the Notes control draws beside its word (11.1); and the company brief (B-149),
+        the latest stored profile's description, which the drawer shows cut at six lines and the
+        MCP ``company`` tool carries (the company page's Overview reads its own, ``page_fmp``); and
+        ``logo`` (B-203), the address of the company's logo read where the latest stored profile
+        names a logo, which the heads of the drawer and the company page draw, ``None`` without one
         (``logo_api.logo_route``). And what the figures are in (spec 2026-11-10 7.4), which the
-        drawer's head and the report page name: ``currency``, the reporting currency the snapshot
+        drawer's head and the Research tab name: ``currency``, the reporting currency the snapshot
         was valued or refused in (``types.money_of``: USD for a USD row, the code for a row refused
         for its currency); ``isAdr``, the ADR flag as assembly reads it, the latest stored
         profile's, else the universe row's, ``None`` with neither (``inputs.adr_flag``);

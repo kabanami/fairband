@@ -1,5 +1,5 @@
 """The chart tables of a report (spec 2026-11-06 Tier 2, 13.6 and 18.4; ``method.md`` 16.6):
-where the report page draws a chart, the Markdown export carries its table twin under the
+where the Research tab draws a chart, the Markdown export carries its table twin under the
 section's heading, before the prose, and the page titles its charts with the words here, so the
 two never differ. Every figure is written as a cite of it would read (``check.shown``), a day as
 the references write it (``refs.day_words``, "3 Nov 2026"), and a cell with no figure on file is
@@ -25,7 +25,8 @@ section each leads:
   growth table, where an estimate cell of its EPS holds a figure, one line says the analysts'
   basis from the cell's note (``tables.ANALYSTS_BASIS``), "EPS estimates are on the analysts' own
   basis, which can leave out items the reported EPS includes."; no other table has a line. The
-  page draws a part's charts under its table's title, each titled by its row's name. A ROIC year on
+  Research tab draws each chart titled by its row's name, by its table's group beside the text,
+  with no title of the table over it (the Research tab's design, 7.4 rule 3). A ROIC year on
   average invested capital at or below zero has a figure with the wrong sign and no meaning
   (``tables.NO_CAPITAL``): its cell reads the note in place of the figure, and the page's chart
   leaves the year out and names it under the chart (B-8).

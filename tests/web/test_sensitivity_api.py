@@ -145,7 +145,7 @@ def test_a_sensitivity_is_stored_and_cited(
         "policyVersion": policy.version,
         "settingsHash": EMPTY_SETTINGS_HASH,
         # the export's title and words for the reading's table (charts.reading_axes), which the
-        # report page draws its grid with (spec 18.4)
+        # Research tab draws its grid with (spec 18.4)
         "title": f"Sensitivity {found['id']}: the belief by the runway return",
         "rowLabel": "belief",
         "colLabel": "runway return",

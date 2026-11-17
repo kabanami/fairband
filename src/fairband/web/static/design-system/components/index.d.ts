@@ -364,7 +364,7 @@ export interface ReportReaderProps {
   state?: 'published' | 'rejected';
   revision?: string;
   /**
-   * fairband: absent, a published report draws no cites line; the report page passes them
+   * fairband: absent, a published report draws no cites line; the report page passed them
    * (spec 2026-11-06 Tier 2, 18.2 and 18.4). Given, the line says what the report rests
    * on in the reader's words, each date in words and no record's id: "On the data of 4 Nov 2026 ·
    * priced that day · valid until 27 Jan 2027 · reuses the full report of 3 Nov 2026"
@@ -759,7 +759,7 @@ export interface SpreadChartProps {
   subtitle?: string;
   /**
    * fairband: the hurdle's name in the legend, the tooltip and the table twin; `WACC` absent. The
-   * report page's is "Hurdle rate", the policy's required return (spec 2026-11-06 Tier 2, 18.4).
+   * Research tab's is "Hurdle rate", the policy's required return (spec 2026-11-06 Tier 2, 18.4).
    */
   hurdleLabel?: string;
   basis?: Basis;

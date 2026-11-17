@@ -80,7 +80,8 @@ transaction.
 
 ``GET /api/companies/{symbol}/reports`` lists the company's revisions newest first, each record
 without its sections: its id, date (``createdAt``), writer, revision, mode, stance and the full
-report it reuses, which the report page's revisions line and cites line read (spec 18.4);
+report it reuses (spec 18.4), the list the Research tab's read carries as its reports on file
+(``report_list``; the Research tab's design, 7.3 and 8.1);
 ``GET /api/reports/{id}`` answers one whole, with its judgments, its appendixes and its
 references, ``[{n, ref, source}]``, generated at read time (``render.appendix_a``, ``appendix_b``,
 ``references``), as the publish answers it; ``GET /api/reports/{id}/markdown`` its Markdown

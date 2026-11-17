@@ -402,10 +402,11 @@ def test_a_second_submission_is_revision_two(client: TestClient) -> None:
 
 
 def test_the_list_carries_what_the_report_page_reads(client: TestClient) -> None:
-    """Spec 18.4: the report page's revisions line links each other revision by its date, and the
-    reader's cites line names the date of the full report a valuation review reuses, so the list
-    carries each revision's id, date, writer, revision, mode, stance and the report it reuses,
-    newest first, without its sections."""
+    """Spec 18.4 and the Research tab's design, 7.2 and 7.3: the tab's list of the reports on file
+    names each revision by its date, revision, mode and stance and links each other one by its id,
+    and the bar's line dates the full report a valuation review reuses from that report's entry,
+    so the list carries each revision's id, date, writer, revision, mode, stance and the report it
+    reuses, newest first, without its sections."""
     sid = _snapshot_id(client)
     full = _published(client, _body(sid))
     review = _body(sid, mode="valuation review", stance="trim")

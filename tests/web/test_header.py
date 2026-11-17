@@ -1,9 +1,10 @@
 """The header and the status line under it across the views (the company page's design, the
 founder's rulings of 2026-11-17). The line of the last refresh and its Details describe the whole
 universe, so the Screen and the other views of many companies keep them; the company page, a page
-of one company, draws neither: the header's stamp already says when the engine ran. A refresh that runs still draws its bar there, and a notice its sentence, since the
-header has neither. The header's finder stands in its right slot on every view but the Screen,
-whose table has a field of its own. The bundle, app.js, finder.js and controls.js run in node
+of one company, draws neither: the header's stamp already says when the engine ran. A refresh
+that runs still draws its bar there, and a notice its sentence, since the header has neither.
+The header's finder stands in its right slot on every view but the Screen, whose table has a
+field of its own. The bundle, app.js, finder.js and controls.js run in node
 (``tests/web/header.mjs``) on steps the test gives, and the tests read the trace."""
 
 import json

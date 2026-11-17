@@ -23,7 +23,7 @@ export's line names both on a company in another currency, spec 2026-11-10 7.6),
 with the trailing revenue and the terminal return and its projection year by year, or its parts
 year by year, and its grid, the rows the terminal growths or, on the parts form, the shift in
 every part's (``GRID_ROWS``), with the rows in words as the export's grid table writes them
-(``rowWords``, for the report page's chart), or, for a report with none whose company can have
+(``rowWords``, for the Research tab's chart), or, for a report with none whose company can have
 none on its snapshot, why, in the register's words (``noSecondary``, "No secondary valuation:
 Fairband's own valuation gives the company a value" where ``store.secondary.no_secondary`` says the
 route values it, "...: the review gives the company a value" (the report's review has a value), or
@@ -61,7 +61,7 @@ a company in another currency, and its refusal after the line where it has one
 other parts as tables, its inputs' "As of", a date input's note and its guidance's "Call" in
 words, and Appendix B as a list; and last the references under ``## References``, ``[^n]: <ref> —
 <source>``: GitHub-flavoured Markdown renders footnote definitions at the end of the document, so
-the heading stands over its list there (spec 2026-11-15 9). The report page keeps its order, the
+the heading stands over its list there (spec 2026-11-15 9). The Research tab keeps its order, the
 references after the last section.
 """
 
@@ -415,7 +415,7 @@ def references(
     policy version the report's snapshot was valued under. With ``section`` (counted from 1), only
     the refs that section cites, each keeping its number in the whole list, so the company
     detail's report summary (spec 2026-11-06 Tier 2, 18.2), which the MCP ``company`` tool
-    carries, numbers its cites as the report page does. No page draws that summary since the
+    carries, numbers its cites as the Research tab does. No page draws that summary since the
     drawer's left (the company page's design, 11)."""
     numbered: dict[str, int] = {}
     for _, part in parts(report.sections):
@@ -641,7 +641,7 @@ def _secondary(secondary: SecondaryRow, currency: str) -> dict[str, Any]:
 
 def _grid(grid: Mapping[str, Any], rows_are: str) -> dict[str, Any]:
     """The grid with what its rows hold and the rows in words, as the export's grid table writes
-    them (``charts.grid_row_words``), which the report page draws (spec 18.4)."""
+    them (``charts.grid_row_words``), which the Research tab draws (spec 18.4)."""
     words = grid_row_words(grid["rows"], rows_are == "shifts")
     return {**grid, "rowsAre": rows_are, "rowWords": list(words)}
 
@@ -660,11 +660,11 @@ def _chart_table(chart: ChartTable) -> list[str]:
 
 
 def _snapshot_line(snapshot: Mapping[str, Any]) -> str:
-    """The snapshot the report rests on in one line, in the order of the report page's Appendix A
-    (``report.js``, ``snapshotLine``): its id, its data date, its price date and the end of its
-    window, each in words, its price and its value a share, both US dollars, as the export writes
-    a figure a share elsewhere, with its thousands separator ("$1,507.85"), and, on a company in
-    another currency, that currency last; a dash for what it has none of."""
+    """The snapshot the report rests on in one line, in the order of the Research tab's Appendix A
+    (``report_parts.js``, ``snapshotLine``): its id, its data date, its price date and the end of
+    its window, each in words, its price and its value a share, both US dollars, as the export
+    writes a figure a share elsewhere, with its thousands separator ("$1,507.85"), and, on a
+    company in another currency, that currency last; a dash for what it has none of."""
     said = [
         f"Snapshot {snapshot['id']}",
         f"data {_day_words(snapshot['dataDate']) or _DASH}",

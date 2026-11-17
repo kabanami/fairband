@@ -230,7 +230,7 @@ def profile_country(payload: Any) -> str | None:
 def profile_brief(payload: Any) -> str | None:
     """The company brief (B-149): the profile object's ``description``, FMP's paragraph on what
     the company does, stripped; ``None`` without a non-empty string. The detail read hands it to
-    the drawer, the report page and the MCP ``company`` tool from the stored payload."""
+    the drawer and the MCP ``company`` tool from the stored payload."""
     row = _profile(payload)
     return None if row is None else text(row.get("description"))
 

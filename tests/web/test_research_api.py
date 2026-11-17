@@ -503,7 +503,7 @@ def test_records_on_an_older_snapshot_leave_the_detail(
 
 def test_the_detail_carries_the_report_and_its_summary(client: TestClient, db_path: Path) -> None:
     """Section 1 as submitted, cites included, and the references it cites with the numbers the
-    report page's list gives them, so a number in the summary matches the page."""
+    report's whole list gives them, so a number in the summary matches the Research tab's."""
     sections = _cited_sections(_latest(db_path, "AAPL"))
     report_id = _report(db_path, "AAPL", "buy", sections)
     whole = client.get(f"/api/reports/{report_id}").json()["references"]

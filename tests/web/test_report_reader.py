@@ -6,8 +6,8 @@ reader's ``·``, and names no part of Fairband and no record's id. A caller that
 tests read the tree it draws (``support.page``).
 
 And Appendix A's record of an override the review applied at a split (spec 2026-11-15 8): the
-page's script, report_parts.js, builds it with the pair in force and the words of the scaling under it,
-and the test reads the tree it builds.
+page's script, report_parts.js, builds it with the pair in force and the words of the scaling
+under it, and the test reads the tree it builds.
 
 And a cite's number in a report's table (spec 2026-11-15 9): ``ReportReader`` holds a cite and
 its number in one span there, and nowhere else.

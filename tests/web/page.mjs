@@ -7,8 +7,10 @@
 // hangs on it ("reportCharts.roicPoints"); its arguments are a JSON list on stdin; its result is
 // JSON on stdout. Scripts named after the helper are loaded after app.js, as the page loads them
 // (charts.js; tests/web/test_report_charts.py; report_parts.js and its Appendix A's overrides,
-// "reportAppendix.overrides"; tests/web/test_report_reader.py; inbox.js, whose root is the
-// stub's, and its row, "inbox.row"; tests/web/test_inbox_launch.py).
+// "reportAppendix.overrides"; tests/web/test_report_reader.py; the Research tab's scripts and
+// their builders, "researchText.lay", "research.bar", "researchRecords.panels";
+// tests/web/test_company_research*.py; inbox.js, whose root is the stub's, and its row,
+// "inbox.row"; tests/web/test_inbox_launch.py).
 //
 // A bundle component is named as window names it ("Fairband.HistoryBars") and called with its
 // props, the one argument; the stub's hooks give it its first state, its refs and no effect, and

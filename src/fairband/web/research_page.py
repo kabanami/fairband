@@ -7,7 +7,7 @@ the report rests on: its snapshot, and its review and its secondary valuation wh
 
 - The value is the first of three that exists: the review's, ``reviewed``; the snapshot's,
   ``mechanical``; the secondary valuation's where it is above zero, ``reviewed`` with the note
-  "secondary valuation", as the report page's head names it. ``levels``, ``{buy, fairLow,
+  "secondary valuation", as the report page's head named it. ``levels``, ``{buy, fairLow,
   fairHigh, trim}``, are the same record's.
 - ``priceToValue`` and ``designation`` are that value against the price of the report's snapshot
   on the policy's edges, as ``rows.standing`` works them out, never the word stored with a record;

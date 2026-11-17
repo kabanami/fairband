@@ -151,7 +151,7 @@ def test_the_levels_use_the_screen_s_words() -> None:
 
 def test_the_company_page_button_s_address() -> None:
     """Company page, first and primary, a link to the company's page, its symbol encoded as the
-    report page's links encode it; then Request research as before."""
+    page's other links to a company encode it; then Request research as before."""
     for symbol, href in (("BRK.B", "#company/BRK.B"), ("BRK/B", "#company/BRK%2FB")):
         detail = answers.detail()
         detail["result"]["symbol"] = symbol

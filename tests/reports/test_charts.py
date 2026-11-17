@@ -1,4 +1,4 @@
-"""The chart tables (spec 2026-11-06 Tier 2, 13.6): the table twin of each chart the report page
+"""The chart tables (spec 2026-11-06 Tier 2, 13.6): the table twin of each chart the Research tab
 draws, as the Markdown export carries it, every figure as a cite of it reads. On the ``snapshots``
 fixture of ``conftest.py``: AAPL with ACME's synthetic statements (revenue $2,100 m in fiscal 2025,
 $2,000 m in 2024, and five quarters to 30 Sep 2026), the consensus for 2026 and 2027 and its

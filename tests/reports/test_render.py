@@ -217,7 +217,7 @@ def test_appendix_a_carries_the_drivers_and_the_grid(
     grid = secondary["grid"]
     assert grid["rowsAre"] == "growths" and len(grid["cells"]) == 3
     assert grid["cells"][1][1] == secondary["valuePerShare"]
-    # the rows in words as the export's grid writes them, which the report page reads (18.4)
+    # the rows in words as the export's grid writes them, which the Research tab reads (18.4)
     assert grid["rowWords"] == ["1.0%", "2.0%", "3.0%"]
     text = markdown(report, a, [], [], {})
     block = text[text.index("### Secondary valuation") : text.index("### Checks that ran")]
@@ -360,7 +360,7 @@ def test_appendix_a_gives_each_input_its_provenance(
 ) -> None:
     """Spec 13.1, "every input with its tag, source and dates": each input carries its source and
     its three dates, the day the figure is as of, when it was observed and when it was entered,
-    which the report page draws with each of Appendix A's inputs (18.4)."""
+    which the Research tab draws with each of Appendix A's inputs (18.4)."""
     sid = snapshots["AAPL"]
     a = appendix_a(conn, _stored(conn, sid), policy)
     snapshot = snapshot_row(conn, sid)
@@ -605,7 +605,7 @@ def test_the_bridge_without_a_review_names_the_value_that_stands(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """Without a review the mechanical value is the value, unless the snapshot refused and has
-    none: then the export says only that there is no review, as the report page does."""
+    none: then the export says only that there is no review, as the Research tab does."""
     for symbol, line in (
         ("AAPL", "No review: the value is the mechanical one."),
         ("AAL", "No review."),
@@ -805,7 +805,7 @@ def test_the_export_s_appendix_a_opens_with_the_snapshot(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """The whole-branch review's I1: the export's second line names no record (spec 2026-11-15 7),
-    so its Appendix A opens with the Snapshot part, one line in the order of the report page's
+    so its Appendix A opens with the Snapshot part, one line in the order of the Research tab's
     Appendix A: the snapshot's id, its data date, its price date and the end of its window in
     words, its price and its value a share, both US dollars, as the export writes a figure a share
     elsewhere, with its thousands separator ("$1,507.85", where the page's line writes

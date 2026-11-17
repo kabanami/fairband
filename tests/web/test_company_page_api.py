@@ -1,7 +1,8 @@
-"""The company page's three reads (the company page's design, 7.4, 10.3, 10.4 and 10.5, and the
-Financials tab's design, 7.9 and 8.3) and the two fields the company's detail gains (7.2 and
-11.1), on the database of ``conftest.py``: AAPL valued on the Mature Growth route, AAL refused for
-its target margin, HGCO valued on the revenue growth route.
+"""Three of the company page's four reads, the overview, the estimates and the financials (the
+company page's design, 7.4, 10.3, 10.4 and 10.5, and the Financials tab's design, 7.9 and 8.3;
+the Research tab's read is ``test_research_page_api.py``'s), and the two fields the company's
+detail gains (7.2 and 11.1), on the database of ``conftest.py``: AAPL valued on the Mature Growth
+route, AAL refused for its target margin, HGCO valued on the revenue growth route.
 
 The page's company is ``page_payloads``' LFOX, which has no snapshot unless a test values one. Its
 FMP answers are stored as the refresh stores them: each under the fetch's params, a quote with its

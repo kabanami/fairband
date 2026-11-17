@@ -215,13 +215,13 @@
      design) numbers a report's cites by its references (footnotes), its value card (7.5) writes
      the meter's gap as every meter does (gapText), and its Records (company_research_records.js,
      7.10) a guidance record's figures and a store word as the guidance table writes them
-     (guided, words). The Inbox view's row (inbox.js, B-210) keeps
-     a request for each pending item too, posts its launch (openLaunch) and draws the line's
-     words (launchWords) from the item the line is drawn from (lineItem). The header's finder
-     (finder.js) finds the rows the Screen's field finds (finds). The drawer with its bar
-     (drawer), its parts (sections), the Notes box (notesBox), the open item's line (launchLine),
-     an input's value (inputValue), a figure a share in a currency (money) and a logo's ground
-     (logoGround) are here for the tests, which read them in node (tests/web/page.mjs). */
+     (guided, words). The Inbox view's row (inbox.js, B-210) keeps a request for each pending
+     item too, posts its launch (openLaunch) and draws the line's words (launchWords) from the
+     item the line is drawn from (lineItem). The header's finder (finder.js) finds the rows the
+     Screen's field finds (finds). The drawer with its bar (drawer), its parts (sections), the
+     Notes box (notesBox), the open item's line (launchLine), an input's value (inputValue), a
+     figure a share in a currency (money) and a logo's ground (logoGround) are here for the
+     tests, which read them in node (tests/web/page.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
@@ -797,20 +797,20 @@
   }
 
   /* The meter of a company's detail (spec 2026-11-06 Tier 2, 18.2 and 18.4), as the drawer and
-     the report page draw it. The head beside the price says the word and price ÷ value over the
-     value's name in one form, "0.82 × the reviewed value", and the caption only what the head
-     does not (18.2 item 2, plan 4): a valued row whose review on the latest snapshot has a value,
-     the review's band, its word and ratio at today's price over the reviewed value, its caption
-     the mechanical value in words, as the row's band and levels follow the reviewed value (plan
-     3); else a valued row's mechanical band against the price, its word and ratio over the
-     mechanical value; a refused row whose review on the latest snapshot has a value, the
-     review's band, the reviewed marker on the value itself, its word and ratio at today's price
-     over the reviewed value, the bundle's caption "reviewed" and the value (the ruling of
-     2026-11-08); else a refused row whose secondary valuation counts on the latest snapshot, the
-     secondary's band, its word and ratio at today's price over the secondary valuation (the
-     ruling of 2026-11-07); else none. The scale is off: the drawer names the levels under it.
-     `hero` false sets the meter's price in figure, under the report page's one headline figure;
-     the drawer passes none. */
+     the company page's Overview draw it. The head beside the price says the word and price ÷
+     value over the value's name in one form, "0.82 × the reviewed value", and the caption only
+     what the head does not (18.2 item 2, plan 4): a valued row whose review on the latest
+     snapshot has a value, the review's band, its word and ratio at today's price over the
+     reviewed value, its caption the mechanical value in words, as the row's band and levels
+     follow the reviewed value (plan 3); else a valued row's mechanical band against the price,
+     its word and ratio over the mechanical value; a refused row whose review on the latest
+     snapshot has a value, the review's band, the reviewed marker on the value itself, its word
+     and ratio at today's price over the reviewed value, the bundle's caption "reviewed" and the
+     value (the ruling of 2026-11-08); else a refused row whose secondary valuation counts on the
+     latest snapshot, the secondary's band, its word and ratio at today's price over the
+     secondary valuation (the ruling of 2026-11-07); else none. The scale is off: the drawer and
+     the Overview name the levels under it. `hero` false sets the meter's price in figure, under
+     the company page's one headline figure, the price in its head; the drawer passes none. */
   function meter(body, hero) {
     var r = body.result;
     var review = body.review;
@@ -866,7 +866,7 @@
 
   /* A refused row whose review, which the detail carries only while it counts on the latest
      snapshot, has a value, its levels, and a price to draw them against: its meter is the
-     review's, as the row's Reviewed cell and the report page's headline show that value. */
+     review's, as the row's Reviewed cell shows that value. */
   function isReviewBanded(body) {
     var r = body.result;
     var v = body.review;
@@ -918,7 +918,7 @@
   }
 
   /* A report's references, [{ n, ref, source }], as ReportReader's footnotes, ref → n (spec 13.1):
-     the report page numbers a cite by the full report's list. */
+     the Research tab numbers a cite by the full report's list. */
   function footnotes(references) {
     var marks = {};
     (references || []).forEach(function (e) { marks[e.ref] = e.n; });
@@ -933,10 +933,10 @@
     return state.request;
   }
 
-  /* A company's Request research, as the drawer and the report page each keep one, so the drawer
-     on one company never resets the report page's on another: the menu closed, the mode a full
-     report on a company with a report as on one without (the founder asked for a full report on
-     the second run), and no note. Its launch (spec 2026-11-16 agent launch, 10): the menu's box
+  /* A company's Request research, as the drawer and the company page each keep one, so the
+     drawer on one company never resets the company page's on another: the menu closed, the mode a
+     full report on a company with a report as on one without (the founder asked for a full report
+     on the second run), and no note. Its launch (spec 2026-11-16 agent launch, 10): the menu's box
      Open Claude Code ticked (`launch`); no launch's post in flight (`opening`); no launch
      followed (`followed`, the launch as the page last read it); no timer (`timer`, held from the
      moment a read of the followed launch is due until its answer lands); no failed read of it in
@@ -949,12 +949,13 @@
     };
   }
 
-  /* Request research (spec 18.2), as the drawer and the report page show it with or without a
-     report (18.4): the button, disabled while an item is open or a launch's post is in flight,
-     its menu, the server's refusal under it and the open item's line. `ask` is the view's request
-     (asking), `redraw` draws the view again and `after` runs once a post ends, taken or refused,
-     so the view reads its company again and the open item's line follows; `ready` is the detail
-     read's launchReady, whether launching is set up (spec 2026-11-16 agent launch, 10). */
+  /* Request research (spec 18.2), as the drawer and the company page's head show it with or
+     without a report (18.4): the button, disabled while an item is open or a launch's post is in
+     flight, its menu, the server's refusal under it and the open item's line. `ask` is the view's
+     request (asking), `redraw` draws the view again and `after` runs once a post ends, taken or
+     refused, so the view reads its company again and the open item's line follows; `ready` is
+     the detail read's launchReady, whether launching is set up (spec 2026-11-16 agent launch,
+     10). */
   function requestResearch(ask, item, redraw, after, ready) {
     return h(React.Fragment, null,
       h('div', { className: 'app-request' },
@@ -1239,7 +1240,7 @@
   /* The request's following stops: its timer is cleared, its count of failed reads goes back to
      none, and its round moves on, so a read begun before the stop is dropped when it lands, and a
      post begun before it (the item's or its launch's) follows nothing. The drawer stops it as it
-     closes and as it turns to another company, the report page as it starts to read another
+     closes and as it turns to another company, the company page as it starts to read another
      company. */
   function stopLaunch(ask) {
     ask.round++;
@@ -1510,7 +1511,7 @@
       });
   }
 
-  /* --------------------------------------------- the parts the report page draws too */
+  /* ------------------------------ the parts Appendix A and the Research tab's cards draw */
 
   /* An override's or a bridge line's value in its input's unit (overrides.TAGS): a word as it
      is, a multiple to two decimals with x, any other figure as the inputs table reads its unit. */
@@ -1585,7 +1586,7 @@
      midpoint in the metric's unit, a money figure in the record's own currency, `g.currency`,
      `$` for USD and the code before the number otherwise, else in `code`, the reporting currency
      (spec 2026-11-15 9.5). Each record brings its state, the ids citing it and its currency,
-     which the report page reads from Appendix A, whose record naming none is in the report's
+     which the Research tab reads from Appendix A, whose record naming none is in the report's
      snapshot's currency. */
   function guidanceTable(guidance, code) {
     return h('table', { className: 'fb-table app-inputs' },
@@ -1659,22 +1660,21 @@
     ]);
   }
 
-  /* A result's classifier evidence, a row a reading, for the report page's Appendix A
-     (18.4). */
+  /* A result's classifier evidence, a row a reading, for a report's Appendix A (18.4). */
   function phaseEvidence(p) {
     return pairs(evidence(p, PHASE_NUMBER[p.phase]));
   }
 
   /* -------------------------------------------------------------------- the head */
 
-  /* The company's logo before its ticker (B-203), in the drawer's head and the report page's:
+  /* The company's logo before its ticker (B-203), in the drawer's head and the company page's:
      an image of the detail read's `logo`, the address of the logo read, which the server names
      where the stored profile names a logo and fetches once; nothing without one. The ticker and
      the name stand beside it, so its alt is empty. The tile holds its place unseen until the
      image loads (logoLoaded), since the first read waits on the server's fetch and an empty
      white tile would flash meanwhile; an image that does not load hides itself and gives its
      place up. Its key is the address: the drawer's next company draws a new element, not one an
-     earlier load marked. `className` is the head's own class; the report page's sets a larger
+     earlier load marked. `className` is the head's own class; the company page's sets a larger
      size. */
   function logo(body, className) {
     if (!body.logo) return null;

@@ -2,9 +2,9 @@
 18.2 and 18.3).
 
 ``agent_records`` gives the company detail (``GET /api/companies/{symbol}``) the agents' records
-that the drawer, the company page and the report page read, on the company's latest snapshot by
-the screen's rule (``rows.counts_on``: a record counts on the snapshot it rests on or on a later
-one that reprices it), each ``None`` without one:
+that the drawer and the company page read, on the company's latest snapshot by the screen's rule
+(``rows.counts_on``: a record counts on the snapshot it rests on or on a later one that reprices
+it), each ``None`` without one:
 
 - ``review``: the current review when it counts, ``{id, value, levels, priceToValue,
   designation, refusal, bridge, overrideCount, mechanical, flags}``; ``levels`` ``{buy, fairLow,
@@ -29,8 +29,9 @@ one that reprices it), each ``None`` without one:
   snapshot ended before today (``rows.window_ended``), ``summary`` its first section as submitted
   (``{heading, parts}``, the cites included) and ``references`` the refs that section cites, each
   with its number in the whole report's list (``render.references``), so a number there matches
-  the report page. The MCP ``company`` tool carries the summary; no page draws it since the
-  drawer's Summary left (the company page's design, 11), and the company page reads the rest.
+  the report's own, as the Research tab numbers it. The MCP ``company`` tool carries the summary;
+  no page draws it since the drawer's Summary left (the company page's design, 11), and the
+  company page reads the rest.
 - ``item``: the company's open work item, ``{id, state, mode, claimedBy, createdAt, launch}``,
   ``createdAt`` the time it was posted and ``launch`` its newest launch as
   ``GET /api/launches/{id}`` answers it (``launch_api.launch_json``, read at the time the detail

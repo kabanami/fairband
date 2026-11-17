@@ -537,11 +537,12 @@
      the close's day, then the controls, Request research's menu opening from its button's right
      edge and its lines under the buttons; the tabs' row on a hairline, the open tab underlined in
      accent and the data date at its right end. Under it the open tab's blocks, the Overview's and
-     the Estimates' in two columns, one column below 1180px (the Financials tab's one block has
-     its own rules below): each block a raised panel with a hairline border, its title and the
-     caption at its right in its head; in a block, lists of a name and a figure on hairlines, a
-     figure on one line and a word or a name wrapping inside its half of the row, groups under their
-     titles in label, and small tables of figures. Loading, the page keeps what it had, faded. */
+     the Estimates' in two columns, one column below 1180px (the Financials tab's one block and
+     the Research tab have their own rules below): each block a raised panel with a hairline
+     border, its title and the caption at its right in its head; in a block, lists of a name and a
+     figure on hairlines, a figure on one line and a word or a name wrapping inside its half of
+     the row, groups under their titles in label, and small tables of figures. Loading, the page
+     keeps what it had, faded. */
   #company { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-6) var(--space-4); }
   .app-company { max-width: 1760px; padding: var(--space-2) 0 var(--space-8); }
   .app-company.is-loading { opacity: 0.5; }
@@ -1320,7 +1321,7 @@
     html, body, .app-page { height: auto; }
     .app-page { display: block; }
     /* the company page runs to its end: a browser does not break a scroll container across
-       pages, so its panel is none in print, with no side padding */
+       pages, so its panel is no scroll container in print, with no side padding */
     section#company { overflow: visible; padding: 0; }
     /* The Research tab (the Research tab's design, 7.11) prints the Report view alone: the
        company's name and ticker, the bar's line, every section and the three closed parts, which

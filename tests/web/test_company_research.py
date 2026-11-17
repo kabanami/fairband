@@ -756,8 +756,8 @@ def test_print_draws_the_report_view_alone() -> None:
     did: the rule for the head names the tab, apart from the tab's own, so a browser that cannot
     read it still hides the tab's controls."""
     block = _media("print")
-    # a browser does not break a scroll container across pages: the company panel is none in
-    # print, and runs to its end with no side padding
+    # a browser does not break a scroll container across pages: the company panel is no scroll
+    # container in print, and runs to its end with no side padding
     assert "section#company { overflow: visible; padding: 0; }" in block
     tab = block[block.index("/* The Research tab") :]
     for rule in (
