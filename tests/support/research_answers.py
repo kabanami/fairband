@@ -33,8 +33,12 @@ in the order of their first cite, Appendix A and Appendix B (``render.appendix_b
 sections). Its ``call``, the review's value and levels against the snapshot's price of $176.80
 ("near" on ``page_answers``' edges); ``ofReport``, criterion 52 that the report recorded and
 criterion 47 that it cites, and the two news items it recorded; ``records``, the company's records
-on file, newest first, report 19's own among them, with reviews 7 and 6, one secondary valuation
-and the ledger's count.
+on file of every kind, newest first, report 19's own among them: override 12 and override 10 of
+the runway return, dropped; three guidance records, an operating margin of 7% to 10%, revenue in
+TWD and an older revenue record it superseded; three kill criteria, one triggered; three news
+items, one whose source is no web address; a note; three findings, one in TWD, one a count and one
+with no figure; reviews 7 and 6, each with override 12's line as the read gives it, and review 4,
+which has no value; one secondary valuation; four ledger rows and their count.
 
 The series the tab reads after the report lands (the Research tab's design, 8.2), each the body
 its read answers: ``TABLES``, the six financial tables and the quarters, every chart of them with
@@ -387,6 +391,30 @@ _BRIDGE_LINE: dict[str, Any] = {
     "delta": -14.5,
     "refusal": None,
 }
+# The line as the read gives a review of ``records`` (``research_api.bridge_lines``): its label,
+# its unit, and its override's reason and writer.
+_RECORD_LINE: dict[str, Any] = _BRIDGE_LINE | {
+    "label": "moat",
+    "unit": "class",
+    "reason": OVERRIDE["reason"],
+    "principal": "agent",
+    "actor": "claude-opus-5-5",
+}
+_RUNWAY: dict[str, Any] = OVERRIDE | {
+    "id": 10,
+    "tag": "return.runway",
+    "old": 0.472,
+    "new": 0.214,
+    "unit": "ratio",
+    "reason": "The return on new plants falls as the newest grade's premium fades.",
+    "lifetime": "lasting",
+    "snapshotId": 33,
+    "at": "2026-10-02T10:10:00+00:00",
+    "state": "dropped",
+    "reviewId": 4,
+    "dropReason": "superseded by report 31's review",
+    "droppedAt": "2026-11-11T13:50:00+00:00",
+}
 _GUIDANCE_RECORD: dict[str, Any] = {
     "id": 14,
     "symbol": SYMBOL,
@@ -692,9 +720,146 @@ _LEDGER: list[dict[str, Any]] = [
     )
 ]
 
+GUIDANCE: list[dict[str, Any]] = [
+    _GUIDANCE_RECORD
+    | {
+        "id": 15,
+        "metric": "operating_margin",
+        "low": 0.07,
+        "high": 0.10,
+        "midpoint": 0.085,
+        "step": None,
+        "text": "An operating margin for fiscal 2026 of 7% to 10% on the new plants.",
+        "createdAt": "2026-11-11T13:42:00+00:00",
+        "currency": None,
+    },
+    _GUIDANCE_RECORD,
+    _GUIDANCE_RECORD
+    | {
+        "id": 11,
+        "low": 430e9,
+        "high": 450e9,
+        "midpoint": 440e9,
+        "asOf": "2026-07-24",
+        "text": "Revenue for fiscal 2026 of TWD 430 to 450 billion.",
+        "createdAt": "2026-10-02T10:15:00+00:00",
+        "supersededBy": 14,
+    },
+]
+
+
+def _finding(finding_id: int, as_of: str, text: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "id": finding_id,
+        "symbol": SYMBOL,
+        "asOf": as_of,
+        "text": text,
+        "value": None,
+        "unit": None,
+        "period": None,
+        **AGENT,
+        "at": "2026-11-11T13:45:00+00:00",
+        "currency": None,
+        "source": {"kind": "url", "ref": "https://lanternfield.example/q3-2026", "note": None},
+    } | extra
+
+
+FINDINGS: list[dict[str, Any]] = [
+    _finding(
+        231,
+        "2025-12-31",
+        "Free cash flow in fiscal 2025 funded the new plants in full.",
+        value=98.3e9,
+        unit="currency",
+        period="2025",
+        currency="TWD",
+        source={"kind": "filing", "ref": "annual report 2025", "note": "page 61"},
+    ),
+    _finding(
+        230,
+        "2026-10-22",
+        "Sensor sales to car suppliers rose for six quarters running.",
+        value=6.0,
+        unit="count",
+        period="2026-Q3",
+        source={
+            "kind": "transcript",
+            "ref": "the call of 22 Oct 2026",
+            "note": "the chief executive's remarks",
+        },
+    ),
+    _finding(229, "2026-10-21", "The company named a new head of its car business."),
+]
+
+_REVIEW: dict[str, Any] = {
+    "id": REVIEW_ID,
+    "symbol": SYMBOL,
+    "snapshotId": SNAPSHOT_ID,
+    "refreshId": None,
+    "createdAt": "2026-11-11T13:50:00+00:00",
+    "value": 182.0,
+    "buyLevel": 145.6,
+    "fairLow": 163.8,
+    "fairHigh": 200.2,
+    "trimLevel": 273.0,
+    "priceToValue": 176.8 / 182.0,
+    "designation": "near",
+    "refusal": None,
+    "mechanicalValue": 196.5,
+    "bridge": [_RECORD_LINE],
+    "overrideIds": [12],
+    "policyVersion": "fairband-policy-v16",
+    "methodVersion": "fairband-mechanical/1.5",
+    "reviewMethod": "fairband-review/1",
+    "settingsHash": EMPTY_SETTINGS_HASH,
+    "decilesRefreshId": 3,
+}
+REVIEWS: list[dict[str, Any]] = [
+    _REVIEW
+    | {
+        "id": 7,
+        "snapshotId": 41,
+        "refreshId": 3,
+        "createdAt": "2026-11-14T06:25:00+00:00",
+        "priceToValue": 182.4 / 182.0,
+    },
+    _REVIEW,
+    _REVIEW
+    | {
+        "id": 4,
+        "snapshotId": 33,
+        "createdAt": "2026-10-02T10:10:00+00:00",
+        "value": None,
+        "buyLevel": None,
+        "fairLow": None,
+        "fairHigh": None,
+        "trimLevel": None,
+        "priceToValue": None,
+        "designation": None,
+        "refusal": "The runway return leaves no value above zero.",
+        "mechanicalValue": 171.2,
+        "bridge": [
+            {
+                "tag": "return.runway",
+                "overrideId": 10,
+                "old": 0.472,
+                "new": 0.214,
+                "delta": None,
+                "refusal": "The runway return leaves no value above zero.",
+                "label": "runway return",
+                "unit": "ratio",
+                "reason": _RUNWAY["reason"],
+                "principal": "agent",
+                "actor": "claude-opus-5-5",
+            }
+        ],
+        "overrideIds": [10],
+    },
+]
+
 RECORDS: dict[str, Any] = {
-    "overrides": [OVERRIDE],
-    "guidance": [_GUIDANCE_RECORD],
+    "overrides": [OVERRIDE, _RUNWAY],
+    "guidance": GUIDANCE,
     "judgments": JUDGMENT_RECORDS,
     "killCriteria": CRITERIA,
     "newsItems": NEWS_ITEMS,
@@ -710,55 +875,9 @@ RECORDS: dict[str, Any] = {
             "overrideId": None,
         }
     ],
-    "findings": [
-        {
-            "id": 230,
-            "symbol": SYMBOL,
-            "asOf": "2026-10-22",
-            "text": "Sensor sales to car suppliers rose for six quarters running.",
-            "value": 6.0,
-            "unit": "count",
-            "period": "2026-Q3",
-            **AGENT,
-            "at": "2026-11-11T13:45:00+00:00",
-            "currency": None,
-            "source": {
-                "kind": "transcript",
-                "ref": "the call of 22 Oct 2026",
-                "note": "the chief executive's remarks",
-            },
-        }
-    ],
+    "findings": FINDINGS,
     "ledger": _LEDGER,
-    "reviews": [
-        {
-            "id": review_id,
-            "symbol": SYMBOL,
-            "snapshotId": snapshot_id,
-            "refreshId": refresh_id,
-            "createdAt": created,
-            "value": 182.0,
-            "buyLevel": 145.6,
-            "fairLow": 163.8,
-            "fairHigh": 200.2,
-            "trimLevel": 273.0,
-            "priceToValue": ratio,
-            "designation": "near",
-            "refusal": None,
-            "mechanicalValue": 196.5,
-            "bridge": [_BRIDGE_LINE],
-            "overrideIds": [12],
-            "policyVersion": "fairband-policy-v16",
-            "methodVersion": "fairband-mechanical/1.5",
-            "reviewMethod": "fairband-review/1",
-            "settingsHash": EMPTY_SETTINGS_HASH,
-            "decilesRefreshId": 3,
-        }
-        for review_id, snapshot_id, refresh_id, created, ratio in (
-            (7, 41, 3, "2026-11-14T06:25:00+00:00", 182.4 / 182.0),
-            (REVIEW_ID, SNAPSHOT_ID, None, "2026-11-11T13:50:00+00:00", 176.8 / 182.0),
-        )
-    ],
+    "reviews": REVIEWS,
     "secondaryValuations": [
         {
             "id": 5,

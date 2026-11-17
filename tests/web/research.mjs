@@ -1,16 +1,16 @@
-// The company page's Research tab driven in node (the Research tab's design, 7.2, 7.3 and 7.8;
-// Review Focus 5), for tests/web/test_company_research.py: the bundle, app.js and the scripts
-// named after it (company.js, report_parts.js, company_research_text.js and
-// company_research.js) are loaded in the page's order, with a stub React whose useState keeps its
-// state from one draw of the tab to the next, as financials.mjs's does; a document whose
-// elements, found by id, are those the tab drew, each recording whether it was opened and
-// scrolled to; a fetch that answers an address from the input's answers, at once or, for an
-// answer marked held, when a release step lets it land, an address given a list of answers
-// taking the next at each fetch, the last for every fetch after, and never answers any other; a
-// companyPage.redraw that draws the tab again, as the page draws it when a series lands; and a
-// window whose localStorage is the driver's: none, as page.mjs has and as a browser that keeps
-// nothing has; one whose every read and write throws, as a private window's may; or one holding
-// the items given.
+// The company page's Research tab driven in node (the Research tab's design, 7.2, 7.3, 7.8 and
+// 7.10; Review Focus 5), for tests/web/test_company_research.py: the bundle, app.js and the
+// scripts named after it (company.js, report_parts.js, company_research_text.js,
+// company_research.js and company_research_records.js) are loaded in the page's order, with a
+// stub React whose useState keeps its state from one draw of the tab to the next, as
+// financials.mjs's does; a document whose elements, found by id, are those the tab drew, each
+// recording whether it was opened and scrolled to; a fetch that answers an address from the
+// input's answers, at once or, for an answer marked held, when a release step lets it land, an
+// address given a list of answers taking the next at each fetch, the last for every fetch after,
+// and never answers any other; a companyPage.redraw that draws the tab again, as the page draws
+// it when a series lands; and a window whose localStorage is the driver's: none, as page.mjs has
+// and as a browser that keeps nothing has; one whose every read and write throws, as a private
+// window's may; or one holding the items given.
 //
 // The input, a JSON object on stdin: {"store": null | "throws" | {<key>: <value>, ...},
 // "answers"?: {<url>: <answer> | [<answer>, ...]}, "steps"}, an answer {"status", "body", "held"?}.

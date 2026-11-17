@@ -31,12 +31,16 @@ SCRIPTS = (
     STATIC / "report_parts.js",
     STATIC / "company_research_text.js",
     STATIC / "company_research.js",
+    STATIC / "company_research_records.js",
 )
 DRIVER = Path(__file__).parent / "research.mjs"
 KEY = "fairband.research.marks"
 TODAY = page_answers.TODAY.isoformat()
 HEADINGS = [s["heading"] for s in answers.SECTIONS]
 RECORDS = "The company's records on file, from any report."
+# Records in the bar with the count of the rows its panels draw of the synthetic records
+# (company_research_records.js; tests/web/test_company_research_records.py).
+RECORDS_VIEW = "Records23"
 EXPIRED = "The value of this report is past the date it was valid until"
 MARKS = ("app-research__marks", "Footnote marks")
 DOWNLOAD = ("app-research__download", "Download .md")
@@ -512,7 +516,7 @@ def test_the_view_is_report_first_and_a_press_shows_records() -> None:
         {},
         [
             _mount(),
-            _press("app-research__view", "Records"),
+            _press("app-research__view", RECORDS_VIEW),
             _mount(_report_19(), "land"),
             _mount(other, "land"),
         ],
@@ -520,7 +524,7 @@ def test_the_view_is_report_first_and_a_press_shows_records() -> None:
     views = classed(mounted["tree"], "app-research__view")
     assert [(text(v), v["props"]["aria-selected"]) for v in views] == [
         ("Report", "true"),
-        ("Records", "false"),
+        (RECORDS_VIEW, "false"),
     ]
     assert [v["props"]["role"] for v in views] == ["tab", "tab"]
     assert classed(mounted["tree"], "fb-stance")
@@ -559,14 +563,14 @@ def test_a_company_with_no_report() -> None:
     no controls and no Request research of the tab's own, which the head has. Records is still
     a view."""
     answer = answers.answer() | {"report": None, "call": None, "reports": []}
-    mounted, records = _drive({}, [_mount(answer), _press("app-research__view", "Records")])
+    mounted, records = _drive({}, [_mount(answer), _press("app-research__view", RECORDS_VIEW)])
     tree = mounted["tree"]
     assert text(_one(tree, "app-research__none")) == "No report yet."
     for gone in ("app-research__line", "app-research__list", "app-research__marks"):
         assert classed(tree, gone) == [], gone
     assert "Request research" not in text(tree)
     assert "Download .md" not in text(tree)
-    assert [text(v) for v in classed(tree, "app-research__view")] == ["Report", "Records"]
+    assert [text(v) for v in classed(tree, "app-research__view")] == ["Report", RECORDS_VIEW]
     assert text(_one(records["tree"], "app-research__line")) == RECORDS
     assert classed(records["tree"], "app-research__none") == []
 

@@ -1054,7 +1054,14 @@
      table; its [n] hidden until Footnote marks is on; its source in a box on surface-raised over
      the page. The three parts kept closed, a head that opens each, + or − before its name;
      inside, the report page's own parts, their panel's frame and title left to the head, the
-     references in two columns where the width allows. */
+     references in two columns where the width allows. Records (7.10): its count after its name
+     in ink-faint; the panels in two columns, one below 980px, a panel with records across both,
+     each framed as a section's, its name and count in its head, the ledger's note at the right
+     in ink-faint; a table on hairlines that scrolls sideways where it must, its heads in label
+     and ink-muted, its figures set right in mono, its days and times in ink-muted, its states in
+     the outlined stamp and a review's word in the screen's chip; a review's row a press, on
+     surface-hover under the pointer and surface-selected while open, its bridge in a row under
+     it; "None on file." in ink-faint. */
   .app-research {
     display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4);
   }
@@ -1121,7 +1128,7 @@
   a.app-research__file:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
   .app-research__what { color: var(--ink-muted); }
   .app-research__main { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
-  .app-research__sec {
+  .app-research__sec, .app-research__panel {
     min-width: 0; padding: var(--space-5) var(--space-6) var(--space-6);
     background: var(--surface-raised); border: 1px solid var(--hairline);
     border-radius: var(--radius-lg); scroll-margin-top: var(--space-3);
@@ -1287,6 +1294,46 @@
   .app-research__fold .app-report__notes li { break-inside: avoid; }
   .app-research__fold .fb-rec + .fb-rec,
   .app-research__fold .app-report__entered + .fb-rec { margin-top: var(--space-3); }
+  .app-research__view .app-research__n { margin-left: 6px; }
+  .app-research__records {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4);
+    align-items: start;
+  }
+  .app-research__panel--full { grid-column: 1 / -1; }
+  .app-research__panelhead {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+    gap: 2px var(--space-3); margin: 0 0 14px;
+  }
+  .app-research__panelhead > .app-research__title { margin: 0; }
+  .app-research__empty { margin: 0; color: var(--ink-faint); }
+  .app-research__scroll { min-width: 0; overflow-x: auto; }
+  .app-research__table { width: 100%; border-collapse: collapse; }
+  .app-research__table th, .app-research__table td {
+    padding: 7px var(--space-4) 7px 0; text-align: left; vertical-align: top;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .app-research__table :is(th, td):last-child { padding-right: 0; }
+  .app-research__table thead th {
+    vertical-align: bottom; color: var(--ink-muted); border-bottom-color: var(--border);
+  }
+  .app-research__table .fb-num { text-align: right; white-space: nowrap; }
+  .app-research__when { color: var(--ink-muted); white-space: nowrap; }
+  .app-research__table a {
+    color: var(--ink); text-decoration-color: var(--border); text-underline-offset: 3px;
+  }
+  .app-research__table a:hover { color: var(--accent); }
+  .app-research__review { cursor: pointer; }
+  .app-research__review:hover { background: var(--surface-hover); }
+  .app-research__review.is-open { background: var(--surface-selected); }
+  .app-research__open {
+    appearance: none; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left;
+    background: none; border: 0; cursor: pointer;
+  }
+  .app-research__open:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-research__bridge > td { padding: var(--space-3) 0 var(--space-4); }
+  @media (width < 980px) {
+    .app-research__records { grid-template-columns: minmax(0, 1fr); }
+  }
   /* Printed, as save-as-PDF serves (spec 13.6, 18.4): the report page's name and meta line, the
      reader, the references and the appendixes. No header chrome, no status line, no button or
      menu, no Request research or its lines (plan 4), and not today's figures, the headline, the
@@ -1355,5 +1402,6 @@
 <script src="/static/company_financials_chart.js"></script>
 <script src="/static/company_research_text.js"></script>
 <script src="/static/company_research.js"></script>
+<script src="/static/company_research_records.js"></script>
 </body>
 </html>

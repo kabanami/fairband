@@ -31,6 +31,7 @@ SCRIPTS = (
     STATIC / "report_parts.js",
     STATIC / "company_research_text.js",
     STATIC / "company_research.js",
+    STATIC / "company_research_records.js",
 )
 DRIVER = Path(__file__).parent / "research.mjs"
 METER = ("low", "high", "price", "fairValue", "buyLevel", "trimLevel", "designation", "gap")

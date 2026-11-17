@@ -5,18 +5,20 @@
    company's reports on file. It draws and writes nothing else: no override, no kill criterion's
    state, no note and no Request research, which the head has.
 
-   Under the tabs' row, the bar (7.2): Report and Records, the tab's two views; in the Report
-   view the report's line, its stance in the Stance column's chip, faded once its validity ended,
-   its mode, its revision, its date and time, who wrote it, valid until and, for a valuation
-   review, the full report it reuses; at its right Footnote marks and Download .md; under it a
-   valuation review's note that it reuses none and the Markdown's refusal. In the Records view
-   the line's sentence alone. Then, in the Report view, the section list at the left (7.3): the
-   report's headings, the three parts kept closed, References with their count, and the reports
-   on file, the one shown marked, each other a link to its address; the name of the section in
-   view marked as the app marks a selection, where the browser can tell which is in view, else
-   the first. A press on a name scrolls to its panel and opens it where it is closed. At the
-   right, a panel a section (7.4): its heading, then the rows its layout gives
-   (FairbandPage.researchText.lay), each block drawn by the design system's reader
+   Under the tabs' row, the bar (7.2): Report and Records, the tab's two views, Records with the
+   count of the rows its panels draw; in the Report view the report's line, its stance in the
+   Stance column's chip, faded once its validity ended, its mode, its revision, its date and time,
+   who wrote it, valid until and, for a valuation review, the full report it reuses; at its right
+   Footnote marks and Download .md; under it a valuation review's note that it reuses none and the
+   Markdown's refusal. In the Records view the line's sentence, and under the bar the company's
+   records on file (7.10), which company_research_records.js draws (FairbandPage.researchRecords,
+   loaded after this script and called as the tab draws). Then, in the Report view, the section
+   list at the left (7.3): the report's headings, the three parts kept closed, References with
+   their count, and the reports on file, the one shown marked, each other a link to its address;
+   the name of the section in view marked as the app marks a selection, where the browser can
+   tell which is in view, else the first. A press on a name scrolls to its panel and opens it
+   where it is closed. At the right, a panel a section (7.4): its heading, then the rows its
+   layout gives (FairbandPage.researchText.lay), each block drawn by the design system's reader
    (Fairband.reportText.draw), and the cards beside its first run of text, the named blocks its
    layout makes cards and the records' cards the tab hands it by heading. Then the references,
    Appendix A and Appendix B (7.8), each closed, each opened drawing what the report page draws
@@ -50,11 +52,11 @@
    on keyboard focus, each cite made focusable; the cite's own title, its ref, is taken off as the
    box shows, so the browser shows no second one.
 
-   Research, the tab's component, keeps the view, the marks, the section in view and the
-   Markdown's refusal in its state, drawn keyed on the company of its answer, so another report of
-   the company keeps them and another company opens a new tab. The pieces are pure builders on
-   FairbandPage.research, for the tests, which read them in node, and draw.research hangs on the
-   company page's draw (company.js). */
+   Research, the tab's component, keeps the view, the marks, the section in view, the Markdown's
+   refusal and the review whose bridge Records draws in its state, drawn keyed on the company of
+   its answer, so another report of the company keeps them and another company opens a new tab.
+   The pieces are pure builders on FairbandPage.research, for the tests, which read them in node,
+   and draw.research hangs on the company page's draw (company.js). */
 (function () {
   'use strict';
 
@@ -107,18 +109,21 @@
   /* -------------------------------------------------------------------------------- the bar */
 
   /* The bar (7.2) on `answer` in the view `view`, 'report' or 'records', Footnote marks `marks`
-     on or off. `act` holds what it draws with and what its controls call: `today`, the detail's
-     day, against which the report's validity has ended; `failed`, the Markdown's refusal or null;
-     view(next), marks() and download(). Under it, in the Report view, a valuation review's note
-     that it reuses no full report, and the Markdown's refusal. */
+     on or off, Records with the count of the rows its panels draw (company_research_records.js).
+     `act` holds what it draws with and what its controls call: `today`, the detail's day, against
+     which the report's validity has ended; `failed`, the Markdown's refusal or null; view(next),
+     marks() and download(). Under it, in the Report view, a valuation review's note that it
+     reuses no full report, and the Markdown's refusal. */
   function bar(answer, view, marks, act) {
     var report = answer.report;
     var shown = view === 'report';
+    var count = P.researchRecords.count(answer.records);
     return h('div', { className: 'app-research__top' },
       h('div', { className: 'app-research__bar' },
         h('div', {
           className: 'app-research__views', role: 'tablist', 'aria-label': 'What the tab shows'
-        }, viewButton('report', 'Report', view, act), viewButton('records', 'Records', view, act)),
+        }, viewButton('report', 'Report', view, act),
+          viewButton('records', 'Records', view, act, count)),
         !shown ? h('p', { className: 'caption app-research__line' }, RECORDS)
           : report ? line(answer, act.today) : null,
         shown && report ? h('div', { className: 'app-research__actions' },
@@ -134,13 +139,14 @@
         : null);
   }
 
-  /* One of the bar's two views, selected where it is `view`. */
-  function viewButton(id, words, view, act) {
+  /* One of the bar's two views, selected where it is `view`, with the count `n` after its name
+     where given. */
+  function viewButton(id, words, view, act, n) {
     return h('button', {
       key: id, type: 'button', role: 'tab', className: 'control app-research__view',
       'aria-selected': id === view ? 'true' : 'false',
       onClick: function () { act.view(id); }
-    }, words);
+    }, words, n == null ? null : h('span', { className: 'figure-sm app-research__n' }, C.count(n)));
   }
 
   /* The report's line: its stance in the Stance column's chip, faded with the report page's
@@ -813,9 +819,11 @@
 
   /* The tab on `props.answer` and the company's `props.detail`: the bar, then in the Report view
      the list and the panels with their cards and charts, the report's series read as it is drawn
-     (series), or "No report yet."; the Records view draws its line alone. It keeps the view,
-     Report at first; Footnote marks, as the browser keeps them; the panel in view, the first at
-     first; and the Markdown's refusal, with the report it is of, so another report draws none. */
+     (series), or "No report yet."; in the Records view the company's records on file
+     (FairbandPage.researchRecords). It keeps the view, Report at first; Footnote marks, as the
+     browser keeps them; the panel in view, the first at first; the Markdown's refusal, with the
+     report it is of, so another report draws none; and the review whose bridge Records draws,
+     none at first, a press on its row again closing it. */
   function Research(props) {
     var answer = props.answer;
     var report = answer.report;
@@ -823,6 +831,7 @@
     var marks = React.useState(storedMarks());
     var shown = React.useState(panelId(0));
     var failed = React.useState(null);
+    var opened = React.useState(null);
     var root = React.useRef(null);
     var refs = React.useRef(null);
     refs.current = report ? report.references : [];
@@ -848,11 +857,12 @@
     var drawn = view[0] === 'report' && report;
     var landed = drawn ? series(report, HELD) : null;
     var cards = drawn ? cardsOf(answer, props.detail, landed) : null;
+    var open = function (id) { opened[1](opened[0] === id ? null : id); };
     return h('div', {
       ref: root, className: 'app-research' + (marks[0] ? ' app-research--marks' : '')
     },
       bar(answer, view[0], marks[0], act),
-      view[0] !== 'report' ? null
+      view[0] !== 'report' ? P.researchRecords.draw(answer.records, opened[0], open)
         : report ? h('div', { className: 'app-research__layout' },
           list(answer, shown[0]),
           h('div', { className: 'app-research__main' },
