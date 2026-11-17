@@ -2522,8 +2522,10 @@ def test_the_report_page_draws_the_appendixes_from_the_records() -> None:
         assert text in records, text
     for gone in ("Drop", "onClick", "Button"):
         assert gone not in records, gone
-    page = _static_file("report.js")
-    assert "/overrides" not in page and "api.del" not in page and ".del(" not in page
+    # the page's code sends no override and no drop, the report page's nor the screen's
+    for name in ("report.js", "app.js"):
+        page = _static_file(name)
+        assert "/overrides" not in page and "api.del" not in page and ".del(" not in page, name
     secondary = _function(script, "secondary")
     _in_order(
         secondary,
