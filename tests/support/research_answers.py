@@ -34,8 +34,14 @@ sections). Its ``call``, the review's value and levels against the snapshot's pr
 ("near" on ``page_answers``' edges); ``ofReport``, criterion 52 that the report recorded and
 criterion 47 that it cites, and the two news items it recorded; ``records``, the company's records
 on file, newest first, report 19's own among them, with reviews 7 and 6, one secondary valuation
-and the ledger's count. Every company, figure and sentence is invented: no vendor data and no
-report on file."""
+and the ledger's count.
+
+The series the tab reads after the report lands (the Research tab's design, 8.2), each the body
+its read answers: ``TABLES``, the six financial tables and the quarters, every chart of them with
+points; ``CLOSES``, five quarters of closes; ``BAND``, the band's history; ``MULTIPLES``, the
+trailing P/E by month and six readings of the forward P/E; ``READING``, sensitivity reading 9.
+``SERIES`` holds each by the address the tab reads it at. Every company, figure and sentence is
+invented: no vendor data and no report on file."""
 
 import copy
 from typing import Any
@@ -825,3 +831,210 @@ ANSWER: dict[str, Any] = {
 def answer() -> dict[str, Any]:
     """A copy of ``ANSWER``."""
     return copy.deepcopy(ANSWER)
+
+
+# ------------------------------------------------------------------------------- the series
+
+
+def _column(period: str) -> dict[str, str]:
+    """A table's column as the financial tables' read serves it, by its period."""
+    if period == "ttm":
+        return {"period": period, "kind": "trailing", "label": "12 months to 30 Sep 2026"}
+    if period.endswith("E"):
+        return {"period": period, "kind": "estimate", "label": f"{period[:-1]} estimate"}
+    if "-Q" in period:
+        year, quarter = period.split("-")
+        return {"period": period, "kind": "quarter", "label": f"{quarter} {year}"}
+    return {"period": period, "kind": "fiscal", "label": period}
+
+
+def _table(
+    name: str, periods: list[str], rows: dict[str, tuple[str, list[float | None]]]
+) -> dict[str, Any]:
+    """A table as the read serves it: its columns, and each row a cell under each column."""
+    return {
+        "name": name,
+        "columns": [_column(period) for period in periods],
+        "rows": [
+            {
+                "name": row,
+                "unit": unit,
+                "cells": [
+                    {
+                        "period": period,
+                        "value": value,
+                        "unit": unit,
+                        "ref": f"table:{SYMBOL}/{name}/{row}/{period}",
+                        "note": None,
+                    }
+                    for period, value in zip(periods, values, strict=True)
+                ],
+            }
+            for row, (unit, values) in rows.items()
+        ],
+    }
+
+
+_YEARS = ["2023", "2024", "2025", "ttm"]
+TABLES: dict[str, Any] = {
+    "symbol": SYMBOL,
+    "currency": "TWD",
+    "tables": [
+        _table(
+            "growth",
+            [*_YEARS, "2026E"],
+            {
+                "revenue": ("currency", [362.3e9, 385.5e9, 412.6e9, 445.1e9, 452.0e9]),
+                "operating_margin": ("percent", [0.29, 0.30, 0.316, 0.32, None]),
+                "eps": ("per-share", [42.1, 45.8, 52.3, 55.0, 58.2]),
+            },
+        ),
+        _table(
+            "cash_flow",
+            _YEARS,
+            {
+                "free_cash_flow": ("currency", [80.1e9, 91.2e9, 98.3e9, 101.0e9]),
+                "stock_compensation_to_revenue": ("percent", [0.011, 0.012, 0.012, 0.013]),
+            },
+        ),
+        _table(
+            "solvency",
+            _YEARS,
+            {
+                "net_debt_to_ebitda": ("multiple", [-0.2, -0.3, -0.4, -0.4]),
+                "interest_coverage": ("multiple", [48.0, 52.0, 61.0, 63.0]),
+            },
+        ),
+        _table(
+            "returns",
+            _YEARS[:3],
+            {"roic": ("percent", [0.19, 0.20, 0.214]), "hurdle_rate": ("percent", [0.09] * 3)},
+        ),
+        _table(
+            "capital_allocation",
+            _YEARS,
+            {
+                "dividends": ("currency", [-20.1e9, -22.4e9, -25.0e9, -25.9e9]),
+                "buybacks": ("currency", [-8.0e9, -9.5e9, -11.2e9, -11.8e9]),
+                "share_count_change": ("percent", [-0.008, -0.009, -0.011, None]),
+            },
+        ),
+        _table(
+            "quality",
+            _YEARS[:3],
+            {"altman_z": ("score", [5.8, 6.0, 6.2]), "piotroski_f": ("score", [7.0, 6.0, 7.0])},
+        ),
+    ],
+    "quarters": _table(
+        "quarters",
+        ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"],
+        {
+            "revenue": ("currency", [104.1e9, 99.8e9, 105.2e9, 112.5e9]),
+            "operating_margin": ("percent", [0.31, 0.30, 0.32, 0.33]),
+            "eps": ("per-share", [12.9, 12.2, 13.4, 14.6]),
+        },
+    ),
+}
+CLOSES: dict[str, Any] = {
+    "symbol": SYMBOL,
+    "closes": [
+        {
+            "date": day,
+            "close": {"value": close, "unit": "per-share", "ref": f"close:{SYMBOL}/{day}"},
+        }
+        for day, close in (
+            ("2025-09-30", 151.2),
+            ("2025-12-31", 158.4),
+            ("2026-03-31", 149.9),
+            ("2026-06-30", 166.0),
+            ("2026-09-30", 171.3),
+            ("2026-11-10", 176.8),
+        )
+    ],
+}
+BAND: dict[str, Any] = {
+    "symbol": SYMBOL,
+    "points": [
+        {
+            "day": "2026-11-10",
+            "price": 176.8,
+            "fairLow": 176.85,
+            "fairHigh": 216.15,
+            "buyLevel": 147.38,
+            "trimLevel": 294.75,
+            "snapshotId": SNAPSHOT_ID,
+        }
+    ],
+}
+
+
+def _multiple(name: str, points: list[tuple[str, float]], since: str | None) -> dict[str, Any]:
+    """A P/E series as the multiples history answers it, its statistics over its points."""
+    ref = f"multiple:{SYMBOL}/{name}"
+    values = [value for _, value in points]
+    stats = {
+        "avg10y": sum(values) / len(values),
+        "median10y": sorted(values)[len(values) // 2],
+        "high10y": max(values),
+        "low10y": min(values),
+    }
+    return {
+        "points": [{"day": day, "value": value, "ref": f"{ref}/{day}"} for day, value in points],
+        "stats": {
+            stat: {"value": value, "unit": "multiple", "ref": f"{ref}/{stat}"}
+            for stat, value in stats.items()
+        },
+        "since": since,
+        "responseId": None,
+        "note": None,
+    }
+
+
+MULTIPLES: dict[str, Any] = {
+    "symbol": SYMBOL,
+    "pe": _multiple(
+        "pe",
+        [("2026-06-30", 22.1), ("2026-07-31", 23.4), ("2026-08-31", 24.0), ("2026-09-30", 23.2)],
+        None,
+    ),
+    "peNote": None,
+    "peForward": _multiple(
+        "pe_forward",
+        [(f"2026-11-{day:02d}", 23.5 + day / 10) for day in (5, 6, 9, 10, 11, 12)],
+        "2026-11-05",
+    ),
+}
+READING_ID = 9
+READING: dict[str, Any] = {
+    "id": READING_ID,
+    "symbol": SYMBOL,
+    "snapshotId": SNAPSHOT_ID,
+    "reviewId": REVIEW_ID,
+    "title": f"Sensitivity {READING_ID}: the belief by the runway return",
+    "rowLabel": "belief",
+    "colLabel": "runway return",
+    "rowWords": ["5.3%", "6.3%", "7.3%"],
+    "colWords": ["15.0%", "20.0%", "25.0%"],
+    "cells": [[160.2, 171.9, 180.4], [170.6, 182.0, 191.3], [182.1, 193.8, 203.0]],
+    "current": [2, 2],
+}
+READING_REF = f"sensitivity:{READING_ID}/2/2"
+COMPANY = f"/api/companies/{SYMBOL}"
+SERIES: dict[str, dict[str, Any]] = {
+    f"{COMPANY}/financial-tables": TABLES,
+    f"{COMPANY}/multiples-history": MULTIPLES,
+    f"{COMPANY}/price-history?years=5": CLOSES,
+    f"{COMPANY}/band-history": BAND,
+    f"/api/sensitivities/{READING_ID}": READING,
+}
+
+
+def series_replies(**held: bool) -> dict[str, Any]:
+    """The fetch's replies of ``tests/web/research.mjs`` for every series, each 200 with its
+    body; an address in ``held`` (its key in ``SERIES``' order: ``tables``, ``multiples``,
+    ``closes``, ``band``, ``reading``) waits until a ``release`` step lets it land."""
+    keys = ("tables", "multiples", "closes", "band", "reading")
+    return {
+        url: {"status": 200, "body": body} | ({"held": True} if held.get(key) else {})
+        for key, (url, body) in zip(keys, SERIES.items(), strict=True)
+    }

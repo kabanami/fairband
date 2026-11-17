@@ -20,7 +20,15 @@
    The trailing twelve months stand after the fiscal years in grey, marked "to date", and the
    analysts' estimates after them as outlines, marked by their period ("2026E"); under a chart
    with such a bar one line says which is which. The last earnings call draws the quarters table
-   by quarter, under the export's title for it. */
+   by quarter, under the export's title for it.
+
+   The company page's Research tab (the Research tab's design, 7.4 rules 3, 4, 6 and 7, and 7.9)
+   draws the same charts, on the same series, with the same titles, notes and rules, but on its
+   section's panel, each with no raised panel of its own (`bare`): groupCharts gives each group's
+   charts by its table's name, quarterCharts the three charts by quarter, gridCharts the grids of
+   Valuation and priceCharts the charts of Price and multiples, each a list the tab lays out, the
+   first two at the height the tab asks for. A read the server refused gives its sentence in the
+   chart's place, as here. */
 (function () {
   'use strict';
 
@@ -78,6 +86,9 @@
      the EPS's basis (the whole-branch review's I2). */
   var TO_DATE = 'to date';
   var OUTLINED = 'Outlined: analysts\' estimates';
+  /* How a chart is set: the report page's on its raised panel, at the bundle's own height; the
+     Research tab's with no panel (bare), at the height it asks for or the bundle's. */
+  var PANELED = { wrap: panel };
 
   /* Each section's charts by its heading, as ReportReader places them, each drawn once the
      series it reads have landed: the six tables and the quarters once the financial tables have,
@@ -100,11 +111,17 @@
   function financial(read) {
     if (read.error) return refused('The financial tables', read.error);
     var body = read.body;
-    var byName = {};
-    body.tables.forEach(function (t) { byName[t.name] = t; });
+    var byName = tablesByName(body);
     return h('div', { className: 'app-charts__parts' }, FINANCIAL.map(function (part) {
       return charted(part, byName[part.table], body.currency);
     }));
+  }
+
+  /* The financial tables of the read's body by their names. */
+  function tablesByName(body) {
+    var byName = {};
+    body.tables.forEach(function (t) { byName[t.name] = t; });
+    return byName;
   }
 
   /* The quarters table's part, its three charts with "No data on file." where no period is
@@ -117,36 +134,42 @@
       charted(QUARTERLY, body.quarters, body.currency)) : null;
   }
 
-  /* A part: its title over a chart for each of its charts, from its table's rows and columns;
-     with no table, every chart with "No data on file.". */
+  /* A part: its title over a chart for each of its charts, each on its raised panel. */
   function charted(part, table, currency) {
+    return h(React.Fragment, { key: part.table },
+      h('h5', { className: 'label app-charts__part' }, part.title),
+      h('div', { className: 'app-charts' }, chartsOf(part, table, currency, PANELED)));
+  }
+
+  /* A part's charts, each set as `look` sets it, from its table's rows and columns; with no
+     table, every chart with "No data on file.". */
+  function chartsOf(part, table, currency, look) {
     var rows = {};
     if (table) table.rows.forEach(function (r) { rows[r.name] = r; });
     var columns = table ? table.columns : null;
-    return h(React.Fragment, { key: part.table },
-      h('h5', { className: 'label app-charts__part' }, part.title),
-      h('div', { className: 'app-charts' }, part.charts.map(function (c) {
-        return c.hurdle ? spread(c, rows) : bars(c, rows, columns, part.by, currency);
-      })));
+    return part.charts.map(function (c) {
+      return c.hurdle ? spread(c, rows, look) : bars(c, rows, columns, part.by, currency, look);
+    });
   }
 
   /* One row's bars, one measure (HistoryBars): a currency in the statements' currency, the EPS a
      share of it, a percentage as one, a multiple or a score bare. Run by the part's `by`, a
      quarter; else by period where a bar is the trailing twelve months or an estimate, with the
-     line that says which under the chart, and by fiscal year where none is (6.6). */
-  function bars(c, rows, columns, by, currency) {
+     line that says which under the chart, and by fiscal year where none is (6.6). Set as `look`
+     sets it, at its height, where it gives none the bundle's. */
+  function bars(c, rows, columns, by, currency, look) {
     var row = c.rows ? returned(rows[c.rows[0]], rows[c.rows[1]]) : rows[c.row];
     var series = row ? points(row, columns) : [];
-    if (!series.length) return panel(c.title, noData(c.title));
+    if (!series.length) return look.wrap(c.title, noData(c.title));
     var unit = row.unit;
     var caption = unit === 'per-share' ? currency + ' a share' : undefined;
     var line = kindsLine(series); /* a point carries its column's kind and label */
-    return panel(c.title, h(React.Fragment, null,
+    return look.wrap(c.title, h(React.Fragment, null,
       h(F.HistoryBars, {
         title: c.title, series: series, basis: 'mechanical',
         unit: unit === 'currency' ? currency : caption,
         format: unit === 'percent' ? F.formatPercent : undefined,
-        inverse: !!c.inverse, by: by || (line ? 'period' : undefined)
+        inverse: !!c.inverse, by: by || (line ? 'period' : undefined), height: look.height
       }),
       line ? h('p', { className: 'caption app-muted' }, line) : null));
   }
@@ -221,14 +244,15 @@
 
   /* ROIC against the hurdle rate the returns table carries, the policy's r (restated into the
      reporting currency on a company in another currency, as its ROIC is in it), both percentages
-     on one axis with the gap filled (SpreadChart); a year missing either is left out. */
-  function spread(c, rows) {
+     on one axis with the gap filled (SpreadChart); a year missing either is left out. Set as
+     `look` sets it. */
+  function spread(c, rows, look) {
     var drawn = roicPoints(rows[c.row], rows[c.hurdle]);
-    if (!drawn.series.length) return panel(c.title, noData(c.title, drawn.left));
-    return panel(c.title, h(React.Fragment, null,
+    if (!drawn.series.length) return look.wrap(c.title, noData(c.title, drawn.left));
+    return look.wrap(c.title, h(React.Fragment, null,
       h(F.SpreadChart, {
         title: c.title, subtitle: 'against the hurdle rate', series: drawn.series,
-        basis: 'mechanical', hurdleLabel: 'Hurdle rate'
+        basis: 'mechanical', height: look.height, hurdleLabel: 'Hurdle rate'
       }),
       drawn.left ? h('p', { className: 'caption app-muted' }, drawn.left) : null));
   }
@@ -265,19 +289,29 @@
      secondary valuation the report rests on, reviewed, an agent's inputs. Each against the price
      of the report's snapshot. None without either. */
   function valuation(report, readings) {
+    var drawn = grids(report, readings, PANELED);
+    return drawn.length ? h('div', { className: 'app-charts' }, drawn) : null;
+  }
+
+  /* Valuation's grids in their order, each set as `look` sets it: each reading's, a reading the
+     server refused its sentence in its place, then the secondary valuation's. */
+  function grids(report, readings, look) {
     var a = report.appendixA;
     var drawn = readings.map(function (read, i) {
-      return read.error ? panel('reading ' + i, refused('A sensitivity reading', read.error))
-        : reading(read.body, a.snapshot.price, report.reviewId == null ? 'mechanical' : 'reviewed');
+      return read.error ? look.wrap('reading ' + i, refused('A sensitivity reading', read.error))
+        : reading(read.body, a.snapshot.price, report.reviewId == null ? 'mechanical' : 'reviewed',
+          look);
     });
-    if (a.secondary && a.secondary.grid) drawn.push(secondaryGrid(a.secondary, a.snapshot.price));
-    return drawn.length ? h('div', { className: 'app-charts' }, drawn) : null;
+    if (a.secondary && a.secondary.grid) {
+      drawn.push(secondaryGrid(a.secondary, a.snapshot.price, look));
+    }
+    return drawn;
   }
 
   /* A reading's grid: its rows the first input's values and its columns the second's, a pair the
      engine valued none at without a fill, the pair in force ringed. */
-  function reading(r, price, basis) {
-    return panel('reading ' + r.id, h(F.SensitivityGrid, {
+  function reading(r, price, basis, look) {
+    return look.wrap('reading ' + r.id, h(F.SensitivityGrid, {
       title: r.title, rows: r.rowWords, cols: r.colWords, cells: r.cells, price: price,
       current: r.current ? { row: r.current[0] - 1, col: r.current[1] - 1 } : undefined,
       rowLabel: r.rowLabel, colLabel: r.colLabel, basis: basis
@@ -286,10 +320,10 @@
 
   /* The secondary valuation's grid (spec 11): the rates across, the terminal growths down or, on
      the parts form, the shift in every part's, the valuation's own pair in the middle. */
-  function secondaryGrid(s, price) {
+  function secondaryGrid(s, price, look) {
     var g = s.grid;
     var title = GRID_TITLE + s.id;
-    return panel(title, h(F.SensitivityGrid, {
+    return look.wrap(title, h(F.SensitivityGrid, {
       title: title, rows: g.rowWords, cols: g.cols.map(F.formatPercent), cells: g.cells,
       price: price, current: { row: 1, col: 1 },
       rowLabel: g.rowsAre === 'shifts' ? "Every part's terminal growth" : 'Terminal growth',
@@ -303,18 +337,21 @@
      its reads have landed. */
   function price(series) {
     return h('div', { className: 'app-charts' },
-      series.closes && series.band ? band(series.closes, series.band) : null,
-      series.multiples ? multiples(series.multiples) : null);
+      series.closes && series.band ? band(series.closes, series.band, PANELED) : null,
+      series.multiples ? multiples(series.multiples, PANELED) : null);
   }
 
   /* BandHistory: the five years of closes a quarter each, the quarter's last close, with the band
      in force at the quarter's end, the newest snapshot priced on or before it: none before the
      first snapshot, none on a refusal's. The past year's high and low in the subtitle. When the
-     band's history did not load, the price alone, with the server's sentence under it. */
-  function band(closes, history) {
-    if (closes.error) return panel(BAND_TITLE, refused('The price history', closes.error), true);
+     band's history did not load, the price alone, with the server's sentence under it. Set as
+     `look` sets it, the full width on a panel. */
+  function band(closes, history, look) {
+    if (closes.error) {
+      return look.wrap(BAND_TITLE, refused('The price history', closes.error), true);
+    }
     var list = closes.body.closes;
-    if (!list.length) return panel(BAND_TITLE, noData(BAND_TITLE), true);
+    if (!list.length) return look.wrap(BAND_TITLE, noData(BAND_TITLE), true);
     var marks = history.error ? [] : history.body.points;
     var series = quarters(list).map(function (q) {
       var p = inForce(marks, q.end);
@@ -323,7 +360,7 @@
         fairLow: p ? p.fairLow : null, fairHigh: p ? p.fairHigh : null
       };
     });
-    return panel(BAND_TITLE, [
+    return look.wrap(BAND_TITLE, [
       h(F.BandHistory, {
         key: 'chart', title: BAND_TITLE, subtitle: pastYear(list), series: series,
         basis: 'mechanical'
@@ -373,26 +410,26 @@
      its newest reading as a figure and since when the log is kept (shortLog), no line and no
      average. A trailing series with no point says why in the server's words when it sends them,
      the series' note ("the series could not be read") or the read's; a forward log with none,
-     that nothing is on file. */
-  function multiples(read) {
-    if (read.error) return panel('multiples', refused('The P/E history', read.error));
+     that nothing is on file. Each set as `look` sets it. */
+  function multiples(read, look) {
+    if (read.error) return look.wrap('multiples', refused('The P/E history', read.error));
     var m = read.body;
     var forward = m.peForward;
     var logged = forward.points.filter(function (p) { return p.value != null; });
     return [
       multiple('Trailing P/E', m.pe, m.pe ? byMonth(m.pe.points) : [],
         'the last P/E of each month against its ten-year average' +
-          (m.peNote ? ' · ' + m.peNote : ''), (m.pe && m.pe.note) || m.peNote),
-      0 < logged.length && logged.length < SHORT_LOG ? panel('forward', shortLog(forward)) :
+          (m.peNote ? ' · ' + m.peNote : ''), (m.pe && m.pe.note) || m.peNote, look),
+      0 < logged.length && logged.length < SHORT_LOG ? look.wrap('forward', shortLog(forward)) :
         multiple('Forward P/E', forward, forward.points.map(function (p) {
           return { period: F.formatDate(p.day), value: p.value };
-        }), forward.since ? 'since ' + F.formatDate(forward.since) : undefined)
+        }), forward.since ? 'since ' + F.formatDate(forward.since) : undefined, undefined, look)
     ];
   }
 
-  function multiple(title, found, series, subtitle, why) {
+  function multiple(title, found, series, subtitle, why, look) {
     var drawn = series.some(function (p) { return p.value != null; });
-    return panel(title, drawn ? h(F.MultipleHistory, {
+    return look.wrap(title, drawn ? h(F.MultipleHistory, {
       title: title, subtitle: subtitle, series: series, average: found.stats.avg10y.value,
       basis: 'mechanical'
     }) : noData(title, why));
@@ -437,12 +474,57 @@
     }
   }
 
+  /* -------------------------------------------------------- the Research tab's charts */
+
+  /* Rule 3 (the Research tab's design, 7.4, 7.9): each group's charts by its table's name, from
+     growth to quality, each with no panel, at `height` where given; the server's sentence alone,
+     { refused }, when the tables did not load. */
+  function groupCharts(read, height) {
+    if (read.error) return { refused: refused('The financial tables', read.error) };
+    var look = { wrap: bare, height: height };
+    var byName = tablesByName(read.body);
+    var drawn = {};
+    FINANCIAL.forEach(function (part) {
+      drawn[part.table] = chartsOf(part, byName[part.table], read.body.currency, look);
+    });
+    return drawn;
+  }
+
+  /* Rule 4: the three charts by quarter, each with no panel, at `height` where given; the
+     server's sentence when the tables did not load; none on an answer from before the quarters
+     were served. */
+  function quarterCharts(read, height) {
+    if (read.error) return refused('The figures by quarter', read.error);
+    var body = read.body;
+    if (!body.quarters) return null;
+    return chartsOf(QUARTERLY, body.quarters, body.currency, { wrap: bare, height: height });
+  }
+
+  /* Rule 6: Valuation's grids, as the report page draws them, each with no panel. */
+  function gridCharts(report, readings) {
+    return grids(report, readings, { wrap: bare });
+  }
+
+  /* Rule 7: the price against the band once the closes and the band's history have landed, then
+     the trailing and the forward P/E once the multiples history has, or its sentence; each with
+     no panel. */
+  function priceCharts(series) {
+    var look = { wrap: bare };
+    var drawn = series.closes && series.band ? [band(series.closes, series.band, look)] : [];
+    return series.multiples ? drawn.concat(multiples(series.multiples, look)) : drawn;
+  }
+
   /* --------------------------------------------------------------------- the parts */
 
   /* A chart on its raised panel; the price chart takes the full width. */
   function panel(key, chart, wide) {
     return h('div', { key: key, className: wide ? 'app-chart app-chart--wide' : 'app-chart' },
       chart);
+  }
+
+  /* A chart with no panel of its own, on the panel of its section (the Research tab). */
+  function bare(key, chart) {
+    return h('div', { key: key, className: 'app-charts__chart' }, chart);
   }
 
   /* A chart with no point: its title and its basis, and that nothing is on file, or the
@@ -461,5 +543,9 @@
       what + ' did not load: ' + sentence + '.');
   }
 
-  P.reportCharts = { draw: draw, roicPoints: roicPoints, points: points, kindsLine: kindsLine };
+  P.reportCharts = {
+    draw: draw, roicPoints: roicPoints, points: points, kindsLine: kindsLine,
+    groupCharts: groupCharts, quarterCharts: quarterCharts, gridCharts: gridCharts,
+    priceCharts: priceCharts
+  };
 })();

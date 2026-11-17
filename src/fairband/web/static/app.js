@@ -209,7 +209,9 @@
      and says when it turns to another company (notesShown), so a note drafted on another goes;
      its Fairband value block (company_overview.js, 8.2) draws the meter, the four levels under it
      in the screen's words (levelRows), the basis chip of the band they draw (bandBasis) and the
-     local day of its report (localIso). The Inbox view's row (inbox.js, B-210) keeps a request
+     local day of its report (localIso); its Research tab's value card (company_research.js, the
+     Research tab's design, 7.5) writes the meter's gap as every meter does (gapText). The Inbox
+     view's row (inbox.js, B-210) keeps a request
      for each pending item too, posts its launch (openLaunch) and draws the line's words
      (launchWords) from the item the line is drawn from (lineItem). The header's finder
      (finder.js) finds the rows the Screen's field finds (finds). The drawer with its bar
@@ -228,7 +230,7 @@
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
-    meter: meter, levelRows: levelRows, bandBasis: bandBasis,
+    meter: meter, gapText: gapText, levelRows: levelRows, bandBasis: bandBasis,
     inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     inputValue: inputValue,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,

@@ -3027,8 +3027,9 @@ def test_the_report_page_draws_the_charts_per_section(db_path: Path, policy: Pol
     )
     assert (
         "P.reportCharts = { draw: draw, roicPoints: roicPoints, points: points,"
-        " kindsLine: kindsLine };"
-    ) in script
+        " kindsLine: kindsLine, groupCharts: groupCharts, quarterCharts: quarterCharts,"
+        " gridCharts: gridCharts, priceCharts: priceCharts };"
+    ) in " ".join(script.split())
     report = _code(_static_file("report.js"))
     reads = _function(report, "readSeries")
     _in_order(
@@ -3074,7 +3075,7 @@ def test_a_missing_cell_is_a_gap() -> None:
     )
     assert "var drawn = roicPoints(rows[c.row], rows[c.hurdle]);" in _function(script, "spread")
     # with every year left out, the panel shows that sentence, not "No data on file."
-    assert "if (!drawn.series.length) return panel(c.title, noData(c.title, drawn.left));" in (
+    assert "if (!drawn.series.length) return look.wrap(c.title, noData(c.title, drawn.left));" in (
         _function(script, "spread")
     )
     month = _function(script, "byMonth")
@@ -3374,8 +3375,10 @@ def test_each_series_lands_as_its_read_settles() -> None:
     ):
         assert text in draw, text
     price = _function(script, "price")
-    assert "series.closes && series.band ? band(series.closes, series.band) : null" in price
-    assert "series.multiples ? multiples(series.multiples) : null" in price
+    assert "series.closes && series.band ? band(series.closes, series.band, PANELED) : null" in (
+        price
+    )
+    assert "series.multiples ? multiples(series.multiples, PANELED) : null" in price
 
 
 def test_a_refused_or_empty_series_says_why() -> None:
@@ -3387,15 +3390,16 @@ def test_a_refused_or_empty_series_says_why() -> None:
     band = _function(script, "band")
     _in_order(
         band,
-        "if (closes.error) return panel(BAND_TITLE, refused('The price history', closes.error),"
-        " true);",
+        "return look.wrap(BAND_TITLE, refused('The price history', closes.error), true);",
         "var marks = history.error ? [] : history.body.points;",
         "h(F.BandHistory, {",
         "history.error ? refused('The band\\'s history', history.error, 'refused') : null",
     )
     assert "history.error)" not in band.split("var marks")[0]
     multiples = _function(script, "multiples")
-    assert "(m.peNote ? ' · ' + m.peNote : ''), (m.pe && m.pe.note) || m.peNote)," in multiples
+    assert "(m.peNote ? ' · ' + m.peNote : ''), (m.pe && m.pe.note) || m.peNote, look)," in (
+        multiples
+    )
     assert "}) : noData(title, why));" in _function(script, "multiple")
     assert "h('p', { className: 'caption app-muted' }, why || NO_DATA));" in (
         _function(script, "noData")
@@ -3411,8 +3415,8 @@ def test_a_short_forward_log_is_a_figure_not_a_chart() -> None:
     script = _code(_static_file("charts.js"))
     assert "var SHORT_LOG = 5;" in script
     multiples = _function(script, "multiples")
-    assert "logged.length < SHORT_LOG ? panel('forward', shortLog(forward)) :" in multiples
-    assert "0 < logged.length && logged.length < SHORT_LOG ? panel(" in multiples
+    assert "logged.length < SHORT_LOG ? look.wrap('forward', shortLog(forward)) :" in multiples
+    assert "0 < logged.length && logged.length < SHORT_LOG ? look.wrap(" in multiples
     short = _function(script, "shortLog")
     assert (
         "'logged since ' + F.formatDate(forward.since) + '; a reading is added at each price refresh'"

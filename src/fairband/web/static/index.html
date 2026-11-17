@@ -565,7 +565,8 @@
   /* The report's charts (spec 18.4, CompanyReport.md): inside the reader, under a section's
      heading and above its sentences, each on a raised panel with a hairline border and no shadow,
      two to a row as small multiples, one to a row below 840px; the price against the band the
-     full width. A part of section 4 under its table's title. */
+     full width. A part of section 4 under its table's title. On the company page's Research tab
+     a chart has no panel of its own (app-charts__chart): it sits on its section's panel. */
   .app-charts {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3);
     margin: var(--space-2) 0 var(--space-4);
@@ -582,6 +583,9 @@
   .app-charts__part:first-child { margin-top: var(--space-2); }
   .app-chart .app-report__error { margin: 0; }
   .app-chart .fb-c + .app-report__error { margin-top: var(--space-2); }
+  .app-charts__chart { min-width: 0; }
+  .app-charts__chart .app-report__error { margin: 0; }
+  .app-charts__chart .fb-c + .app-report__error { margin-top: var(--space-2); }
   .fb-report__section > .app-report__error { margin: var(--space-1) 0 var(--space-3); }
   @media (width < 840px) { .app-charts { grid-template-columns: minmax(0, 1fr); } }
   /* The company page (the company page's design, 7), as its mockup lays it out, with no link back
@@ -1025,7 +1029,7 @@
       min-width: 168px; white-space: normal;
     }
   }
-  /* The company page's Research tab (the Research tab's design, 7.2 to 7.4, 7.7 and 7.8), as its
+  /* The company page's Research tab (the Research tab's design, 7.2 to 7.9), as its
      mockup lays it out. Under the tabs' row the bar: Report and Records, a segmented control on a
      hairline, the chosen one on surface-selected; the report's line in ink-muted; Footnote marks
      and Download .md at its right end; its notes under it. Then the section list, 196px wide,
@@ -1036,12 +1040,21 @@
      the reading width, 16px on a 24px line; a wide table across the panel, the whole width where
      a cell is long; named lists side by side over a hairline; the two sides in two columns; the
      cards, each on surface with a hairline border, in a column beside the first run of text that
-     stays in view while the panel scrolls, their text at 14px, a table's cells after the first set
-     right. A cite in the text's colour over a dotted line in border, accent under the pointer and
-     with the focus, with no line in an agent's table; its [n] hidden until Footnote marks is on;
-     its source in a box on surface-raised over the page. The three parts kept closed, a head that
-     opens each, + or − before its name; inside, the report page's own parts, their panel's frame
-     and title left to the head, the references in two columns where the width allows. */
+     stays in view while the panel scrolls, their text at 14px, a named block's name the label's,
+     a table's cells after the first set right. A card's head: its name in label and ink-muted,
+     the word on what it holds at its right in ink-faint; its records one under another on
+     hairlines, a state in an outlined stamp, accent where a judgment changed; its line under it
+     in ink-faint.
+     The report's call: the value in figure-lg beside its kind, the meter, the levels in words,
+     each keyed by its zone's colour. The judgments' cards in a row under the text. A paragraph of
+     the financial section beside its group's charts, 27rem wide, each pair over a hairline; the
+     charts with no panel, in a grid of their own, wider where a row holds them alone; the
+     earnings call's three by quarter in such a grid. A cite in the text's colour over a dotted
+     line in border, accent under the pointer and with the focus, with no line in an agent's
+     table; its [n] hidden until Footnote marks is on; its source in a box on surface-raised over
+     the page. The three parts kept closed, a head that opens each, + or − before its name;
+     inside, the report page's own parts, their panel's frame and title left to the head, the
+     references in two columns where the width allows. */
   .app-research {
     display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4);
   }
@@ -1137,7 +1150,7 @@
     display: flex; flex-direction: column; gap: var(--space-2); min-width: 0;
   }
   .app-research__name { margin: 0; color: var(--ink-muted); }
-  .app-research__name > .fb-report__prose {
+  .app-research .app-research__name > .fb-report__prose {
     max-width: none; font: inherit; letter-spacing: inherit; text-transform: inherit;
     color: inherit;
   }
@@ -1159,6 +1172,74 @@
   }
   .app-research__card .fb-report__table { width: 100%; }
   .app-research__card .fb-report__table :is(th, td):not(:first-child) { text-align: right; }
+  .app-research__head {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+    gap: 2px var(--space-3); margin: 0; color: var(--ink-muted);
+  }
+  .app-research__foot, .app-research__faint, .app-research__headnote { color: var(--ink-faint); }
+  .app-research__foot { margin: 0; }
+  .app-research__muted, .app-research__reason, .app-research__decision {
+    margin: 0; color: var(--ink-muted);
+  }
+  .app-research__value { display: flex; flex-direction: column; gap: 2px; }
+  .app-research__figure {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2);
+  }
+  .app-research__kind { color: var(--ink-faint); }
+  .app-research__levels {
+    display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; padding: 0;
+    list-style: none; color: var(--ink-muted);
+  }
+  .app-research__level { display: inline-flex; align-items: baseline; gap: 6px; }
+  .app-research__level::before {
+    content: ""; flex: none; align-self: center; width: 8px; height: 8px;
+    border-radius: var(--radius-sm);
+  }
+  .app-research__level--buy::before { background: var(--zone-buy); }
+  .app-research__level--fair::before { background: var(--zone-fair); }
+  .app-research__level--trim::before { background: var(--zone-trim); }
+  .app-research__recs {
+    display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none;
+  }
+  .app-research__rec {
+    display: flex; flex-direction: column; gap: 3px; padding: 9px 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .app-research__rec:first-child { padding-top: 0; border-top: 0; }
+  .app-research__rec:last-child { padding-bottom: 0; }
+  .app-research__rechead {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2);
+  }
+  .app-research__rec .app-research__label { font-weight: 500; }
+  .app-research__effect { margin-left: auto; }
+  .app-research__since, .app-research__host { color: var(--ink-faint); }
+  .app-research__rec a {
+    color: var(--ink); text-decoration-color: var(--border); text-underline-offset: 3px;
+  }
+  .app-research__rec a:hover { color: var(--accent); }
+  .app-research__stamp {
+    display: inline-flex; align-items: center; padding: 0 6px; color: var(--ink-muted);
+    border: 1px solid currentColor; border-radius: var(--radius-sm); text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .app-research__stamp--on { color: var(--accent); }
+  .app-research__judged {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: var(--space-3);
+  }
+  .app-research__judged .app-research__rechead { justify-content: space-between; }
+  .app-research__pair {
+    display: grid; grid-template-columns: minmax(0, 27rem) minmax(0, 1fr);
+    gap: var(--space-3) var(--space-8); align-items: start; padding-top: var(--space-5);
+    border-top: 1px solid var(--hairline);
+  }
+  .app-research__body > .app-research__pair:first-child { padding-top: 0; border-top: 0; }
+  .app-research__minis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-3) var(--space-6); min-width: 0;
+  }
+  .app-research__minis--all { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .app-research__minis > .app-report__error { grid-column: 1 / -1; margin: 0; }
   .app-research .fb-cite { color: inherit; border-bottom-color: var(--border); }
   .app-research .fb-cite:hover, .app-research .fb-cite:focus-visible {
     color: var(--accent); border-bottom-color: var(--accent);

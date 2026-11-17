@@ -14,11 +14,19 @@ And the page's charts past the fiscal year and by quarter (spec 2026-11-15 6.5, 
 ``points`` makes a point of each cell under its column, its tick, its kind and its label;
 ``kindsLine`` the line under a chart with a bar that is not a fiscal year; ``draw`` section 4's
 charts with those bars and that line, and section 5's three charts by quarter. ``draw``'s tree
-comes back as the page's script builds it, a bundle component's props unread by the stub."""
+comes back as the page's script builds it, a bundle component's props unread by the stub.
 
+And the company page's Research tab's charts (the Research tab's design, 7.4 rules 3, 4, 6 and 7,
+and 7.9): ``groupCharts``, ``quarterCharts``, ``gridCharts`` and ``priceCharts`` give the report
+page's charts with no raised panel, the charts of a pair and of the quarters' row at a height of
+their own, and a read the server refused as its sentence in the chart's place; on
+``support.research_answers``' series of LFOX."""
+
+import copy
 from typing import Any
 
 import pytest
+from support import research_answers as answers
 from support.page import NODE, STATIC, classed, elements, node, text
 
 from fairband.reports.tables import ANALYSTS_BASIS
@@ -604,3 +612,157 @@ def test_section_5_says_why_when_the_read_was_refused() -> None:
     assert text(sections["Financial performance and health"]) == (
         "The financial tables did not load: no financial statements for ACME."
     )
+
+
+# ---------------------------------------------------------------- the Research tab's charts
+
+SMALL = 120  # the charts' height in a pair and in the quarters' row (7.9)
+GROUPS = ["growth", "cash_flow", "solvency", "returns", "capital_allocation", "quality"]
+REFUSED = "no financial statements for LFOX"
+
+
+def _charts(tree: Any) -> list[dict[str, Any]]:
+    """The props of each chart drawn in ``tree``: a bundle chart's element, which carries its
+    ``series`` or, a grid, its ``cells``."""
+    return [e["props"] for e in elements(tree) if "series" in e["props"] or "cells" in e["props"]]
+
+
+def test_group_charts_give_each_group_s_charts_at_the_height_asked_with_no_panel() -> None:
+    """Rule 3: the six groups by their tables' names, 3, 2, 2, 1, 2 and 2 charts, each the
+    report page's chart, HistoryBars or SpreadChart, at the height given, on no raised panel;
+    with no height, the bundle's own."""
+    drawn = _call("reportCharts.groupCharts", {"body": answers.TABLES}, SMALL)
+    assert list(drawn) == GROUPS
+    assert [len(drawn[key]) for key in GROUPS] == [3, 2, 2, 1, 2, 2]
+    titles = []
+    for key in GROUPS:
+        for chart in drawn[key]:
+            [props] = _charts(chart)
+            assert props["height"] == SMALL
+            titles.append(props["title"])
+        assert classed(drawn[key], "app-chart") == []
+    assert titles == [
+        "Revenue",
+        "Operating margin",
+        "EPS",
+        "Free cash flow",
+        "Stock compensation to revenue",
+        "Net debt to EBITDA",
+        "Interest coverage",
+        "ROIC",
+        "Buybacks and dividends",
+        "Share count change",
+        "Altman's Z″",
+        "Piotroski's F",
+    ]
+    [roic] = _charts(drawn["returns"])
+    assert roic["subtitle"] == "against the hurdle rate"  # the SpreadChart
+    whole = _call("reportCharts.groupCharts", {"body": answers.TABLES})
+    assert all("height" not in props for key in GROUPS for props in _charts(whole[key]))
+
+
+def test_group_charts_of_a_refused_read_give_its_sentence() -> None:
+    drawn = _call("reportCharts.groupCharts", {"error": REFUSED}, SMALL)
+    assert list(drawn) == ["refused"]
+    assert text(drawn["refused"]) == f"The financial tables did not load: {REFUSED}."
+
+
+def test_quarter_charts_give_the_three_charts_by_quarter() -> None:
+    """Rule 4: the revenue, the operating margin and the EPS by quarter at the height given, with
+    no panel; a refused read its sentence; an answer without the quarters none."""
+    drawn = _call("reportCharts.quarterCharts", {"body": answers.TABLES}, SMALL)
+    assert len(drawn) == 3
+    charts = [props for chart in drawn for props in _charts(chart)]
+    assert [c["title"] for c in charts] == ["Revenue", "Operating margin", "EPS"]
+    assert all(c["by"] == "quarter" and c["height"] == SMALL for c in charts)
+    assert classed(drawn, "app-chart") == []
+    refused = _call("reportCharts.quarterCharts", {"error": REFUSED}, SMALL)
+    assert text(refused) == f"The figures by quarter did not load: {REFUSED}."
+    older = {k: v for k, v in answers.TABLES.items() if k != "quarters"}
+    assert _call("reportCharts.quarterCharts", {"body": older}, SMALL) is None
+
+
+def _report(secondary: bool = False) -> dict[str, Any]:
+    """The synthetic report, with the secondary valuation's grid where ``secondary``."""
+    report: dict[str, Any] = answers.answer()["report"]
+    if secondary:
+        record = answers.RECORDS["secondaryValuations"][0]
+        grid = record["grid"]
+        report["appendixA"]["secondary"] = {
+            "id": record["id"],
+            "grid": {
+                "rowWords": ["−1 pp", "0 pp", "+1 pp"],
+                "cols": grid["cols"],
+                "cells": grid["cells"],
+                "rowsAre": grid["rowsAre"],
+            },
+        }
+    return report
+
+
+def test_grid_charts_give_each_reading_and_the_secondary_grid_a_failed_one_its_sentence() -> None:
+    """Rule 6: each reading's grid in its order, a reading that failed its sentence in its place,
+    then the secondary valuation's grid; on no raised panel; none for a report with neither."""
+    readings = [{"error": "no sensitivity reading 8"}, {"body": answers.READING}]
+    drawn = _call("reportCharts.gridCharts", _report(secondary=True), readings)
+    assert len(drawn) == 3
+    assert text(drawn[0]) == "A sensitivity reading did not load: no sensitivity reading 8."
+    assert _charts(drawn[0]) == []
+    [reading] = _charts(drawn[1])
+    assert reading["title"] == answers.READING["title"]
+    assert reading["basis"] == "reviewed"  # the report rests on review 6
+    assert reading["current"] == {"row": 1, "col": 1}
+    [grid] = _charts(drawn[2])
+    assert grid["title"] == "The grid of secondary valuation 5"
+    assert classed(drawn, "app-chart") == []
+    assert _call("reportCharts.gridCharts", _report(), []) == []
+
+
+def test_price_charts_give_the_band_and_the_two_p_e_or_a_refusal_in_their_place() -> None:
+    """Rule 7: the price against the band, the trailing P/E and the forward P/E, on no raised
+    panel; with the multiples history refused, the band and the sentence; each once its reads
+    have landed."""
+    landed = {
+        "closes": {"body": answers.CLOSES},
+        "band": {"body": answers.BAND},
+        "multiples": {"body": answers.MULTIPLES},
+    }
+    drawn = _call("reportCharts.priceCharts", landed)
+    assert [[c["title"] for c in _charts(chart)] for chart in drawn] == [
+        ["The price against the band by quarter"],
+        ["Trailing P/E"],
+        ["Forward P/E"],
+    ]
+    assert classed(drawn, "app-chart") == []
+    refused = _call(
+        "reportCharts.priceCharts", landed | {"multiples": {"error": "GuruFocus refused"}}
+    )
+    assert len(refused) == 2
+    assert [c["title"] for c in _charts(refused[0])] == ["The price against the band by quarter"]
+    assert text(refused[1]) == "The P/E history did not load: GuruFocus refused."
+    assert _call("reportCharts.priceCharts", {"closes": landed["closes"]}) == []
+    alone = _call("reportCharts.priceCharts", {"multiples": landed["multiples"]})
+    assert [[c["title"] for c in _charts(chart)] for chart in alone] == [
+        ["Trailing P/E"],
+        ["Forward P/E"],
+    ]
+
+
+def test_draw_still_sets_each_chart_on_its_raised_panel() -> None:
+    """``draw`` stays as the report page reads it: each chart on its raised panel, at the
+    bundle's own height."""
+    landed = {
+        "tables": {"body": answers.TABLES},
+        "readings": [{"body": answers.READING}],
+        "closes": {"body": answers.CLOSES},
+        "band": {"body": answers.BAND},
+        "multiples": {"body": answers.MULTIPLES},
+    }
+    sections = _call("reportCharts.draw", _report(secondary=True), copy.deepcopy(landed))
+    counts = {"Financial performance and health": 12, "The last earnings call": 3}
+    counts |= {"Valuation": 2, "Price and multiples": 3}
+    for heading, count in counts.items():
+        panels = classed(sections[heading], "app-chart")
+        assert len(panels) == count, heading
+        assert all(len(_charts(p)) == 1 for p in panels), heading
+        assert all("height" not in props for props in _charts(sections[heading])), heading

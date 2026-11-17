@@ -22,6 +22,25 @@
    Appendix A and Appendix B (7.8), each closed, each opened drawing what the report page draws
    (FairbandPage.reportParts). A company with no report draws "No report yet." alone.
 
+   The cards by heading (7.4 rules 1 and 6 to 10): Summary, the report's call (7.5), its value,
+   the design system's meter whole and the levels in words; Valuation, each grid the report cites
+   and the secondary valuation's, then Changes to Fairband's inputs (7.6); Price and multiples,
+   the price against the band and the two P/E; Recent news, the sources on file, newest first;
+   Risks and kill criteria, the kill criteria; Key judgments, one card a judgment in a row under
+   the text. A card draws the read's fields and stored records, and computes no figure. The
+   charts (7.9) are the report page's (FairbandPage.reportCharts) with no panel of their own: in
+   Financial performance and health a paragraph stands beside its group's charts and a group no
+   paragraph names in a row of its own (rule 3); the last earnings call opens with its three
+   charts by quarter (rule 4); those of a pair and of the quarters' row drawn smaller.
+
+   The series the charts read (8.2) are read as the report page reads them, each on its own after
+   the report lands, each with the request header: the financial tables, the multiples history,
+   five years of closes, the band's history and each sensitivity reading the references name.
+   They are kept by the report's id outside the tab, read once a report, and each landing draws
+   the page again (FairbandPage.companyPage.redraw), so a series of a report no longer shown
+   changes nothing drawn. A section's text is drawn at once; a chart waits for its series; a read
+   the server refused draws its sentence in the chart's place.
+
    A cited number (7.7) is the design system's cite: the CSS gives it the text's colour and its
    [n] shows while Footnote marks is on, the choice kept in the browser's localStorage under
    fairband.research.marks, read and written inside a try, off where it keeps nothing. Its source,
@@ -47,6 +66,18 @@
   var EXPIRED = 'The value of this report is past the date it was valid until';
   var CLOSED = ['research-refs', 'research-a', 'research-b']; /* the closed parts' panels */
   var CITE_TITLE = /^traces to /; /* the start of the bundle's title of a cite, before its ref */
+  var SMALL = 120; /* the charts' height in a pair and in the quarters' row (7.9) */
+  var EARNINGS = 'The last earnings call';
+  var UNDER = ['Key judgments']; /* the headings whose cards stand in a row under the text */
+  var NO_CHANGE = 'The report changes no input, so its value is the mechanical value.';
+  var KEPT_STATE =
+    'A criterion keeps its state after the report: an agent marks it when the event happens.';
+  var JUDGED = {
+    phase: 'Phase', moat: 'Moat', belief: 'Belief', roic: 'Return on new capital',
+    target_margin: 'Target margin'
+  };
+  var WEB = /^https?:\/\//i; /* an address the news card links to */
+  var HELD = {}; /* the series of each report shown, by its id, as they land (series) */
 
   /* A section's panel's id, from its index in the report: research-s1 for the first. */
   function panelId(index) { return 'research-s' + (index + 1); }
@@ -212,15 +243,31 @@
   /* The panel of `s`, the report's section at `index` (7.4): its heading, then the rows its
      layout gives under the report's stance, and its cards, the named blocks the layout makes
      cards and those `cards` holds for its heading, in a column beside its first run of text, or
-     after its rows where it has none; no column where it has no card. */
-  function section(s, index, report, cards) {
+     after its rows where it has none; no column where it has no card. Under Key judgments the
+     cards `cards` holds stand after the rows instead. The charts read the series `landed` holds
+     (series): the financial tables' beside the paragraphs of Financial performance and health,
+     a refusal's sentence once, in the first place a chart stands; the quarters' as the first row
+     of the last earnings call. */
+  function section(s, index, report, cards, landed) {
     var laid = P.researchText.lay(s.heading, s.parts, report.stance);
     var footnotes = P.footnotes(report.references);
+    var tables = (landed || {}).tables;
     var held = Object.prototype.hasOwnProperty.call(cards, s.heading) ? cards[s.heading] : [];
+    var under = UNDER.indexOf(s.heading) >= 0;
     var aside = laid.cards.map(function (b, i) {
       return labelled(b, footnotes, i, 'app-research__card');
-    }).concat(held);
-    var rows = laid.rows.map(function (r, i) { return row(r, footnotes, i); });
+    }).concat(under ? [] : held);
+    var charts = tables ? {
+      small: P.reportCharts.groupCharts(tables, SMALL), whole: P.reportCharts.groupCharts(tables)
+    } : null;
+    var firstCharts = -1; /* the first row of charts, where a refusal's sentence stands */
+    laid.rows.some(function (r, i) {
+      if (r.kind === 'pair' || r.kind === 'groups') firstCharts = i;
+      return firstCharts >= 0;
+    });
+    var rows = laid.rows.map(function (r, i) {
+      return row(r, footnotes, i, charts, i === firstCharts);
+    });
     if (aside.length) {
       var side = h('div', { key: 'cards', className: 'app-research__cards' }, aside);
       var first = laid.rows.map(function (r) { return r.kind; }).indexOf('run');
@@ -230,6 +277,9 @@
           side);
       }
     }
+    var quarters = s.heading === EARNINGS && tables ? quarterRow(tables) : null;
+    if (quarters) rows.unshift(quarters);
+    if (under) rows = rows.concat(held);
     return h('section', {
       key: panelId(index), id: panelId(index), className: 'app-research__sec'
     },
@@ -237,13 +287,15 @@
       h('div', { className: 'app-research__body' }, rows));
   }
 
-  /* A row of the layout under `key` (company_research_text.js, lay). */
-  function row(r, footnotes, key) {
+  /* A row of the layout under `key` (company_research_text.js, lay); a pair and a row of groups
+     with the `charts` of the financial tables, null before they land, and the refusal's sentence
+     where the row is the `first` to stand charts. */
+  function row(r, footnotes, key, charts, first) {
     if (r.kind === 'run') return run(r.blocks, footnotes, key);
     if (r.kind === 'wide') return wide(r.block, footnotes, key);
     if (r.kind === 'columns') return columns(r.blocks, footnotes, key);
-    if (r.kind === 'pair') return pair(r, footnotes, key);
-    if (r.kind === 'groups') return groups(r, key);
+    if (r.kind === 'pair') return pair(r, footnotes, key, charts && charts.small, first);
+    if (r.kind === 'groups') return groups(r, key, charts && charts.whole, first);
     if (r.kind === 'sides') return sides(r.sides, footnotes, key);
     return null;
   }
@@ -270,15 +322,33 @@
     }));
   }
 
-  /* A paragraph beside the charts of its group: the paragraph at the reading width, as a run
-     draws it. */
-  function pair(r, footnotes, key) {
-    return run([r.block], footnotes, key);
+  /* A paragraph beside the charts of its group (rule 3): the paragraph at the reading width, as a
+     run draws it, and the group's charts of `drawn` (groupCharts, drawn smaller), none before
+     they land; where the tables did not load, the sentence in the `first` pair alone. */
+  function pair(r, footnotes, key, drawn, first) {
+    var charts = !drawn ? null : drawn.refused ? (first ? drawn.refused : null) : drawn[r.group];
+    return h('div', { key: key, className: 'app-research__pair' },
+      run([r.block], footnotes, 'text'),
+      h('div', { key: 'charts', className: 'app-research__minis' }, charts));
   }
 
-  /* The charts of groups alone: nothing yet. */
-  function groups() {
-    return null;
+  /* The charts of the groups no paragraph names, alone, in a row at their own height (rule 3);
+     nothing before they land; where the tables did not load, the sentence where the row is the
+     `first` to stand charts. */
+  function groups(r, key, drawn, first) {
+    if (!drawn || (drawn.refused && !first)) return null;
+    var charts = drawn.refused || [].concat.apply([], r.groups.map(function (g) {
+      return drawn[g];
+    }));
+    return h('div', { key: key, className: 'app-research__minis app-research__minis--all' },
+      charts);
+  }
+
+  /* The last earnings call's first row (rule 4): its three charts by quarter, drawn smaller, or
+     the sentence of the tables' refusal; none on an answer without the quarters. */
+  function quarterRow(tables) {
+    var drawn = P.reportCharts.quarterCharts(tables, SMALL);
+    return drawn ? h('div', { key: 'quarters', className: 'app-research__minis' }, drawn) : null;
   }
 
   /* Two columns, each its block under its label. */
@@ -304,6 +374,320 @@
       h('div', { className: 'label app-research__name' },
         F.reportText.draw({ kind: 'p', items: [b.name] }, footnotes, 'name')),
       F.reportText.draw(b.body, footnotes, 'body'));
+  }
+
+  /* -------------------------------------------------------------------------------- the cards */
+
+  /* The cards of each heading (7.4 rules 1 and 6 to 10) for `answer`'s report, the company's
+     `detail` and the series `landed` holds; a card with nothing to draw is left out. */
+  function cardsOf(answer, detail, landed) {
+    var report = answer.report;
+    var of = answer.ofReport || {};
+    var cards = {
+      'Summary': [valueCard(answer.call, detail)],
+      'Valuation': charted(P.reportCharts.gridCharts(report, landed.readings || []))
+        .concat([changesCard(report)]),
+      'Price and multiples': charted(P.reportCharts.priceCharts(landed)),
+      'Recent news': [newsCard(of.newsItems)],
+      'Risks and kill criteria': [killCard(of.killCriteria)],
+      'Key judgments': [judgmentCards(report)]
+    };
+    Object.keys(cards).forEach(function (k) { cards[k] = cards[k].filter(Boolean); });
+    return cards;
+  }
+
+  /* Charts as cards in a section's column, each chart's own head its name. */
+  function charted(charts) {
+    return charts.map(function (chart, i) {
+      return h('div', { key: 'chart' + i, className: 'app-research__card app-research__chart' },
+        chart);
+    });
+  }
+
+  /* A card under `key` of the class `className`: its name and, at the right of it, the word on
+     what it holds where it has one, over its body, and a line under it where it has one. */
+  function card(key, className, name, note, body, foot) {
+    return h('div', { key: key, className: 'app-research__card ' + className },
+      h('p', { className: 'app-research__head' },
+        h('span', { className: 'label' }, name),
+        note == null ? null : h('span', { className: 'caption app-research__headnote' }, note)),
+      body,
+      foot ? h('p', { className: 'caption app-research__foot' }, foot) : null);
+  }
+
+  /* The report's call (7.5) on the read's `call`, today's figures from the company's `detail`:
+     what the value rests on in its head; the value a share and its kind; the design system's
+     meter on the value, its four levels and the snapshot's price, whole; the levels in words;
+     the caption. With no value, the refusal's sentence and no meter; with no price or no
+     levels, no meter. None without a call. */
+  function valueCard(call, detail) {
+    if (!call) return null;
+    var body = call.value == null
+      ? [call.refusal ? h('p', { key: 'refusal', className: 'body app-refusal' }, call.refusal)
+        : null]
+      : [valueFigure(call), meter(call, detail), levels(call.levels)];
+    return card('call', 'app-research__call', 'The report\'s call', pricedOn(call), body,
+      callFoot(call, detail));
+  }
+
+  /* "on the data of" its day, then "priced that day" or "priced" and the price's day; the data's
+     day alone where the snapshot has no price. */
+  function pricedOn(call) {
+    var data = 'on the data of ' + C.day(call.dataDate);
+    if (call.priceDate == null) return data;
+    return data + (call.priceDate === call.dataDate ? ', priced that day'
+      : ', priced ' + C.day(call.priceDate));
+  }
+
+  function valueFigure(call) {
+    return h('div', { key: 'value', className: 'app-research__value' },
+      h('span', { className: 'caption app-research__faint' }, 'Value a share'),
+      h('span', { className: 'app-research__figure' },
+        h('span', { className: 'figure-lg' }, F.formatMoney(call.value)),
+        h('span', { className: 'label app-research__kind' },
+          call.note ? call.basis + ', ' + call.note : call.basis)));
+  }
+
+  /* BandMeter on the call's value, its levels and the snapshot's price, the read's word and its
+     gap in every meter's words (FairbandPage.gapText) on the detail's edges; none without a
+     price or the levels. */
+  function meter(call, detail) {
+    var l = call.levels;
+    if (call.price == null || !l) return null;
+    return h(F.BandMeter, {
+      key: 'meter', low: l.fairLow, high: l.fairHigh, price: call.price, fairValue: call.value,
+      buyLevel: l.buy, trimLevel: l.trim, designation: call.designation, showScale: false,
+      gap: P.gapText(call.priceToValue, detail ? detail.designationEdges : null, valueName(call)),
+      hero: false
+    });
+  }
+
+  /* The name the gap gives the value: the secondary valuation, the reviewed value or the
+     mechanical value. */
+  function valueName(call) {
+    if (call.note === 'secondary valuation') return 'the secondary valuation';
+    return call.basis === 'reviewed' ? 'the reviewed value' : 'the mechanical value';
+  }
+
+  /* The three levels in words, each by its zone's colour; none without levels. */
+  function levels(l) {
+    if (!l) return null;
+    return h('ul', { key: 'levels', className: 'caption app-research__levels' },
+      level('buy', 'buy below ', F.formatMoney(l.buy)),
+      level('fair', 'close to the value ',
+        F.formatMoney(l.fairLow) + ' to ' + F.formatMoney(l.fairHigh)),
+      level('trim', 'trim above ', F.formatMoney(l.trim)));
+  }
+
+  function level(zone, words, figure) {
+    return h('li', { key: zone, className: 'app-research__level app-research__level--' + zone },
+      words, h('span', { className: 'figure-sm' }, figure));
+  }
+
+  /* The caption: valid until; today's value and price, the detail's; and, where the report's
+     value is a review's and its snapshot has a mechanical value, that value. */
+  function callFoot(call, detail) {
+    var said = ['Valid until ' + C.day(call.validUntil) + '.'];
+    var now = today(detail);
+    if (now) said.push(now);
+    if (call.basis === 'reviewed' && call.note == null && call.mechanicalValue != null) {
+      said.push('The mechanical value was ' + F.formatMoney(call.mechanicalValue) + '.');
+    }
+    return said.join(' ');
+  }
+
+  /* Today's value and price from the company's detail: the review's value, reviewed, where it
+     carries a review with a value, else the snapshot's, mechanical, and the snapshot's price;
+     null where it has no value or no price. */
+  function today(detail) {
+    var r = detail && detail.result;
+    if (!r) return null;
+    var reviewed = !!detail.review && detail.review.value != null;
+    var value = reviewed ? detail.review.value : r.value;
+    if (value == null || r.price == null) return null;
+    return 'Today the ' + (reviewed ? 'reviewed' : 'mechanical') + ' value is ' +
+      F.formatMoney(value) + ' and the price ' + F.formatMoney(r.price) + '.';
+  }
+
+  /* Changes to Fairband's inputs (7.6): for a report on a review, a line a change in the bridge's
+     order, its label, its figures before and after in its input's unit and its effect on the
+     value a share, signed, or its refusal; for one with none, that it changes no input, where
+     its snapshot has a mechanical value for that to be. */
+  function changesCard(report) {
+    var a = report.appendixA;
+    var lines = a.bridge ? a.bridge.lines : [];
+    var units = {};
+    a.overrides.forEach(function (o) { units[o.id] = o.unit; });
+    var body = lines.length
+      ? h('ul', { className: 'app-research__recs' }, lines.map(function (line, i) {
+        return change(line, units[line.overrideId], i);
+      }))
+      : a.snapshot.value != null ? h('p', { className: 'body app-research__muted' }, NO_CHANGE)
+        : null;
+    return card('changes', 'app-research__changes', 'Changes to Fairband\'s inputs',
+      lines.length ? C.count(lines.length) : 'none', body);
+  }
+
+  function change(line, unit, key) {
+    return h('li', { key: key, className: 'app-research__rec' },
+      h('span', { className: 'app-research__rechead' },
+        h('span', { className: 'body app-research__label' }, line.label),
+        line.delta == null ? null
+          : h('span', { className: 'figure-sm app-research__effect' },
+            (line.delta > 0 ? '+' : '') + F.formatMoney(line.delta) + ' a share')),
+      h('span', { className: 'figure-sm app-research__change' },
+        P.inputFigure(line.old, unit) + ' → ' + P.inputFigure(line.new, unit)),
+      line.refusal ? h('span', { className: 'caption app-refusal' }, line.refusal) : null);
+  }
+
+  /* Kill criteria (rule 9): how many are open of all, each with its state, the day of that
+     state, its text and its state's reason, then that a state outlives the report; none for a
+     report with no criterion. */
+  function killCard(criteria) {
+    if (!criteria || !criteria.length) return null;
+    var open = criteria.filter(function (k) { return k.state === 'open'; }).length;
+    return card('kill', 'app-research__kill', 'Kill criteria',
+      C.count(open) + ' open of ' + C.count(criteria.length),
+      h('ul', { className: 'app-research__recs' }, criteria.map(criterion)), KEPT_STATE);
+  }
+
+  function criterion(k) {
+    return h('li', { key: k.id, className: 'app-research__rec' },
+      h('span', { className: 'app-research__rechead' },
+        h('span', { className: 'label app-research__stamp' }, k.state),
+        h('span', { className: 'caption app-research__since' },
+          'since ' + C.day(P.localIso(k.stateAt || k.at)))),
+      h('span', { className: 'body' }, k.text),
+      k.stateReason ? h('span', { className: 'body app-research__reason' }, k.stateReason)
+        : null);
+  }
+
+  /* The sources on file (rule 8): the news items with their count, newest first, each with its
+     date, its address's host and its headline, a link where the address is a web address; none
+     for a report with no item. */
+  function newsCard(items) {
+    if (!items || !items.length) return null;
+    var newest = items.slice().sort(function (a, b) {
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id;
+    });
+    return card('news', 'app-research__news', 'The sources on file', C.count(items.length),
+      h('ul', { className: 'app-research__recs' }, newest.map(newsItem)));
+  }
+
+  function newsItem(n) {
+    var web = WEB.test(String(n.source || ''));
+    var host = web ? hostOf(n.source) : '';
+    return h('li', { key: n.id, className: 'app-research__rec' },
+      h('span', { className: 'app-research__rechead' },
+        h('span', { className: 'figure-sm app-research__date' }, C.day(n.date)),
+        host ? h('span', { className: 'caption app-research__host' }, host) : null),
+      web ? h('a', {
+        className: 'body app-research__headline', href: n.source, target: '_blank',
+        rel: 'noopener'
+      }, n.headline) : h('span', { className: 'body app-research__headline' }, n.headline));
+  }
+
+  /* A web address's host without www.; '' where the browser cannot read it. */
+  function hostOf(address) {
+    try {
+      return new URL(address).hostname.replace(/^www\./, '');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /* The judgments (rule 10): one card a judgment in a row, its name, "stands", or "changed"
+     where it names an override, and its decision; none for a report with no judgment. */
+  function judgmentCards(report) {
+    var list = report.judgments || [];
+    if (!list.length) return null;
+    return h('div', { key: 'judged', className: 'app-research__judged' }, list.map(function (j) {
+      var changed = j.overrideId != null;
+      return h('div', { key: j.id, className: 'app-research__card' },
+        h('span', { className: 'app-research__rechead' },
+          h('span', { className: 'heading app-research__judgment' },
+            JUDGED[j.judgment] || j.judgment),
+          h('span', {
+            className: 'label app-research__stamp' + (changed ? ' app-research__stamp--on' : '')
+          }, changed ? 'changed' : 'stands')),
+        h('span', { className: 'body app-research__decision' }, j.decision));
+    }));
+  }
+
+  /* ------------------------------------------------------------------------------- the series */
+
+  /* What has landed of the series `report`'s charts read (8.2), held in `held` by the report's
+     id: on the first call for a report its reads start, each landing kept under its id and the
+     page drawn again, and each later call gives what has landed. */
+  function series(report, held) {
+    if (!Object.prototype.hasOwnProperty.call(held, report.id)) {
+      held[report.id] = {};
+      readSeries(report, held);
+    }
+    return held[report.id];
+  }
+
+  /* The report's series, each on its own, its body or the server's sentence why not, as the
+     report page reads them: the six financial tables, the multiples history, the closes of the
+     five years, the band's history and each sensitivity reading the references name, once, in
+     the order first cited, the company's own. Each lands under the report's id, so one of a
+     report no longer shown changes nothing drawn, and the page draws again. */
+  function readSeries(report, held) {
+    var id = report.id;
+    var company = '/api/companies/' + encodeURIComponent(report.symbol);
+    var land = function (key) {
+      return function (got) {
+        var next = {};
+        Object.keys(held[id]).forEach(function (k) { next[k] = held[id][k]; });
+        next[key] = got;
+        held[id] = next;
+        C.redraw();
+      };
+    };
+    settle(read(company + '/financial-tables')).then(land('tables'));
+    settle(read(company + '/multiples-history')).then(land('multiples'));
+    settle(read(company + '/price-history?years=5')).then(land('closes'));
+    settle(read(company + '/band-history')).then(land('band'));
+    Promise.all(cited(report.references).map(function (n) {
+      return settle(read('/api/sensitivities/' + n));
+    })).then(function (got) {
+      land('readings')(got.filter(function (r) {
+        return r.error || r.body.symbol === report.symbol;
+      }));
+    });
+  }
+
+  /* A read as its body, or the server's sentence why not. */
+  function settle(reading) {
+    return reading.then(function (body) { return { body: body }; },
+      function (err) { return { error: err.message }; });
+  }
+
+  /* The ids of the sensitivity readings the references name, once each, in the order first
+     cited, as the export reads them. */
+  function cited(references) {
+    var ids = [];
+    references.forEach(function (e) {
+      var found = /^sensitivity:(\d+)(\/|$)/.exec(String(e.ref).trim());
+      if (found && ids.indexOf(found[1]) === -1) ids.push(found[1]);
+    });
+    return ids;
+  }
+
+  /* A read whose refusal is the server's sentence, as it arrives. Every read carries the request
+     header: the server refuses without it a read that may call a vendor, the multiples
+     history's, so no other site's page can spend a vendor's quota. */
+  function read(url) {
+    return fetch(url, { headers: { 'X-Fairband-Request': '1' } }).then(function (response) {
+      return response.ok ? response.json() : refused(response);
+    });
+  }
+
+  function refused(response) {
+    return response.json().catch(function () { return null; }).then(function (body) {
+      throw new Error(body && typeof body.detail === 'string' ? body.detail
+        : 'the server answered ' + response.status);
+    });
   }
 
   /* --------------------------------------------------------------------------- the closed parts */
@@ -417,10 +801,10 @@
   /* ---------------------------------------------------------------------------------- the tab */
 
   /* The tab on `props.answer` and the company's `props.detail`: the bar, then in the Report view
-     the list and the panels, or "No report yet."; the Records view draws its line alone. It keeps
-     the view, Report at first; Footnote marks, as the browser keeps them; the panel in view, the
-     first at first; and the Markdown's refusal, with the report it is of, so another report
-     draws none. */
+     the list and the panels with their cards and charts, the report's series read as it is drawn
+     (series), or "No report yet."; the Records view draws its line alone. It keeps the view,
+     Report at first; Footnote marks, as the browser keeps them; the panel in view, the first at
+     first; and the Markdown's refusal, with the report it is of, so another report draws none. */
   function Research(props) {
     var answer = props.answer;
     var report = answer.report;
@@ -450,6 +834,9 @@
         P.reportParts.download(report, function (text) { failed[1]({ id: id, text: text }); });
       }
     };
+    var drawn = view[0] === 'report' && report;
+    var landed = drawn ? series(report, HELD) : null;
+    var cards = drawn ? cardsOf(answer, props.detail, landed) : null;
     return h('div', {
       ref: root, className: 'app-research' + (marks[0] ? ' app-research--marks' : '')
     },
@@ -458,7 +845,7 @@
         : report ? h('div', { className: 'app-research__layout' },
           list(answer, shown[0]),
           h('div', { className: 'app-research__main' },
-            report.sections.map(function (s, i) { return section(s, i, report, {}); }),
+            report.sections.map(function (s, i) { return section(s, i, report, cards, landed); }),
             closed(report)))
           : h('p', { className: 'body app-research__none' }, 'No report yet.'));
   }
@@ -472,7 +859,9 @@
   /* What the page and the tests use. */
   P.research = {
     bar: bar, list: list, section: section, closed: closed, source: source,
-    storedMarks: storedMarks, keepMarks: keepMarks, Research: Research
+    storedMarks: storedMarks, keepMarks: keepMarks, Research: Research,
+    valueCard: valueCard, changesCard: changesCard, killCard: killCard, newsCard: newsCard,
+    judgmentCards: judgmentCards, series: series
   };
   C.draw.research = research;
 })();

@@ -26,6 +26,7 @@ from support.web import _static_file
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 SCRIPTS = (
+    STATIC / "charts.js",
     STATIC / "company.js",
     STATIC / "report_parts.js",
     STATIC / "company_research_text.js",
@@ -273,8 +274,8 @@ def test_a_section_is_drawn_by_its_layout() -> None:
     """A section is a panel with its heading, id research-s<n> from 1. A run of text at the
     reading width; a wide table across the panel, the whole width where a cell is long; named
     lists side by side; the two sides each under its label; the cards of rule 2, each under its
-    name, in a column beside the first run; a paragraph beside its charts drawn at the reading
-    width as a run is. No block drawn twice, none left out."""
+    name, in a column beside the first run; a paragraph beside its charts, in a pair, drawn at
+    the reading width as a run is. No block drawn twice, none left out."""
     business = _section(1)
     assert business["type"] == "section" and business["props"]["id"] == "research-s2"
     [title] = [e for e in elements(business) if e.get("type") == "h2"]
@@ -317,7 +318,9 @@ def test_a_section_is_drawn_by_its_layout() -> None:
     ]
 
     financial = _section(3)
-    assert [" ".join(_classes(r)) for r in _rows(financial)] == ["app-research__run"] * 6
+    pairs = _rows(financial)
+    assert [" ".join(_classes(r)) for r in pairs] == ["app-research__pair"] * 6
+    assert all("app-research__run" in _classes(p["props"]["children"][0]) for p in pairs)
 
     for index in range(len(answers.SECTIONS)):
         drawn = _drawn_blocks(_section(index))

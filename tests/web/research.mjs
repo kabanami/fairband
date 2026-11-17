@@ -4,13 +4,15 @@
 // company_research.js) are loaded in the page's order, with a stub React whose useState keeps its
 // state from one draw of the tab to the next, as financials.mjs's does; a document whose
 // elements, found by id, are those the tab drew, each recording whether it was opened and
-// scrolled to; a fetch that answers an address from the input's answers, and never answers any
-// other; and a window whose localStorage is the driver's: none, as page.mjs has and as a browser
-// that keeps nothing has; one whose every read and write throws, as a private window's may; or
-// one holding the items given.
+// scrolled to; a fetch that answers an address from the input's answers, at once or, for an
+// answer marked held, when a release step lets it land, and never answers any other; a
+// companyPage.redraw that draws the tab again, as the page draws it when a series lands; and a
+// window whose localStorage is the driver's: none, as page.mjs has and as a browser that keeps
+// nothing has; one whose every read and write throws, as a private window's may; or one holding
+// the items given.
 //
 // The input, a JSON object on stdin: {"store": null | "throws" | {<key>: <value>, ...},
-// "answers"?: {<url>: {"status", "body"}}, "steps"}. The steps, a list, each one object:
+// "answers"?: {<url>: {"status", "body", "held"?}}, "steps"}. The steps, a list, each one object:
 //   {"do": "stored"}                     storedMarks() is read
 //   {"do": "keep", "on"}                 keepMarks(on) is called
 //   {"do": "mount", "answer", "detail"}  the tab opens on `answer` and the company's `detail`,
@@ -24,11 +26,16 @@
 //   {"do": "press", "class", "text"}     the drawn tab's element of the class `class` whose text
 //                                        is `text` is pressed, the work it sets off is done, and
 //                                        the tab is drawn again
+//   {"do": "wait"}                       the work set off so far is done (the answers given at once
+//                                        land), and the tab is drawn again
+//   {"do": "release", "url"}             the oldest fetch of `url` still held lands, the work it
+//                                        sets off is done, and the tab is drawn again
 // After each step the trace on stdout gains what it returned (storedMarks' choice), whether it
 // threw, the store's items (null for none or one that throws), the requests made (each its
-// method and address), the elements found by id that were opened or scrolled to, each {open,
-// scrolled}, and the tree the tab draws, each component in it drawn with its props in turn, as
-// page.mjs draws one, so a test reads the elements the bundle's components give.
+// method and address) and the headers each was sent with, the elements found by id that were
+// opened or scrolled to, each {open, scrolled}, the times companyPage.redraw was called, and the
+// tree the tab draws, each component in it drawn with its props in turn, as page.mjs draws one,
+// so a test reads the elements the bundle's components give.
 //
 //   node research.mjs <bundle.js> <app.js> <script.js> ...  < input.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -79,17 +86,22 @@ const document = {
 };
 
 let fetched = []; // the requests the current step made
+let headers = []; // the headers each of them was sent with, null for none
+const held = []; // the fetches of held answers not yet released, oldest first: { url, land }
 const answers = input.answers || {};
 const fetch = (url, init) => {
   fetched.push([(init && init.method) || 'GET', url]);
+  headers.push((init && init.headers) || null);
   const given = answers[url];
   if (!given) return new Promise(() => {});
-  return Promise.resolve({
+  const response = {
     ok: given.status >= 200 && given.status < 300,
     status: given.status,
     json: () => Promise.resolve(given.body),
     blob: () => Promise.resolve(given.body),
-  });
+  };
+  if (!given.held) return Promise.resolve(response);
+  return new Promise((land) => { held.push({ url, land: () => land(response) }); });
 };
 const window = { React, ReactDOM, document, fetch, addEventListener() {} };
 
@@ -114,6 +126,11 @@ for (const script of scripts) {
     script)(window, React, ReactDOM, window.Fairband, window.FairbandPage, document, fetch);
 }
 const T = window.FairbandPage.research;
+let redrawn = 0; // the times the tab asked the page to draw again this step
+window.FairbandPage.companyPage.redraw = () => {
+  redrawn += 1;
+  if (tab) draw();
+};
 
 function* elements(tree) {
   if (Array.isArray(tree)) { for (const child of tree) yield* elements(child); return; }
@@ -157,7 +174,9 @@ for (const step of input.steps) {
   let result = null;
   let threw = false;
   fetched = [];
+  headers = [];
   touched = {};
+  redrawn = 0;
   try {
     if (step.do === 'stored') result = T.storedMarks();
     else if (step.do === 'keep') T.keepMarks(step.on);
@@ -172,6 +191,15 @@ for (const step of input.steps) {
       pressed.props.onClick({ preventDefault() {}, stopPropagation() {} });
       await new Promise((done) => later(done, 0));
       draw();
+    } else if (step.do === 'wait') {
+      await new Promise((done) => later(done, 0));
+      draw();
+    } else if (step.do === 'release') {
+      const at = held.findIndex((f) => f.url === step.url);
+      if (at < 0) throw new Error('no fetch of ' + step.url + ' is held');
+      held.splice(at, 1)[0].land();
+      await new Promise((done) => later(done, 0));
+      draw();
     } else throw new Error('no step ' + step.do);
   } catch (error) {
     threw = true;
@@ -183,7 +211,9 @@ for (const step of input.steps) {
     threw,
     store: items && Object.assign({}, items),
     fetched,
+    headers,
     touched,
+    redrawn,
     tree: live,
   });
 }
