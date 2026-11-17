@@ -1,10 +1,12 @@
-"""The company page's Financials tab (the Financials tab's design, 7.1, 7.2, 7.3, 7.7, 7.8 and 7.9;
+"""The company page's Financials tab (the Financials tab's design, 7.1 to 7.4, 7.7, 7.8 and 7.9;
 Review Focus 2, 3 and 5): its place in the tabs' row and in the hash, its controls by sub-tab, the
 tables of each sub-tab with their rows' kinds, the captions, a column's head, a figure's text, an
-empty table's sentence, and the unit kept in the browser. company.js and company_financials.js
-run in node after the bundle and app.js (``support.page``), and the tests read what the tab's
+empty table's sentence, the unit kept in the browser, and the lines on the chart, a row's button
+that adds one or takes it off and the colour each keeps. company.js and company_financials.js run
+in node after the bundle and app.js (``support.page``), and the tests read what the tab's
 functions return and the trees its builder draws; ``financials.mjs`` drives the tab's state, with
-a store of its own; the layout node cannot run is read from the page's CSS.
+a store of its own, and with the chart's scripts where a test reads the picks the tab hands its
+chart; the layout node cannot run is read from the page's CSS.
 
 The answer is made here, ``ANSWER``, ACME's, in US dollars: two fiscal years and two quarters of
 each statement, a revenue by product and by region, and a table of ratios. Its 2025 column of the
@@ -25,11 +27,20 @@ from support.web import _static_file
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 SCRIPTS = (STATIC / "company.js", STATIC / "company_financials.js")
+CHARTED = (  # the tab with its chart, whose place then holds the picks
+    STATIC / "company.js",
+    STATIC / "company_chart.js",
+    STATIC / "company_financials.js",
+    STATIC / "company_financials_chart.js",
+)
 DRIVER = Path(__file__).parent / "financials.mjs"
 KEY = "fairband.financials.unit"
 SUBTABS = ["Income statement", "Balance sheet", "Cash flow", "Segments", "Ratios"]
 RIGHT = "press a line to chart it alone, or its + to add it to the chart"
 DASH = "—"
+ADD = "Add to the chart"
+TAKE = "Take off the chart"
+FULL = "The chart holds 4 lines. Take one off first."
 
 
 def _row(key: str, label: str, kind: str, unit: str, values: list[Any]) -> dict[str, Any]:
@@ -138,10 +149,13 @@ def _block(answer: dict[str, Any] = ANSWER, **view: str) -> Any:
     return _tab("block", answer, VIEW | view, [], None)
 
 
-def _drive(store: Any, steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The trace of ``steps`` with the store ``store`` (``financials.mjs``)."""
+def _drive(
+    store: Any, steps: list[dict[str, Any]], loaded: tuple[Path, ...] = SCRIPTS
+) -> list[dict[str, Any]]:
+    """The trace of ``steps`` with the store ``store`` (``financials.mjs``), the scripts
+    ``loaded`` after app.js."""
     assert NODE is not None
-    scripts = (BUNDLE, STATIC / "app.js", *SCRIPTS)
+    scripts = (BUNDLE, STATIC / "app.js", *loaded)
     done = subprocess.run(
         [NODE, str(DRIVER), *(str(script) for script in scripts)],
         input=json.dumps({"store": store, "steps": steps}),
@@ -163,10 +177,20 @@ def _typed(tree: Any, kind: str) -> list[dict[str, Any]]:
     return [e for e in elements(tree) if e.get("type") == kind]
 
 
+def _words(cell: dict[str, Any]) -> str:
+    """The text of a cell, a row's button before its name left out."""
+    kids = cell["props"].get("children")
+    return text([k for k in (kids if isinstance(kids, list) else [kids]) if not _button(k)])
+
+
+def _button(tree: Any) -> bool:
+    return isinstance(tree, dict) and tree.get("type") == "button"
+
+
 def _grid(table: dict[str, Any]) -> list[list[str]]:
     """The texts of a drawn table: its head's cells, then each row's, its name first."""
     return [
-        [text(cell) for cell in elements(row) if cell.get("type") in ("th", "td")]
+        [_words(cell) for cell in elements(row) if cell.get("type") in ("th", "td")]
         for row in _typed(table, "tr")
     ]
 
@@ -240,7 +264,7 @@ def test_the_controls_by_sub_tab() -> None:
         ("group", "Unit of the amounts"),
         ("group", "Period"),
     ]
-    buttons = _typed(tree, "button")
+    buttons = _typed(classed(tree, "app-fin__bar")[0], "button")
     assert len(buttons) == 9
     assert {b["props"]["type"] for b in buttons} == {"button"}
     [chart] = classed(tree, "app-fin__chart")
@@ -624,6 +648,284 @@ def test_the_unit_is_millions_where_storage_fails() -> None:
     assert kept["store"] == {KEY: "b"}
     [opened] = _drive({KEY: "b"}, [{"do": "mount", "answer": ANSWER}])
     assert _view(opened["view"]) == ("Income statement", "Billions", "Annual")
+
+
+# ------------------------------------------------------------------------ the lines on the chart
+
+
+def _line(kind: str, key: str, table: str | None = None) -> dict[str, Any]:
+    """A line as a row knows it: its sub-tab, its table and its key."""
+    return {"kind": kind, "table": table, "key": key}
+
+
+def _pick(kind: str, key: str, table: str | None = None, slot: int = 0) -> dict[str, Any]:
+    """A line on the chart, with its colour slot."""
+    return _line(kind, key, table) | {"slot": slot}
+
+
+REVENUE = _pick("income", "revenue")
+GROSS = _line("income", "grossProfit")
+EPS = _line("income", "eps")
+COST = _line("income", "costOfRevenue")
+SHARES = _line("income", "weightedAverageShsOut")
+MARGIN = _line("ratios", "grossProfitMargin")
+
+
+def _classes(e: dict[str, Any]) -> set[str]:
+    return set(str(e["props"].get("className") or "").split())
+
+
+def _adds(tree: Any) -> dict[str, dict[str, Any]]:
+    """Each line's row's button by the row's name: its words, aria-pressed, aria-label, title,
+    type, whether it is disabled, and the classes of the swatch it holds (None for none)."""
+    found = {}
+    for row in _typed(tree, "tr"):
+        buttons = classed(row, "app-fin__add")
+        if not buttons:
+            continue
+        [button] = buttons
+        name = _typed(row, "th")[0]
+        swatches = [e for e in elements(button) if e is not button]
+        found[_words(name)] = {
+            "text": text(button),
+            "pressed": button["props"]["aria-pressed"],
+            "label": button["props"]["aria-label"],
+            "title": button["props"]["title"],
+            "disabled": bool(button["props"].get("disabled")),
+            "type": button["props"]["type"],
+            "swatch": _classes(swatches[0]) if swatches else None,
+        }
+    return found
+
+
+def test_the_plus_adds_a_line_and_takes_it_off() -> None:
+    """A press on a row's + adds its line at the lowest free slot, after the lines on the chart;
+    a press on its swatch takes it off, and the one line left takes slot 0. The press is the
+    button's alone: its click goes no further, so the row's own press, which charts its line
+    alone, does not follow, and the row takes no Enter or Space that comes from its button."""
+    two = _tab("toggle", [REVENUE], GROSS)
+    assert two == [REVENUE, GROSS | {"slot": 1}]
+    assert _tab("toggle", two, _line("income", "revenue")) == [GROSS | {"slot": 0}]
+    assert _tab("toggle", [], GROSS) == [GROSS | {"slot": 0}]
+
+    trace = _drive(
+        None,
+        [
+            {"do": "mount", "answer": ANSWER},
+            {"do": "add", "text": "Gross profit"},
+            {"do": "add", "text": "EPS"},
+            {"do": "add", "text": "Revenue"},
+            {"do": "row", "text": "Cost of revenue", "key": "Enter", "button": True},
+            {"do": "row", "text": "Cost of revenue", "key": " ", "button": True},
+            {"do": "add", "text": "Revenue"},
+        ],
+        CHARTED,
+    )
+    assert [step["threw"] for step in trace] == [False] * 7
+    assert [step["picks"] for step in trace] == [
+        [REVENUE],
+        [REVENUE, GROSS | {"slot": 1}],
+        [REVENUE, GROSS | {"slot": 1}, EPS | {"slot": 2}],
+        [GROSS | {"slot": 1}, EPS | {"slot": 2}],
+        [GROSS | {"slot": 1}, EPS | {"slot": 2}],
+        [GROSS | {"slot": 1}, EPS | {"slot": 2}],
+        [GROSS | {"slot": 1}, EPS | {"slot": 2}, REVENUE],
+    ]
+    assert [step["on"] for step in trace] == [
+        ["Revenue"],
+        ["Revenue", "Gross profit"],
+        ["Revenue", "Gross profit", "EPS"],
+        ["Gross profit", "EPS"],
+        ["Gross profit", "EPS"],
+        ["Gross profit", "EPS"],
+        ["Revenue", "Gross profit", "EPS"],
+    ]
+    assert [step["stopped"] for step in trace] == [False, True, True, True, False, False, True]
+    assert [step["prevented"] for step in trace[4:6]] == [False, False]
+    script = _static_file("company_financials.js")
+    assert "event.target !== event.currentTarget" in script
+
+
+def test_the_last_line_stays_and_a_fifth_is_refused() -> None:
+    """The last line on the chart cannot be taken off, and the chart holds four lines: a fifth
+    is refused. At four, the button of every row off the chart is disabled, with the title that
+    says why; a row on the chart keeps its own."""
+    assert _tab("toggle", [REVENUE], _line("income", "revenue")) == [REVENUE]
+    assert _tab("drop", [REVENUE], REVENUE) == [REVENUE]
+    four = [REVENUE, GROSS | {"slot": 1}, EPS | {"slot": 2}, COST | {"slot": 3}]
+    assert _tab("toggle", four, SHARES) == four
+    assert _tab("toggle", four, MARGIN) == four
+    script = _static_file("company_financials.js")
+    assert re.search(r"\n  var MAX = 4;", script)
+    assert "MAX: MAX" in script
+
+    adds = _adds(_tab("block", ANSWER, VIEW, four, None))
+    for name in ("Revenue", "Cost of revenue", "Gross profit", "EPS"):
+        assert adds[name]["pressed"] == "true", name
+        assert (adds[name]["label"], adds[name]["title"]) == (TAKE, TAKE), name
+        assert adds[name]["disabled"] is False, name
+    for name in ("General and administrative", "Shares, basic"):
+        assert adds[name] == {
+            "text": "+",
+            "pressed": "false",
+            "label": ADD,
+            "title": FULL,
+            "disabled": True,
+            "type": "button",
+            "swatch": None,
+        }, name
+    three = _adds(_tab("block", ANSWER, VIEW, four[:3], None))
+    assert (three["Shares, basic"]["disabled"], three["Shares, basic"]["title"]) == (False, ADD)
+    ratios = _adds(_tab("block", ANSWER, VIEW | {"kind": "ratios"}, four, None))
+    assert {a["disabled"] for a in ratios.values()} == {True}
+
+    trace = _drive(
+        None,
+        [
+            {"do": "mount", "answer": ANSWER},
+            {"do": "add", "text": "Gross profit"},
+            {"do": "add", "text": "EPS"},
+            {"do": "add", "text": "Cost of revenue"},
+            {"do": "add", "text": "Shares, basic"},
+            {"do": "drop", "pick": REVENUE},
+            {"do": "drop", "pick": GROSS | {"slot": 1}},
+            {"do": "drop", "pick": EPS | {"slot": 2}},
+            {"do": "drop", "pick": COST | {"slot": 3}},
+        ],
+        CHARTED,
+    )
+    assert [len(step["picks"]) for step in trace] == [1, 2, 3, 4, 4, 3, 2, 1, 1]
+    assert trace[4]["picks"] == four
+    assert trace[-1]["picks"] == [COST | {"slot": 0}]
+
+
+def test_a_line_keeps_its_colour_while_another_leaves() -> None:
+    """A line keeps its slot until it leaves the chart: taking one off repaints none of the
+    others, and the next line added takes the lowest slot free. The one line left takes slot 0.
+    The labels' x takes a line off, down to one line, which stays."""
+    three = [REVENUE, GROSS | {"slot": 1}, EPS | {"slot": 2}]
+    left = _tab("drop", three, GROSS | {"slot": 1})
+    assert left == [REVENUE, EPS | {"slot": 2}]
+    assert _tab("toggle", left, COST) == [REVENUE, EPS | {"slot": 2}, COST | {"slot": 1}]
+    assert _tab("toggle", three, GROSS) == left
+    assert _tab("drop", left, REVENUE) == [EPS | {"slot": 0}]
+    assert _tab("drop", three, SHARES | {"slot": 3}) == three  # a line not on the chart
+
+    trace = _drive(
+        None,
+        [
+            {"do": "mount", "answer": ANSWER},
+            {"do": "add", "text": "Gross profit"},
+            {"do": "add", "text": "EPS"},
+            {"do": "add", "text": "Cost of revenue"},
+            {"do": "drop", "pick": GROSS | {"slot": 1}},
+            {"do": "add", "text": "Shares, basic"},
+            {"do": "drop", "pick": REVENUE},
+            {"do": "drop", "pick": EPS | {"slot": 2}},
+            {"do": "drop", "pick": SHARES | {"slot": 1}},
+            {"do": "drop", "pick": COST | {"slot": 0}},
+        ],
+        CHARTED,
+    )
+    assert [step["threw"] for step in trace] == [False] * 10
+    assert [[p["slot"] for p in step["picks"]] for step in trace] == [
+        [0],
+        [0, 1],
+        [0, 1, 2],
+        [0, 1, 2, 3],
+        [0, 2, 3],
+        [0, 2, 3, 1],
+        [2, 3, 1],
+        [3, 1],
+        [0],
+        [0],
+    ]
+    assert trace[4]["picks"] == [REVENUE, EPS | {"slot": 2}, COST | {"slot": 3}]
+    assert trace[-1]["picks"] == [COST | {"slot": 0}]
+
+
+def test_the_picks_stay_across_sub_tabs_and_go_with_the_company() -> None:
+    """The lines on the chart stay as the reader changes sub-tab and period, so a statement's
+    line and a ratio stand together; another company's answer, a new tab keyed on its symbol,
+    opens on its Revenue alone."""
+    trace = _drive(
+        None,
+        [
+            {"do": "mount", "answer": ANSWER},
+            {"do": "add", "text": "Gross profit"},
+            _press("app-fin__tab", "Ratios"),
+            {"do": "add", "text": "Gross"},
+            _press("app-fin__tab", "Income statement"),
+            _press("app-fin__period", "Quarterly"),
+            _press("app-fin__tab", "Segments"),
+            {"do": "mount", "answer": ANSWER | {"symbol": "BETA"}},
+        ],
+        CHARTED,
+    )
+    held = [REVENUE, GROSS | {"slot": 1}, MARGIN | {"slot": 2}]
+    assert [step["picks"] for step in trace] == [
+        [REVENUE],
+        held[:2],
+        held[:2],
+        held,
+        held,
+        held,
+        held,
+        [REVENUE],
+    ]
+    assert [step["on"] for step in trace] == [
+        ["Revenue"],
+        ["Revenue", "Gross profit"],
+        [],
+        ["Gross"],
+        ["Revenue", "Gross profit"],
+        ["Revenue"],
+        [],
+        [],  # BETA's tab opens on the sub-tab kept, Segments, its Revenue on the chart
+    ]
+    drawn = node("companyPage.draw.financials", [ANSWER | {"symbol": "BETA"}], *SCRIPTS)
+    assert drawn["props"]["key"] == "BETA"
+
+
+def test_a_row_on_the_chart_shows_its_colour() -> None:
+    """A row on the chart carries its slot's class, which gives it its line's colour: its button
+    pressed, holding the line's swatch, a square for bars and a round dot for a line, with no
+    words; a row off the chart reads +. A section head has no button. The CSS gives each of the
+    four slots its series colour, chart-1 to chart-4, which the row's 2px bar and the swatch
+    wear, and no colour of its own; no text wears one."""
+    picks = [REVENUE, EPS | {"slot": 2}, MARGIN | {"slot": 3}]
+    tree = _tab("block", ANSWER, VIEW, picks, None)
+    rows = {_words(_typed(r, "th")[0]): r for r in _typed(tree, "tr")[1:]}
+    assert _classes(rows["Revenue"]) == {"is-total", "is-on", "is-s0"}
+    assert _classes(rows["EPS"]) == {"is-on", "is-s2"}
+    adds = _adds(tree)
+    for name in ("Revenue", "EPS"):
+        assert adds[name]["text"] == ""
+        assert adds[name]["pressed"] == "true"
+        assert adds[name]["swatch"] == {"app-fin__swatch"}
+    assert adds["Gross profit"]["text"] == "+"
+    assert adds["Gross profit"]["pressed"] == "false"
+    assert (adds["Gross profit"]["label"], adds["Gross profit"]["title"]) == (ADD, ADD)
+    assert adds["Gross profit"]["swatch"] is None
+    ratios = _tab("block", ANSWER, VIEW | {"kind": "ratios"}, picks, None)
+    assert _adds(ratios)["Gross"]["swatch"] == {"app-fin__swatch", "app-fin__swatch--round"}
+    assert [_classes(r) for r in _typed(ratios, "tr") if "is-on" in _classes(r)] == [
+        {"is-on", "is-s3"}
+    ]
+    for head in classed(ratios, "is-head"):
+        assert classed(head, "app-fin__add") == []
+    [name] = _typed(rows["Revenue"], "th")
+    assert _button(name["props"]["children"][0])  # the button before the name
+
+    css = _rules(_static_file("index.html"))
+    for slot in range(4):
+        assert css[f".app-fin .is-s{slot}"] == f"--fin-series: var(--chart-{slot + 1});"
+    assert "background: var(--fin-series);" in css[".app-fin__swatch, .app-fin__key"]
+    assert "border-radius: 50%;" in css[".app-fin__swatch--round, .app-fin__key--round"]
+    assert "opacity: 0.35;" in css[".app-fin__add:disabled"]
+    painted = " ".join(css.values())
+    assert not re.search(r"(?<![-\w])color: var\(--(fin-series|chart-)", painted)  # no text
+    assert re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", painted) == []
 
 
 # -------------------------------------------------------------------------------- the layout

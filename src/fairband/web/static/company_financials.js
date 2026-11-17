@@ -15,10 +15,17 @@
    millions or billions, never computed.
 
    The lines on the chart (7.4): a pick is {kind, table, key, slot}, a line known by its sub-tab,
-   its table (null, or product or region on Segments) and its key, with its colour slot. A press
-   on a row, a click or Enter or Space while it has the focus, charts its line alone; a row on the
-   chart is marked. A section head takes no press. The tab opens on its company's Revenue alone
-   (first), and on no line where it has none, when its chart's place stays empty.
+   its table (null, or product or region on Segments) and its key, with its colour slot, 0 to 3,
+   which the page's CSS paints chart-1 to chart-4. A press on a row, a click or Enter or Space
+   while it has the focus, charts its line alone. A press on its button, + while its line is off
+   the chart and the line's swatch while it is on it, adds the line at the lowest slot free or
+   takes it off (toggle); the press is the button's alone, and the row takes no key that comes
+   from it. A label's x on the chart takes its line off too (drop). The chart holds MAX lines,
+   four: at four every other row's + is disabled. A line keeps its slot while it stays on the
+   chart; the last line cannot be taken off, and the one line left takes slot 0. A row on the
+   chart is marked with its slot. A section head takes no press and has no button. The tab opens
+   on its company's Revenue alone (first), and on no line where it has none, when its chart's
+   place stays empty.
 
    The state: the sub-tab and the period are kept in this script while the app is open, from one
    company to the next; the unit is kept in the browser's localStorage under
@@ -49,6 +56,11 @@
   var UNIT_KEY = 'fairband.financials.unit';
   var PICK = 'press a line to chart it alone, or its + to add it to the chart';
   var DASH = '—';
+  var MAX = 4; /* the lines the chart holds, each in a colour of its own */
+  var ADD = 'Add to the chart';
+  var TAKE = 'Take off the chart';
+  var FULL = 'The chart holds 4 lines. Take one off first.';
+  var BARS = { money: true, perShare: true, shares: true }; /* the units drawn as bars */
 
   /* The sub-tab and the period a tab opens on: the last the reader chose while the app is open. */
   var kept = { kind: 'income', period: 'annual' };
@@ -113,6 +125,36 @@
       return pick.kind === line.kind && pick.table === line.table && pick.key === line.key;
     })[0] || null;
   }
+
+  /* The lowest colour slot, of 0 to MAX - 1, that none of `picks` holds. */
+  function free(picks) {
+    var held = picks.map(function (pick) { return pick.slot; });
+    var slot = 0;
+    while (held.indexOf(slot) >= 0) slot += 1;
+    return slot;
+  }
+
+  /* The picks with the line `line` added after them at the lowest slot free, or taken off where
+     it is on the chart (drop); `picks` as they are where the chart holds MAX lines already. */
+  function toggle(picks, line) {
+    var pick = picked(picks, line);
+    if (pick) return drop(picks, pick);
+    if (picks.length >= MAX) return picks;
+    return picks.concat([Object.assign({}, line, { slot: free(picks) })]);
+  }
+
+  /* The picks with the line of `pick` taken off: the others keep their slots, and the one line
+     left takes slot 0; `picks` as they are where it is the only line or not on the chart. */
+  function drop(picks, pick) {
+    var gone = picked(picks, pick);
+    if (!gone || picks.length < 2) return picks;
+    var left = picks.filter(function (p) { return p !== gone; });
+    return left.length === 1 ? alone(left[0]) : left;
+  }
+
+  /* The form of a line in `unit` on the chart: bars for an amount, a per-share figure and a
+     share count; a line for every other unit, a percent, a multiple, a ratio or days. */
+  function form(unit) { return BARS[unit] ? 'bars' : 'line'; }
 
   /* ---------------------------------------------------------------------- words and figures */
 
@@ -206,7 +248,8 @@
      holds the chart (company_financials_chart.js) where a line is picked and that script is
      loaded, else nothing. `on.view(change)` is called with the change a control asks for
      ({kind: 'ratios'}, {scale: 'b'}, {period: 'quarter'}), `on.picks(next)` with the picks a
-     row's press asks for; neither is called while the block draws. */
+     row's press, its button's or a label's x on the chart asks for; neither is called while the
+     block draws. */
   function block(answer, view, picks, on) {
     var found = tables(answer, view.kind, view.period);
     var unit = caption(view.kind, answer.currency, view.scale);
@@ -215,7 +258,8 @@
     return h('section', { className: 'app-company__panel app-fin', 'aria-label': 'Financials' },
       controls(answer.cadence, view, on),
       h('div', { className: 'app-fin__chart' }, picks.length && chart ? h(chart.view, {
-        answer: answer, picks: picks, period: view.period, scale: view.scale
+        answer: answer, picks: picks, period: view.period, scale: view.scale,
+        onDrop: function (pick) { on.picks(drop(picks, pick)); }
       }) : null),
       h('div', { className: 'app-fin__notes' },
         h('p', { className: 'caption app-fin__note' }, note(view.kind, view.period,
@@ -267,10 +311,10 @@
   }
 
   /* A table of periods, the table `where`, {kind, table}, of its sub-tab: its head, the `unit`
-     caption over the lines' names, then a column's head a period; then a row a line, its name,
-     then its figures in `scale`, a dash in ink-faint; a section head one cell across every
-     column, with no figure and no press. A line's row takes the focus and a press (line); one
-     on the chart, among `picks`, is marked with its slot. */
+     caption over the lines' names, then a column's head a period; then a row a line, its button
+     and its name, then its figures in `scale`, a dash in ink-faint; a section head one cell
+     across every column, with no figure, no button and no press. A line's row takes the focus
+     and a press (line); one on the chart, among `picks`, is marked with its slot. */
   function sheet(table, unit, currency, scale, where, picks, on) {
     var dp = digits(table);
     var across = table.columns.length + 1;
@@ -289,10 +333,12 @@
             h('th', { colSpan: across, className: 'label' }, h('span', null, row.label)));
         }
         var line = { kind: where.kind, table: where.table, key: row.key };
-        var own = press(line, picked(picks, line), KINDS[row.kind], on);
+        var pick = picked(picks, line);
+        var own = press(line, pick, KINDS[row.kind], on);
         own.key = i;
         return h('tr', own,
-          h('th', { scope: 'row', className: 'body' }, row.label),
+          h('th', { scope: 'row', className: 'body' }, add(line, pick, row.unit, picks, on),
+            row.label),
           row.values.map(function (value, j) {
             var text = figure(row, value, scale, dp);
             return h('td', { key: j, className: 'figure' + (text === DASH ? ' is-nil' : '') },
@@ -302,8 +348,9 @@
   }
 
   /* A line's row's own props: its class, `kind`'s with is-on and its slot's where `pick`, the
-     line's on the chart, is one; its focus; and its press, a click or Enter or Space, which
-     calls `on.picks` with the line `line` alone. */
+     line's on the chart, is one; its focus; and its press, a click or Enter or Space while the
+     row itself has the focus, not its button, which calls `on.picks` with the line `line`
+     alone. */
   function press(line, pick, kind, on) {
     var names = [kind, pick ? 'is-on is-s' + pick.slot : null].filter(Boolean).join(' ');
     function pressed() { on.picks(alone(line)); }
@@ -311,11 +358,31 @@
       className: names || undefined, tabIndex: 0, 'aria-selected': pick ? 'true' : 'false',
       onClick: pressed,
       onKeyDown: function (event) {
+        if (event.target !== event.currentTarget) return; /* the button's key, its own click */
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         pressed();
       }
     };
+  }
+
+  /* A line's row's button: while the line `line` is off the chart, + that adds it, disabled
+     with the words why while the chart holds MAX lines; while it is on it, `pick`, the swatch of
+     its colour, a square for bars and a round dot for a line in `unit`, that takes it off
+     (toggle, which keeps the last line). Its click goes no further, so the row's own press, which
+     charts the line alone, does not follow it. */
+  function add(line, pick, unit, picks, on) {
+    var full = !pick && picks.length >= MAX;
+    return h('button', {
+      type: 'button', className: 'app-fin__add', 'aria-pressed': pick ? 'true' : 'false',
+      'aria-label': pick ? TAKE : ADD, title: pick ? TAKE : full ? FULL : ADD, disabled: full,
+      onClick: function (event) {
+        event.stopPropagation();
+        on.picks(toggle(picks, line));
+      }
+    }, pick ? h('span', {
+      className: 'app-fin__swatch' + (form(unit) === 'line' ? ' app-fin__swatch--round' : '')
+    }) : '+');
   }
 
   /* The tab: the block of `props.answer`, keeping its view, which opens at the sub-tab and the
@@ -346,9 +413,10 @@
 
   /* What the page and the tests use. */
   P.companyFinancials = {
-    SUBTABS: SUBTABS, yearly: yearly, step: step, tables: tables, first: first, alone: alone,
-    digits: digits, figure: figure, caption: caption, note: note, head: head,
-    storedScale: storedScale, keepScale: keepScale, block: block, Financials: Financials
+    SUBTABS: SUBTABS, MAX: MAX, yearly: yearly, step: step, tables: tables, first: first,
+    alone: alone, picked: picked, toggle: toggle, drop: drop, form: form, digits: digits,
+    figure: figure, caption: caption, note: note, head: head, storedScale: storedScale,
+    keepScale: keepScale, block: block, Financials: Financials
   };
   C.draw.financials = financials;
 })();

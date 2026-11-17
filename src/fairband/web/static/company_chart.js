@@ -15,7 +15,8 @@
    sentence in the plot's place. A row with no close is left out of the line and one with no
    volume draws no bar; a flat or single close's scale is widened by a step, so nothing divides
    by zero. The pieces are pure functions of the rows and the width, on
-   FairbandPage.companyChart for the Overview and for the tests, which read them in node; Chart
+   FairbandPage.companyChart for the Overview, for the Financials tab's chart, which borrows the
+   steps, the keys and the ticks' figures, and for the tests, which read them in node; Chart
    keeps the range, the day picked and the width it measures. */
 (function () {
   'use strict';
@@ -414,6 +415,7 @@
   /* What the Overview and the tests use. */
   P.companyChart = {
     RANGES: RANGES, inRange: inRange, change: change, lead: lead, niceStep: niceStep,
-    xTicks: xTicks, geometry: geometry, nearest: nearest, keyed: keyed, block: block, Chart: Chart
+    decimals: decimals, bare: bare, xTicks: xTicks, geometry: geometry, nearest: nearest,
+    keyed: keyed, block: block, Chart: Chart
   };
 })();

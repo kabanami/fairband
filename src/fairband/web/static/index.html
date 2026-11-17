@@ -901,10 +901,10 @@
   .app-fin__none { margin: var(--space-2) 0 0; color: var(--ink-faint); }
   /* A line's row takes a press (7.3 and 7.4): the pointer's hand; a section head none. A row on
      the chart on surface-selected, its name in ink, with a 2px bar of its line's colour at its
-     left edge. A line's colour is its slot's: is-s0 sets chart-1 as the series colour its row
-     and its marks wear. The focus ringed by the row's own cells, since the names' sticky column
-     would cover a ring on the row; on a row on the chart the ring's left edge takes the bar's
-     place while it has the focus. */
+     left edge. A line's colour is its slot's: is-s0 to is-s3 set chart-1 to chart-4 as the
+     series colour its row, its swatches, its label and its marks wear, never its text. The focus
+     ringed by the row's own cells, since the names' sticky column would cover a ring on the row;
+     on a row on the chart the ring's left edge takes the bar's place while it has the focus. */
   .app-fin__table tbody tr { cursor: pointer; }
   .app-fin__table tbody tr.is-head { cursor: default; }
   .app-fin__table tbody tr.is-on th, .app-fin__table tbody tr.is-on td {
@@ -914,6 +914,30 @@
     color: var(--ink); box-shadow: inset 2px 0 0 var(--fin-series);
   }
   .app-fin .is-s0 { --fin-series: var(--chart-1); }
+  .app-fin .is-s1 { --fin-series: var(--chart-2); }
+  .app-fin .is-s2 { --fin-series: var(--chart-3); }
+  .app-fin .is-s3 { --fin-series: var(--chart-4); }
+  /* A row's button before its name (7.3): + in ink-faint while its line is off the chart, the
+     line's swatch while it is on it, framed under the pointer and ringed with the focus; faded
+     where the chart holds four lines. A swatch, in a row's button, a label or the box, is 10px,
+     a square for bars and a round dot for a line, in its line's colour. */
+  .app-fin__add {
+    appearance: none; display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; margin: -1px var(--space-1) -1px calc(-1 * var(--space-1));
+    padding: 0; vertical-align: middle; font-family: var(--font-mono); font-size: 13px;
+    line-height: 1; color: var(--ink-faint); background: none; border: 1px solid transparent;
+    border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .app-fin__table tbody tr:hover .app-fin__add:not(:disabled), .app-fin__add:focus-visible {
+    color: var(--ink); border-color: var(--border);
+  }
+  .app-fin__add:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .app-fin__add:disabled { opacity: 0.35; cursor: not-allowed; }
+  .app-fin__swatch, .app-fin__key {
+    display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 2px;
+    background: var(--fin-series);
+  }
+  .app-fin__swatch--round, .app-fin__key--round { border-radius: 50%; }
   .app-fin__table tbody tr:focus-visible { outline: none; }
   .app-fin__table tbody tr:focus-visible > th, .app-fin__table tbody tr:focus-visible > td {
     box-shadow: inset 0 2px 0 var(--focus-ring), inset 0 -2px 0 var(--focus-ring);
@@ -965,6 +989,36 @@
     border-radius: var(--radius-md); box-shadow: var(--shadow-popover); white-space: nowrap;
     pointer-events: none;
   }
+  /* The chart of several lines (7.5), as the mockup draws it: the labels on one line that wraps,
+     each on surface in a hairline frame, in ink, its x in ink-faint, framed under the pointer and
+     ringed with the focus; a label that is off in ink-faint, its swatch faded. Each plot's unit
+     at its top left in the sans face. Where no line draws, the sentence in ink-faint. The box of
+     several beside the period, under its top: the period in ink-muted, then a row a line, its
+     swatch, its name and its figure at the right. */
+  .app-fin__legend {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-2); padding: 0;
+    list-style: none;
+  }
+  .app-fin__label {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 22px;
+    padding: 2px 2px 2px var(--space-2); color: var(--ink); background: var(--surface);
+    border: 1px solid var(--hairline); border-radius: var(--radius-md);
+  }
+  .app-fin__label.is-off { color: var(--ink-faint); }
+  .app-fin__label.is-off .app-fin__key { opacity: 0.4; }
+  .app-fin__x {
+    appearance: none; width: 22px; height: 22px; margin: 0; padding: 0; font: inherit;
+    font-size: 15px; line-height: 1; color: var(--ink-faint); background: none; border: 0;
+    border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .app-fin__x:hover { color: var(--ink); background: var(--surface-hover); }
+  .app-fin__x:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .app-fin__plot .app-fin__measure { font-family: var(--font-sans); }
+  .app-fin__blank { margin: var(--space-3) 0 0; color: var(--ink-faint); }
+  .app-fin__tip--rows { transform: none; }
+  .app-fin__tipwhen { color: var(--ink-muted); }
+  .app-fin__tiprow { display: flex; align-items: center; gap: 6px; }
+  .app-fin__tiprow .figure-sm { margin-left: auto; padding-left: var(--space-3); }
   @media (width < 700px) {
     .app-fin__table th:first-child, .app-fin__table td:first-child {
       min-width: 168px; white-space: normal;

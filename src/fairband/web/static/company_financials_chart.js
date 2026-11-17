@@ -1,35 +1,50 @@
-/* The Financials tab's chart (the Financials tab's design, 7.4, 7.5, 7.7 and 7.9), loaded after
+/* The Financials tab's chart (the Financials tab's design, 7.4 to 7.7 and 7.9), loaded after
    company_financials.js, whose tab draws it in its chart's place, above the captions, with the
-   lines the reader picked at the tab's period and unit. Each pick is a series of its line's table
-   at the period. A line by fiscal year only, a segment or a ratio, is off by quarter, and so is a
-   statement's line the quarterly table lacks: an off line draws nothing, and where no line draws
-   the chart's place is empty. The chart stands on the union of the drawn lines' periods, known by
-   their labels, in order of the day each ends, so a line with no figure for a period draws no
-   mark there.
+   lines the reader picked, up to four, at the tab's period and unit. Each pick is a series of its
+   line's table at the period. A line by fiscal year only, a segment or a ratio, is off by
+   quarter, and so is a statement's line the quarterly table lacks: an off line draws nothing.
+   The chart stands on the union of the drawn lines' periods, known by their labels, in order of
+   the day each ends, so a line with no figure for a period draws no mark there.
 
    The head of one line: its name, its newest figure in figure-lg as its table writes it, then the
-   newest period and the plot's unit in words. One plot, 160px high: an amount, a per-share
-   figure or a share count as bars from a zero baseline, one a period, at most 44px wide and 72% of
-   the period's width, rounded 4px at the data end and square at the baseline, a lone line's
-   figure below zero in chart-neg-3; any other unit as a 2px line on a scale that fits its
-   figures, broken at a gap, a lone figure between gaps a dot, its newest point an end marker 10px
-   across ringed in surface-raised. A figure draws no mark where its table writes a dash (none, or
-   an amount, a share count or a multiple of exactly 0), where it is a bar of 0, or where it is an
-   amount or a per-share figure in another currency than the tab's; no scale is built from such a
-   figure. The scale in four clean steps, widened by a step where it would be flat; the ticks bare
-   and compact at its right, monospaced in ink-faint; the zero line in border, the others in
-   chart-grid, solid. The periods' labels stand under the plot, every second or every third left
-   out, from the newest back, where they would touch.
+   newest period and the plot's unit in words; of one line that is off, its name and why. The head
+   of several: a label a line, drawn or off, in their order, each its swatch, a square for bars
+   and a round dot for a line, its name, its figure at the newest period or, faded, why it is off,
+   and a x that takes it off; then the newest period. The labels are the chart's legend. Where no
+   line draws, the plot's place holds the sentence that says so.
 
-   The pointer over the plot, or the arrow keys, Home and End while it has the focus, pick a
-   period (company_chart.js's keyed): a box over its mark with the period and the figure, the code
-   before a figure in another currency, and the other bars faded; on a line a crosshair and a
-   marker on its point. Escape, the pointer leaving and a loss of focus clear it. Nothing animates
-   and no table twins the chart. A mark carries its line's colour slot as a class, is-s0 for a
-   lone line, which the page's CSS paints; no text wears a series colour. The pieces are pure
-   functions of the answer, the picks, the period, the unit and the width, on
-   FairbandPage.companyFinancialsChart for the tab and the tests, which read them in node; view,
-   the component, keeps the period picked and the width it measures. */
+   The lines of one unit share a plot and its scale; each other unit takes a plot of its own under
+   it, in the order the units were first picked, 160px high alone, 120px each of two, 100px each
+   of three and 90px each of four; with several lines each plot states its unit at its top left.
+   The periods' labels stand once, under the last plot, every second or every third left out,
+   from the newest back, where they would touch. An amount, a per-share figure or a share count is
+   bars from a zero baseline: one line's at most 44px wide and 72% of the period's width, two to
+   four lines' side by side in their order, each at most 28px and 2px apart, together within 72%
+   of the period's width; rounded 4px at the data end and square at the baseline; a lone line's
+   figure below zero in chart-neg-3, and with several every bar in its line's colour. Any other
+   unit is a 2px line on a scale that fits its figures, broken at a gap, a lone figure between
+   gaps a dot, its newest point an end marker 10px across ringed in surface-raised. A figure draws
+   no mark where its table writes a dash (none, or an amount, a share count or a multiple of
+   exactly 0), where it is a bar of 0, or where it is an amount or a per-share figure in another
+   currency than the tab's; no scale is built from such a figure, and a plot with no figure draws
+   its frame, its baseline. A plot's scale in four clean steps, three under 150px, widened by a
+   step where it would be flat; the ticks bare and compact at its right (company_chart.js's
+   steps and figures), monospaced in ink-faint; the zero line in border, the others in
+   chart-grid, solid.
+
+   The pointer over the plots, or the arrow keys, Home and End while they have the focus, pick a
+   period (company_chart.js's keyed). One line drawn: a box over its mark with the period and the
+   figure. Several: a box beside the period, on the side with room, with the period, then a row a
+   line drawn, its swatch, its name and its figure. A figure in another currency is led by its
+   code. The other periods' bars fade; where a line plot is drawn a crosshair runs through every
+   plot and each line's point takes a marker. Escape, the pointer leaving and a loss of focus
+   clear it. Nothing animates and no table twins the chart. A mark, a label and a box's row carry
+   their line's colour slot as a class, is-s0 to is-s3, which the page's CSS paints chart-1 to
+   chart-4; no text wears a series colour. The pieces are pure functions of the answer, the
+   picks, the period, the unit and the width, on FairbandPage.companyFinancialsChart for the tab
+   and the tests, which read them in node; view, the component, keeps the period picked and the
+   width it measures, and puts the focus on the next label's x, or on the plot, after a x takes
+   its line off. */
 (function () {
   'use strict';
 
@@ -38,29 +53,36 @@
   var F = P.companyFinancials;
   var K = P.companyChart;
 
-  /* The plot's frame, as the mockup draws it: the width drawn at before one is measured and the
-     least it is drawn at; the left margin; the right margin, the ticks' room; the room above the
-     plot, the plot's height, and the room under it for the periods' labels. */
+  /* The chart's frame, as the mockup draws it: the width drawn at before one is measured and the
+     least it is drawn at; the left margin; the right margin, the ticks' room; the room above a
+     plot, for its unit's words; a plot's height by the number of plots; the room under a plot
+     over the next one's; and the room under the last plot for the periods' labels. */
   var WIDTH = 900;
   var LEAST = 280;
   var LEFT = 6;
   var RIGHT = 58;
   var TOP = 18;
-  var PLOT = 160;
+  var HEIGHTS = [160, 120, 100, 90];
+  var BETWEEN = 8;
   var BOTTOM = 22;
   var BAR_MAX = 44; /* a lone line's bar, at most */
+  var BAR_SOME = 28; /* a bar among several of a period, at most */
+  var GAP = 2; /* between the bars of a period */
   var BAR_SHARE = 0.72; /* of its period's width, at most */
   var RADIUS = 4; /* a bar's corners at its data end */
   var CHAR = 6.6; /* a monospaced 11px character's width, near enough to keep labels apart */
   var TIP_CHAR = 7.2; /* a monospaced 12px character's, the box's figure-sm */
+  var NAME_CHAR = 7; /* an 11px character's of a line's name in the box, at the widest */
+  var TIP_ROOM = 46; /* a box's row beyond its words: its swatch, its gaps, padding and border */
   var DASH = '—';
-  var BARS = { money: true, perShare: true, shares: true };
   var OWN = { money: true, perShare: true }; /* the units in the tab's currency */
-  var NIL = { money: true, shares: true, multiple: true }; /* the units a dash at exactly 0 */
   var WORDS = { percent: 'percent', multiple: 'multiple', ratio: 'ratio', days: 'days' };
   var COMPACT = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K'], [1, '']];
   var KEYS = { ArrowLeft: true, ArrowRight: true, Home: true, End: true };
   var READ = 'The left and right arrow keys read each period.';
+  var TAKE = 'Take off the chart';
+  var NONE = 'These lines have figures by fiscal year only. Choose Annual, or press a line in ' +
+    'the table.';
 
   function ok(v) { return typeof v === 'number' && isFinite(v); }
 
@@ -83,13 +105,14 @@
 
   /* The series of `picks` at `period`, 'annual' or 'quarter', one a pick in their order, each
      {pick, slot, name, unit, form, off, columns, at, digits}: its name on the chart and its unit,
-     its form by its unit, bars for money, per share and a share count and a line for the rest;
-     why it is off, null where it draws: by year only for a segment or a ratio by quarter, no
-     figures by quarter for a statement's line the quarterly table lacks, both read by fiscal
-     year; its table's columns; `at`, each column's label to {value, currency}, its figure and the
-     column's currency; its table's decimals (companyFinancials.digits). A statement's line its
-     annual table lacks, which its quarterly one holds, stands on the annual columns with no
-     figure; a pick no table holds has no series. */
+     its form by its unit (companyFinancials.form), bars for money, per share and a share count
+     and a line for the rest; why it is off, null where it draws: by year only for a segment or a
+     ratio by quarter, no figures by quarter for a statement's line the quarterly table lacks,
+     both read by fiscal year; its table's columns; `at`, each column's label to {value,
+     currency}, its figure and the column's currency; its table's decimals
+     (companyFinancials.digits). A statement's line its annual table lacks, which its quarterly
+     one holds, stands on the annual columns with no figure; a pick no table holds has no
+     series. */
   function series(answer, picks, period) {
     var out = [];
     picks.forEach(function (pick) {
@@ -111,7 +134,7 @@
       }
       out.push({
         pick: pick, slot: pick.slot, name: named.row.name, unit: named.row.unit,
-        form: BARS[named.row.unit] ? 'bars' : 'line', off: off, columns: table.columns, at: at,
+        form: F.form(named.row.unit), off: off, columns: table.columns, at: at,
         digits: F.digits(table)
       });
     });
@@ -147,10 +170,11 @@
 
   /* --------------------------------------------------------------------------- the figures */
 
-  /* True where `cell`, {value, currency}, of a line in `unit` holds a figure: a number its table
-     does not write as a dash. */
-  function figured(cell, unit) {
-    return !!cell && ok(cell.value) && !(cell.value === 0 && NIL[unit]);
+  /* True where `cell`, {value, currency}, of the series `s` holds a figure: one its table does
+     not write as a dash (companyFinancials.figure: none, or an amount, a share count or a
+     multiple of exactly 0). */
+  function figured(cell, s) {
+    return !!cell && F.figure({ unit: s.unit, key: s.pick.key }, cell.value, 'm', 0) !== DASH;
   }
 
   /* True where `code`, a column's currency, is not the tab's `currency` for a line in `unit`, an
@@ -163,7 +187,7 @@
   /* True where the cell `cell` of the series `s` draws a mark in a tab in `currency`: a figure,
      in the tab's currency where its unit is, and not a bar of 0. */
   function marked(cell, s, currency) {
-    return figured(cell, s.unit) && !foreign(s.unit, cell.currency, currency) &&
+    return figured(cell, s) && !foreign(s.unit, cell.currency, currency) &&
       !(s.form === 'bars' && cell.value === 0);
   }
 
@@ -171,7 +195,7 @@
      code and a space before a figure in another currency than the tab's `currency`; a dash for
      no figure. */
   function said(s, cell, scale, currency) {
-    if (!figured(cell, s.unit)) return DASH;
+    if (!figured(cell, s)) return DASH;
     var text = F.figure({ unit: s.unit, key: s.pick.key }, cell.value, scale, s.digits);
     return foreign(s.unit, cell.currency, currency) ? cell.currency + ' ' + text : text;
   }
@@ -196,20 +220,11 @@
     return { step: step, from: from, to: to };
   }
 
-  /* The decimals a tick at `step` needs to differ from its neighbours: none from 1 up. */
-  function decimals(step) { return step >= 1 ? 0 : Math.ceil(-Math.log10(step) - 1e-9); }
-
-  /* A figure as an axis writes it, bare: to `dp` decimals with no thousands separator, and a
-     minus, U+2212, where it is below zero at that precision. */
-  function bare(v, dp) {
-    var text = Math.abs(v).toFixed(dp);
-    return v < 0 && /[1-9]/.test(text) ? '−' + text : text;
-  }
-
   /* The ticks' texts of a plot in `unit` on the scale `sc`, from its foot up, bare and compact:
      an amount or a share count in thousands, millions, billions or trillions by the plot's
      largest tick (0B, 200B; 0M, 50M), a percent with %, a multiple with x, a per-share figure, a
-     plain ratio and days as plain numbers, each to the decimals its step needs. */
+     plain ratio and days as plain numbers, each to the decimals its step needs
+     (companyChart.decimals and bare). */
   function tickTexts(unit, sc) {
     var size = Math.max(Math.abs(sc.from), Math.abs(sc.to)) * sc.step;
     var by = 1;
@@ -224,9 +239,9 @@
     } else if (unit === 'multiple') {
       after = 'x';
     }
-    var dp = decimals(sc.step * by);
+    var dp = K.decimals(sc.step * by);
     var out = [];
-    for (var k = sc.from; k <= sc.to; k++) out.push(bare(k * sc.step * by, dp) + after);
+    for (var k = sc.from; k <= sc.to; k++) out.push(K.bare(k * sc.step * by, dp) + after);
     return out;
   }
 
@@ -247,13 +262,15 @@
     };
   }
 
-  /* The plot of the series `lines`, of one unit, each with its cells a period, on the periods at
-     `xs`, each `band` wide, its top at `top` and `height` high, in a tab in `currency`, `lone`
-     where one line is drawn: its unit, its form, its top and its height; its ticks from its foot
-     up, each its y, its text and whether it is the zero line, its frame its baseline alone where
-     it has no figure to scale; the y of its baseline, or of its scale's end nearer zero; and its
-     series, each with its bars, or its line's path, its lone figures' dots and its end marker,
-     and each period's mark's top, null where it draws none. */
+  /* The plot of the series `lines`, of one unit, in their order, each with its cells a period, on
+     the periods at `xs`, each `band` wide, its top at `top` and `height` high, in a tab in
+     `currency`, `lone` where one line is drawn on the chart: its unit, its form, its top and its
+     height; its ticks from its foot up, in four steps from 150px high and three under it, each
+     its y, its text and whether it is the zero line, its frame its baseline alone where it has no
+     figure to scale; the y of its baseline, or of its scale's end nearer zero; and its series,
+     each with its bars, a period's bars side by side about its middle in the lines' order, or its
+     line's path, its lone figures' dots and its end marker, and each period's mark's top, null
+     where it draws none. */
   function plotOf(lines, xs, band, top, height, currency, lone) {
     var form = lines[0].form;
     var values = [];
@@ -274,8 +291,11 @@
         });
       }
     }
-    var width = Math.min(band * BAR_SHARE, BAR_MAX);
-    var shaped = lines.map(function (s) {
+    var count = lines.length;
+    var width = count === 1 ? Math.min(band * BAR_SHARE, BAR_MAX)
+      : Math.max(1, Math.min(BAR_SOME, (band * BAR_SHARE - GAP * (count - 1)) / count));
+    var group = count * width + GAP * (count - 1);
+    var shaped = lines.map(function (s, q) {
       var bars = [];
       var dots = [];
       var path = '';
@@ -287,7 +307,7 @@
         if (!p) return null;
         if (form === 'bars') {
           var v = s.cells[i].value;
-          var b = bar(xs[i] - width / 2, width, y(0), p.y, v);
+          var b = bar(xs[i] - group / 2 + q * (width + GAP), width, y(0), p.y, v);
           bars.push(Object.assign(b, { i: i, neg: lone && v < 0 }));
           return b.y;
         }
@@ -323,11 +343,13 @@
     return out;
   }
 
-  /* The chart of the series `drawn` at `width` (the width drawn at before one is measured where
-     it is none, and never under the least), in the tab's `currency`, in the svg's units; null
-     where no series draws or they stand on no period. Its width and height, its plot's left edge
-     and width, each period's `band` and x, at the middle of its band; its periods and their
-     labels; and its plots, one here, holding the series. */
+  /* The chart of the series `drawn`, in their order, at `width` (the width drawn at before one is
+     measured where it is none, and never under the least), in the tab's `currency`, in the svg's
+     units; null where no series draws or they stand on no period. Its width and height, its
+     plots' left edge and width, each period's `band` and x, at the middle of its band; its
+     periods and their labels; and its plots, one a unit in the order the units first come, each
+     holding its unit's series, one under the other, of one height by their number, each with
+     its room above it. */
   function geometry(drawn, width, currency) {
     var cols = periods(drawn);
     if (!drawn.length || !cols.length) return null;
@@ -335,15 +357,27 @@
     var plotWidth = W - LEFT - RIGHT;
     var band = plotWidth / cols.length;
     var xs = cols.map(function (c, i) { return LEFT + band * (i + 0.5); });
-    var lines = drawn.map(function (s) {
-      return Object.assign({}, s, {
+    var units = [];
+    var byUnit = Object.create(null);
+    drawn.forEach(function (s) {
+      if (!byUnit[s.unit]) {
+        byUnit[s.unit] = [];
+        units.push(s.unit);
+      }
+      byUnit[s.unit].push(Object.assign({}, s, {
         cells: cols.map(function (c) { return s.at[c.label] || null; })
-      });
+      }));
     });
+    var high = HEIGHTS[Math.min(units.length, HEIGHTS.length) - 1];
+    var plots = units.map(function (unit, k) {
+      return plotOf(byUnit[unit], xs, band, TOP + k * (high + BETWEEN + TOP), high, currency,
+        drawn.length === 1);
+    });
+    var last = plots[plots.length - 1];
     return {
-      width: W, height: TOP + PLOT + BOTTOM, left: LEFT, plotWidth: plotWidth, band: band,
-      currency: currency, periods: cols, xs: xs, labels: labels(cols, xs, band, W),
-      plots: [plotOf(lines, xs, band, TOP, PLOT, currency, drawn.length === 1)]
+      width: W, height: last.top + last.height + BOTTOM, left: LEFT, plotWidth: plotWidth,
+      band: band, currency: currency, periods: cols, xs: xs, labels: labels(cols, xs, band, W),
+      plots: plots
     };
   }
 
@@ -353,23 +387,49 @@
     return Math.max(0, Math.min(g.periods.length - 1, i));
   }
 
-  /* What the hover shows for the period `i` of the chart `g` of one line, in `scale`:
-     {i, x, y, left, text}, the period's label and the line's figure as its table writes it, with
+  /* What the hover shows for the period `i` of the chart `g`, in `scale`; null for no period,
+     one the chart lacks, and a period where no line drawn has a figure. Of one line drawn,
+     {i, x, y, left, text}: the period's label and the line's figure as its table writes it, with
      the code before a figure in another currency; centred on the period's x, kept inside the
      chart (`left`, its left edge, its width reckoned from its text), and standing over `y`, the
      top of its bar, a little over its line's point, or its baseline where the figure draws no
-     mark. Null for no period, one the chart lacks, and a period with no figure. */
+     mark. Of several, {i, x, y, left, right, label, rows}: the period's label, then a row a line
+     drawn, plot by plot, each {slot, form, name, text}, its figure written as one line's; at the
+     first plot's top `y`, beside the period: at its right, its left edge at `left`, where the
+     box's width, reckoned from its words, has room there; else at its left, its right edge
+     `right` from the chart's; else, with room on neither side, against the chart's right edge,
+     never past its left. The other of `left` and `right` is null. */
   function box(g, i, scale) {
     if (!g || !ok(i) || i < 0 || i >= g.periods.length) return null;
-    var p = g.plots[0];
-    var s = p.series[0];
-    if (g.plots.length !== 1 || p.series.length !== 1 || !figured(s.cells[i], s.unit)) {
-      return null;
-    }
+    var all = [];
+    g.plots.forEach(function (p) { all = all.concat(p.series); });
+    if (!all.some(function (s) { return figured(s.cells[i], s); })) return null;
+    if (all.length === 1) return boxOfOne(g, all[0], i, scale);
+    var rows = all.map(function (s) {
+      return {
+        slot: s.slot, form: s.form, name: s.name, text: said(s, s.cells[i], scale, g.currency)
+      };
+    });
+    var wide = TIP_ROOM + Math.max.apply(null, rows.map(function (row) {
+      return row.name.length * NAME_CHAR + row.text.length * TIP_CHAR;
+    }));
+    var x = g.xs[i];
+    var after = x + g.band / 2 + 4;
+    var before = x - g.band / 2 - 4;
+    var left = after + wide <= g.width ? after : before - wide >= 0 ? null
+      : Math.max(0, g.width - wide);
+    return {
+      i: i, x: x, y: g.plots[0].top, left: left, right: left === null ? g.width - before : null,
+      label: g.periods[i].label, rows: rows
+    };
+  }
+
+  /* The box of the period `i` of the one line `s` drawn on the chart `g`, in `scale` (box). */
+  function boxOfOne(g, s, i, scale) {
     var text = g.periods[i].label + ' · ' + said(s, s.cells[i], scale, g.currency);
     var wide = text.length * TIP_CHAR + 18;
     var x = g.xs[i];
-    var y = s.tops[i] === null ? p.base : s.tops[i] - (s.form === 'line' ? 8 : 0);
+    var y = s.tops[i] === null ? g.plots[0].base : s.tops[i] - (s.form === 'line' ? 8 : 0);
     return {
       i: i, x: x, y: y, left: Math.max(0, Math.min(g.width - wide, x - wide / 2)), text: text
     };
@@ -378,23 +438,34 @@
   /* ----------------------------------------------------------------------------- the block */
 
   /* The chart of `picks` on `answer` at `period` in the unit of the amounts `scale`, the period
-     `at` picked (null: none, and so is one the chart lacks), drawn at `width`: its head and its
-     plot; null where no line draws. `on` holds the ref the plot's wrapper takes, `pick(i)`,
-     called with the period the pointer or a key picks, null to clear it, and `drop(pick)`; none
+     `at` picked (null: none, and so is one the chart lacks), drawn at `width`: its head, the one
+     line's (head) or the labels of several (legend), then its plots, or, where no line draws,
+     the sentence in their place; null where no table holds a pick. `on` holds the refs the
+     plots' wrapper and the labels' list take, `pick(i)`, called with the period the pointer or a
+     key picks, null to clear it, and `drop(pick)`, called with the pick whose x is pressed; none
      of them is called while it draws. */
   function block(answer, picks, period, scale, at, width, on) {
-    var drawn = series(answer, picks, period).filter(function (s) { return s.off === null; });
+    var all = series(answer, picks, period);
+    var drawn = all.filter(function (s) { return s.off === null; });
     var g = geometry(drawn, width, answer.currency);
-    if (!g) return null;
-    var picked = ok(at) && at >= 0 && at < g.periods.length ? at : null;
+    if (!all.length || (!g && drawn.length)) return null;
+    var several = all.length > 1;
+    var picked = g && ok(at) && at >= 0 && at < g.periods.length ? at : null;
     return h(React.Fragment, null,
-      head(g, g.plots[0].series[0], scale),
-      plot(g, picked, box(g, picked, scale), scale, on));
+      several ? legend(g, all, scale, answer.currency, on) : head(g, all[0], scale),
+      g ? plot(g, picked, box(g, picked, scale), scale, several, on)
+        : h('p', { className: 'caption app-fin__blank' }, NONE));
   }
 
   /* The head of the chart of one line `s`: its name, its newest figure in figure-lg, at the
-     chart's newest period, and that period and the plot's unit in words. */
+     chart's newest period, and that period and the plot's unit in words; of a line that is off,
+     its name and why. */
   function head(g, s, scale) {
+    if (s.off) {
+      return h('div', { className: 'app-fin__chead' },
+        h('h2', { className: 'heading' }, s.name),
+        h('p', { className: 'caption app-fin__unit' }, s.off));
+    }
     var newest = g.periods[g.periods.length - 1];
     return h('div', { className: 'app-fin__chead' },
       h('h2', { className: 'heading' }, s.name),
@@ -403,11 +474,46 @@
         newest.label + ', ' + unitWords(s.unit, g.currency, scale)));
   }
 
-  /* The plot's wrapper, which takes the focus and the keys, named by what it draws and how the
+  /* The head of the chart `g` of several lines `all`, in a tab in `currency`: a label a line, in
+     their order, drawn or off, each wearing its slot, its swatch, its name, its figure at the
+     chart's newest period as its table writes it, the code before a figure in another currency,
+     or, faded, why it is off, and a x that calls `on.drop` with its pick; then the caption of the
+     newest period, none where no line draws. */
+  function legend(g, all, scale, currency, on) {
+    var newest = g ? g.periods[g.periods.length - 1].label : null;
+    return h('div', { className: 'app-fin__chead' },
+      h('ul', { className: 'app-fin__legend', ref: on ? on.legend : null }, all.map(function (s) {
+        return h('li', {
+          key: s.pick.kind + ' ' + s.pick.table + ' ' + s.pick.key,
+          className: 'control app-fin__label is-s' + s.slot + (s.off ? ' is-off' : '')
+        },
+          swatch(s),
+          h('span', null, s.name),
+          s.off ? h('span', { className: 'caption' }, s.off)
+            : h('span', { className: 'figure-sm' }, said(s, s.at[newest], scale, currency)),
+          h('button', {
+            type: 'button', className: 'app-fin__x', 'aria-label': TAKE, title: TAKE,
+            onClick: function () { on.drop(s.pick); }
+          }, '×'));
+      })),
+      newest ? h('p', { className: 'caption app-fin__unit' }, 'figures for ' + newest) : null);
+  }
+
+  /* The swatch of `s`, a series or a box's row, in the colour of the slot its label or row wears:
+     a square for bars, a round dot for a line. */
+  function swatch(s) {
+    return h('span', {
+      className: 'app-fin__key' + (s.form === 'line' ? ' app-fin__key--round' : '')
+    });
+  }
+
+  /* The plots' wrapper, which takes the focus and the keys, named by what it draws and how the
      keys read it, and holds the svg and, with a period picked that has a figure, its box `tip`.
-     The pointer over the svg picks the period under it, the svg's width scaled to the units it
-     draws in; leaving the svg or the wrapper's focus clears it. */
-  function plot(g, at, tip, scale, on) {
+     The svg holds the plots, each its frame, with its unit in words at its top left where
+     `several` lines are picked, and its marks; the periods' labels under the last; and what the
+     period picked draws over them. The pointer over the svg picks the period under it, the svg's
+     width scaled to the units it draws in; leaving the svg or the wrapper's focus clears it. */
+  function plot(g, at, tip, scale, several, on) {
     var names = [];
     g.plots.forEach(function (p) {
       p.series.forEach(function (s) {
@@ -435,7 +541,8 @@
         onMouseLeave: function () { on.pick(null); }
       },
         g.plots.map(function (p, k) {
-          return h('g', { key: k }, frame(g, p), marks(p, at, !!tip));
+          var words = several ? unitWords(p.unit, g.currency, scale) : null;
+          return h('g', { key: k }, frame(g, p, words), marks(p, at, !!tip));
         }),
         g.labels.map(function (label) {
           return h('text', {
@@ -444,17 +551,39 @@
           }, label.text);
         }),
         over(g, at)),
-      tip ? h('div', {
+      tip && tip.rows ? listed(tip) : null,
+      tip && !tip.rows ? h('div', {
         className: 'figure-sm app-fin__tip',
         style: { left: tip.left + 'px', top: tip.y - 6 + 'px' }
       }, tip.text) : null);
   }
 
-  /* A plot's grid, a line a tick across the plot, the zero line apart, and its ticks' texts at
-     its right. */
-  function frame(g, p) {
+  /* The box of several lines `tip` (box): the period, then a row a line, its swatch, its name
+     and its figure, each row wearing its line's slot. */
+  function listed(tip) {
+    var side = tip.left === null ? { right: tip.right + 'px' } : { left: tip.left + 'px' };
+    return h('div', {
+      className: 'app-fin__tip app-fin__tip--rows',
+      style: Object.assign(side, { top: tip.y + 'px' })
+    },
+      h('div', { className: 'figure-sm app-fin__tipwhen' }, tip.label),
+      tip.rows.map(function (row, k) {
+        return h('div', { key: k, className: 'app-fin__tiprow is-s' + row.slot },
+          swatch(row),
+          h('span', { className: 'caption' }, row.name),
+          h('span', { className: 'figure-sm' }, row.text));
+      }));
+  }
+
+  /* A plot's unit in its `words` at its top left, where there are words; its grid, a line a tick
+     across the plot, the zero line apart; and its ticks' texts at its right. */
+  function frame(g, p, words) {
     var right = g.left + g.plotWidth;
-    return p.ticks.map(function (tick, k) {
+    return [
+      words ? h('text', {
+        key: 'measure', className: 'app-fin__measure', x: g.left, y: p.top - 6
+      }, words) : null
+    ].concat(p.ticks.map(function (tick, k) {
       return h(React.Fragment, { key: 'tick' + k },
         h('line', {
           className: tick.zero ? 'app-fin__zero' : 'app-fin__grid', x1: g.left, x2: right,
@@ -462,7 +591,7 @@
         }),
         tick.text === null ? null
           : h('text', { className: 'app-fin__tick', x: right + 8, y: tick.y + 4 }, tick.text));
-    });
+    }));
   }
 
   /* A plot's marks, each of its series' slot: its bars, faded but the period `at` where `boxed`,
@@ -495,41 +624,58 @@
     });
   }
 
-  /* What the period `at` draws over a line's plot: a crosshair through it and a marker on each
-     line's point there. */
+  /* What the period `at` draws over the plots where one is a line's: a crosshair through it from
+     the first plot's top to the last plot's foot, and a marker on each line's point there. */
   function over(g, at) {
-    if (at === null) return null;
+    var lines = g.plots.filter(function (p) { return p.form === 'line'; });
+    if (at === null || !lines.length) return null;
     var x = g.xs[at];
-    return g.plots.map(function (p, k) {
-      if (p.form !== 'line') return null;
-      return h(React.Fragment, { key: 'over' + k },
-        h('line', { className: 'app-fin__cross', x1: x, x2: x, y1: p.top, y2: p.top + p.height }),
-        p.series.map(function (s, q) {
+    var last = g.plots[g.plots.length - 1];
+    return h(React.Fragment, null,
+      h('line', {
+        className: 'app-fin__cross', x1: x, x2: x, y1: g.plots[0].top, y2: last.top + last.height
+      }),
+      lines.map(function (p, k) {
+        return p.series.map(function (s, q) {
           return s.tops[at] === null ? null : h('circle', {
-            key: 'mark' + q, className: 'app-fin__mark is-s' + s.slot, cx: x, cy: s.tops[at], r: 5
+            key: 'mark' + k + '-' + q, className: 'app-fin__mark is-s' + s.slot, cx: x,
+            cy: s.tops[at], r: 5
           });
-        }));
-    });
+        });
+      }));
   }
 
   /* The chart, props {answer, picks, period, scale, onDrop}: the block, keeping the period
-     picked, none when it opens, and the width of the plot's wrapper, measured after each draw and
-     at each resize of the window. */
+     picked, none when it opens, and the width of the plots' wrapper, measured after each draw and
+     at each resize of the window. A label's x calls onDrop with its pick; after the draw that
+     follows, the focus goes to the first label's x left, or to the plots where none is. */
   function view(props) {
     var at = React.useState(null);
     var width = React.useState(WIDTH);
     var wrapper = React.useRef(null);
+    var list = React.useRef(null);
+    var dropped = React.useRef(false);
     function measure() {
       var found = wrapper.current ? wrapper.current.clientWidth : 0;
       if (found > 0) width[1](found);
     }
     React.useEffect(measure);
     React.useEffect(function () {
+      if (!dropped.current) return;
+      dropped.current = false;
+      var next = (list.current && list.current.querySelector('.app-fin__x')) || wrapper.current;
+      if (next) next.focus({ preventScroll: true });
+    });
+    React.useEffect(function () {
       window.addEventListener('resize', measure);
       return function () { window.removeEventListener('resize', measure); };
     }, []);
     return block(props.answer, props.picks, props.period, props.scale, at[0], width[0], {
-      ref: wrapper, pick: at[1], drop: props.onDrop
+      ref: wrapper, legend: list, pick: at[1],
+      drop: function (pick) {
+        dropped.current = true;
+        props.onDrop(pick);
+      }
     });
   }
 
