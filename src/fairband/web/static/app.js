@@ -1533,17 +1533,15 @@
 
   /* -------------------------------------------------------- a table of figures by year */
 
-  /* A row a year from year 1, a column for each [head, the figures by year, their format, and a
-     note on the head when there is one]. Wider than its column, the table scrolls on its own, by
-     keyboard too: its box takes focus. */
+  /* A row a year from year 1, a column for each [head, the figures by year, their format]. Wider
+     than its column, the table scrolls on its own, by keyboard too: its box takes focus. */
   function figuresTable(columns) {
     return h('div', { className: 'app-scroll', tabIndex: 0 },
       h('table', { className: 'fb-table app-figures' },
         h('thead', null, h('tr', null,
           h('th', { className: 'label fb-num' }, 'Year'),
           columns.map(function (c) {
-            return h('th', { key: c[0], className: 'label fb-num' },
-              c[3] ? noted(c[0], c[3]) : c[0]);
+            return h('th', { key: c[0], className: 'label fb-num' }, c[0]);
           }))),
         h('tbody', null, columns[0][1].map(function (_, t) {
           return h('tr', { key: t },
@@ -1552,11 +1550,6 @@
               return h('td', { key: c[0], className: 'fb-num figure-sm' }, c[2](c[1][t]));
             }));
         }))));
-  }
-
-  /* A figure with words after it, in sans and in brackets; the figure stays mono. */
-  function noted(text, note) {
-    return h(React.Fragment, null, text, h('span', { className: 'caption' }, ' (' + note + ')'));
   }
 
   /* ---------------------------------------------------------------- the inputs */

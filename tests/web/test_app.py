@@ -1807,9 +1807,20 @@ def test_app_js_normalises_a_saved_column_list() -> None:
 
 
 def test_figure_tables_scroll_by_keyboard_with_the_year_in_view() -> None:
-    """The table of figures by year the report page draws (``figuresTable``)."""
+    """The table of figures by year the report page draws (``figuresTable``), each column's head
+    its name: no caller hands a column a note for its head."""
     script = _static_file("app.js")
     assert script.count("h('div', { className: 'app-scroll', tabIndex: 0 },") == 1
+    table = _function(script, "figuresTable")
+    assert "return h('th', { key: c[0], className: 'label fb-num' }, c[0]);" in table
+    assert "c[3]" not in table and "function noted(" not in script
+    report = _static_file("report.js")
+    calls = re.findall(r"P\.figuresTable\(\[(.*?)\]\)", report, re.DOTALL)
+    assert len(calls) == 2
+    for call in calls:
+        # each column three elements: its name, its figures by year and their format
+        three = re.findall(r"\['[^']+', column\(p\.years, '\w+'\), \w+\]", call)
+        assert len(three) == call.count("['"), call
     page = _static_file("index.html")
     assert (
         ".app-scroll:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }"
