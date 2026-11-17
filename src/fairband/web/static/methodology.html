@@ -229,8 +229,8 @@ High or Moderate. It is Mature Stable when the word is Low or Close to zero or n
 </ol>
 
 <h3 class="heading">Notes that do not change the phase</h3>
-<p class="body">Some checks add a note and never change the phase. The notes show in the drawer's
-phase evidence.</p>
+<p class="body">Some checks add a note and never change the phase. The notes show in the Flags
+column, and a report's Appendix A lists them with the rest of the phase evidence.</p>
 <ul class="body">
 <li>The growth word points to another phase than the margin rule gave a loss-making company.</li>
 <li>The margin direction points elsewhere: Rising to Mature Growth, Declining to Decline.</li>
@@ -242,10 +242,10 @@ phase evidence.</p>
 </ul>
 
 <h3 class="heading">The cash-flow stage</h3>
-<p class="body">Beside the phase, the drawer shows the Dickinson stage (a life-cycle reading of the
+<p class="body">Beside the phase, Fairband reads the Dickinson stage (a life-cycle reading of the
 signs of three cash flows) <a class="app-cite" href="#methodology/src-dickinson">[Dickinson 2011]</a>.
 It reads the last fiscal year's operating, investing and financing cash flows. It never decides the
-phase and adds no note.</p>
+phase and adds no note. A report's Appendix A shows it with the phase evidence.</p>
 <div class="app-prose__wide">
 <table class="fb-table">
 <thead><tr><th class="label">Operating</th><th class="label">Investing</th><th class="label">Financing</th><th class="label">Stage</th></tr></thead>
@@ -284,7 +284,7 @@ operating margin. An unclassified company gets no value; its row gives the reaso
 <p class="body">Microsoft's revenue grew 16.1% a year over its last three fiscal years. That ranks
 in decile 8, so its growth word is High. Its operating margin is 46.8%, above zero, so rule 5 gives
 Mature Growth. Its margin rose 1.3 points a year. That ranks in decile 7, below the top two, so
-it reads Stable. A stable margin points to no phase, so the drawer adds no note. The cash-flow
+it reads Stable. A stable margin points to no phase, so no note is added. The cash-flow
 stage, Mature, agrees.</p>
 <p class="body app-prose__row"><a href="#" data-find="MSFT">Open today's row</a></p>
 </section>
@@ -515,11 +515,12 @@ measure is unreliable, it is the average return of the last three years.</p>
 beside the belief. If the price needs far more growth than similar companies usually reach, it
 assumes the company is an exception. If it needs less, the value covers the price even when growth
 falls below the belief, down to the implied growth.</p>
-<p class="body">The drawer also shows the value at runways of
+<p class="body">Fairband also works out the value at runways of
 <span data-policy="runway_years.None">—</span>, <span data-policy="runway_years.Narrow">—</span>
-and <span data-policy="runway_years.Wide">—</span>. It shows the value at returns of
+and <span data-policy="runway_years.Wide">—</span>. It works out the value at returns of
 <span data-policy="roic_sensitivity.0">—</span> and <span data-policy="roic_sensitivity.1">—</span>
-too. A wide spread means the value depends heavily on those choices.</p>
+too. An agent reads them when it researches the company. A wide spread means the value depends
+heavily on those choices.</p>
 
 <h3 class="heading">Flags on this route</h3>
 <p class="body">A consensus year with fewer than <span data-policy="analyst_min">—</span> analysts
@@ -583,8 +584,8 @@ and fades in equal steps from year 1.</li>
 <p class="body">EPV (earnings power value: earnings divided by the hurdle rate, the value with no
 growth) stands beside the value. A company whose new capital earns more than the hurdle rate is
 worth more than its EPV.</p>
-<p class="body">The drawer also shows what the Mature Growth route would give, as a cross-check. The
-cross-check never sets the levels or the word.</p>
+<p class="body">The screen's Growth-route value column shows what the Mature Growth route would
+give, as a cross-check. The cross-check never sets the levels or the word.</p>
 
 <h3 class="heading">Worked example: Coca-Cola</h3>
 <div class="app-prose__wide">
@@ -671,8 +672,8 @@ better figure. An agent may set a market value in its place, with evidence.</p>
 price. Set it beside the peers' margins. A price that needs a margin above every peer's assumes
 the company will beat all of them.
 Fairband looks for it between <span data-policy="implied_margin_bounds.0">—</span> and
-<span data-policy="implied_margin_bounds.1">—</span>. The drawer also shows the growth the price
-needs in the held years.</p>
+<span data-policy="implied_margin_bounds.1">—</span>. The screen's Implied growth column shows the
+growth the price needs in the held years.</p>
 
 <h3 class="heading">Flags on this route</h3>
 <p class="body">A held rate cut by the cap gets a note. Peers taken from the industry get a note. A
@@ -686,7 +687,7 @@ Damodaran also charges a young company for the chance that it fails
 <a class="app-cite" href="#methodology/src-young">[Damodaran 2009b]</a>. No survival table fits a
 listed company worth more than <span data-policy="universe.cap_floor_usd">—</span>, so Fairband
 leaves that chance out. The value is then the going-concern value (the value if the company
-survives), and the drawer says so.</p>
+survives), and the note Failure not charged says so.</p>
 
 <h3 class="heading">Worked example: CrowdStrike</h3>
 <div class="app-prose__wide">
@@ -834,12 +835,12 @@ the income statement <a class="app-cite" href="#methodology/src-altman">[Altman 
 <p class="body">3M's revenue fell 10.0% a year over three years, decile 1, so its growth word is
 Close to zero or negative. Its five-year trend falls $3.0 billion a year, and revenue fell in three
 of its last four years: rule 2 gives Decline. Analysts expect revenue to grow in each of the next
-four years, so the drawer warns of a consensus recovery. Five analysts give revenue for fiscal 2030,
-year 4, so the consensus runs to year 4. After it, the trend's decline rate of 12.2% fades in a
-straight line to zero by year 10. Revenue shrinks 10.2% in year 5 and 2.0% in year 9, then holds
-flat. One margin, 18.3%, holds in every year. The value is $48 a share against a price of $183.66,
-Well above. No decline rate reaches the price: the price is above the value even when revenue stops
-shrinking.</p>
+four years, so the row carries the warning Consensus recovery. Five analysts give revenue for
+fiscal 2030, year 4, so the consensus runs to year 4. After it, the trend's decline rate of 12.2%
+fades in a straight line to zero by year 10. Revenue shrinks 10.2% in year 5 and 2.0% in year 9,
+then holds flat. One margin, 18.3%, holds in every year. The value is $48 a share against a price
+of $183.66, Well above. No decline rate reaches the price: the price is above the value even when
+revenue stops shrinking.</p>
 <p class="body">The newest balance sheet shows a minority interest of $1.0 billion, where 3M's earlier
 sheets showed about $50 million. The engine takes the vendor's line as it stands. An agent who finds
 another figure in the filing corrects it with the override balance.minority.</p>
@@ -892,18 +893,18 @@ burn) says how long the company can last without raising money. A cover under
 last twelve months. It lost $1.7 billion of operating income over the last year. At $172.29 a
 share, the market values the business at $34.1 billion net of cash and debt. To be worth that, it
 needs $42.2 billion of revenue in year 10 at its peers' 19.8% margin. Its cash covers 2.5 years of
-the current burn, so the drawer does not warn. Net cash is $15 a share, a floor far under the
-price.</p>
+the current burn, so the row carries no Cash cover short warning. Net cash is $15 a share, a floor
+far under the price.</p>
 <p class="body app-prose__row"><a href="#" data-find="RVMD">Open today's row</a></p>
 </section>
 
 <section id="flags">
 <h2 class="title">The flags</h2>
 <p class="body">A flag warns and never changes a value, a level or the word. Each has a short word
-for the screen and one sentence in the drawer. Twelve flags are quality warnings (signs that the
-value may be wrong because the business or its figures are unusual). The Warnings column counts
-them, and the Clean filter keeps the rows with none. Every other flag is a note: shown, never
-counted.</p>
+for the screen and one sentence, which an agent reads when it researches the company. Twelve flags
+are quality warnings (signs that the value may be wrong because the business or its figures are
+unusual). The Warnings column counts them, and the Clean filter keeps the rows with none. Every
+other flag is a note: shown, never counted.</p>
 
 <h3 class="heading">Quality warnings</h3>
 <ul class="body app-flags">
@@ -951,8 +952,8 @@ can be wrong. Or the market cap may leave a class out.</span></li>
 </ul>
 
 <h3 class="heading" id="flags-notes">Notes</h3>
-<p class="body">Notes say how a figure was reached. They show in the Flags column and the drawer,
-and never count.</p>
+<p class="body">Notes say how a figure was reached. They show in the Flags column and never
+count.</p>
 <ul class="body app-flags">
 <li><span class="label">Growth word disagrees</span> <code class="fb-tag figure-sm">growth-word-disagrees</code>
 <span class="body app-flags__what">The growth word points to another phase than the margin rule
@@ -1193,12 +1194,13 @@ with a footnote; the references follow the last section.</p>
 <p class="body">The screen's Reviewed column shows the reviewed value. Where neither the route nor
 the review values the company, it shows the value of a secondary valuation instead. The band, the buy and trim levels and the
 designation follow the reviewed value; the Mechanical column keeps the engine's value. Where a
-review fills the row, the Flags and Warnings columns, the Clean filter and the drawer's list of
-flags read the review's flags. A secondary valuation has none, so its row keeps the engine's. The
-Stance column shows the latest report's word. A ◆ after the ticker marks a published report. The
-drawer's meter draws that band; the drawer adds the stance and the report's summary. Its Details
-hold the bridge, the overrides, the secondary valuation, the guidance, the judgments (the agent's
-decisions on the inputs) and the notes. The <a href="#inbox">Inbox</a> lists the work items
+review fills the row, the Flags and Warnings columns and the Clean filter read the review's
+flags. A secondary valuation has none, so its row keeps the engine's. The Stance column shows the
+latest report's word. A ◆ after the ticker marks a published report. The drawer's meter draws that
+band. The company page, which the ticker opens, draws it too, and under it the latest report's
+stance and a link to the report. The report's Appendix A lists the bridge, the overrides, the
+secondary valuation and the guidance. Its Key judgments section records the agent's decisions on
+the inputs. The Notes button, in the drawer and on the company page, lists the company's notes. The <a href="#inbox">Inbox</a> lists the work items
 (requests for an agent's research on one company). Request research in the drawer posts one. On a watchlist, it
 posts a valuation review for each company on the list with no open item.</p>
 </section>

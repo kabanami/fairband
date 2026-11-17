@@ -1,12 +1,11 @@
-"""The drawer's reads (spec 2026-11-06 Tier 2, 16, 18.2 and 18.3), on the database of
-``conftest.py``: AAPL valued on the Mature Growth route, AAL refused for its target margin and HGCO
-valued on the revenue growth route, each with one snapshot.
+"""The agents' records of the company detail and the research read (spec 2026-11-06 Tier 2, 16,
+18.2 and 18.3), on the database of ``conftest.py``: AAPL valued on the Mature Growth route, AAL
+refused for its target margin and HGCO valued on the revenue growth route, each with one snapshot.
 
-The company detail carries the agents' records its main view leads with: the current review and
-the newest secondary valuation when they rest on the latest snapshot or one it reprices (the
-screen's rule), the latest published report with its Summary, and the open work item.
-``GET /api/companies/{symbol}/research`` serves what Details lists, each record as its own read
-serves it."""
+The company detail carries the agents' records: the current review and the newest secondary
+valuation when they rest on the latest snapshot or one it reprices (the screen's rule), the latest
+published report with its summary, and the open work item. ``GET /api/companies/{symbol}/research``
+serves the company's research records, each record as its own read serves it."""
 
 from collections.abc import Callable
 from contextlib import closing
@@ -316,7 +315,7 @@ def test_a_refused_review_carries_its_refusal(
     )
     assert (found["priceToValue"], found["designation"]) == (None, None)
     assert (found["bridge"], found["overrideCount"]) == ([], 1)
-    # a review with no value fills no row: its flags are not the drawer's (spec 2026-11-13 8a)
+    # a review with no value fills no row: it carries no flags for one (spec 2026-11-13 8a)
     assert found["flags"] is None and refused.flags
 
 
@@ -330,7 +329,7 @@ def test_a_refused_row_carries_its_valued_review(
     """AAL's route refused and an override values it: the detail carries the review's value, its
     levels and price ÷ value with its word at the latest snapshot's price, so the drawer draws the
     review's band where the row shows the review's value (18.1, 18.2; the ruling of 2026-11-08);
-    the secondary valuation that counts there comes too, for Details."""
+    the secondary valuation that counts there comes too."""
     override_id, review = _aal_review(db_path, policy, results)
     value, levels = review.result.value, review.result.levels
     assert value is not None and levels is not None
@@ -504,7 +503,7 @@ def test_records_on_an_older_snapshot_leave_the_detail(
 
 def test_the_detail_carries_the_report_and_its_summary(client: TestClient, db_path: Path) -> None:
     """Section 1 as submitted, cites included, and the references it cites with the numbers the
-    report page's list gives them, so a number in the drawer matches the page."""
+    report page's list gives them, so a number in the summary matches the page."""
     sections = _cited_sections(_latest(db_path, "AAPL"))
     report_id = _report(db_path, "AAPL", "buy", sections)
     whole = client.get(f"/api/reports/{report_id}").json()["references"]

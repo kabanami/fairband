@@ -129,7 +129,7 @@ def test_scoped_refresh_with_stored_deciles_values(env_with_deciles: Env) -> Non
     # The synthetic company's invested capital takes the issuer's as-reported intangibles.
     [roic] = [i for i in acme.result.inputs if i.name == "aggregate_roic"]
     assert (roic.kind, roic.estimate_method) == ("estimate", "bs10-intangibles-total-v1")
-    # The drawer names the tax country, the FMP profile's.
+    # The tax rate's input names the tax country, the FMP profile's.
     [tax] = [i for i in acme.result.inputs if i.name == "tax_rate_latest"]
     assert tax.note is not None and tax.note.startswith("US, the headquarters country in the FMP")
 

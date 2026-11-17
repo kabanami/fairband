@@ -110,9 +110,9 @@ export interface ButtonProps {
   /** fairband: the control's name in full, where its text is short (Top ↑ is "Back to top"). */
   'aria-label'?: string;
   /**
-   * fairband: given, the button is a link (`<a href>`) in the button's look, as Open the report
-   * goes to the report page (spec 2026-11-06 Tier 2, 18.2); `type`, `disabled` and `onClick` are
-   * then not used.
+   * fairband: given, the button is a link (`<a href>`) in the button's look, as Company page goes
+   * to the company page (spec 2026-11-06 Tier 2, 18.2; spec 2026-11-16 company page, 11 and 13);
+   * `type`, `disabled` and `onClick` are then not used.
    */
   href?: string;
   className?: string;
@@ -346,8 +346,8 @@ export interface ReportReaderProps {
   state?: 'published' | 'rejected';
   revision?: string;
   /**
-   * fairband: absent, a published report draws no cites line, as the drawer's Summary leaves it
-   * to the report page (spec 2026-11-06 Tier 2, 18.2). Given, the line says what the report rests
+   * fairband: absent, a published report draws no cites line; the report page passes them
+   * (spec 2026-11-06 Tier 2, 18.2 and 18.4). Given, the line says what the report rests
    * on in the reader's words, each date in words and no record's id: "On the data of 4 Nov 2026 ·
    * priced that day · valid until 27 Jan 2027 · reuses the full report of 3 Nov 2026"
    * (spec 2026-11-15 7). Each date is an ISO date.
@@ -364,8 +364,8 @@ export interface ReportReaderProps {
   };
   /**
    * fairband: each section's text as blocks, `<p>`, `<ul>` or `<ol start>`, and a table in a
-   * scroller with its header row, bold and the cites inline in any of them; the drawer's Summary
-   * renders the same (spec 2026-11-06 Tier 2, 13.1 and 18.4).
+   * scroller with its header row, bold and the cites inline in any of them (spec 2026-11-06
+   * Tier 2, 13.1 and 18.4).
    */
   sections?: ReportSection[];
   /**

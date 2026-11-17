@@ -99,8 +99,8 @@ time { font-variant-numeric: tabular-nums; }
 .fb-btn--quiet:hover { background: var(--accent-quiet); border-color: transparent; }
 .fb-btn--danger { color: var(--critical); border-color: var(--border); }
 .fb-btn--danger:hover { background: var(--critical-quiet); border-color: var(--critical); }
-/* fairband: a Button given href is a link in the button's look, Open the report (spec 2026-11-06
-   Tier 2, 18.2): no underline, as the button has none. */
+/* fairband: a Button given href is a link in the button's look, Company page (spec 2026-11-06
+   Tier 2, 18.2; spec 2026-11-16 company page, 11 and 13): no underline, as the button has none. */
 a.fb-btn { text-decoration: none; }
 
 /* ----------------------------------------------------------- RunProgress */
@@ -897,7 +897,7 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* fairband: the screen's header cells stick under its bar, at the height the page measures and
    sets as --bar-height, or the bar's one-line height until it is measured: 38px, the space-1 and
    space-2 padding round a 26px control (classifier-designation spec 8.2). Every other table, the
-   groups' and the drawer's, keeps its header at the top. */
+   groups' among them, keeps its header at the top. */
 .fb-screen .fb-table thead th { top: var(--bar-height, 38px); }
 .fb-table th.fb-num, .fb-table td.fb-num { text-align: right; font-variant-numeric: tabular-nums; }
 .fb-table tbody tr { height: var(--row-height); }

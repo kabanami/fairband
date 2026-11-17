@@ -633,7 +633,7 @@ def test_a_refused_rows_secondary_leaves_the_engines_flags(
 def test_a_secondary_at_or_below_zero_fills_no_reviewed_value(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:
-    """The record stays for the Details; the cell shows an em dash and "Has a review", which keeps
+    """The record stays on file; the cell shows an em dash and "Has a review", which keeps
     a row whose ``reviewed`` is set, does not keep it."""
     loss = _secondary(db_path, policy, "AAL", _latest(db_path, "AAL"), (-5e9,) * 3)
     with closing(connect(db_path)) as conn:

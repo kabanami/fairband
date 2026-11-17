@@ -10,8 +10,8 @@ the greatest id per symbol, the snapshots its agents' records rest on in one rea
 (``snapshot_rows``), and the Settings page the versions most of the screen's cite. A review reads
 the snapshot that assembled a snapshot's figures (``assembling_snapshot``) to know which splits
 they had seen (spec 2026-11-14 7). The report
-page's price chart and its table twin read a company's band over time from the copied columns
-alone (``band_points``), never parsing a result.
+page's price chart and the export's table twin of it read a company's band over time from the
+copied columns alone (``band_points``), never parsing a result.
 """
 
 import json

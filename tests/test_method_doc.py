@@ -471,14 +471,16 @@ def test_a_finding_and_a_guidance_record_name_their_currency() -> None:
             " snapshot (16.6)."
         ),
         (
-            "Every read of a finding or a guidance record (`findings`, `guidance`, the drawer's"
-            " research read, and for a guidance record a report's Appendix A) answers `currency`:"
-            " the stored code, else the reporting currency; none for a figure that is not money."
+            "Every read of a finding or a guidance record (`findings`, `guidance`, the research"
+            " read `GET /api/companies/{symbol}/research`, and for a guidance record a report's"
+            " Appendix A) answers `currency`: the stored code, else the reporting currency; none"
+            " for a figure that is not money."
         ),
         (
-            "The drawer writes a finding's and a guidance record's money figure in that currency,"
-            ' `$` for USD and the code before the number otherwise ("SEK 2,100,000,000"), as the'
-            " report page's Appendix A writes a guidance record's (16.6; spec 2026-11-15 9.5)."
+            "The report page's Appendix A writes a guidance record's money figure in that"
+            ' currency, `$` for USD and the code before the number otherwise ("SEK 2,100,000,000")'
+            " (16.6; spec 2026-11-15 9.5); no page draws a finding since the drawer's Details left"
+            " (spec 2026-11-16 company page, 11), and an agent reads them through `findings`."
         ),
     ):
         assert words in references, words
@@ -748,8 +750,8 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
             ' with "No data on file.";'
         ),
         (
-            "A bar chart draws a bar for each column of its table that holds a figure, the table"
-            " twin naming each by the column's label"
+            "A bar chart draws a bar for each column of its table that holds a figure, the"
+            " tooltip naming each by the column's label"
         ),
         (
             "and its axis prints every bar's tick up to seven bars and every other one on more,"
@@ -1182,7 +1184,7 @@ def test_a_kill_criterion_holds_a_threshold_cited_in_its_section_alone() -> None
             ' is, "kill criterion 12, a threshold the author chose".'
         ),
         (
-            "Every read of a criterion (`kill_criteria`, the drawer's research read) answers its"
+            "Every read of a criterion (`kill_criteria`, the research read) answers its"
             " `threshold`, its `unit` and its `currency`, as a finding's."
         ),
     ):

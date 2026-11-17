@@ -4,14 +4,14 @@ refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 (``agents_api``), the guidance routes (``guidance_api``), the override and review routes
 (``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
 Methodology section read and the report routes (``reports_api``), the company page's two reads
-(``company_api``), the drawer's research read (``research_api``), the multiples history read
+(``company_api``), the research read (``research_api``), the multiples history read
 (``multiples_api``), the band's history read (``history_api``), the vendor pass-through route
 (``vendor_api``), the filing reads (``filings_api``), the company logo's read (``logo_api``), and
 the policy values and growth deciles the Methodology page cites (spec 2026-11-04 7.4). The
 Agents section's settings routes (``launch_api``) read and write ``launch.json`` in the config
 folder, not the ``settings`` table; its launch routes (``launch_api``) store a launch, open its
-window and take its launcher's reports. The company detail carries the agents' records the drawer
-leads with (``research_api.agent_records``).
+window and take its launcher's reports. The company detail carries the agents' records that the
+drawer, the company page and the report page read (``research_api.agent_records``).
 
 ``create_app`` builds it over a connection factory: each API request opens its own connection
 and closes it before it answers. The static files are the package's ``web/static`` directory:
@@ -45,8 +45,8 @@ their number, the fields computed for the companies that have a row.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
-the rows' freshness and the drawer's validity window, the designation edges of the groups, of the
-word a row reads at its reviewed value (``rows.agent_fields``) and of the drawer. A stored setting
+the rows' freshness and of the company detail, the designation edges of the groups, of the word a
+row reads at its reviewed value (``rows.agent_fields``) and of the drawer. A stored setting
 the policy refuses makes those routes answer 409 naming it, until it is reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
@@ -363,18 +363,19 @@ def create_app(
     def company(symbol: str) -> dict[str, Any]:
         """The company's latest snapshot in full, with its latest universe row, two of the
         effective policy's values: the designation edges, by which the drawer keeps its price ÷
-        value figure inside the word's band, and ``aging_fraction``, by which its validity window
-        reads aging where the screen's Freshness column does; and the agents' records the drawer
-        leads with (``research_api.agent_records``: ``review``, ``secondary``, ``report``,
-        ``item``), with ``moat``, the moat class in force, which the drawer's head and the company
-        page's head stamp (the company page's design, 7.2); and ``noteCount``, the count of the
-        company's notes, which the Notes control draws beside its word (11.1); and the company
-        brief (B-149), the latest stored profile's description, which the drawer's head reads a
-        line of, the report page and Details show whole, and the MCP ``company`` tool carries;
-        and ``logo`` (B-203), the address of the company's logo read
-        where the latest stored profile names a logo, which the drawer's head and the report
-        page's draw, ``None`` without one (``logo_api.logo_route``). And what the figures are in
-        (spec 2026-11-10 7.4), which the drawer's head, Details and the report page name:
+        value figure inside the word's band, and ``aging_fraction``, from which a validity window
+        reads aging where the screen's Freshness column does (no page draws the window since it
+        left the drawer, the company page's design 11); and the agents' records that the drawer,
+        the company page and the report page read (``research_api.agent_records``: ``review``,
+        ``secondary``, ``report``, ``item``), with ``moat``, the moat class in force, which the
+        drawer's head and the company page's head stamp (the company page's design, 7.2); and
+        ``noteCount``, the count of the company's notes, which the Notes control draws beside its
+        word (11.1); and the company brief (B-149), the latest stored profile's description, which
+        the drawer shows cut at six lines, the report page shows whole, and the MCP ``company``
+        tool carries; and ``logo`` (B-203), the address of the company's logo read where the
+        latest stored profile names a logo, which the drawer's head and the report page's draw,
+        ``None`` without one (``logo_api.logo_route``). And what the figures are in
+        (spec 2026-11-10 7.4), which the drawer's head and the report page name:
         ``currency``, the reporting currency the snapshot was valued or refused in
         (``types.money_of``: USD for a USD row, the code for a row refused for its currency);
         ``isAdr``, the ADR flag as assembly reads it, the latest stored profile's, else the universe

@@ -109,8 +109,8 @@
     var className = cx('fb-btn', 'control', 'fb-btn--' + (p.variant || 'secondary'),
       p.size === 'sm' && 'fb-btn--sm', p.className);
     // fairband: given href, the button is a link in the button's look, since a link stays a link
-    // (Button.md): Open the report goes to the report page by its hash (spec 2026-11-06 Tier 2,
-    // 18.2).
+    // (Button.md): Company page goes to the company page by its hash, in the drawer and on the
+    // report page (spec 2026-11-06 Tier 2, 18.2; spec 2026-11-16 company page, 11 and 13).
     if (p.href) {
       return h('a', { className: className, href: p.href, 'aria-label': p['aria-label'] },
         p.children);
@@ -959,8 +959,8 @@
                 }))
               ))
           : h(React.Fragment, null,
-              // fairband: the cites line only when the caller passes cites: the drawer's Summary
-              // leaves it to the report page (spec 2026-11-06 Tier 2, 18.2).
+              // fairband: the cites line only when the caller passes cites, as the report page
+              // does (spec 2026-11-06 Tier 2, 18.2 and 18.4); a reader without them draws none.
               p.cites ? h('p', { className: 'fb-report__cites caption' },
                 // fairband: the line under the title says what the report rests on in the reader's
                 // words, each date a DateText and no record's id, which Appendix A names: the

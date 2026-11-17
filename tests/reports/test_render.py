@@ -359,8 +359,8 @@ def test_appendix_a_gives_each_input_its_provenance(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """Spec 13.1, "every input with its tag, source and dates": each input carries its source and
-    its three dates, the day the figure is as of, when it was observed and when it was entered, so
-    the report page draws Appendix A's inputs as the drawer draws a snapshot's (18.4)."""
+    its three dates, the day the figure is as of, when it was observed and when it was entered,
+    which the report page draws with each of Appendix A's inputs (18.4)."""
     sid = snapshots["AAPL"]
     a = appendix_a(conn, _stored(conn, sid), policy)
     snapshot = snapshot_row(conn, sid)
@@ -530,7 +530,7 @@ def test_appendix_a_gives_each_guidance_record_its_currency(
     report = _stored(conn, sid, symbol="FXCO")
     usd = replace(mature_growth_inputs(), symbol="FXCO")  # a newer snapshot, in USD
     insert_snapshot(conn, value_company(usd, universe_deciles(), policy, TODAY), aapl.refresh_id)
-    assert reporting_currency(conn, "FXCO") == "USD"  # the drawer's, not the report's
+    assert reporting_currency(conn, "FXCO") == "USD"  # the latest snapshot's, not the report's
     a = appendix_a(conn, report, policy)
     assert a["snapshot"]["currency"] == "SEK"
     by_id = {g["id"]: g["currency"] for g in a["guidance"]}
@@ -949,8 +949,9 @@ def test_the_references_list(
 def test_the_references_one_section_cites(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
-    """The drawer's Summary (spec 2026-11-06 Tier 2, 18.2): the refs section 1 cites, each with
-    the number the whole list gives it, so a number in the drawer matches the report page; r,
+    """The company detail's report summary (spec 2026-11-06 Tier 2, 18.2): the refs section 1
+    cites, each with the number the whole list gives it, so a number there matches the report
+    page; r,
     cited in section 4 alone, is left out. A section past the last cites nothing."""
     sid = snapshots["AAPL"]
     report = _stored(conn, sid, sections=_cited(sid))

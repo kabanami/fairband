@@ -1,9 +1,10 @@
-"""The drawer's reads (spec 2026-11-06 Tier 2, 16, 18.2 and 18.3).
+"""The agents' records of the company detail and the research read (spec 2026-11-06 Tier 2, 16,
+18.2 and 18.3).
 
 ``agent_records`` gives the company detail (``GET /api/companies/{symbol}``) the agents' records
-the drawer's main view leads with, read on the company's latest snapshot by the screen's rule
-(``rows.counts_on``: a record counts on the snapshot it rests on or on a later one that reprices
-it), each ``None`` without one:
+that the drawer, the company page and the report page read, on the company's latest snapshot by
+the screen's rule (``rows.counts_on``: a record counts on the snapshot it rests on or on a later
+one that reprices it), each ``None`` without one:
 
 - ``review``: the current review when it counts, ``{id, value, levels, priceToValue,
   designation, refusal, bridge, overrideCount, mechanical, flags}``; ``levels`` ``{buy, fairLow,
@@ -27,8 +28,9 @@ it), each ``None`` without one:
   actor, expired, summary, references}``, wherever it rests: ``expired`` when the window of its
   snapshot ended before today (``rows.window_ended``), ``summary`` its first section as submitted
   (``{heading, parts}``, the cites included) and ``references`` the refs that section cites, each
-  with its number in the whole report's list (``render.references``), so a number in the drawer
-  matches the report page.
+  with its number in the whole report's list (``render.references``), so a number there matches
+  the report page. The MCP ``company`` tool carries the summary; no page draws it since the
+  drawer's Summary left (the company page's design, 11), and the company page reads the rest.
 - ``item``: the company's open work item, ``{id, state, mode, claimedBy, createdAt, launch}``,
   ``createdAt`` the time it was posted and ``launch`` its newest launch as
   ``GET /api/launches/{id}`` answers it (``launch_api.launch_json``, read at the time the detail
@@ -41,13 +43,14 @@ moat class in force (method 4.9), ``"Wide"``, ``"Narrow"`` or ``"None"``: the re
 counts and has a value, else the snapshot's when the snapshot has a value, else ``None``. So a
 refused snapshot with a counted review that values the company has that review's moat.
 
-``GET /api/companies/{symbol}/research`` answers what Details lists (18.3), each record as its own
-read serves it: ``overrides``, ``guidance``, ``killCriteria``, ``newsItems``, ``notes`` and
-``findings`` newest first, a finding, a guidance record and a kill criterion's threshold with
-the currency of its money (``agents_api.money_json``; spec 2026-11-15 8.1, 9.1); ``judgments``,
-the latest report's, in the order the agent gave them; and ``ledger``, the company's twenty newest
-rows, newest first. A company with no snapshot is a 404, "no snapshot for <symbol>", as the detail
-answers; a symbol that is not one a 400.
+``GET /api/companies/{symbol}/research`` answers the company's research records (18.3), which the
+drawer's Details listed until it left (the company page's design, 11) and no page reads now (the
+Research tab will, B-218), each record as its own read serves it: ``overrides``, ``guidance``,
+``killCriteria``, ``newsItems``, ``notes`` and ``findings`` newest first, a finding, a guidance
+record and a kill criterion's threshold with the currency of its money (``agents_api.money_json``;
+spec 2026-11-15 8.1, 9.1); ``judgments``, the latest report's, in the order the agent gave them;
+and ``ledger``, the company's twenty newest rows, newest first. A company with no snapshot is a
+404, "no snapshot for <symbol>", as the detail answers; a symbol that is not one a 400.
 """
 
 import sqlite3
@@ -83,7 +86,7 @@ from fairband.web.launch_api import launch_json
 from fairband.web.reviews_api import secondary_json
 from fairband.web.rows import counts_on, rested_on, standing, window_ended
 
-LEDGER_ROWS = 20  # the company's newest ledger rows Details lists
+LEDGER_ROWS = 20  # the company's newest ledger rows the research read answers
 # Each input's bridge label and unit by its tag as a stored bridge line names it.
 _LABELS: dict[str, str] = {tag: label for tag, label in LABELS.items()}
 _UNITS: dict[str, str] = {tag: spec.unit for tag, spec in TAGS.items()}
@@ -99,7 +102,7 @@ def agent_records(
 ) -> dict[str, Any]:
     """The detail's ``review``, ``priceNeeds``, ``moat``, ``secondary``, ``report`` and ``item``
     (module docstring) on the company's latest ``snapshot``; ``policy`` is the effective one and
-    ``tax`` the statements' table, by which the Summary's references read their sources; ``today``
+    ``tax`` the statements' table, by which the summary's references read their sources; ``today``
     is the day the report's window is judged on and ``now`` the time the item's launch is read
     at."""
     symbol = snapshot.symbol
@@ -152,7 +155,7 @@ def add_research_routes(app: FastAPI, conn_factory: Callable[[], sqlite3.Connect
 
     @app.get("/api/companies/{symbol}/research")
     def research(symbol: str) -> dict[str, Any]:
-        """The records Details lists (module docstring)."""
+        """The company's research records (module docstring)."""
         try:
             company = exchange_symbol(symbol)
         except ValueError as exc:

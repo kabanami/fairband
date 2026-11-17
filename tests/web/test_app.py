@@ -353,7 +353,8 @@ def test_screen_envelope_columns_and_today(client: TestClient) -> None:
 
 
 def test_screen_envelope_has_today(client: TestClient) -> None:
-    """The drawer judges the validity window on the engine's day, never the browser's."""
+    """The screen names the engine's day, on which a validity window is judged, never the
+    browser's."""
     assert _screen(client)["today"] == NOW.date().isoformat() == "2026-11-01"
 
 
@@ -401,10 +402,10 @@ def test_groups_and_the_drawer_read_the_edges_of_the_settings(client: TestClient
     assert after["shareBelowValue"] == 0.0
 
 
-def test_the_drawer_reads_the_aging_fraction_of_the_settings(client: TestClient) -> None:
-    """The drawer's validity window turns aging where the screen's Freshness column does: the
-    route serves the effective ``aging_fraction``, a setting that takes effect at once (spec
-    2026-11-04 8.2)."""
+def test_the_detail_reads_the_aging_fraction_of_the_settings(client: TestClient) -> None:
+    """The company detail serves the effective ``aging_fraction``, from which a validity window
+    turns aging where the screen's Freshness column does, a setting that takes effect at once
+    (spec 2026-11-04 8.2)."""
     assert client.get("/api/companies/AAPL").json()["agingFraction"] == 0.6667
     r = client.put("/api/settings", json={"changes": {"aging_fraction": 0.1}}, headers=HEADER)
     assert r.status_code == 200, r.text
@@ -765,13 +766,14 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
     assert body["brief"] is None
     # The logo's address (B-203) is the stored profile's too: tests/web/test_logo_api.py.
     assert body["logo"] is None
-    # The agents' records the drawer's main view leads with (spec 2026-11-06 Tier 2, 18.2): none
-    # here; tests/web/test_research_api.py writes each and reads its shape.
+    # The agents' records (spec 2026-11-06 Tier 2, 18.2): none here;
+    # tests/web/test_research_api.py writes each and reads its shape.
     assert (body["review"], body["secondary"], body["report"], body["item"]) == (None,) * 4
     assert body["priceNeeds"] is None and body["result"]["designation"] == "above"
     # The policy's edges, by which the drawer keeps its price ÷ value figure inside the band.
     assert body["designationEdges"] == [0.65, 0.85, 1.15, 1.5]
-    # The fraction of the window from which the drawer's validity window reads aging.
+    # The fraction of the window from which a validity window reads aging, as the Freshness
+    # column does.
     assert body["agingFraction"] == 0.6667
     result = body["result"]
     assert result == json.loads(result_to_json(results["AAPL"]))
@@ -4030,8 +4032,8 @@ def test_bundle_css_bar_is_sticky_and_the_header_sits_under_it() -> None:
     """Classifier-designation spec 8.2: the FIND, filter and columns bar sticks at the top of the
     table's scroller, on the raised surface above the header cells, and the screen's header cells
     stick under it at its measured height, the bar's one-line height until it is measured. Its
-    space below is padding, so no row shows between the bar and the header. The groups' and the
-    drawer's tables keep their header at the top."""
+    space below is padding, so no row shows between the bar and the header. The groups' table
+    keeps its header at the top."""
     css = _component_file("bundle.css")
     bar = _rule(css, ".fb-screen__bar {")
     assert "position: sticky;" in bar and "top: 0;" in bar

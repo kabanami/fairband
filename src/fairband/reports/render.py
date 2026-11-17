@@ -413,8 +413,10 @@ def references(
     each is first cited; a ref cited again, with a period or without, keeps its number. ``policy``
     is the effective one and ``tax`` the statements' table; a ``policy:`` ref's source names the
     policy version the report's snapshot was valued under. With ``section`` (counted from 1), only
-    the refs that section cites, each keeping its number in the whole list: the drawer's Summary
-    (spec 2026-11-06 Tier 2, 18.2), whose numbers match the report page's."""
+    the refs that section cites, each keeping its number in the whole list, so the company
+    detail's report summary (spec 2026-11-06 Tier 2, 18.2), which the MCP ``company`` tool
+    carries, numbers its cites as the report page does. No page draws that summary since the
+    drawer's left (the company page's design, 11)."""
     numbered: dict[str, int] = {}
     for _, part in parts(report.sections):
         ref = _cited(part)

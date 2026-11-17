@@ -201,7 +201,7 @@ def test_the_examples_are_dated_to_method_1_4() -> None:
     classifier = _section(html, "classifier")
     msft = classifier[classifier.index("Worked example: Microsoft") :]
     assert '<td class="body">Checks</td><td class="body fb-num">none</td>' in msft
-    assert "A stable margin points to no phase, so the drawer adds no note." in msft
+    assert "A stable margin points to no phase, so no note is added." in msft
     assert "Margin direction disagrees" not in msft and "Stable points to Mature" not in msft
     assert "1.3 points a year · decile 7 · Stable" in msft
     assert "Consensus growth, years 2 to 4" in mmm
@@ -500,12 +500,15 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         ),
         # spec 2026-11-13 8a: the flags follow a review that fills the row, not a secondary
         (
-            "Where a review fills the row, the Flags and Warnings columns, the Clean filter and"
-            " the drawer's list of flags read the review's flags. A secondary valuation has none,"
-            " so its row keeps the engine's."
+            "Where a review fills the row, the Flags and Warnings columns and the Clean filter read"
+            " the review's flags. A secondary valuation has none, so its row keeps the engine's."
         ),
-        # the meter draws the band; the drawer, not the meter, adds the stance and the summary
-        "The drawer's meter draws that band; the drawer adds the stance and the report's summary.",
+        # the company page's design, 8.2 and 11: the drawer's meter draws the band; the company
+        # page draws it too, with the report's stance and its link under it
+        (
+            "The drawer's meter draws that band. The company page, which the ticker opens, draws"
+            " it too, and under it the latest report's stance and a link to the report."
+        ),
         # spec 2026-11-14 7: a refresh scales an earlier override at a split, and says so
         (
             "After a stock split, an earlier override in dollars a share or in shares is scaled"

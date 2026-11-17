@@ -84,14 +84,14 @@ For Codex, add a line to `AGENTS.md` that tells the agent to follow
 
 ## Opening Claude Code from the page
 
-Once `launch.json` holds a window command, **Request research** in a company's drawer or on its
-report page also opens a terminal window, in which Claude Code starts with the research skill and
-the work item as its first prompt, `/fairband-research work item 12`. The agent claims the item,
-and the line under the button follows the launch until it does, or says what failed: the window,
-or Claude Code in it. The menu's box **Open Claude Code**, cleared, posts the request without a
-window. Without a window command the button only posts the work item. A pending item's row on
-the Inbox page has **Open Claude Code** too, for an item that no click made: the review Fairband
-posts when a watched company's window ends, or an item an agent posted.
+Once `launch.json` holds a window command, **Request research** in a company's drawer, on its
+company page or on its report page also opens a terminal window, in which Claude Code starts with
+the research skill and the work item as its first prompt, `/fairband-research work item 12`. The
+agent claims the item, and the line under the button follows the launch until it does, or says
+what failed: the window, or Claude Code in it. The menu's box **Open Claude Code**, cleared, posts
+the request without a window. Without a window command the button only posts the work item. A
+pending item's row on the Inbox page has **Open Claude Code** too, for an item that no click made:
+the review Fairband posts when a watched company's window ends, or an item an agent posted.
 
 The file is `~/.config/fairband/launch.json`, beside `keys.toml`. The Agents section of the
 Settings page shows what it holds and writes it on Save; its **Test** opens a window in which

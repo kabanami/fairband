@@ -422,7 +422,7 @@ def test_the_intangibles_estimate_reaches_the_roic_inputs(
     mg_inputs: CompanyInputs, ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     """Assembly took the issuer's as-reported intangibles total (D17) into invested capital: on
-    both routes the aggregate ROIC and the runway return the drawer shows are estimates under
+    both routes the aggregate ROIC and the runway return the inputs carry are estimates under
     that method. The aggregate ROIC says why; the runway return keeps the note naming the measure
     the charge used. The snapshot keeps them."""
     method = "bs10-intangibles-total-v1"
@@ -1016,7 +1016,7 @@ def test_value_at_or_below_zero_is_refused(
     r = value_company(mg_inputs, deciles, policy, TODAY)
     assert_refused(r, "value not positive under the reinvestment charge")
     im = r.intermediates
-    # the value side is kept for the drawer; nothing at the price is computed
+    # the value side is kept in the intermediates; nothing at the price is computed
     assert im["value_per_share"] < 0
     assert im["price_facts"] == asdict(price_facts(mg_inputs.closes, TODAY))
     assert not {"implied_growth", "multiples", "expected_return"} & set(im)
@@ -2174,7 +2174,7 @@ def test_value_outside_adds_to_the_value_and_targets_the_business_price(
     im = outside.intermediates
     assert im["outside_value_per_share"] == 12.0
     assert "outside_value_per_share" not in plain.intermediates
-    # the intermediates' value a share stays the business's, so the drawer's arithmetic reproduces
+    # the intermediates' value a share stays the business's, so the route's arithmetic reproduces
     assert im["value_per_share"] == plain.intermediates["value_per_share"]
     path, charge = route_mature_growth._rebuilt(im, policy)
     target = (plain.price - 12.0) * plain.intermediates["shares"]
@@ -3063,7 +3063,7 @@ def test_reprice_moves_the_price_input(
     deciles: Deciles,
     policy: Policy,
 ) -> None:
-    """The drawer reproduces a repriced row: its price input is the fresh quote, as of the new
+    """A repriced row reproduces from its inputs: its price input is the fresh quote, as of the new
     price date and stamped as the quote was; its source and every other input stay. A refusal's
     price input moves too."""
     day = date(2026, 11, 2)
