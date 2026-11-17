@@ -35,9 +35,10 @@
 // After each step the trace on stdout gains what it returned (storedMarks' choice), whether it
 // threw, the store's items (null for none or one that throws), the requests made (each its
 // method and address) and the headers each was sent with, the elements found by id that were
-// opened or scrolled to, each {open, scrolled}, the times companyPage.redraw was called, and the
-// tree the tab draws, each component in it drawn with its props in turn, as page.mjs draws one,
-// so a test reads the elements the bundle's components give.
+// opened or scrolled to, each {open, scrolled}, the times companyPage.redraw was called, the
+// height each call to reportCharts.groupCharts was given (null for none), and the tree the tab
+// draws, each component in it drawn with its props in turn, as page.mjs draws one, so a test
+// reads the elements the bundle's components give.
 //
 //   node research.mjs <bundle.js> <app.js> <script.js> ...  < input.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -136,6 +137,12 @@ window.FairbandPage.companyPage.redraw = () => {
   redrawn += 1;
   if (tab) draw();
 };
+let grouped = []; // the height each call to reportCharts.groupCharts was given this step
+const groupCharts = window.FairbandPage.reportCharts.groupCharts;
+window.FairbandPage.reportCharts.groupCharts = (tables, height) => {
+  grouped.push(height === undefined ? null : height);
+  return groupCharts(tables, height);
+};
 
 function* elements(tree) {
   if (Array.isArray(tree)) { for (const child of tree) yield* elements(child); return; }
@@ -182,6 +189,7 @@ for (const step of input.steps) {
   headers = [];
   touched = {};
   redrawn = 0;
+  grouped = [];
   try {
     if (step.do === 'stored') result = T.storedMarks();
     else if (step.do === 'keep') T.keepMarks(step.on);
@@ -219,6 +227,7 @@ for (const step of input.steps) {
     headers,
     touched,
     redrawn,
+    grouped,
     tree: live,
   });
 }

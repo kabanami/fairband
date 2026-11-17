@@ -749,8 +749,8 @@ def test_a_refused_series_draws_the_server_s_sentence_in_the_charts_place() -> N
 
 
 def test_a_series_of_another_report_is_dropped() -> None:
-    """Report 31's financial tables, landing after report 19 is shown, change nothing drawn;
-    report 19's own, landing after, draw its charts."""
+    """Report 31's financial tables, landing after report 19 is shown, change nothing drawn and
+    draw nothing again; report 19's own, landing after, draw its charts."""
     replies = {TABLES: {"status": 200, "body": answers.TABLES, "held": True}}
     steps = [
         _mount(),
@@ -761,8 +761,51 @@ def test_a_series_of_another_report_is_dropped() -> None:
     ]
     _, shown, waited, late, own = _drive(steps, replies)
     assert [url for _, url in shown["fetched"]].count(TABLES) == 1  # report 19's own read
-    assert late["redrawn"] == 1
+    assert late["redrawn"] == 0
     assert late["tree"] == waited["tree"]
     assert _titles(waited["tree"]) == []
     assert own["redrawn"] == 1
     assert len(_titles(own["tree"])) == 12 + 3  # the six groups' charts and the quarters'
+
+
+def test_only_the_report_shown_keeps_its_series() -> None:
+    """The series are kept for the report shown alone: once report 19 is shown, report 31's are
+    let go, so going back to 31 draws no chart of its first run while its own read is held, and
+    draws its charts as that read lands."""
+    replies = {
+        TABLES: [
+            {"status": 200, "body": answers.TABLES},
+            {"status": 200, "body": answers.TABLES},
+            {"status": 200, "body": answers.TABLES, "held": True},
+        ]
+    }
+    steps = [_mount(), {"do": "wait"}, _mount(_report_19(), "land"), {"do": "wait"}]
+    steps += [_mount(answers.answer(), "land"), {"do": "wait"}, {"do": "release", "url": TABLES}]
+    _, first, _, other, back, waited, landed = _drive(steps, replies)
+    assert len(_titles(first["tree"])) == 12 + 3
+    assert len(_titles(other["tree"])) == 12 + 3
+    assert [url for _, url in back["fetched"]].count(TABLES) == 1
+    assert _titles(back["tree"]) == [] and _titles(waited["tree"]) == []
+    assert landed["redrawn"] == 1
+    assert len(_titles(landed["tree"])) == 12 + 3
+
+
+def test_the_financial_charts_are_built_for_their_section_alone() -> None:
+    """A draw builds the financial tables' charts once, for the section whose layout stands
+    them: smaller for its pairs, at their own height for a row of groups no paragraph names, and
+    for no other section."""
+    replies = {TABLES: {"status": 200, "body": answers.TABLES}}
+    press = {"do": "press", "class": "app-research__marks", "text": "Footnote marks"}
+    *_, pressed = _drive([_mount(), {"do": "wait"}, press], replies)
+    assert len(_titles(pressed["tree"])) == 12 + 3
+    assert pressed["grouped"] == [SMALL]
+
+    answer = answers.answer()
+    financial = HEADINGS.index("Financial performance and health")
+    answer["report"]["sections"][financial]["parts"] = [
+        p.replace("**Quality.**", "**Scores.**") if isinstance(p, str) else p
+        for p in answers.FINANCIAL
+    ]
+    *_, pressed = _drive([_mount(answer), {"do": "wait"}, press], replies)
+    assert pressed["grouped"] == [SMALL, None]
+    assert len(classed(pressed["tree"], "app-research__minis--all")) == 1

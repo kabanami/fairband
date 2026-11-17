@@ -38,12 +38,13 @@
    The series the charts read (8.2) are read as the report page reads them, each on its own after
    the report lands, each with the request header: the financial tables, the multiples history,
    five years of closes, the band's history and each sensitivity reading the references name.
-   They are kept by the report's id outside the tab, read when a report's answer lands, again
-   when a new answer of the same report lands (the charts drawn staying until their new series
-   land), never when the tab is only drawn again; each landing draws the page again
-   (FairbandPage.companyPage.redraw), so a series of a report no longer shown changes nothing
-   drawn, and one of an older run of the reads is dropped. A section's text is drawn at once; a
-   chart waits for its series; a read the server refused draws its sentence in the chart's place.
+   They are kept by the report's id outside the tab, the report shown's alone, read when a
+   report's answer lands, again when a new answer of the same report lands (the charts drawn
+   staying until their new series land), never when the tab is only drawn again; each landing
+   draws the page again (FairbandPage.companyPage.redraw), and one of a report no longer shown,
+   or of an older run of the reads, is dropped and draws nothing again. A section's text is drawn
+   at once; a chart waits for its series; a read the server refused draws its sentence in the
+   chart's place. The financial tables' charts are built for the section that stands them alone.
 
    A cited number (7.7) is the design system's cite: the CSS gives it the text's colour and its
    [n] shows while Footnote marks is on, the choice kept in the browser's localStorage under
@@ -265,8 +266,14 @@
     var aside = laid.cards.map(function (b, i) {
       return labelled(b, footnotes, i, 'app-research__card');
     }).concat(under ? [] : held);
-    var charts = tables ? {
-      small: P.reportCharts.groupCharts(tables, SMALL), whole: P.reportCharts.groupCharts(tables)
+    var kinds = laid.rows.map(function (r) { return r.kind; });
+    var pairs = kinds.indexOf('pair') >= 0;
+    var grouped = kinds.indexOf('groups') >= 0;
+    /* the charts of the section that stands them alone: smaller for its pairs, whole for a row
+       of groups */
+    var charts = tables && (pairs || grouped) ? {
+      small: pairs ? P.reportCharts.groupCharts(tables, SMALL) : null,
+      whole: grouped ? P.reportCharts.groupCharts(tables) : null
     } : null;
     var firstCharts = -1; /* the first row of charts, where a refusal's sentence stands */
     laid.rows.some(function (r, i) {
@@ -278,7 +285,7 @@
     });
     if (aside.length) {
       var side = h('div', { key: 'cards', className: 'app-research__cards' }, aside);
-      var first = laid.rows.map(function (r) { return r.kind; }).indexOf('run');
+      var first = kinds.indexOf('run');
       if (first < 0) rows.push(side);
       else {
         rows[first] = h('div', { key: 'split', className: 'app-research__split' }, rows[first],
@@ -629,11 +636,15 @@
      when the tab is handed a report it has not read them for: the first time, and again when a
      new answer of the tab's read lands for the same report (a new report object: after a
      refresh ends, after a note is taken), as the report page reads them at every landing; what
-     landed before stays drawn until each new series takes its place. Drawn again with the same
+     landed before stays drawn until each new series takes its place. Starting them, it lets go
+     of every other report's, so `held` keeps the report shown alone. Drawn again with the same
      answer, it starts no read and gives what has landed. */
   function series(report, held) {
     var kept = Object.prototype.hasOwnProperty.call(held, report.id) ? held[report.id] : null;
     if (!kept || kept.of !== report) {
+      Object.keys(held).forEach(function (id) {
+        if (id !== String(report.id)) delete held[id];
+      });
       kept = held[report.id] = { of: report, got: kept ? kept.got : {} };
       readSeries(report, held);
     }
@@ -643,17 +654,18 @@
   /* The report's series, each on its own, its body or the server's sentence why not, as the
      report page reads them: the six financial tables, the multiples history, the closes of the
      five years, the band's history and each sensitivity reading the references name, once, in
-     the order first cited, the company's own. Each lands under the report's id, so one of a
-     report no longer shown changes nothing drawn, taking the place of the one before it, and the
-     page draws again; one of an older run of the reads, landing after a newer run started, is
-     dropped. */
+     the order first cited, the company's own. Each lands under the report's id, taking the place
+     of the one before it, and the page draws again; one of a report no longer shown, or of an
+     older run of the reads, landing after a newer run started, is dropped and draws nothing
+     again. */
   function readSeries(report, held) {
     var id = report.id;
     var company = '/api/companies/' + encodeURIComponent(report.symbol);
     var land = function (key) {
       return function (got) {
         var kept = held[id];
-        if (kept.of !== report) return; /* a newer run of the reads started: the latest wins */
+        /* another report is shown, or a newer run of the reads started: the latest wins */
+        if (!kept || kept.of !== report) return;
         var next = {};
         Object.keys(kept.got).forEach(function (k) { next[k] = kept.got[k]; });
         next[key] = got;
