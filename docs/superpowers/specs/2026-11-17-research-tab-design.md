@@ -341,6 +341,15 @@ paragraph's bold lead word names the group. The earnings call's three charts sta
 quarter`. A refused read draws its sentence alone, with no title (the whole-branch review's
 ruling, decision log).
 
+A chart's track is never under 300 px where its column allows it, the least the design system's
+charts need for their ticks, and never wider than the column where it does not, so three charts
+in a column too narrow for three stand two and one. In a row of groups each group is a block of
+its own, its title over its own charts, and the blocks stand side by side in their order and
+wrap; a block is as wide as its charts at 320 px a chart and the gaps between them, never wider
+than the row, and where it must shrink its charts wrap inside it. The earnings call's three
+charts are one such block across the panel (the look after the whole-branch review's fixes,
+decision log).
+
 ### 7.10 Records
 
 The Records view: one panel a kind, each with its count, each a table, newest first, "None on
@@ -783,3 +792,28 @@ The readout goes in the decision log: the heights of the seven, and what the eye
      Rule 5 would take the words off a paragraph that opens "The bull case is …" and leave "Is
      …"; none of the 33 reports on file opens so: 25 open "The bull case:", 6 "**The bull
      case.**" and 2 "The bull case.".
+- **2026-11-18, the look after the whole-branch review's fixes.** The controller looked at the
+  tab in a browser after `3fe138f` and found two faults of the charts' widths; the review of
+  those fixes left three small items. All are fixed in `f929a94` (the code and the tests) and
+  this entry's commit (the documents):
+  1. A chart was too narrow for its ticks. The tracks were at least 200 px in a pair and the
+     earnings call's row and 240 px in a row of groups, where the design system's charts need
+     about 300 px: at a 1,440 px window the Growth pair's three charts were 203 px wide each, and
+     NVDA's row of groups drew its charts 263 to 290 px wide, the ticks under the bars running
+     into each other ("20222023", "2026to date"). One rule now sets every track at every width,
+     never under 300 px where the column allows it and never wider than the column, so three
+     charts in a column too narrow for three stand two and one; the narrow width's own rules for
+     the tracks left (7.9).
+  2. Made by the titles: each title spanned the row of groups' one grid, so every group started
+     a row of its own and, the titles filling every track, no empty track collapsed. At 2,000 px
+     NVDA's financial section was 2,751 px tall against 1,622 px before the titles, its charts
+     five tracks wide with the right two empty under every group. Each group is now a block of
+     its own, its title over its own grid of charts, the blocks side by side in their order and
+     wrapping, a block as wide as its charts at 320 px a chart and the gaps between them (the
+     tab sets the count, `--charts`), never wider than the row; the earnings call's block stands
+     across the panel (7.9).
+  3. The review's small items: a test pins again that a row of groups draws its charts at their
+     own height and a pair the smaller ones; a test's comment in `tests/web/test_app.py` says the
+     one print rule for the cite's number shows the marks and sizes nothing; B-218's range runs
+     to `f929a94`; and `docs/method.md` 16.6 names the groups' titles and "By quarter" over the
+     earnings call's charts.

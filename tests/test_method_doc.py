@@ -745,10 +745,17 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
             " the readings the sections cite"
         ),
         (
-            "in The last earnings call three charts by quarter in the section's first row, the"
-            " revenue, the operating margin and the EPS, each by its row's name, each bar's tick"
-            ' its quarter and the last two digits of its year ("Q3 26"), and where no period is'
-            ' stored the three with "No data on file.";'
+            "in Financial performance and health each chart by its row's name, buybacks and"
+            " dividends one measure, their sum, and a group no paragraph names a block of its own"
+            ' under its table\'s title ("Growth and profitability"), a group a paragraph names'
+            " under none, since the paragraph's lead word names it"
+        ),
+        (
+            "in The last earnings call three charts by quarter in the section's first row, under"
+            ' the export\'s title for them, "By quarter", the revenue, the operating margin and the'
+            " EPS, each by its row's name, each bar's tick its quarter and the last two digits of"
+            ' its year ("Q3 26"), and where no period is stored the three with "No data on'
+            ' file.";'
         ),
         (
             "A bar chart draws a bar for each column of its table that holds a figure, the"
