@@ -3124,21 +3124,31 @@ def test_the_axis_always_prints_the_trailing_twelve_months_tick() -> None:
     assert _code(bundle).count("periodLabel(") == 2  # its definition and XAxis, its one caller
 
 
-def test_the_bars_axis_holds_as_many_ticks_as_its_width() -> None:
-    """The Research tab's design, 7.9, a patch to HistoryBars alone: its axis is given `most`,
-    the ticks its plot's width holds, one each 56px, seven at most and two at least, so a bar
-    chart as narrow as the tab's thins its year ticks and one as wide as the report page's prints
-    as before; the other charts' axes are untouched. What the axis prints is read in node
-    (tests/web/test_report_charts.py)."""
+def test_the_charts_axes_hold_as_many_ticks_as_their_width() -> None:
+    """The Research tab's design, 7.9, one patch: `ticksHeld(width, per)`, the ticks a plot's
+    width holds, one to `per` px, seven at most and two at least, gives the axis its `most` in
+    HistoryBars (56px a tick: a year, "to date"), BandHistory (64px: "Q4 2021") and SpreadChart
+    (56px), each call marked; so a chart as narrow as the tab's thins its ticks and one as wide
+    as the report page drew it prints as before. MultipleHistory keeps its own `most`. What the
+    axes print is read in node (tests/web/test_report_charts.py)."""
     bundle = _component_file("bundle.js")
-    bars = _function(bundle, "HistoryBars")
-    _in_order(
-        bars,
-        "// fairband: the axis carries as many ticks as the plot's width holds",
-        "(spec 2026-11-17 research tab, 7.9)",
-        "most: Math.min(7, Math.max(2, Math.floor((R - L) / 56)))",
+    held = _function(bundle, "ticksHeld")
+    lead = bundle.index("// fairband: the ticks a plot `width` px wide holds")
+    assert "(spec 2026-11-17 research tab, 7.9)" in bundle[lead : bundle.index(held)]
+    assert "return Math.min(7, Math.max(2, Math.floor(width / per)));" in held
+    for chart, per in (("HistoryBars", 56), ("BandHistory", 64), ("SpreadChart", 56)):
+        _in_order(
+            _function(bundle, chart),
+            "// fairband: the axis carries as many ticks as the plot's width holds",
+            "(spec 2026-11-17 research tab, 7.9)",
+            f"most: ticksHeld(R - L, {per})",
+        )
+    code = _code(bundle)
+    assert code.count("ticksHeld(") == 4  # its definition and the three axes
+    assert code.count("most: ticksHeld(") == 3
+    assert "h(XAxis, { series: series, x: X, y: B, left: L, right: R, most: most })" in (
+        _function(bundle, "MultipleHistory")
     )
-    assert _code(bundle).count("Math.floor((R - L) / 56)") == 1  # HistoryBars' axis alone
 
 
 def test_the_research_tab_s_reads_carry_the_request_header() -> None:

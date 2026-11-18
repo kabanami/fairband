@@ -303,6 +303,57 @@ def test_a_narrow_chart_thins_its_year_ticks_so_none_runs_into_the_trailing_one(
     assert all(b - a > 1 for a, b in pairwise(slots)), slots
 
 
+def _xticks(component: str, width: int, series: list[Any]) -> list[tuple[str, float]]:
+    """The ticks the axis of the bundle's ``component`` prints on ``series`` at ``width`` px, in
+    order, each its words and where it stands."""
+    tree = node("Fairband." + component, [{"title": "A chart", "series": series, "width": width}])
+    [axis] = classed(tree, "fb-c__xaxis")
+    return [(text(t), float(t["props"]["x"])) for t in classed(axis, "fb-c__tick")]
+
+
+# 21 quarters, Q4 2021 to Q4 2026, the price against a band, as the Research tab's price chart
+# draws five years of closes.
+CLOSES = [
+    {
+        "period": f"Q{1 + (q + 3) % 4} {2021 + (q + 3) // 4}",
+        "price": 100.0 + q,
+        "fairLow": 90.0,
+        "fairHigh": 120.0,
+    }
+    for q in range(21)
+]
+# Five years of ROIC against the hurdle rate, as the Research tab's ROIC chart draws them.
+SPREAD = [{"period": str(2021 + k), "roic": 20.0 + k, "wacc": 9.0} for k in range(5)]
+
+
+def test_the_band_chart_prints_as_many_quarter_ticks_as_its_width_holds() -> None:
+    """The Research tab's design, 7.9: at a 1,440px window the Price and multiples column is
+    about 372px wide, and the band chart printed seven quarter ticks into each other. Its axis
+    now holds the ticks its plot's width holds, one to 64px, a quarter's tick being wider than a
+    year's ("Q4 2021"), seven at most, two at least: at 372px (230px of plot) no more than three,
+    the first and the last among them, none closer than 64px to the next; at 740px, the panel's
+    width at a 2,000px window, the seven it printed before."""
+    narrow = _xticks("BandHistory", 372, CLOSES)
+    plot = 372 - 56 - 86
+    assert len(narrow) <= plot // 64
+    assert narrow[0][0] == "Q4 2021" and narrow[-1][0] == "Q4 2026"
+    assert all(b[1] - a[1] >= 64 for a, b in pairwise(narrow)), narrow
+    wide = [words for words, _ in _xticks("BandHistory", 740, CLOSES)]
+    assert wide == [CLOSES[i]["period"] for i in (0, 3, 6, 9, 12, 15, 20)]
+
+
+def test_the_roic_chart_prints_as_many_year_ticks_as_its_width_holds() -> None:
+    """The Research tab's design, 7.9: SpreadChart's axis holds the ticks its plot's width
+    holds, one to 56px as the bar chart's, seven at most: at 320px (186px of plot) no more than
+    three, the first and the last among them; at 550px, about as wide as the report page drew
+    it, all five, as before."""
+    narrow = [words for words, _ in _xticks("SpreadChart", 320, SPREAD)]
+    assert len(narrow) <= (320 - 56 - 78) // 56
+    assert narrow[0] == "2021" and narrow[-1] == "2025"
+    wide = [words for words, _ in _xticks("SpreadChart", 550, SPREAD)]
+    assert wide == ["2021", "2022", "2023", "2024", "2025"]
+
+
 def test_an_axis_with_no_trailing_point_prints_as_before() -> None:
     """The other charts pass no `kind`: eight bars of fiscal years and estimates, or eight
     quarters, print every other tick and the last, as before the patch."""
