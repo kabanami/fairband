@@ -139,9 +139,6 @@ itself, a skill that takes an agent through a report step by step, is in
 
 ## How it was built
 
-I built Fairband with Claude Code. I set the direction and made the rulings; coding agents wrote
-the code, and every commit names the model that wrote it.
-
 - The first commit is from 31 October 2026. Eighteen days later the repository held more than
   660 commits and 4,580 tests.
 - Each larger feature has a written design and a plan, was built task by task with a review of
