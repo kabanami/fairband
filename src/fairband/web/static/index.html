@@ -1196,20 +1196,31 @@
     border-top: 1px solid var(--hairline);
   }
   .app-research__body > .app-research__pair:first-child { padding-top: 0; border-top: 0; }
+  /* The charts (7.9): the design system's charts need about 300px for their ticks, so a chart's
+     track is never under 300px where its column allows it, and never wider than the column where
+     it does not, at every width: three charts in a column too narrow for three stand two and
+     one. A row of groups stands each group as a block of its own, side by side in their order and
+     wrapping; a block is as wide as its charts at 320px a chart and the gaps between them
+     (--charts, the count the tab sets), never wider than the row, so where it must shrink its
+     charts wrap inside it. A block's title, a group's or By quarter over the earnings call's
+     block, which stands across the panel, is in the label's look the report page gave a part. */
   .app-research__minis {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
     gap: var(--space-3) var(--space-6); min-width: 0;
   }
-  .app-research__minis--all { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .app-research__minis > .app-report__error { grid-column: 1 / -1; margin: 0; }
-  /* A group's title over its charts in a row of groups, and By quarter over the earnings call's
-     (7.9): across the row, in the label's look the report page gave a part, a group after another
-     set off by more space than its title from its charts. */
-  .app-research__part {
-    grid-column: 1 / -1; margin: var(--space-3) 0 0; color: var(--ink-muted);
-    text-transform: uppercase;
+  .app-research__groups {
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-5) var(--space-6);
+    min-width: 0;
   }
-  .app-research__part:first-child { margin-top: 0; }
+  .app-research__groups > .app-report__error { margin: 0; }
+  .app-research__groups > .app-research__block {
+    width: calc(var(--charts) * 320px + (var(--charts) - 1) * var(--space-6)); max-width: 100%;
+  }
+  .app-research__block { min-width: 0; }
+  .app-research__part {
+    margin: 0 0 var(--space-2); color: var(--ink-muted); text-transform: uppercase;
+  }
   .app-research .fb-cite { color: inherit; border-bottom-color: var(--border); }
   .app-research .fb-cite:hover, .app-research .fb-cite:focus-visible {
     color: var(--accent); border-bottom-color: var(--accent);
@@ -1297,7 +1308,9 @@
      row above the report, each of its lists a line that scrolls sideways, the reports on file
      first, in a line under the bar, the name in view and the report shown marked by an accent
      lower edge; a section's cards under its text and a pair's charts under its paragraph, as many
-     to a row as the width holds; Records one column; the panels' padding 16px. */
+     to a row as the width holds, by the charts' rule at every width, whose tracks and blocks are
+     never wider than their column, so nothing is wider than a 400px window; Records one column;
+     the panels' padding 16px. */
   @media (width < 980px) {
     .app-research__records { grid-template-columns: minmax(0, 1fr); }
     .app-research__layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
@@ -1310,12 +1323,6 @@
     .app-research__link.is-on, .app-research__file.is-on { border-bottom-color: var(--accent); }
     .app-research__split, .app-research__pair { grid-template-columns: minmax(0, 1fr); }
     .app-research__cards { position: static; }
-    .app-research__minis {
-      grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
-    }
-    .app-research__minis--all {
-      grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-    }
     .app-research__sec, .app-research__panel { padding: var(--space-4); }
     .app-research__summary { padding: var(--space-3) var(--space-4); }
     .app-research__fold { padding: var(--space-1) var(--space-4) var(--space-4); }

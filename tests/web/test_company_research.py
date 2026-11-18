@@ -716,7 +716,9 @@ def test_below_980_px_the_tab_is_one_column() -> None:
     section list is a row above the report, each of its lists a line that scrolls sideways, the
     reports on file first, in a line under the bar; a name marked by its lower edge. A section's
     cards stand under its text, and a pair's charts under its paragraph, as many to a row as fit;
-    Records one column; the panels' padding the mockup's."""
+    Records one column; the panels' padding the mockup's. The charts' tracks take no rule of
+    their own here: the one rule at every width, at least 300px and never wider than the column,
+    and a group's block never wider than its row, keep them inside a 400px window (7.9)."""
     block = _media("(width < 980px)")
     for rule in (
         ".app-research__records { grid-template-columns: minmax(0, 1fr); }",
@@ -734,17 +736,11 @@ def test_below_980_px_the_tab_is_one_column() -> None:
         ),
         ".app-research__split, .app-research__pair { grid-template-columns: minmax(0, 1fr); }",
         ".app-research__cards { position: static; }",
-        (
-            ".app-research__minis { grid-template-columns:"
-            " repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }"
-        ),
-        (
-            ".app-research__minis--all { grid-template-columns:"
-            " repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }"
-        ),
         ".app-research__sec, .app-research__panel { padding: var(--space-4); }",
     ):
         assert rule in block, rule
+    for name in ("app-research__minis", "app-research__groups", "app-research__block"):
+        assert name not in block, name
 
 
 def test_print_draws_the_report_view_alone() -> None:

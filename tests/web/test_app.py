@@ -2716,10 +2716,11 @@ def test_a_wide_table_prints_whole() -> None:
     its number never wrap, in a table dense with figures those pairs set its width, so the table
     takes the floor of the type scale and nothing below it (the controller's ruling): the cells'
     words at the ``label`` token's 12px on a 16px line, a cite at ``figure-sm``'s 12px, its own
-    class's size, and its number at the ``caption``'s 11px, its screen size, with no print rule;
-    the tab's selector beats the cell's type class. Nothing in print stops the cells wrapping, and
-    a cite stays whole with its number by the bundle's rule, which holds in print. The table still
-    stays on one page, and the screen keeps its scroller."""
+    class's size, and its number at the ``caption``'s 11px, its screen size, with no print rule
+    that sizes it (the one print rule that names it shows the tab's marks); the tab's selector
+    beats the cell's type class. Nothing in print stops the cells wrapping, and a cite stays
+    whole with its number by the bundle's rule, which holds in print. The table still stays on
+    one page, and the screen keeps its scroller."""
     page = _static_file("index.html")
     block = page[page.index("@media print {") :]
     block = block[: block.index("\n  }\n")]
@@ -2740,7 +2741,7 @@ def test_a_wide_table_prints_whole() -> None:
     assert [line.strip() for line in code.splitlines() if "fb-report__scroll" in line] == [
         ".fb-report__scroll { overflow: visible; }"
     ]
-    # no width for the table, and no print rule for the cite's number
+    # no width for the table
     assert [line.strip() for line in code.splitlines() if "fb-report__table" in line] == [
         ".fb-report__table, .fb-report__list li { break-inside: avoid; }",
         ".app-research .fb-report__table td { font-size: 12px; line-height: 16px; }",

@@ -685,15 +685,34 @@ def _titled(*keys: str) -> list[tuple[str, str]]:
     ]
 
 
+def _heights(tree: Any) -> list[int | None]:
+    """The height each chart in ``tree`` is given, in order; None where it is given none and
+    takes the bundle's own, its whole height."""
+    return [e["props"].get("height") for e in elements(tree) if "series" in e["props"]]
+
+
+def _block(block: dict[str, Any], title: str, charts: list[Any]) -> None:
+    """``block`` is a block of charts (7.9): its title, ``title``, an ``h3`` in the label's look,
+    over its own grid of ``charts``, with the count of its charts for its width."""
+    assert block["type"] == "div" and block["props"]["className"] == "app-research__block"
+    assert block["props"]["style"] == {"--charts": str(len(charts))}
+    head, grid = block["props"]["children"]
+    assert head["type"] == "h3" and head["props"]["className"] == "label app-research__part"
+    assert text(head) == title
+    assert grid["props"]["className"] == "app-research__minis"
+    assert grid["props"]["children"] == [charts]
+
+
 def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
     """Rule 3: a pair is its paragraph at the reading width beside its group's charts, drawn
     smaller, with no title, since the paragraph's bold lead word names the group; a group no
-    paragraph names stands in a row of its own, the charts alone at their own height under the
-    group's title. Rule 4: the call opens with its three charts by quarter, drawn smaller, under
-    "By quarter". A refused read draws its sentence once, in the place of the first charts. Every
-    section's text is drawn while no series has landed."""
+    paragraph names stands in a row of its own, a block of its charts at their own height under
+    the group's title. Rule 4: the call opens with its three charts by quarter, drawn smaller,
+    one block under "By quarter". A refused read draws its sentence once, in the place of the
+    first charts, and no block. Every section's text is drawn while no series has landed."""
     tables = {"body": answers.TABLES}
     small = _charts_of("groupCharts", tables, SMALL)
+    whole = _charts_of("groupCharts", tables)
     financial = HEADINGS.index("Financial performance and health")
     rows = _rows(_section(financial, {"tables": tables}))
     assert [r["props"]["className"] for r in rows] == ["app-research__pair"] * 6
@@ -703,6 +722,8 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
         assert charts["props"]["className"] == "app-research__minis"
         assert charts["props"]["children"] == [small[key]["charts"]]
         assert _heads(row) == [("chart", title) for title in CHARTS[key]]  # no title
+        assert classed(row, "app-research__block") == []
+        assert _heights(row) == [SMALL] * len(CHARTS[key])  # drawn smaller
 
     parts = [
         p.replace("**Quality.**", "**Scores.**") if isinstance(p, str) else p
@@ -712,9 +733,12 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
     assert [r["props"]["className"] for r in rows] == [
         *["app-research__pair"] * 5,
         "app-research__run",
-        "app-research__minis app-research__minis--all",
+        "app-research__groups",
     ]
     assert _heads(rows[-1]) == _titled("quality")
+    [quality] = rows[-1]["props"]["children"][0]
+    _block(quality, TITLES["quality"], whole["quality"]["charts"])
+    assert _heights(rows[-1]) == [None, None]  # at their own height, not the pairs'
 
     refused = {"error": "no financial statements for LFOX"}
     rows = _rows(_section(financial, {"tables": refused}))
@@ -723,7 +747,6 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
 
     earnings = HEADINGS.index("The last earnings call")
     first, *rest = _rows(_section(earnings, {"tables": tables}))
-    assert first["props"]["className"] == "app-research__minis"
     assert _heads(first) == [
         ("part", QUARTERS_TITLE),
         ("chart", "Revenue"),
@@ -732,13 +755,14 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
     ]
     assert QUARTERS_TITLE == "By quarter"
     quarters = _charts_of("quarterCharts", tables, SMALL)
-    assert [c for c in elements(first) if "series" in c["props"]] == [
-        c for c in elements(quarters["charts"]) if "series" in c["props"]
-    ]
+    _block(first, QUARTERS_TITLE, quarters["charts"])
+    assert _heights(first) == [SMALL] * 3
     assert rest == _rows(_section(earnings, {}))
     [refusal] = _rows(_section(earnings, {"tables": refused}))[:1]
     assert text(refusal) == "The figures by quarter did not load: no financial statements for LFOX."
     assert _heads(refusal) == []  # the sentence alone, no title
+    assert "app-research__block" not in refusal["props"]["className"]
+    assert classed(refusal, "app-research__block") == []
 
     [mounted] = _drive([_mount()])
     for index in range(len(HEADINGS)):
@@ -753,20 +777,24 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
 
 def test_a_row_of_groups_draws_each_group_s_title_over_its_charts() -> None:
     """Spec 7.9: the charts keep the report page's titles, the export's (``charts.TITLES``). A
-    row of groups draws each group's title over that group's charts, in the label's look the
-    report page gave a part, across the row: all six in their order where no paragraph names a
-    group, so every chart stands first; the two no paragraph names after the pairs. A pair draws
-    none. A refused read draws its sentence once and no title."""
+    row of groups draws each group as a block of its own, in their order: the group's title, in
+    the label's look the report page gave a part, over its own grid of its charts at their own
+    height, with the count of its charts for its width; all six where no paragraph names a group,
+    so every chart stands first; the two no paragraph names after the pairs. A pair draws no
+    block and no title. A refused read draws its sentence once and no block."""
     tables = {"body": answers.TABLES}
+    whole = _charts_of("groupCharts", tables)
     financial = HEADINGS.index("Financial performance and health")
     plain = ["Revenue grew and the cash stayed ahead of the debt."]
     first, *rest = _rows(_section(financial, {"tables": tables}, plain))
-    assert first["props"]["className"] == "app-research__minis app-research__minis--all"
+    assert first["props"]["className"] == "app-research__groups"
     assert _heads(first) == _titled(*GROUPS)
-    assert [e["type"] for e in classed(first, "app-research__part")] == ["h3"] * 6
-    assert [e["props"]["className"] for e in classed(first, "app-research__part")] == [
-        "label app-research__part"
-    ] * 6
+    blocks = first["props"]["children"][0]
+    assert len(blocks) == 6 and classed(first, "app-research__block") == blocks
+    for block, key in zip(blocks, GROUPS, strict=True):
+        _block(block, TITLES[key], whole[key]["charts"])
+    assert [b["props"]["style"]["--charts"] for b in blocks] == ["3", "2", "2", "1", "2", "2"]
+    assert _heights(first) == [None] * 12
     assert classed(rest, "app-research__part") == []
 
     named = {"**Capital allocation.**": "**Payouts.**", "**Quality.**": "**Scores.**"}
@@ -775,10 +803,17 @@ def test_a_row_of_groups_draws_each_group_s_title_over_its_charts() -> None:
         parts = [p.replace(lead, other) if isinstance(p, str) else p for p in parts]
     rows = _rows(_section(financial, {"tables": tables}, parts))
     two = rows[-1]  # after the pairs and the paragraphs that name no group
-    assert two["props"]["className"] == "app-research__minis app-research__minis--all"
+    assert two["props"]["className"] == "app-research__groups"
     assert _heads(two) == _titled("capital_allocation", "quality")
+    blocks = two["props"]["children"][0]
+    assert len(blocks) == 2
+    for block, key in zip(blocks, ["capital_allocation", "quality"], strict=True):
+        _block(block, TITLES[key], whole[key]["charts"])
     pairs = [r for r in rows if r["props"]["className"] == "app-research__pair"]
-    assert len(pairs) == 4 and classed(pairs, "app-research__part") == []
+    assert len(pairs) == 4
+    assert (
+        classed(pairs, "app-research__part") == [] and classed(pairs, "app-research__block") == []
+    )
 
     refused = {"error": "no financial statements for LFOX"}
     first = _rows(_section(financial, {"tables": refused}, plain))[0]
@@ -786,14 +821,38 @@ def test_a_row_of_groups_draws_each_group_s_title_over_its_charts() -> None:
     assert [text(e) for e in classed(first, "app-report__error")] == [sentence]
     assert text(first) == sentence
     assert classed(first, "app-research__part") == []
+    assert classed(first, "app-research__block") == []
 
     title = _rule(".app-research__part {")
-    for declaration in (
-        "grid-column: 1 / -1;",
-        "color: var(--ink-muted);",
-        "text-transform: uppercase;",
-    ):
+    for declaration in ("color: var(--ink-muted);", "text-transform: uppercase;"):
         assert declaration in title, declaration
+    assert "grid-column" not in title  # over its own block, not across a grid
+
+
+def test_a_chart_is_never_narrower_than_its_labels_need() -> None:
+    """The look after the whole-branch review's fixes (spec 7.9): the design system's charts need
+    about 300px for their ticks, so a chart's track is never under 300px where the column allows
+    it, and no wider than the column where it does not, in a pair, the earnings call's block and
+    a group's: three charts in a column too narrow for three stand two and one. A row of groups
+    stands its blocks side by side, in their order, and wraps them; a block is as wide as its
+    charts at 320px a chart and the gaps between them, never wider than the row, so its charts
+    wrap inside it where it must shrink. Below 980px no rule widens them again, so nothing is
+    wider than a 400px window."""
+    assert _rule(".app-research__minis {") == (
+        "display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));"
+        " gap: var(--space-3) var(--space-6); min-width: 0;"
+    )
+    row = _rule(".app-research__groups {")
+    assert "display: flex;" in row and "flex-wrap: wrap;" in row and "min-width: 0;" in row
+    block = _rule(".app-research__groups > .app-research__block {")
+    assert "width: calc(var(--charts) * 320px + (var(--charts) - 1) * var(--space-6));" in block
+    assert "max-width: 100%;" in block
+    assert "min-width: 0;" in _rule(".app-research__block {")
+    # one rule sets the charts' tracks, at every width (test_company_research.py,
+    # test_below_980_px_the_tab_is_one_column)
+    css = _static_file("index.html")
+    assert "app-research__minis--all" not in css
+    assert len(re.findall(r"\.app-research__minis \{", css)) == 1
 
 
 # ------------------------------------------------------------------------------- the series
@@ -976,4 +1035,4 @@ def test_the_financial_charts_are_built_for_their_section_alone() -> None:
     ]
     *_, pressed = _drive([_mount(answer), {"do": "wait"}, press], replies)
     assert pressed["grouped"] == [SMALL, None]
-    assert len(classed(pressed["tree"], "app-research__minis--all")) == 1
+    assert len(classed(pressed["tree"], "app-research__groups")) == 1

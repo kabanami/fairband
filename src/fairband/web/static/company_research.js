@@ -35,10 +35,10 @@
    Risks and kill criteria, the kill criteria; Key judgments, one card a judgment in a row under
    the text. A card draws the read's fields and stored records, and computes no figure. The
    charts (7.9) are charts.js's (FairbandPage.reportCharts) with no panel of their own: in
-   Financial performance and health a paragraph stands beside its group's charts and a group no
-   paragraph names in a row of its own, under the group's title (rule 3); the last earnings call
-   opens with its three charts by quarter, under By quarter (rule 4); those of a pair and of the
-   quarters' row drawn smaller.
+   Financial performance and health a paragraph stands beside its group's charts and the groups
+   no paragraph names in a row of their own, each a block under its title, side by side (rule
+   3); the last earnings call opens with its three charts by quarter, a block under By quarter
+   (rule 4); those of a pair and of the quarters' block drawn smaller.
 
    The series the charts read (8.2) are read each on its own after the report lands, each with
    the request header: the financial tables, the multiples history, five years of closes, the
@@ -372,31 +372,38 @@
       h('div', { key: 'charts', className: 'app-research__minis' }, charts));
   }
 
-  /* The charts of the groups no paragraph names, alone, in a row at their own height (rule 3),
-     each group's title over its charts (7.9); nothing before they land; where the tables did not
-     load, the sentence alone, no title, where the row is the `first` to stand charts. */
+  /* The charts of the groups no paragraph names, alone, at their own height (rule 3): each group
+     a block of its own, its title over its charts (7.9), the blocks side by side in their order
+     and wrapping (app-research__groups); nothing before they land; where the tables did not
+     load, the sentence alone, no block, where the row is the `first` to stand charts. */
   function groups(r, key, drawn, first) {
     if (!drawn || (drawn.refused && !first)) return null;
-    var charts = drawn.refused || r.groups.map(function (g) { return titled(g, drawn[g]); });
-    return h('div', { key: key, className: 'app-research__minis app-research__minis--all' },
-      charts);
+    var body = drawn.refused || r.groups.map(function (g) { return titled(g, drawn[g]); });
+    return h('div', { key: key, className: 'app-research__groups' }, body);
   }
 
-  /* The last earnings call's first row (rule 4): its three charts by quarter, drawn smaller,
-     under the export's title for them, By quarter (7.9), or the sentence of the tables' refusal
-     alone; none on an answer without the quarters. */
+  /* The last earnings call's first row (rule 4): its three charts by quarter, drawn smaller, one
+     block across the panel under the export's title for them, By quarter (7.9); or the sentence
+     of the tables' refusal alone, no block; none on an answer without the quarters. */
   function quarterRow(tables) {
     var drawn = P.reportCharts.quarterCharts(tables, SMALL);
     if (!drawn) return null;
-    return h('div', { key: 'quarters', className: 'app-research__minis' },
-      drawn.refused || titled('quarters', drawn));
+    if (drawn.refused) {
+      return h('div', { key: 'quarters', className: 'app-research__minis' }, drawn.refused);
+    }
+    return titled('quarters', drawn);
   }
 
-  /* A group of charts under `key`, { title, charts }: its title across the row of charts, in the
-     label's look the report page gave a part (app-research__part), then its charts. */
+  /* A block of charts under `key`, { title, charts } (7.9): its title, in the label's look the
+     report page gave a part (app-research__part), over its own grid of its charts; the count of
+     its charts in --charts, by which a row of groups sets the block's width. */
   function titled(key, group) {
-    return h(React.Fragment, { key: key },
-      h('h3', { className: 'label app-research__part' }, group.title), group.charts);
+    return h('div', {
+      key: key, className: 'app-research__block',
+      style: { '--charts': String(group.charts.length) }
+    },
+      h('h3', { className: 'label app-research__part' }, group.title),
+      h('div', { className: 'app-research__minis' }, group.charts));
   }
 
   /* Two columns, each its block under its label. */
