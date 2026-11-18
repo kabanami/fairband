@@ -1,18 +1,20 @@
-"""The company page's four reads for one made-up company, ``page_payloads``' Lanternfield Optics
+"""The company page's five reads for one made-up company, ``page_payloads``' Lanternfield Optics
 (``LFOX``), which lists in US dollars and reports in New Taiwan dollars: the overview answer, the
-estimates answer, the financials answer and the company's detail, as the page's node tests hand
-them to its scripts.
+estimates answer, the financials answer, the Investor relations tab's answer and the company's
+detail, as the page's node tests hand them to its scripts.
 
-The three answers are the readers' (``vendors.page_fmp`` and ``vendors.page_financials``) on
-``page_payloads``' answers, put together as ``web/company_api.py`` puts them, so their shapes are
-the server's. Only the data date, the news' time and the financials' currency and cadence are set
-by hand: the server takes the first two from when its answers were stored, and finds the others
-on the stored statements (the newest annual income row names New Taiwan dollars, and the quarters
-end a quarter apart). The detail is written by hand in the shape of ``GET
+The four answers are the readers' (``vendors.page_fmp``, ``vendors.page_financials`` and
+``vendors.page_investor``) on ``page_payloads``' answers, put together as ``web/company_api.py``
+puts them, so their shapes are the server's. Only the data date, the news' time, the financials'
+currency and cadence and the filing list's window and day are set by hand: the server takes the
+first two and the filing list's day from when its answers were stored, finds the currency and the
+cadence on the stored statements (the newest annual income row names New Taiwan dollars, and the
+quarters end a quarter apart), and the window from the stored list's params (a refresh's of 2 Nov
+2026, the 365 days to 1 Nov 2026). The detail is written by hand in the shape of ``GET
 /api/companies/{symbol}`` (``web/app.py``, ``company``): LFOX valued on the Mature Growth route at
 $196.50 against a price of $182.40, a wide moat, two notes, no review, no report and no open item.
 
-The builders give the variants: a refused row, a reviewed row with a published report, the three
+The builders give the variants: a refused row, a reviewed row with a published report, the four
 answers of a company with nothing stored but its profile, and the overview of one with nothing
 stored at all. Each returns a new copy."""
 
@@ -21,9 +23,9 @@ from datetime import date
 from typing import Any
 
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
-from fairband.refresh.fetch import NEWS_STORIES, STATEMENT_YEARS
+from fairband.refresh.fetch import NEWS_STORIES, STATEMENT_YEARS, filings_window
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT
-from fairband.vendors import page_financials, page_fmp
+from fairband.vendors import page_financials, page_fmp, page_investor
 from fairband.vendors.fmp import StatementKind
 from support import page_payloads as pages
 
@@ -99,6 +101,24 @@ FINANCIALS: dict[str, Any] = {
     "ratios": page_financials.ratios(
         pages.RATIOS_ANNUAL, pages.KEY_METRICS_ANNUAL, REPORTING, STATEMENT_YEARS
     ),
+}
+
+FILINGS_DAY = "2026-11-02"  # the day the filing list was stored: a refresh's, which reads it
+_WINDOW = filings_window(date(2026, 11, 1))  # the list's window, the 365 days to 1 Nov 2026
+
+INVESTOR: dict[str, Any] = {
+    "symbol": SYMBOL,
+    "dataDate": DATA_DATE,
+    "quote": page_fmp.head_quote(_ROW),
+    "nextEarnings": None if _NEXT is None else _NEXT["day"],
+    "calls": page_investor.calls(pages.CALL_DATES, pages.EARNINGS),
+    "filings": {
+        "from": _WINDOW[0].isoformat(),
+        "to": _WINDOW[1].isoformat(),
+        "rows": page_investor.filing_rows(pages.FILINGS),
+        "truncated": False,
+        "observedDay": FILINGS_DAY,
+    },
 }
 
 DETAIL: dict[str, Any] = {
@@ -292,6 +312,24 @@ def profile_only_estimates() -> dict[str, Any]:
         "consensus": page_fmp.consensus(None, None, "USD"),
         "target": page_fmp.target(None),
         "ratings": page_fmp.ratings(None),
+    }
+
+
+def investor() -> dict[str, Any]:
+    """A copy of ``INVESTOR``."""
+    return copy.deepcopy(INVESTOR)
+
+
+def profile_only_investor() -> dict[str, Any]:
+    """The Investor relations tab's answer of a company with nothing stored but its profile,
+    which that read does not draw: no next date, no call, no filing list and no data date."""
+    return {
+        "symbol": SYMBOL,
+        "dataDate": None,
+        "quote": page_fmp.head_quote(None),
+        "nextEarnings": None,
+        "calls": page_investor.calls(None, None),
+        "filings": None,
     }
 
 

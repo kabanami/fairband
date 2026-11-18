@@ -1,17 +1,22 @@
 """The company page's loader as it runs (the company page's design, 7.1 and 7.5): the real app.js,
-controls.js and company.js in node (``tests/web/company_load.mjs``), with a fetch that answers only
-when a step answers it, so each test says when each read lands. Each test reads, after each step,
-what was fetched, what is still in flight, the companies handed ``FairbandPage.notesShown``, the
-popups drawn and what the page draws: faded or not, a failed read's sentence, the head's ticker
-and price, the tab selected and what the open tab's function was handed (the driver's own
-function draws the mark of the tab's answer and the price of the detail).
+controls.js, company.js and company_investor.js in node (``tests/web/company_load.mjs``), with a
+fetch that answers only when a step answers it, so each test says when each read lands. Each test
+reads, after each step, what was fetched and the headers it carried, what is still in flight, the
+companies handed ``FairbandPage.notesShown``, the popups drawn and what the page draws: faded or
+not, a failed read's sentence, the head's ticker and price, the tab selected and what the open
+tab's function was handed (the driver's own function draws the mark of the tab's answer and the
+price of the detail, and on the Investor relations tab the address's word), the data date at the
+row's right end and the view the Investor relations tab's switch selects.
 
 The transitions: a tab held, shown with no read; a tab whose read is out, asked for again; a
 refresh that ends during a tab's read; a tab held, asked for while a read of the detail is out;
 another company, whose first company's late landing is dropped; a failed read of the detail and
 of a tab; a read that lands after the reader left the view; the popups, which close as a view is
-shown; and the panel's place, back at its top as the company or the Research tab's report
-changes."""
+shown; the panel's place, back at its top as the company or the Research tab's report changes;
+and the Investor relations tab's addresses, whose word after the tab's name (a call, ``2026Q4``,
+or ``filings``) never travels to the server, so a change of it, by the address or the tab's
+switch, draws the answer held again and reads nothing, even while the tab's own read is out (the
+Investor relations tab's design, 7.1 and 7.6)."""
 
 import json
 import subprocess
@@ -31,12 +36,15 @@ SCRIPTS = (
     STATIC / "finder.js",
     STATIC / "controls.js",
     STATIC / "company.js",
+    STATIC / "company_investor.js",
 )
 LFOX = "/api/companies/LFOX"
 OVERVIEW = LFOX + "/page/overview"
 ESTIMATES = LFOX + "/page/estimates"
 FINANCIALS = LFOX + "/page/financials"
 RESEARCH = LFOX + "/page/research"
+INVESTOR = LFOX + "/page/investor-relations"
+IR = "#company/LFOX/investor-relations"
 NOTES = LFOX + "/notes"
 BRK = "/api/companies/BRK.B"
 RETRY = "The company's data did not load: {}. Open the page again to retry."
@@ -78,7 +86,9 @@ def _tab(mark: str, symbol: str = "LFOX") -> dict[str, Any]:
     }
 
 
-def _show(symbol: str, tab: str, report: int | None = None) -> dict[str, Any]:
+def _show(symbol: str, tab: str, report: int | str | None = None) -> dict[str, Any]:
+    """A link or a tab's button opens the page at ``tab``, at the id ``report``: a report's on
+    the Research tab, a call or ``filings`` on the Investor relations tab."""
     return {"do": "show", "symbol": symbol, "tab": tab, "id": report}
 
 
@@ -641,3 +651,278 @@ def test_another_report_opens_at_its_head_and_the_same_report_keeps_the_readers_
         0,  # from an id to the latest
         0,
     ]
+
+
+# --------------------------------------------------------------- the Investor relations tab
+
+
+def _investor(mark: str, **changes: Any) -> dict[str, Any]:
+    """The Investor relations tab's answer (``page_answers``' LFOX: its data date 14 Nov 2026,
+    its filing list's day 2 Nov 2026), named by its mark, with ``changes``."""
+    return answers.investor() | {"mark": mark} | changes
+
+
+def _hash(word: str | None = None) -> dict[str, Any]:
+    """A link, or the browser, moves the hash to the Investor relations tab, at ``word``."""
+    return {"do": "hash", "hash": IR + ("" if word is None else "/" + word)}
+
+
+def _switch(view: str) -> dict[str, Any]:
+    """The Investor relations tab's switch pressed on its button named ``view``."""
+    return {"do": "switch", "view": view}
+
+
+def _ir(mark: str, word: str | None, price: float = 182.4) -> dict[str, Any]:
+    """What the Investor relations tab's function was handed: its answer's mark, the detail's
+    price and the address's word."""
+    return _drawn("investor-relations", mark, price) | {"id": word}
+
+
+IR_OPENED = OPENED | {"tab": "Investor relations"}
+ON_CALLS = "data 14 Nov 2026"  # the read's data date, the Earnings calls view's
+ON_FILINGS = "data 2 Nov 2026"  # the filing list's day, the Filings view's
+
+
+@pytest.mark.parametrize(
+    ("word", "kept"),
+    [
+        (None, None),
+        ("2026Q4", "2026Q4"),
+        ("filings", "filings"),
+        ("2026Q5", None),
+        ("nonsense", None),
+        ("12", None),
+        ("2026q4", None),
+        ("Filings", None),
+    ],
+)
+def test_the_tab_s_addresses(word: str | None, kept: str | None) -> None:
+    """#company/LFOX/investor-relations, /2026Q4 (a call: a fiscal year and Q1 to Q4) and
+    /filings are kept and written back; any other word (a fifth quarter, a word, a report's id)
+    is put right to the tab alone (7.1). Each reads the detail, then the tab's own read with no
+    query and no header, the word never travelling to the server, and the tab's function is
+    handed the word kept; the view and the data date follow it."""
+    hashed, detail, landed = _drive(
+        [_hash(word), _answer(LFOX, _detail(182.4)), _answer(INVESTOR, _investor("ir 1"))]
+    )
+    written = IR + ("" if kept is None else "/" + kept)
+    assert hashed["hash"] == written and hashed["shows"] is True
+    assert hashed["fetched"] == _get(LFOX)
+    assert detail["fetched"] == _get(INVESTOR)
+    assert detail["headers"] == [None]
+    assert landed["hash"] == written
+    assert landed["page"] == IR_OPENED | {"drawn": _ir("ir 1", kept)}
+    assert landed["view"] == ("Filings" if kept == "filings" else "Earnings calls")
+    assert landed["asOf"] == (ON_FILINGS if kept == "filings" else ON_CALLS)
+
+
+def test_the_tab_opens_from_a_link_on_its_word() -> None:
+    """``show('company', 'LFOX', 'investor-relations', '2026Q4')``, a link or a press, writes
+    the word in the hash and reads the tab with no query."""
+    shown, detail, landed = _drive(
+        [
+            _show("LFOX", "investor-relations", "2026Q4"),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+        ]
+    )
+    assert shown["hash"] == IR + "/2026Q4"
+    assert detail["fetched"] == _get(INVESTOR)
+    assert landed["page"]["drawn"] == _ir("ir 1", "2026Q4")
+
+
+def test_a_change_of_the_tab_s_word_reads_nothing() -> None:
+    """Review Focus 4: from /2026Q4 to /2026Q3, to /filings, to the tab alone, and a word put
+    right: each change draws the answer held again, at once and not faded, with the new word,
+    and reads nothing; the view and the data date follow the word."""
+    trace = _drive(
+        [
+            _hash("2026Q4"),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            _hash("2026Q3"),
+            _hash("filings"),
+            _show("LFOX", "investor-relations"),
+            _hash("nonsense"),
+        ]
+    )
+    q3, filings, calls, put_right = trace[3:]
+    for step in (q3, filings, calls, put_right):
+        assert step["fetched"] == [] and step["inFlight"] == []
+        assert step["notesShown"] == []
+    assert q3["hash"] == IR + "/2026Q3"
+    assert q3["page"] == IR_OPENED | {"drawn": _ir("ir 1", "2026Q3")}
+    assert (q3["view"], q3["asOf"]) == ("Earnings calls", ON_CALLS)
+    assert filings["hash"] == IR + "/filings"
+    assert filings["page"] == IR_OPENED | {"drawn": _ir("ir 1", "filings")}
+    assert (filings["view"], filings["asOf"]) == ("Filings", ON_FILINGS)
+    assert calls["hash"] == IR
+    assert calls["page"] == IR_OPENED | {"drawn": _ir("ir 1", None)}
+    assert (calls["view"], calls["asOf"]) == ("Earnings calls", ON_CALLS)
+    assert put_right["hash"] == IR
+    assert put_right["page"] == calls["page"]
+
+
+def test_the_switch_replaces_the_hash_and_reads_nothing() -> None:
+    """A press of Filings replaces the hash with the tab's /filings and draws the Filings view
+    on the answer held, reading nothing; a press of Earnings calls replaces it with the tab
+    alone. A press of the view shown changes nothing: on a call, Earnings calls keeps the call."""
+    trace = _drive(
+        [
+            _hash("2026Q4"),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            _switch("Earnings calls"),
+            _switch("Filings"),
+            _switch("Filings"),
+            _switch("Earnings calls"),
+        ]
+    )
+    same, filings, again, calls = trace[3:]
+    for step in (same, filings, again, calls):
+        assert step["fetched"] == [] and step["inFlight"] == []
+        assert step["page"]["faded"] is False
+    assert same["hash"] == IR + "/2026Q4" and same["page"]["drawn"] == _ir("ir 1", "2026Q4")
+    assert filings["hash"] == IR + "/filings"
+    assert filings["page"]["drawn"] == _ir("ir 1", "filings")
+    assert (filings["view"], filings["asOf"]) == ("Filings", ON_FILINGS)
+    assert again["hash"] == IR + "/filings" and again["page"] == filings["page"]
+    assert calls["hash"] == IR
+    assert calls["page"]["drawn"] == _ir("ir 1", None)
+    assert (calls["view"], calls["asOf"]) == ("Earnings calls", ON_CALLS)
+
+
+def test_the_filings_view_without_a_filing_list_has_no_data_date() -> None:
+    """A company with no filing list on file: the Filings view's data date is none, the row
+    shows no date; the Earnings calls view's is the read's."""
+    trace = _drive(
+        [
+            _hash("filings"),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1", filings=None)),
+            _switch("Earnings calls"),
+        ]
+    )
+    assert (trace[2]["view"], trace[2]["asOf"]) == ("Filings", None)
+    assert (trace[3]["view"], trace[3]["asOf"]) == ("Earnings calls", ON_CALLS)
+    assert trace[3]["fetched"] == []
+
+
+def test_a_change_of_the_word_while_the_tab_s_read_is_out_reads_nothing_more() -> None:
+    """A refresh's end reads the page shown again, the detail and the tab, the page faded; a
+    press of the switch then draws the new view at once, still faded, and reads nothing more:
+    the read out lands on the new word. The tab's first read, out while the page shows another
+    tab, takes a change of the word that a link makes the same way: it lands on the newest."""
+    trace = _drive(
+        [
+            _hash(),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            AGAIN,
+            _switch("Filings"),
+            _answer(LFOX, _detail(190.0)),
+            _answer(INVESTOR, _investor("ir 2")),
+        ]
+    )
+    again, pressed, detail, landed = trace[3:]
+    assert again["fetched"] == _get(LFOX)
+    assert pressed["fetched"] == [] and pressed["inFlight"] == [LFOX]
+    assert pressed["hash"] == IR + "/filings"
+    assert pressed["page"] == IR_OPENED | {"faded": True, "drawn": _ir("ir 1", "filings")}
+    assert detail["fetched"] == _get(INVESTOR)
+    assert landed["inFlight"] == []
+    assert landed["page"] == IR_OPENED | {
+        "price": "$190.00",
+        "drawn": _ir("ir 2", "filings", 190.0),
+    }
+    assert landed["hash"] == IR + "/filings"
+
+    trace = _drive(
+        [
+            *OPEN,
+            _hash("filings"),
+            _hash("2026Q4"),
+            _hash(),
+            _answer(INVESTOR, _investor("ir 1")),
+        ]
+    )
+    first, call, alone, landed = trace[3:]
+    assert first["fetched"] == _get(INVESTOR)
+    for step in (call, alone):
+        assert step["fetched"] == [] and step["inFlight"] == [INVESTOR]
+        assert step["page"] == OPENED | {"faded": True}
+    assert call["hash"] == IR + "/2026Q4" and alone["hash"] == IR
+    assert landed["page"] == IR_OPENED | {"drawn": _ir("ir 1", None)}
+    assert landed["inFlight"] == []
+
+
+def test_the_switch_of_the_faded_tab_drops_another_tab_s_read() -> None:
+    """The reader leaves the tab for another one not held, then, while its read is out, presses
+    the faded tab's switch: the tab is shown again at once on the answer held, at the new view,
+    and the other tab's read, landing late, is dropped; nothing is read."""
+    trace = _drive(
+        [
+            _hash(),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            _show("LFOX", "estimates"),
+            _switch("Filings"),
+            _answer(ESTIMATES, _tab("estimates 1")),
+        ]
+    )
+    other, pressed, late = trace[3:]
+    assert other["fetched"] == _get(ESTIMATES)
+    assert other["page"] == IR_OPENED | {"faded": True, "drawn": _ir("ir 1", None)}
+    assert pressed["fetched"] == []
+    assert pressed["hash"] == IR + "/filings"
+    shown = IR_OPENED | {"drawn": _ir("ir 1", "filings")}
+    assert pressed["page"] == shown
+    assert late["page"] == shown and late["hash"] == IR + "/filings"
+
+
+def test_another_tab_and_back_shows_the_tab_held() -> None:
+    """The tab held is shown again with no read when the reader comes back to it, on the word
+    the address names; another company's tab is read anew."""
+    trace = _drive(
+        [
+            _hash("filings"),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            _show("LFOX", "overview"),
+            _answer(OVERVIEW, _tab("overview 1")),
+            _hash("2026Q3"),
+            _show("BRK.B", "investor-relations"),
+        ]
+    )
+    overview, landed, back, other = trace[3:]
+    assert overview["fetched"] == _get(OVERVIEW)
+    assert landed["page"]["tab"] == "Overview"
+    assert back["fetched"] == [] and back["inFlight"] == []
+    assert back["page"] == IR_OPENED | {"drawn": _ir("ir 1", "2026Q3")}
+    assert (back["view"], back["asOf"]) == ("Earnings calls", ON_CALLS)
+    assert other["fetched"] == _get(BRK)
+    assert other["hash"] == "#company/BRK.B/investor-relations"
+
+
+def test_a_vendor_read_carries_the_request_header() -> None:
+    """``companyPage.readVendor``, the read of the tab's two later reads, which may call a
+    vendor: a GET with the header ``X-Fairband-Request: 1``; its answer as it arrives, its
+    refusal the server's sentence with the answer's status. The tab's own read carries none
+    (test_the_tab_s_addresses)."""
+    call = INVESTOR + "/call?year=2026&quarter=3"
+    older = INVESTOR + "/filings?to=2025-10-31"
+    trace = _drive(
+        [
+            {"do": "vendor", "url": call},
+            _answer(call, {"turns": []}),
+            {"do": "vendor", "url": older},
+            _answer(older, {"detail": "no FMP key"}, 503),
+        ]
+    )
+    asked, answered, again, refused = trace
+    assert asked["fetched"] == _get(call)
+    assert asked["headers"] == [{"X-Fairband-Request": "1"}]
+    assert asked["vendor"] is None
+    assert answered["vendor"] == {"answer": {"turns": []}}
+    assert again["headers"] == [{"X-Fairband-Request": "1"}]
+    assert refused["vendor"] == {"message": "no FMP key", "status": 503}

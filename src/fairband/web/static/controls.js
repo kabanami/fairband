@@ -13,10 +13,12 @@
    the groups or the company page, when that view is open) load again. The group view is one
    plain table from /api/groups (spec 6.3), with no chart. The company page (company.js) is a
    panel no header view names: #company/<symbol> opens its Overview, #company/<symbol>/financials
-   its Financials tab, #company/<symbol>/estimates its Estimates tab, #company/<symbol>/research
-   its Research tab on the company's latest report and #company/<symbol>/research/<id> on the
-   report with that id (the company page's design, 7.1; the Financials tab's design, 7.1; the
-   Research tab's design, 7.1). The report page left (the Research tab's design, 9): its
+   its Financials tab, #company/<symbol>/estimates its Estimates tab,
+   #company/<symbol>/investor-relations its Investor relations tab, with a call (/2026Q4) or
+   /filings after it, #company/<symbol>/research its Research tab on the company's latest report
+   and #company/<symbol>/research/<id> on the report with that id (the company page's design,
+   7.1; the Financials tab's design, 7.1; the Investor relations tab's design, 7.1; the Research
+   tab's design, 7.1). The report page left (the Research tab's design, 9): its
    addresses, #report/<symbol> and #report/<symbol>/<id>, open the Research tab on the same
    report, the hash replaced by the tab's. */
 (function () {
@@ -47,7 +49,7 @@
   var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox', 'company'];
   /* The company page's tabs in the row's order, the Overview first: the tab of a hash that names
      none, or one the page does not know. */
-  var COMPANY_TABS = ['overview', 'financials', 'estimates', 'research'];
+  var COMPANY_TABS = ['overview', 'financials', 'estimates', 'investor-relations', 'research'];
   var panels = {};
   VIEWS.forEach(function (id) { panels[id] = document.getElementById(id); });
   var header = ReactDOM.createRoot(document.getElementById('header'));
@@ -222,10 +224,11 @@
      does not know is the Screen. A section of the Methodology view stays in P.section for that
      view's script to scroll to; one named while the view is open runs its loader again
      (spec 2026-11-04 6). The company page takes a company's symbol, a tab and, on the Research
-     tab, a report's id, `report`, kept in P.company for its script; without a symbol it is the
-     Screen, and another symbol, tab or report while it is open runs its loader again; a change of
-     tab or of report replaces the hash as a change of view does, so the browser's Back never
-     steps through the tabs (the company page's design, 7.1; the Research tab's design, 7.1). A
+     tab, a report's id, `report`, on the Investor relations tab its word (keepCompany), kept in
+     P.company for its script; without a symbol it is the Screen, and another symbol, tab or id
+     while it is open runs its loader again; a change of tab or of id replaces the hash as a change
+     of view does, so the browser's Back never steps through the tabs (the company page's design,
+     7.1; the Research tab's design, 7.1). A
      view shown closes the watchlist popup and the Notes box (FairbandPage.closePopups), which no
      press closes when the browser's Back or Forward moves the hash. */
   function show(tab, section, id, report) {
@@ -247,15 +250,20 @@
 
   /* The company a hash names, kept in P.company: the symbol decoded, as the links encode it, and
      upper-cased, as the store keeps it; the tab, the Overview for none or one the page does not
-     know; and the report's id, a whole number on the Research tab, else null, the company's latest
-     report there. True when it is not the company, tab and report already kept. */
+     know; and the tab's id: the report's, a whole number on the Research tab, else null, the
+     company's latest report there; on the Investor relations tab its word, a call, the fiscal
+     year and the quarter as 2026Q4, or filings, its Filings view, else null, the Earnings calls
+     view on the newest call (the Investor relations tab's design, 7.1); null on any other tab.
+     True when it is not the company, tab and id already kept. */
   function keepCompany(symbol, tab, id) {
     var name = symbol;
     try { name = decodeURIComponent(symbol); } catch (e) { /* a malformed escape stays as typed */ }
     var shown = COMPANY_TABS.indexOf(tab) === -1 ? COMPANY_TABS[0] : tab;
+    var word = String(id);
     var company = {
       symbol: name.toUpperCase(), tab: shown,
-      id: shown === 'research' && /^\d+$/.test(String(id)) ? Number(id) : null
+      id: shown === 'research' && /^\d+$/.test(word) ? Number(word)
+        : shown === 'investor-relations' && /^(filings|\d{4}Q[1-4])$/.test(word) ? word : null
     };
     var kept = P.company;
     P.company = company;
@@ -264,7 +272,9 @@
   }
 
   /* The kept company's part of the hash, the symbol encoded as the links encode it: /AAPL for the
-     Overview, which names no tab, /AAPL/estimates, or /AAPL/research/12 for a report's id. */
+     Overview, which names no tab, /AAPL/estimates, /AAPL/research/12 for a report's id, or
+     /AAPL/investor-relations/2026Q4 and /AAPL/investor-relations/filings for the Investor
+     relations tab's word. */
   function companyPath() {
     var tab = P.company.tab;
     var id = P.company.id;
@@ -275,8 +285,11 @@
   /* The view a hash names, on load and when a link changes it: #watchlists, #methodology,
      #settings, #methodology/<section-id>, the Methodology view at that section; #company/<symbol>,
      the company page's Overview, #company/<symbol>/financials, its Financials tab,
-     #company/<symbol>/estimates, its Estimates tab, #company/<symbol>/research, its Research tab
-     on the latest report, or #company/<symbol>/research/<id>, on that report. The report page's
+     #company/<symbol>/estimates, its Estimates tab, #company/<symbol>/investor-relations, its
+     Investor relations tab, #company/<symbol>/investor-relations/2026Q4 on that call and
+     #company/<symbol>/investor-relations/filings on its Filings view, a word the tab cannot read
+     put right to the tab alone, #company/<symbol>/research, its Research tab on the latest report,
+     or #company/<symbol>/research/<id>, on that report. The report page's
      addresses, which a link or a bookmark may still name, #report/<symbol> and
      #report/<symbol>/<id>, open the Research tab on the same report, the company's latest where
      no id is given, the hash replaced by the tab's; #report with no symbol is the Screen, as show
@@ -548,8 +561,9 @@
 
   /* What the later views use: show opens a view; each view registers its loader in onShow, and
      onShow[tab]() runs each time that view opens; section is the Methodology section a hash
-     named; company is the company, the tab and the report the company page shows,
-     { symbol, tab, id }, the id null but on a report of the Research tab; running() is true
+     named; company is the company, the tab and the id the company page shows,
+     { symbol, tab, id }, the id null but on a report of the Research tab and on a word of the
+     Investor relations tab; running() is true
      while a refresh runs; followRefresh() follows a refresh another view started (the Settings
      view's revalue) as the header follows its own: the run bar while it runs, the rows loaded
      again when it ends; countInbox(items) hands the header the Inbox view's own read, so its

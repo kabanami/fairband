@@ -285,22 +285,25 @@ def test_the_menus_of_the_head_open_inside_the_page() -> None:
 
 
 def test_the_tabs_and_the_data_date() -> None:
-    """Overview, Financials, Estimates and Research are the four tabs, each a button, the open
-    one selected (the Research tab's design, 7.1); the data date stands at the row's right end."""
+    """Overview, Financials, Estimates, Investor relations and Research are the five tabs, each a
+    button, the open one selected (the Research tab's design, 7.1; the Investor relations tab's
+    design, 7.1); the data date stands at the row's right end."""
     tree = _page("tabs", "BRK.B", "estimates", "2026-11-14")
     tabs = classed(tree, "app-company__tab")
-    assert [text(t) for t in tabs] == ["Overview", "Financials", "Estimates", "Research"]
-    for tab, selected in zip(tabs, ("false", "false", "true", "false"), strict=True):
+    names = ["Overview", "Financials", "Estimates", "Investor relations", "Research"]
+    assert [text(t) for t in tabs] == names
+    for tab, selected in zip(tabs, ("false", "false", "true", "false", "false"), strict=True):
         assert tab["type"] == "button"
         assert tab["props"]["role"] == "tab"
         assert tab["props"]["aria-selected"] == selected
         assert "href" not in tab["props"]
     [asof] = classed(tree, "app-company__asof")
     assert text(asof) == "data 14 Nov 2026"
-    _texts_in_order(tree, "Overview", "Financials", "Estimates", "Research", "data 14 Nov 2026")
+    _texts_in_order(tree, *names, "data 14 Nov 2026")
 
     other = _page("tabs", "A&B", "research", None)
     assert [t["props"].get("aria-selected") for t in classed(other, "app-company__tab")] == [
+        "false",
         "false",
         "false",
         "false",
@@ -322,6 +325,7 @@ def test_a_tab_replaces_the_hash() -> None:
         ["overview", "Overview"],
         ["financials", "Financials"],
         ["estimates", "Estimates"],
+        ["investor-relations", "Investor relations"],
         ["research", "Research"],
     ]
 
@@ -487,17 +491,26 @@ def test_a_panel_a_list_of_pairs_a_group_and_a_table() -> None:
 
 
 def test_the_tabs_draw_from_the_functions_later_scripts_hang_on_draw() -> None:
-    """``draw`` starts empty; under the tabs the page draws the open tab's function on its answer
-    and the detail, and nothing while it is missing; a tab's failed read draws its sentence."""
+    """``draw`` starts empty; under the tabs the page draws the open tab's function on its answer,
+    the detail and the id it shows (the Investor relations tab's word), and nothing while it is
+    missing; a tab's failed read draws its sentence. The row's data date is the tab's own where
+    its script hangs a function on ``dataDate``, else its answer's."""
     script = _static_file("company.js")
     body = _function(script, "tabBody")
     _in_order(
         body,
         "if (state.failed) return note(state.failed);",
         "var drawn = P.companyPage.draw[state.tab];",
-        "return answer && drawn ? drawn(answer, d) : null;",
+        "return answer && drawn ? drawn(answer, d, state.id) : null;",
     )
     assert "draw: {}" in script
+    _in_order(
+        _function(script, "asOf"),
+        "var dated = P.companyPage.dataDate[state.tab];",
+        "return dated ? dated(answer, state.id) : answer.dataDate;",
+    )
+    assert "tabs(state.symbol, state.tab, answer && asOf(answer))," in _function(script, "page")
+    assert "dataDate: {}" in script
 
 
 # -------------------------------------------------------------------------------- the reads
@@ -516,7 +529,8 @@ def test_the_reads_and_their_failures() -> None:
         "if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);",
         "state.loading = true;",
         "(whole ? read(company) : Promise.resolve(state.detail))",
-        "read(company + '/page/' + want.tab + (want.id == null ? '' : '?report=' + want.id))",
+        "var query = key === want.tab ? '' : '?report=' + want.id;",
+        "return read(company + '/page/' + want.tab + query)",
         "return { detail: detail, answer: null, failed: failure(err, want.tab === 'research') };",
         ".then(function (found) {\n        if (request !== latest) return;",
         "state.loading = false;\n        shown();",
@@ -640,8 +654,8 @@ def test_the_page_reads_again_when_a_refresh_ends() -> None:
         landed,
         "if (held && key !== keyOf(state) && state.answers[key] && !state.whole) {",
         "state.reading = null;\n      shown();\n      return;",
-        "var whole = !held || key === keyOf(state) || key === state.reading || state.whole;",
-        "state.whole = whole;\n    state.reading = key;",
+        "var whole = !held || key === keyOf(state) || key === keyOf(state.reading) || state.whole;",
+        "state.whole = whole;\n    state.reading = want;",
         "state.loading = true;",
         "(whole ? read(company) : Promise.resolve(state.detail))",
         ".then(function (found) {\n        if (request !== latest) return;",
@@ -667,13 +681,15 @@ def test_the_symbol_is_decoded_where_the_hash_is_read_and_encoded_where_written(
 def test_the_hash_both_ways() -> None:
     """keepCompany and companyPath run in node on hashes as a link writes them: the symbol
     decoded and upper-cased, an unknown tab the Overview, a report's id a whole number on the
-    Research tab alone, and the hash written back with the symbol encoded, no tab for the
-    Overview and the id after Research. True when the company, the tab or the report moved."""
+    Research tab alone, the Investor relations tab's word a call (2026Q4) or filings on that tab
+    alone, and the hash written back with the symbol encoded, no tab for the Overview and the id
+    after Research or Investor relations. True when the company, the tab or the id moved."""
     js = _static_file("controls.js")
     tabs = re.search(r"\n  (var COMPANY_TABS = .*?;)\n", js)
     assert tabs is not None
     assert tabs.group(1) == (
-        "var COMPANY_TABS = ['overview', 'financials', 'estimates', 'research'];"
+        "var COMPANY_TABS = "
+        "['overview', 'financials', 'estimates', 'investor-relations', 'research'];"
     )
     source = "\n".join(
         [
@@ -704,6 +720,14 @@ def test_the_hash_both_ways() -> None:
         ["AAPL", "research", "x"],
         ["AAPL", "research", "1.5"],
         ["AAPL", "estimates", "12"],
+        ["AAPL", "investor-relations", "2026Q4"],
+        ["AAPL", "investor-relations", "2026Q3"],
+        ["AAPL", "investor-relations", "filings"],
+        ["AAPL", "investor-relations", "2026Q5"],
+        ["AAPL", "investor-relations", "12"],
+        ["AAPL", "investor-relations", None],
+        ["AAPL", "research", "2026Q4"],
+        ["AAPL", "estimates", "filings"],
     ]
     assert NODE is not None
     done = subprocess.run(
@@ -714,6 +738,7 @@ def test_the_hash_both_ways() -> None:
         timeout=60,
     )
     research = {"symbol": "AAPL", "tab": "research"}
+    investor = {"symbol": "AAPL", "tab": "investor-relations"}
     assert json.loads(done.stdout) == [
         [True, {"symbol": "BRK.B", "tab": "estimates", "id": None}, "/BRK.B/estimates"],
         [False, {"symbol": "BRK.B", "tab": "estimates", "id": None}, "/BRK.B/estimates"],
@@ -732,5 +757,13 @@ def test_the_hash_both_ways() -> None:
         [True, research | {"id": None}, "/AAPL/research"],
         [False, research | {"id": None}, "/AAPL/research"],
         [False, research | {"id": None}, "/AAPL/research"],
+        [True, {"symbol": "AAPL", "tab": "estimates", "id": None}, "/AAPL/estimates"],
+        [True, investor | {"id": "2026Q4"}, "/AAPL/investor-relations/2026Q4"],
+        [True, investor | {"id": "2026Q3"}, "/AAPL/investor-relations/2026Q3"],
+        [True, investor | {"id": "filings"}, "/AAPL/investor-relations/filings"],
+        [True, investor | {"id": None}, "/AAPL/investor-relations"],
+        [False, investor | {"id": None}, "/AAPL/investor-relations"],
+        [False, investor | {"id": None}, "/AAPL/investor-relations"],
+        [True, research | {"id": None}, "/AAPL/research"],
         [True, {"symbol": "AAPL", "tab": "estimates", "id": None}, "/AAPL/estimates"],
     ]

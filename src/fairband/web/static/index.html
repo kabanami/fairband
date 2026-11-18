@@ -972,6 +972,21 @@
       min-width: 168px; white-space: normal;
     }
   }
+  /* The Investor relations tab (the Investor relations tab's design, 7.2), as its mockup draws
+     it: one block the page's width under the tabs' row. At its top a row over a hairline: the
+     switch of the two views at its left, the Financials tab's segmented control (.app-fin__seg),
+     and at its right end the line of the next earnings report in ink-muted, its day in ink; the
+     row wraps, the line to the right end of a row of its own where the two do not fit. A view's
+     sentence for nothing on file in ink-faint, under the row. The tokens' colours alone; nothing
+     moves. */
+  .app-ir { margin-top: var(--space-4); }
+  .app-ir__bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5);
+    padding-bottom: var(--space-3); border-bottom: 1px solid var(--hairline);
+  }
+  .app-ir__next { margin: 0 0 0 auto; color: var(--ink-muted); }
+  .app-ir__day { color: var(--ink); font-weight: 500; }
+  .app-ir__none { margin: var(--space-4) 0 0; color: var(--ink-faint); }
   /* The company page's Research tab (the Research tab's design, 7.2 to 7.9), as its
      mockup lays it out. Under the tabs' row the bar: Report and Records, a segmented control on a
      hairline, the chosen one on surface-selected; the report's line in ink-muted; Footnote marks
@@ -1419,6 +1434,7 @@
 <script src="/static/company_estimates.js"></script>
 <script src="/static/company_financials.js"></script>
 <script src="/static/company_financials_chart.js"></script>
+<script src="/static/company_investor.js"></script>
 <script src="/static/company_research_text.js"></script>
 <script src="/static/company_research.js"></script>
 <script src="/static/company_research_records.js"></script>

@@ -1,12 +1,15 @@
 // The company page's loader driven in node (the company page's design, 7.1 and 7.5), for
-// tests/web/test_company_load.py: the bundle, app.js, finder.js, controls.js and company.js are
-// loaded in the page's order, with a stub React, a stub ReactDOM whose roots keep what they last
-// drew, the few browser objects the scripts touch (each view's panel one object whose `hidden`
-// controls.js sets, the hash, the history the views replace) and a fetch of the driver's own,
-// answered only when a step answers it, so the steps say exactly when each read lands. The reads
-// the header and the screen start as the scripts load are dropped: no step answers them. The
-// tabs' functions are the driver's own, so the trace reads what the page holds: each draws
-// { tab, mark, price }, the mark of the tab's answer it was handed and the price of the detail.
+// tests/web/test_company_load.py: the bundle, app.js, finder.js, controls.js, company.js and
+// company_investor.js are loaded in the page's order, with a stub React, a stub ReactDOM whose
+// roots keep what they last drew, the few browser objects the scripts touch (each view's panel one
+// object whose `hidden` controls.js sets, the hash, the history the views replace) and a fetch of
+// the driver's own, answered only when a step answers it, so the steps say exactly when each read
+// lands. The reads the header and the screen start as the scripts load are dropped: no step
+// answers them. The tabs' functions are the driver's own, so the trace reads what the page holds:
+// each draws { tab, mark, price }, the mark of the tab's answer it was handed and the price of the
+// detail; the Investor relations tab's adds { id }, the address's word the page handed it (the
+// Investor relations tab's design, 7.1), and draws the tab's own frame under it
+// (company_investor.js), so a step can press its switch.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "symbol", "tab", "id"?}  a link or a tab's button opens the company page there,
@@ -26,18 +29,26 @@
 //   {"do": "notes"}                         the head's Notes control is pressed: its box opens
 //   {"do": "watch"}                         the head's Watchlists ▾ is pressed, on the company alone
 //                                           (FairbandPage.watch): its popup opens
+//   {"do": "switch", "view"}                the Investor relations tab's switch is pressed on its
+//                                           button named `view` (Earnings calls, Filings)
+//   {"do": "vendor", "url"}                 a tab reads `url` through companyPage.readVendor, the
+//                                           read that may call a vendor
 // After each step and the work it sets off, the trace on stdout gains what the step fetched (each
-// request's method and path), the paths still in flight, the companies the step handed
-// FairbandPage.notesShown, the hash, whether the company page's panel shows and how far down it
-// is scrolled, the popups drawn (the watchlist popup, WatchMenu, and the Notes box, NotesBox),
-// and what the company page draws: faded or not, the sentence of a failed read, the head's
-// ticker and price, the tab selected and what the open tab's function drew.
+// request's method and path) and the headers each request carried (null for none), the paths
+// still in flight, the companies the step handed FairbandPage.notesShown, the hash, whether the
+// company page's panel shows and how far down it is scrolled, the popups drawn (the watchlist
+// popup, WatchMenu, and the Notes box, NotesBox), what the company page draws: faded or not, the
+// sentence of a failed read, the head's ticker and price, the tab selected and what the open
+// tab's function drew; then the data date at the tabs' row's right end (asOf, its words, null
+// for none), the view the Investor relations tab's switch selects (null where it is not drawn),
+// and how the last readVendor settled (vendor: { answer }, or { message, status } for a refusal;
+// null before one settles).
 //
 //   node company_load.mjs <bundle.js> <app.js> <finder.js> <controls.js> <company.js>
-//     < steps.json  > trace.json
+//     <company_investor.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
 
-const [bundle, app, finder, controls, company] = process.argv.slice(2, 7)
+const [bundle, app, finder, controls, company, investor] = process.argv.slice(2, 8)
   .map((path) => readFileSync(path, 'utf8'));
 const steps = JSON.parse(readFileSync(0, 'utf8'));
 const later = globalThis.setTimeout; // the driver's own wait for the work a step sets off
@@ -83,8 +94,10 @@ const history = {
 
 let inFlight = []; // the fetches not yet answered, oldest first: { url, resolve, reject }
 let fetched = []; // the requests the current step made
+let headers = []; // the headers each of them carried, null for none
 const fetch = (url, init) => new Promise((resolve, reject) => {
   fetched.push([(init && init.method) || 'GET', url]);
+  headers.push((init && init.headers) || null);
   inFlight.push({ url, resolve, reject });
 });
 
@@ -101,15 +114,24 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   'history', 'location', controls)(
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location);
-new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
-  company)(window, React, ReactDOM, window.Fairband, P, document, fetch);
-inFlight = []; fetched = []; // the header's and the screen's own reads, which no step answers
-
-// The tabs' functions: each draws what it was handed.
-for (const tab of ['overview', 'financials', 'estimates', 'research']) {
-  P.companyPage.draw[tab] = (answer, detail) => (
-    { type: 'drawn', props: { tab, mark: answer.mark, price: detail.result.price } });
+for (const script of [company, investor]) {
+  new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
+    script)(window, React, ReactDOM, window.Fairband, P, document, fetch);
 }
+inFlight = []; fetched = []; headers = []; // the header's and the screen's own reads, unanswered
+
+// The tabs' functions: each draws what it was handed; the Investor relations tab's the word too,
+// and the tab's own frame under it.
+const IR = 'investor-relations';
+const frame = P.companyPage.draw[IR];
+for (const tab of ['overview', 'financials', 'estimates', IR, 'research']) {
+  P.companyPage.draw[tab] = (answer, detail, id) => {
+    const props = { tab, mark: answer.mark, price: detail.result.price };
+    if (tab !== IR) return { type: 'drawn', props };
+    return { type: 'drawn', props: { ...props, id, children: [frame(answer, detail, id)] } };
+  };
+}
+let vendor = null; // how the last readVendor settled
 let shown = []; // the companies the current step handed notesShown
 const notesShown = P.notesShown;
 P.notesShown = (symbol) => { shown.push(symbol); notesShown(symbol); };
@@ -143,14 +165,30 @@ function page() {
   const [drawn] = [...elements(tree)].filter((e) => e.type === 'drawn');
   const [selected] = [...elements(tree)].filter((e) => e.props['aria-selected'] === 'true');
   const [ticker] = classed(head || tree, 'ticker');
+  const { children, ...handed } = drawn ? drawn.props : {}; // what it was handed, not its frame
   return {
     faded: tree.props.className.split(' ').includes('is-loading'),
     sentence: sentence ? textOf(sentence) : null,
     ticker: ticker ? textOf(ticker) : null,
     price: head ? textOf(classed(head, 'figure-lg')[0]) : null,
     tab: selected ? textOf(selected) : null,
-    drawn: drawn ? drawn.props : null,
+    drawn: drawn ? handed : null,
   };
+}
+
+// The data date at the tabs' row's right end, and the view the Investor relations tab's switch
+// selects.
+function asOf() {
+  const tree = companyRoot().drawn;
+  const [date] = tree ? classed(tree, 'app-company__asof') : [];
+  return date ? textOf(date) : null;
+}
+
+function view() {
+  const tree = companyRoot().drawn;
+  const [on] = (tree ? classed(tree, 'app-ir__view') : [])
+    .filter((e) => e.props['aria-selected'] === 'true');
+  return on ? textOf(on) : null;
 }
 
 // The popups drawn: the roots app.js made on elements of its own, at the end of the page.
@@ -179,9 +217,18 @@ function press(name) {
   control.props.onClick({ currentTarget: { name } });
 }
 
+// The Investor relations tab's switch, pressed on its button named `name`.
+function pressView(name) {
+  const [button] = classed(companyRoot().drawn, 'app-ir__view')
+    .filter((e) => textOf(e) === name);
+  if (!button) throw new Error('no button ' + name);
+  button.props.onClick({ currentTarget: button });
+}
+
 const trace = [];
 for (const step of steps) {
   fetched = [];
+  headers = [];
   shown = [];
   if (step.do === 'show') P.show('company', step.symbol, step.tab, step.id);
   else if (step.do === 'hash') {
@@ -192,11 +239,17 @@ for (const step of steps) {
   else if (step.do === 'answer' || step.do === 'fail') answered(step);
   else if (step.do === 'notes') press('app-notes-open');
   else if (step.do === 'watch') P.watch({ ticker: P.company.symbol }, { name: 'Watchlists' });
-  else throw new Error('no step ' + step.do);
+  else if (step.do === 'switch') pressView(step.view);
+  else if (step.do === 'vendor') {
+    P.companyPage.readVendor(step.url).then(
+      (answer) => { vendor = { answer }; },
+      (err) => { vendor = { message: err.message, status: err.status ?? null }; });
+  } else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
   trace.push({
     do: step.do,
     fetched,
+    headers,
     inFlight: inFlight.map((call) => call.url),
     notesShown: shown,
     hash: location.hash,
@@ -204,6 +257,9 @@ for (const step of steps) {
     scrollTop: panels.company.scrollTop || 0,
     popups: popups(),
     page: page(),
+    asOf: asOf(),
+    view: view(),
+    vendor,
   });
 }
 process.stdout.write(JSON.stringify(trace));

@@ -1,6 +1,8 @@
 /* The company page (the company page's design, 7), loaded after charts.js: a view at
    #company/<symbol>, its Overview, #company/<symbol>/financials, its Financials tab (the
-   Financials tab's design, 7.1), #company/<symbol>/estimates, its Estimates tab, and
+   Financials tab's design, 7.1), #company/<symbol>/estimates, its Estimates tab,
+   #company/<symbol>/investor-relations, its Investor relations tab, with a call (/2026Q4) or its
+   Filings view (/filings) after it (the Investor relations tab's design, 7.1), and
    #company/<symbol>/research, its Research tab on the company's latest report, or
    #company/<symbol>/research/<id> on the report with that id (the Research tab's design, 7.1).
    No link leads back to the screen: the header's Screen view does (the decision log of
@@ -8,14 +10,15 @@
    phase badge, the moat stamp and one caption line, the exchange, the sector and the industry;
    at its right the latest snapshot's price, the day's change where the stored quote is that
    price's, the day of the close, then Notes, the watchlists control and Request research. Under
-   it the tabs' row: Overview, Financials, Estimates and Research, the data date of the open tab
-   at the row's right end.
+   it the tabs' row: Overview, Financials, Estimates, Investor relations and Research, the data
+   date of the open tab at the row's right end.
    Under the row the open tab's blocks, which the later scripts hang on companyPage.draw by tab;
    nothing is drawn there while a tab's function is missing. The head reads the company's
    detail, as the drawer does; each tab its own read of the store, which carries the head's
    quote too; and the Overview, where its stored news is stale, one read of the news
    pass-through after it draws them, which may call a vendor (10.5), as the Research tab's read
-   of the multiples history may (company_research.js).
+   of the multiples history may (company_research.js) and the Investor relations tab's reads of
+   an older call and an older year of filings (readVendor).
    The parts the blocks are built from, a panel, a list of names and figures, a group, a small
    table, and the formatters of their figures (14.1), are on FairbandPage.companyPage with the
    head and the tabs' row, for those scripts and for the tests, which read them in node. */
@@ -25,16 +28,20 @@
   var h = React.createElement;
   var F = Fairband;
   var P = FairbandPage;
-  /* The four tabs the page reads, each its read's path and its name. */
+  /* The five tabs the page reads, each its read's path and its name. */
   var TABS = [['overview', 'Overview'], ['financials', 'Financials'], ['estimates', 'Estimates'],
-    ['research', 'Research']];
+    ['investor-relations', 'Investor relations'], ['research', 'Research']];
+  /* The tab whose id is a word the page draws and never reads: the Investor relations tab's call
+     or view (the Investor relations tab's design, 7.1). */
+  var WORDED = 'investor-relations';
 
   var mount = document.getElementById('company');
   var root = ReactDOM.createRoot(mount);
   var state = {
     symbol: null, /* the company whose page is shown */
     tab: 'overview', /* the tab shown */
-    id: null, /* the report the Research tab shows, by its id; null for the latest and elsewhere */
+    id: null, /* the report the Research tab shows, by its id, null for the latest; the word the
+                 Investor relations tab shows; null elsewhere */
     report: null, /* the key (keyOf) of the report the Research tab showed last of the company
                      shown, kept while another tab shows; null before the tab showed one */
     detail: null, /* GET /api/companies/{symbol}: the head */
@@ -43,14 +50,21 @@
     error: null, /* the detail's read failed: the server's sentence, drawn in the head's place */
     loading: false,
     whole: false, /* the read out reads the detail too: the tabs held may be older than it */
-    reading: null, /* the tab and report the read out reads (keyOf), before it is shown */
+    reading: null, /* the company, tab and id the read out reads ({ symbol, tab, id }, as
+                      FairbandPage.company named them, or as a change of the Investor relations
+                      tab's word alone moved them since: redrawn), before it is shown */
     request: null /* Request research for the page's company (FairbandPage.asking) */
   };
   var latest = 0;
 
   /* The key a tab's answer is held under, of `at`, { tab, id }: the tab, and for a report the
-     Research tab names by its id, research/<id>, so each report read is a tab of its own. */
-  function keyOf(at) { return at.id == null ? at.tab : at.tab + '/' + at.id; }
+     Research tab names by its id, research/<id>, so each report read is a tab of its own. The
+     Investor relations tab's word is no part of it: the tab's one answer is drawn on every word.
+     Null for no `at`. */
+  function keyOf(at) {
+    if (!at) return null;
+    return at.id == null || at.tab === WORDED ? at.tab : at.tab + '/' + at.id;
+  }
 
   /* The page FairbandPage.company names (7.1, 7.5). Another company, or the tab shown asked for
      again (the view opened again, a request's post ended, a note was taken in the head's Notes box,
@@ -76,10 +90,12 @@
      the Research tab turns to another report than it showed last, another id or the latest after
      an id, read or held (the Research tab's design, 7.3), since its section list stays in view
      while the report scrolls; the same report read again, another tab, and the same report on
-     coming back keep the reader's place. */
+     coming back keep the reader's place. The Investor relations tab's word is the page's own: the
+     tab's read takes no query, and a change of the word alone reads nothing (redrawn). */
   function load() {
     var want = P.company;
     var key = keyOf(want);
+    if (redrawn(want, key)) return;
     var request = ++latest;
     var held = !!state.detail && !state.error && state.symbol === want.symbol;
     if (want.tab === 'research' && state.symbol === want.symbol && state.report != null &&
@@ -96,7 +112,7 @@
       shown();
       return;
     }
-    var whole = !held || key === keyOf(state) || key === state.reading || state.whole;
+    var whole = !held || key === keyOf(state) || key === keyOf(state.reading) || state.whole;
     var company = '/api/companies/' + encodeURIComponent(want.symbol);
     if (state.request && state.request.symbol !== want.symbol) P.stopLaunch(state.request);
     if (state.symbol !== want.symbol) P.notesShown(want.symbol);
@@ -104,12 +120,14 @@
        Back): the next page opens at its head, not at the depth the reader left. */
     if (state.symbol !== want.symbol) mount.scrollTop = 0;
     state.whole = whole;
-    state.reading = key;
+    state.reading = want;
     state.loading = true;
     render();
     (whole ? read(company) : Promise.resolve(state.detail))
       .then(function (detail) {
-        return read(company + '/page/' + want.tab + (want.id == null ? '' : '?report=' + want.id))
+        /* a report's id alone travels, ?report=<id>; the Investor relations tab's word never */
+        var query = key === want.tab ? '' : '?report=' + want.id;
+        return read(company + '/page/' + want.tab + query)
           .then(function (answer) {
             return { detail: detail, answer: answer, failed: null };
           }, function (err) {
@@ -118,6 +136,7 @@
       })
       .then(function (found) {
         if (request !== latest) return;
+        var at = state.reading; /* want, or its word as a change of it alone moved it (redrawn) */
         state.whole = false;
         state.reading = null;
         if (whole) state.answers = {};
@@ -127,7 +146,7 @@
         if (want.tab === 'research') state.report = key;
         state.symbol = want.symbol;
         state.tab = want.tab;
-        state.id = want.id;
+        state.id = at.id;
         state.detail = found.detail;
         state.failed = found.failed;
         state.error = null;
@@ -137,6 +156,7 @@
       })
       .catch(function (err) {
         if (request !== latest) return;
+        var at = state.reading;
         state.whole = false;
         state.reading = null;
         if (state.symbol !== want.symbol && !mount.hidden) P.notesShown(want.symbol);
@@ -144,7 +164,7 @@
         if (want.tab === 'research') state.report = key;
         state.symbol = want.symbol;
         state.tab = want.tab;
-        state.id = want.id;
+        state.id = at.id;
         state.detail = null;
         state.answers = {};
         state.failed = null;
@@ -152,6 +172,38 @@
         state.loading = false;
         render();
       });
+  }
+
+  /* A change of the Investor relations tab's word alone, its call or its view, which the page
+     draws and never reads (the Investor relations tab's design, 7.1; `want` the address asked
+     for, `key` its key): true where it is drawn with no read, so load reads nothing. Where the
+     tab's own read of the company is out (a refresh's end, the tab asked for from another), that
+     read lands on the new word, and the tab, where the page shows it, is drawn on it at once,
+     still faded. Else, where the page shows the tab of the company and holds its answer, the
+     answer is drawn again on the new word at once, and a read of another tab out is dropped, as
+     a tab held is shown at once (load); but not while a read of the detail is out, which the
+     answer held may be older than: load reads the detail and the tab. False for every other
+     change, and for the same word asked for again (a refresh's end, a note taken), which load
+     reads whole. */
+  function redrawn(want, key) {
+    if (want.tab !== WORDED) return false;
+    var out = state.reading;
+    if (out && out.symbol === want.symbol && keyOf(out) === key) {
+      if (out.id === want.id) return false;
+      state.reading = want;
+      if (state.symbol === want.symbol && state.tab === want.tab) state.id = want.id;
+      render();
+      return true;
+    }
+    if (!state.detail || state.error || state.symbol !== want.symbol || state.tab !== want.tab ||
+      state.id === want.id || !state.answers[key] || state.whole) return false;
+    ++latest; /* a read of another tab out lands late, and is dropped */
+    state.id = want.id;
+    state.failed = null;
+    state.loading = false;
+    state.reading = null;
+    shown();
+    return true;
   }
 
   /* The page shows the company's detail it holds, as a read lands or a tab read before is shown
@@ -219,17 +271,28 @@
     var answer = state.answers[keyOf(state)] || null;
     return h('div', { className: className },
       head(d, answer && answer.quote),
-      tabs(state.symbol, state.tab, answer && answer.dataDate),
+      tabs(state.symbol, state.tab, answer && asOf(answer)),
       tabBody(answer, d));
   }
 
   /* Under the tabs' row: the tab's failed read in one sentence (7.5), else its blocks, drawn by
-     the function a later script hangs on draw for the tab, on its answer and the detail, once
-     both are in; nothing while either is missing. */
+     the function a later script hangs on draw for the tab, on its answer, the detail and the id
+     the page shows (the Investor relations tab's word), once the answer and the detail are in;
+     nothing while either is missing. */
   function tabBody(answer, d) {
     if (state.failed) return note(state.failed);
     var drawn = P.companyPage.draw[state.tab];
-    return answer && drawn ? drawn(answer, d) : null;
+    return answer && drawn ? drawn(answer, d, state.id) : null;
+  }
+
+  /* The open tab's data date, at the row's right end (7.4): its answer's, unless the tab's script
+     works its own out, a function it hangs on dataDate for the tab, called on the answer and the
+     id the page shows, as the Investor relations tab's, whose two views each count their own
+     answers (its design, 7.6). A tab whose later reads land after its answer draws the page
+     again (redraw), and the date with it. */
+  function asOf(answer) {
+    var dated = P.companyPage.dataDate[state.tab];
+    return dated ? dated(answer, state.id) : answer.dataDate;
   }
 
   function note(text) { return h('p', { className: 'body app-note' }, text); }
@@ -306,10 +369,11 @@
 
   /* ------------------------------------------------------------------ the tabs */
 
-  /* The tabs' row (7.3, 7.4; the Research tab's design, 7.1): Overview, Financials, Estimates
-     and Research, the open one selected, each opening through FairbandPage.show, which replaces
-     the hash, Research on the company's latest report; and at the row's right end the data date
-     of the open tab's read, none without one. */
+  /* The tabs' row (7.3, 7.4; the Research tab's design, 7.1; the Investor relations tab's design,
+     7.1): Overview, Financials, Estimates, Investor relations and Research, the open one
+     selected, each opening through FairbandPage.show, which replaces the hash, Investor relations
+     on its Earnings calls view and Research on the company's latest report; and at the row's
+     right end the data date of the open tab (asOf), none without one. */
   function tabs(symbol, tab, dataDate) {
     return h('nav', { className: 'app-company__tabs' },
       h('div', { className: 'app-company__tablist', role: 'tablist' },
@@ -458,12 +522,20 @@
   /* -------------------------------------------------------------------- the reads */
 
   /* A read whose refusal is the server's sentence, as it arrives, with the answer's status, by
-     which the detail's 404 keeps its own sentence (failure). The page's reads are plain GETs: none
-     calls a vendor. */
-  function read(url) {
-    return fetch(url).then(function (response) {
+     which the detail's 404 keeps its own sentence (failure); `init`, where given, the fetch's
+     options. The page's own reads, the detail and each tab's, are plain GETs: none calls a
+     vendor. */
+  function read(url, init) {
+    return fetch(url, init).then(function (response) {
       return response.ok ? response.json() : refused(response);
     });
+  }
+
+  /* A tab's read that may call a vendor (the Investor relations tab's design, 8.2: an older
+     call's transcript, an older year of filings): read with the header a write carries, without
+     which the server refuses it, as the Research tab's reads and newer news carry it. */
+  function readVendor(url) {
+    return read(url, { headers: { 'X-Fairband-Request': '1' } });
   }
 
   function refused(response) {
@@ -518,19 +590,22 @@
   }
 
   /* What the tabs' scripts and the tests use: the head, the tabs' row, a panel, a list of names
-     and figures, a group, a small table and the formatters; redraw(), which draws the page again
-     with what it holds, for a tab
-     whose own reads land after its answer; and draw, which each tab's script fills with its tab's
+     and figures, a group, a small table and the formatters; readVendor(url), a tab's read that
+     may call a vendor; redraw(), which draws the page again with what it holds, for a tab
+     whose own reads land after its answer; draw, which each tab's script fills with its tab's
      function, draw.overview(answer, detail), draw.financials(answer, detail),
-     draw.estimates(answer, detail) and draw.research(answer, detail), each returning the tab's
-     element. The read of newer news (freshNews), the row the watchlists popup opens on and a
-     failed read's sentence are here for the tests. */
+     draw.estimates(answer, detail), draw['investor-relations'](answer, detail, id) and
+     draw.research(answer, detail), each returning the tab's element, `id` the id the page shows,
+     the Investor relations tab's word; and dataDate, where a tab's script hangs the function that
+     works out its data date, dataDate['investor-relations'](answer, id) (asOf). The read of newer
+     news (freshNews), the row the watchlists popup opens on and a failed read's sentence are here
+     for the tests. */
   P.companyPage = {
     head: head, tabs: tabs, panel: panel, kv: kv, group: group, table: table,
     money: money, big: big, percent: percent, points: points, signed: signed,
     multiple: multiple, decimal: decimal, day: day, count: count,
-    watchRow: watchRow, failure: failure, freshNews: freshNews, redraw: render,
-    draw: {}
+    watchRow: watchRow, failure: failure, freshNews: freshNews, readVendor: readVendor,
+    redraw: render, draw: {}, dataDate: {}
   };
   P.onShow.company = load;
 

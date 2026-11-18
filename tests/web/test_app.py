@@ -853,6 +853,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/company_estimates.js",
         "/static/company_financials.js",
         "/static/company_financials_chart.js",
+        "/static/company_investor.js",
         "/static/company_research_text.js",
         "/static/company_research.js",
         "/static/company_research_records.js",
