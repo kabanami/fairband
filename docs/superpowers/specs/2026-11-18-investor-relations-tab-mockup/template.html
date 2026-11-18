@@ -1,0 +1,418 @@
+<title>Investor Relations Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: the app's header and the company's head for their place, then the tab: a switch of
+     two views; calls are a list beside a reader, filings a filtered table. Fairband's tokens. */
+  :root {
+    --surface: #fbfcfd; --sunken: #f2f4f6; --raised: #ffffff; --hover: #eef1f4;
+    --selected: #e4f3f1; --hairline: #e2e6ea; --ink: #11161b; --muted: #4d555f;
+    --faint: #656e7a; --accent: #0f7a6e; --phase-4: #76681a; --mark-ink: #11161b;
+    --hit: #fff1b8; --pos: #0f7a62; --neg: #99392e;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #121417; --sunken: #0d0f11; --raised: #191c20; --hover: #202429;
+      --selected: #15262a; --hairline: #2a2f35; --ink: #e8eaed; --muted: #a3abb5;
+      --faint: #7b838e; --accent: #4bc0b0; --phase-4: #c4bb5c; --mark-ink: #e8eaed;
+      --hit: #5a4a12; --pos: #72d2bd; --neg: #cf7264; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface: #121417; --sunken: #0d0f11; --raised: #191c20; --hover: #202429;
+    --selected: #15262a; --hairline: #2a2f35; --ink: #e8eaed; --muted: #a3abb5;
+    --faint: #7b838e; --accent: #4bc0b0; --phase-4: #c4bb5c; --mark-ink: #e8eaed;
+    --hit: #5a4a12; --pos: #72d2bd; --neg: #cf7264; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--surface); color: var(--ink); font-family: var(--sans); font-size: 14px;
+    line-height: 1.45; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .label { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint);
+    font-weight: 500; }
+
+  .note { padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--sunken);
+    color: var(--muted); font-size: 12.5px; border-bottom: 1px solid var(--hairline); }
+  .bar, .page { padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px; padding-block: 10px;
+    border-bottom: 1px solid var(--hairline); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; }
+  .brand svg { width: 22px; height: 22px; }
+  .nav { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-weight: 500;
+    font-size: 13px; }
+  .page { padding-block: 16px 48px; max-width: 1500px; margin: 0 auto; }
+
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+  .head__logo { width: 40px; height: 40px; border-radius: 6px; background: #ffffff; padding: 7px;
+    flex: none; }
+  .head__name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .head__name h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  .head__sub { color: var(--faint); font-size: 12px; }
+  .phase { display: inline-flex; border: 1px solid var(--phase-4); border-radius: 3px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; overflow: hidden; }
+  .phase b { background: var(--phase-4); color: var(--surface); padding: 1px 7px; }
+  .phase span { padding: 1px 7px; }
+  .stamp { border: 1px solid var(--muted); border-radius: 3px; padding: 1px 6px; font-size: 11.5px;
+    letter-spacing: 0.04em; color: var(--muted); }
+  .head__price { margin-left: auto; display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 4px 10px; }
+  .head__price .p { font-size: 20px; font-weight: 500; }
+  .head__price .c { color: var(--muted); }
+  .head__price .d { color: var(--faint); font-size: 12px; }
+
+  .tabs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; margin-top: 14px;
+    border-bottom: 1px solid var(--hairline); }
+  .tabs span { padding: 8px 12px; color: var(--muted); font-weight: 500; }
+  .tabs span.on { color: var(--ink); border-bottom: 2px solid var(--accent); margin-bottom: -1px; }
+  .tabs .date { margin-left: auto; font-size: 12px; color: var(--faint); font-weight: 400; }
+
+  .panel { margin-top: 16px; border: 1px solid var(--hairline); border-radius: 8px;
+    background: var(--raised); padding: 16px; }
+  .panel__top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+    padding-bottom: 14px; border-bottom: 1px solid var(--hairline); }
+  .seg { display: inline-flex; border: 1px solid var(--hairline); border-radius: 5px;
+    overflow: hidden; }
+  .seg button { background: none; border: 0; padding: 6px 14px; color: var(--muted);
+    font-weight: 500; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--hairline); }
+  .seg button[aria-selected="true"] { background: var(--selected); color: var(--ink); }
+  .seg button:hover { background: var(--hover); }
+  .next { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .next b { font-weight: 500; color: var(--ink); }
+
+  .calls { display: flex; gap: 24px; margin-top: 16px; align-items: flex-start; }
+  .list { flex: 0 0 236px; min-width: 0; max-height: 78vh; overflow-y: auto;
+    position: sticky; top: 12px; }
+  .list h3 { margin: 14px 0 4px; }
+  .list h3:first-child { margin-top: 0; }
+  .call { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    width: 100%; text-align: left; background: none; border: 0; border-left: 2px solid var(--hairline);
+    padding: 6px 10px; cursor: pointer; }
+  .call:hover { background: var(--hover); }
+  .call[aria-current="true"] { background: var(--selected); border-left-color: var(--accent); }
+  .call .q { font-weight: 500; }
+  .call .d { color: var(--muted); font-size: 12.5px; }
+  .more { margin-top: 12px; background: none; border: 1px solid var(--hairline); border-radius: 5px;
+    padding: 6px 12px; cursor: pointer; color: var(--muted); }
+  .more:hover { background: var(--hover); }
+
+  .reader { flex: 1 1 0; min-width: 0; }
+  .reader h2 { margin: 0; font-size: 18px; font-weight: 600; text-wrap: balance; }
+  .reader .when { color: var(--muted); margin-top: 2px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0;
+    margin-top: 14px; border: 1px solid var(--hairline); border-radius: 6px;
+    background: var(--surface); }
+  .fact { padding: 10px 14px; border-right: 1px solid var(--hairline); }
+  .fact:last-child { border-right: 0; }
+  .fact .v { font-size: 17px; margin-top: 2px; }
+  .fact .s { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .up { color: var(--pos); } .down { color: var(--neg); }
+  .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 16px; }
+  .tools input { flex: 0 1 260px; min-width: 0; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--hairline); border-radius: 5px; padding: 6px 10px; font: inherit; }
+  .tools .count { color: var(--muted); font-size: 12.5px; }
+  .tools button { background: none; border: 1px solid var(--hairline); border-radius: 5px;
+    padding: 6px 12px; cursor: pointer; color: var(--muted); }
+  .tools button:hover { background: var(--hover); }
+  .turns { margin-top: 8px; max-width: 46rem; }
+  .turn { padding: 14px 0; border-top: 1px solid var(--hairline); }
+  .turn:first-child { border-top: 0; }
+  .turn .who { font-weight: 600; font-size: 13px; }
+  .turn .who.op { color: var(--faint); font-weight: 500; }
+  .turn p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
+  .part { margin: 22px 0 0; padding-top: 14px; border-top: 2px solid var(--hairline); }
+  mark { background: var(--hit); color: inherit; border-radius: 2px; padding: 0 1px; }
+  .cut { margin-top: 16px; padding: 10px 14px; border: 1px dashed var(--hairline);
+    border-radius: 6px; color: var(--muted); font-size: 13px; max-width: 46rem; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip { background: none; border: 1px solid var(--hairline); border-radius: 999px;
+    padding: 4px 12px; cursor: pointer; color: var(--muted); }
+  .chip:hover { background: var(--hover); }
+  .chip[aria-pressed="true"] { background: var(--selected); color: var(--ink);
+    border-color: var(--accent); }
+  .chip .n { font-family: var(--mono); font-size: 12px; margin-left: 4px; color: var(--faint); }
+  .wide { overflow-x: auto; margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--hairline); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--hairline); vertical-align: baseline; }
+  td.form { font-weight: 500; white-space: nowrap; }
+  td.what { color: var(--muted); }
+  td a { color: var(--accent); text-underline-offset: 2px; }
+  td.links { white-space: nowrap; }
+  td.links a + a { margin-left: 14px; }
+  .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 14px;
+    color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 860px) {
+    .calls { flex-direction: column; gap: 16px; }
+    .list { flex: none; width: 100%; position: static; max-height: 240px;
+      border: 1px solid var(--hairline); border-radius: 6px; padding: 10px; }
+    .head__price { margin-left: 0; }
+    .fact { border-right: 0; border-bottom: 1px solid var(--hairline); }
+    .fact:last-child { border-bottom: 0; }
+  }
+</style>
+
+<div class="note">A mockup of the Investor relations tab, on Apple's data as Fairband stores it. One call's transcript is here, cut short; the rest of the page works.</div>
+
+<div class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="7" y="4" width="25" height="5" rx="1.5" fill="#a6e3f2"/>
+      <rect x="0" y="12" width="32" height="8" rx="1.5" fill="#4bc0b0"/>
+      <rect x="11" y="23" width="21" height="5" rx="1.5" fill="#d9a23f"/>
+      <rect x="18.6" y="2" width="2.8" height="28" rx="1.4" fill="var(--mark-ink)"/>
+      <circle cx="20" cy="3.6" r="2.8" fill="var(--mark-ink)"/>
+    </svg>
+    Fairband
+  </div>
+  <div class="nav"><span>Screen</span><span>Groups</span><span>Watchlists</span><span>Methodology</span><span>Settings</span><span>Inbox</span></div>
+</div>
+
+<div class="page">
+  <div class="head" id="head"></div>
+  <div class="tabs">
+    <span>Overview</span><span>Financials</span><span>Estimates</span>
+    <span class="on">Investor relations</span><span>Research</span>
+    <span class="date" id="data-date"></span>
+  </div>
+
+  <div class="panel">
+    <div class="panel__top">
+      <div class="seg" role="tablist" aria-label="What the tab shows">
+        <button role="tab" id="tab-calls" aria-selected="true">Earnings calls</button>
+        <button role="tab" id="tab-filings" aria-selected="false">Filings</button>
+      </div>
+      <div class="next" id="next"></div>
+    </div>
+
+    <div id="view-calls">
+      <div class="calls">
+        <nav class="list" id="call-list" aria-label="The calls on file"></nav>
+        <article class="reader" id="reader"></article>
+      </div>
+    </div>
+
+    <div id="view-filings" hidden>
+      <div class="chips" id="chips"></div>
+      <div class="wide"><table>
+        <thead><tr><th class="label">Filed</th><th class="label">Form</th><th class="label">What it is</th><th class="label">On the SEC's site</th></tr></thead>
+        <tbody id="filing-rows"></tbody>
+      </table></div>
+      <div class="foot"><span id="window"></span><button class="more" id="older" style="margin-top:0">Show older filings</button><span id="older-note" hidden>In the product this reads the year before.</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const day = (iso) => { const [y, m, d] = iso.slice(0, 10).split('-').map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; };
+const money = (v) => v == null ? '—' : '$' + v.toFixed(2);
+const big = (v) => v == null ? '—' : '$' + (v / 1e9).toFixed(1) + 'B';
+const el = (tag, attrs, ...kids) => {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') node.className = v; else if (k === 'text') node.textContent = v; else node.setAttribute(k, v);
+  }
+  for (const kid of kids) if (kid != null) node.append(kid);
+  return node;
+};
+
+// The head
+(function () {
+  const h = DATA.head;
+  const sign = h.change < 0 ? '−' : '+';
+  document.getElementById('head').append(
+    el('img', { class: 'head__logo', src: h.logo, alt: '' }),
+    el('div', {},
+      el('div', { class: 'head__name' },
+        el('h1', { text: h.name }), el('span', { class: 'num', text: h.symbol }),
+        el('span', { class: 'phase' }, el('b', { text: String(h.phaseNumber) }), el('span', { text: h.phase.toUpperCase() })),
+        el('span', { class: 'stamp', text: h.moat.toUpperCase() + ' MOAT' })),
+      el('div', { class: 'head__sub', text: [h.exchange, h.sector, h.industry].join(', ') })),
+    el('div', { class: 'head__price' },
+      el('span', { class: 'p num', text: money(h.price) }),
+      el('span', { class: 'c num', text: `${sign}$${Math.abs(h.change).toFixed(2)} (${sign}${Math.abs(h.changePercent).toFixed(2)}%)` }),
+      el('span', { class: 'd', text: 'close ' + day(h.day) })));
+  document.getElementById('data-date').textContent = 'data ' + day(DATA.dataDate);
+  const next = document.getElementById('next');
+  next.append('Next earnings report ', el('b', { text: day(DATA.nextEarnings) }));
+})();
+
+// Earnings calls
+let shown = 5;                       // fiscal years in the list before "Show all"
+let current = DATA.calls[0];
+let needle = '';
+
+function callList() {
+  const list = document.getElementById('call-list');
+  list.replaceChildren();
+  const years = [...new Set(DATA.calls.map((c) => c.fiscalYear))];
+  for (const year of years.slice(0, shown)) {
+    list.append(el('h3', { class: 'label', text: 'Fiscal ' + year }));
+    for (const call of DATA.calls.filter((c) => c.fiscalYear === year)) {
+      const row = el('button', { class: 'call', 'aria-current': String(call === current) },
+        el('span', { class: 'q', text: 'Q' + call.quarter }), el('span', { class: 'd', text: day(call.date) }));
+      row.addEventListener('click', () => { current = call; needle = ''; callList(); reader(); });
+      list.append(row);
+    }
+  }
+  if (shown < years.length) {
+    const more = el('button', { class: 'more', text: `Show all ${DATA.calls.length} calls` });
+    more.addEventListener('click', () => { shown = years.length; callList(); });
+    list.append(more);
+  }
+}
+
+// A long turn in paragraphs of a few sentences, as the vendor gives one line a speaker.
+function paragraphs(text) {
+  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [text];
+  const out = []; let now = '';
+  for (const s of sentences) {
+    if (now.length + s.length > 520 && now) { out.push(now.trim()); now = ''; }
+    now += s;
+  }
+  if (now.trim()) out.push(now.trim());
+  return out;
+}
+
+function marked(text) {
+  const p = document.createElement('p');
+  if (!needle) { p.textContent = text; return [p, 0]; }
+  const lower = text.toLowerCase(); const find = needle.toLowerCase();
+  let at = 0; let hits = 0;
+  for (;;) {
+    const i = lower.indexOf(find, at);
+    if (i < 0) break;
+    p.append(text.slice(at, i), el('mark', { text: text.slice(i, i + find.length) }));
+    at = i + find.length; hits += 1;
+  }
+  p.append(text.slice(at));
+  return [p, hits];
+}
+
+function fact(label, value, sub, tone) {
+  return el('div', { class: 'fact' }, el('div', { class: 'label', text: label }),
+    el('div', { class: 'v num', text: value }), sub ? el('div', { class: 's num' + (tone ? ' ' + tone : ''), text: sub }) : null);
+}
+
+function against(actual, expected) {
+  if (actual == null || expected == null || !expected) return [null, null];
+  const gap = (actual / expected - 1) * 100;
+  return [`${gap >= 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)}% against the estimate`, gap >= 0 ? 'up' : 'down'];
+}
+
+function reader() {
+  const box = document.getElementById('reader');
+  const c = current;
+  box.replaceChildren(
+    el('h2', { text: `Q${c.quarter} fiscal ${c.fiscalYear} earnings call` }),
+    el('div', { class: 'when', text: day(c.date) }));
+  if (c.epsActual != null || c.revenueActual != null) {
+    const [e, et] = against(c.epsActual, c.epsEstimated);
+    const [r, rt] = against(c.revenueActual, c.revenueEstimated);
+    box.append(el('div', { class: 'facts' },
+      fact('EPS reported', money(c.epsActual), e, et),
+      fact('EPS estimate', money(c.epsEstimated)),
+      fact('Revenue reported', big(c.revenueActual), r, rt),
+      fact('Revenue estimate', big(c.revenueEstimated))));
+  }
+  const t = DATA.transcript;
+  if (c.fiscalYear !== t.fiscalYear || c.quarter !== t.quarter) {
+    box.append(el('div', { class: 'cut', text: 'This mockup holds the text of one call, the newest. In the product each call\'s transcript loads when you select it.' }));
+    return;
+  }
+  const input = el('input', { id: 'find', type: 'search', placeholder: 'Find in this call', 'aria-label': 'Find in this call' });
+  input.value = needle;
+  const count = el('span', { class: 'count' });
+  const jump = el('button', { text: 'Go to the questions' });
+  box.append(el('div', { class: 'tools' }, input, count, jump));
+  const turns = el('div', { class: 'turns' });
+  let total = 0; let questions = null;
+  t.turns.forEach((turn, i) => {
+    const node = el('section', { class: 'turn' + (i === t.questionsAt ? ' part' : '') });
+    if (i === t.questionsAt) { questions = node; node.append(el('div', { class: 'label', text: 'Questions and answers' })); }
+    node.append(el('div', { class: 'who' + (turn.speaker === 'Operator' ? ' op' : ''), text: turn.speaker }));
+    for (const para of paragraphs(turn.text)) { const [p, hits] = marked(para); total += hits; node.append(p); }
+    if (turn.cut) node.append(el('p', { class: 'count', text: 'The mockup cuts this turn short here.' }));
+    turns.append(node);
+  });
+  box.append(turns, el('div', { class: 'cut', text: `The mockup stops here: ${t.turns.length} of the call's ${t.allTurns} turns. The product shows the whole call.` }));
+  count.textContent = needle ? `${total} ${total === 1 ? 'match' : 'matches'}` : '';
+  input.addEventListener('input', () => {
+    needle = input.value.trim().length >= 2 ? input.value.trim() : '';
+    const pos = input.selectionStart; reader();
+    const again = document.getElementById('find'); again.focus(); again.setSelectionRange(pos, pos);
+  });
+  jump.addEventListener('click', () => { if (questions) questions.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+}
+
+// Filings
+const FORMS = {
+  '10-K': 'Annual report', '10-Q': 'Quarterly report', '8-K': 'Current report: an event the company must disclose',
+  'DEF 14A': 'Proxy statement for the shareholders\' meeting', 'DEFA14A': 'Additional proxy material',
+  '3': 'An insider\'s first statement of holdings', '4': 'A change in an insider\'s holdings',
+  '5': 'An insider\'s yearly statement of holdings', '144': 'Notice of a planned sale of restricted shares',
+  '424B2': 'Prospectus for securities on offer', 'FWP': 'Free writing prospectus',
+  '25-NSE': 'Notice that a security leaves an exchange', 'SD': 'Specialized disclosure report',
+  '11-K': 'Annual report of an employee stock plan', 'S-8': 'Registration of shares for employee plans',
+  'S-3ASR': 'Shelf registration of securities', '20-F': 'Annual report of a foreign issuer',
+  '6-K': 'Report of a foreign issuer', 'SC 13G': 'A large holder\'s statement of ownership',
+  'SC 13G/A': 'A change to a large holder\'s statement', 'PX14A6G': 'A shareholder\'s notice of exempt solicitation',
+  'ARS': 'Annual report to shareholders',
+};
+const INSIDER = (f) => /^(3|4|5|144)(\/A)?$/.test(f);
+const GROUPS = [
+  ['Without insider forms', (f) => !INSIDER(f)],
+  ['10-K and 10-Q', (f) => /^10-[KQ]/.test(f)],
+  ['8-K', (f) => /^8-K/.test(f)],
+  ['Insider forms', INSIDER],
+  ['All', () => true],
+];
+let group = 0;
+
+function filings() {
+  const chips = document.getElementById('chips');
+  chips.replaceChildren();
+  GROUPS.forEach(([name, keep], i) => {
+    const n = DATA.filings.filter((f) => keep(f.formType)).length;
+    const chip = el('button', { class: 'chip', 'aria-pressed': String(i === group) }, name, el('span', { class: 'n', text: String(n) }));
+    chip.addEventListener('click', () => { group = i; filings(); });
+    chips.append(chip);
+  });
+  const rows = document.getElementById('filing-rows');
+  rows.replaceChildren();
+  for (const f of DATA.filings.filter((x) => GROUPS[group][1](x.formType))) {
+    const links = el('td', { class: 'links' });
+    if (f.finalLink) links.append(el('a', { href: f.finalLink, target: '_blank', rel: 'noopener', text: 'Document' }));
+    if (f.link) links.append(el('a', { href: f.link, target: '_blank', rel: 'noopener', text: 'All files' }));
+    rows.append(el('tr', {}, el('td', { class: 'num', text: day(f.filingDate) }), el('td', { class: 'form', text: f.formType }),
+      el('td', { class: 'what', text: FORMS[f.formType] || FORMS[f.formType.replace(/\/A$/, '')] && 'Amendment: ' + FORMS[f.formType.replace(/\/A$/, '')] || '' }), links));
+  }
+  document.getElementById('window').textContent = `Filed from ${day(DATA.filingsFrom)} to ${day(DATA.filingsTo)}.`;
+}
+document.getElementById('older').addEventListener('click', () => { document.getElementById('older-note').hidden = false; });
+
+// The two views, by the address's #calls or #filings
+function show(view) {
+  const calls = view !== 'filings';
+  document.getElementById('view-calls').hidden = !calls;
+  document.getElementById('view-filings').hidden = calls;
+  document.getElementById('tab-calls').setAttribute('aria-selected', String(calls));
+  document.getElementById('tab-filings').setAttribute('aria-selected', String(!calls));
+}
+document.getElementById('tab-calls').addEventListener('click', () => { location.hash = 'calls'; show('calls'); });
+document.getElementById('tab-filings').addEventListener('click', () => { location.hash = 'filings'; show('filings'); });
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+callList(); reader(); filings(); show(location.hash.slice(1));
+</script>
