@@ -361,12 +361,15 @@ with no vendor call, as the other tabs' reads are. It answers:
   the four figures null where no stored `earnings` row is the call's by 7.4's rule or the row
   lacks the figure. A row of the list without a whole fiscal year, a quarter of 1 to 4 and an
   ISO date is dropped. Empty where no list is stored.
-- `filings`: `{from, to, rows, truncated, observedDay}` of the usable stored `sec-filings`
-  answer whose `to` is the latest (the newest among equals), the rows newest first, each `{form,
+- `filings`: `{from, to, rows, truncated, observedDay}` of the tab's filing list: the usable
+  stored `sec-filings` answer of a whole window, its params exactly those of
+  `page_params("sec-filings", symbol, <its to>)` (365 days, `FILINGS_LIMIT`), whose `to` is on
+  or before today, the latest `to` among those, the newest among equals. A stored answer whose
+  `to` is no ISO date, or whose params are any other window (an agent's narrower or wider list,
+  or one that ends in the future), is never the tab's. The rows newest first, each `{form,
   filed, document, files}`, a link null unless it starts `https://`; `truncated` true where the
   answer holds `FILINGS_LIMIT` rows; `observedDay` the day the stored answer was observed. Null
-  where none is stored. An agent's list of an older window has an earlier `to`, so it never
-  stands in for the refresh's.
+  where none is stored.
 
 **`GET /api/companies/{symbol}/page/investor-relations/call?year=<y>&quarter=<q>`** answers
 `{symbol, fiscalYear, quarter, date, turns, questionsAt, observedDay}`: `turns` a list of
@@ -386,9 +389,10 @@ questions' first turn, or null; `observedDay` the day the copy was fetched.
 
 **`GET /api/companies/{symbol}/page/investor-relations/filings?to=<ISO date>`** answers
 `{from, to, rows, truncated, observedDay}` for the 365 days that end on `to`, through the
-`filings` pass-through. A stored usable answer of that exact window is used whatever its age
-where `to` is before today (*my call*: a past year's list does not change); else the
-pass-through's window holds. It fails as the call read does.
+`filings` pass-through. A `to` after today is refused (the page never asks a window that has
+not ended); a `to` of today is allowed. A stored usable answer of that exact window is used
+whatever its age where `to` is before today (*my call*: a past year's list does not change);
+else the pass-through's window holds. It fails as the call read does.
 
 The last two may call a vendor. So each carries the header `X-Fairband-Request: 1`, else 403,
 as the pass-through routes do (`app`, D11): their paths join `_VENDOR_READS` (`web/app.py`),
@@ -397,8 +401,9 @@ for these two.
 
 Rules for all three, beside the page's (its design, 10.3): a symbol that is not one is a 400;
 a company with no stored profile is a 404, "no page data for <symbol>"; a `year` or a
-`quarter` that is no whole number, a quarter outside 1 to 4, or a `to` that is no ISO date, is
-a 400 with its sentence. No answer carries a ref or a response id: no report cites them.
+`quarter` that is no whole number, a quarter outside 1 to 4, a `to` that is no ISO date, or a
+`to` after today, is a 400 with its sentence, judged before any store read or vendor call. No
+answer carries a ref or a response id: no report cites them.
 
 The payload readers are pure functions in `src/fairband/vendors/page_investor.py`, beside
 `page_fmp.py` and `page_financials.py`: the turns of a transcript's text, its paragraphs, the
@@ -571,3 +576,6 @@ filings; how `fetch_company` runs a call that depends on another's answer.
 - **2026-11-18, the build's ruling:** the first read's data date covers the calls view's stored
   answers, and each filing list carries its own day, so the page can give each view its caption
   (7.6).
+- **2026-11-18, the build's ruling:** the tab's filing list is a whole 365-day window that ends
+  on or before today, since a narrower list an agent asked for the same day, or one that ends in
+  the future, would otherwise stand in for the refresh's (8.2).

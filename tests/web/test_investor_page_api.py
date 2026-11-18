@@ -53,6 +53,7 @@ FIGURES = ("epsReported", "epsEstimate", "revenueReported", "revenueEstimate")
 NO_QUOTE = {"price": None, "change": None, "changePercent": None, "day": None}
 BAD_QUARTER = "quarter must be 1 to 4"
 BAD_TO = "to must be an ISO date from 0002-01-01 on"
+FUTURE_TO = "to must be today or earlier"
 # The two reads that may call a vendor, each for a call or a window the store does not hold.
 VENDOR_READS = (f"{CALL}?year=2026&quarter=3", f"{FILINGS}?to=2025-10-31")
 # The filings of the window to 31 Oct 2025, the year before the refresh's.
@@ -255,6 +256,52 @@ def test_the_latest_window_wins_over_a_newer_copy_of_an_older_one(
     _filings(db_path, DAY + timedelta(days=1), error, at=NOW, error="unusable payload: {...}")
     filings = _get(client, TAB)["filings"]
     assert (filings["to"], filings["rows"]) == ("2026-11-01", page_investor.filing_rows(again))
+
+
+def test_a_narrower_or_wider_list_asked_the_same_day_is_not_the_tab_s(
+    client: TestClient, db_path: Path
+) -> None:
+    """The review's case: the refresh stores its window in the morning, then an agent asks the
+    filings from 1 Oct to today, and another list from two years back to today. All three end
+    today and the agents' are newer, but only a whole window of 365 days is the tab's."""
+    _profile(db_path)
+    _filings(db_path, DAY)
+    narrower = {"symbol": SYMBOL, "from": "2026-10-01", "to": "2026-11-01", "limit": "1000"}
+    wider = {"symbol": SYMBOL, "from": "2024-11-01", "to": "2026-11-01", "limit": "1000"}
+    _store(db_path, "sec-filings", narrower, pages.FILINGS[:1], NOW)
+    _store(db_path, "sec-filings", wider, pages.FILINGS[:2], NOW)
+    filings = _get(client, TAB)["filings"]
+    assert (filings["from"], filings["to"]) == ("2025-11-01", "2026-11-01")
+    assert filings["rows"] == page_investor.filing_rows(pages.FILINGS)
+
+
+def test_a_list_that_ends_in_the_future_is_not_the_tab_s(client: TestClient, db_path: Path) -> None:
+    """The review's other case: a whole window that ends a month after today, stored directly
+    since the older-window read now refuses to ask one, holds no filing yet and would beat every
+    refresh until its day. The tab keeps the refresh's."""
+    _profile(db_path)
+    _filings(db_path, DAY)
+    _filings(db_path, DAY + timedelta(days=30), [], at=NOW)
+    filings = _get(client, TAB)["filings"]
+    assert (filings["to"], len(filings["rows"])) == ("2026-11-01", len(pages.FILINGS))
+
+
+def test_no_whole_window_on_file_is_no_filing_list(client: TestClient, db_path: Path) -> None:
+    """Review Focus 1 and 2: filing lists of any other shape, and none of a whole window that
+    ends by today, give the tab no filing list, and nothing throws: a narrower window, a window
+    of another page size, a row whose params lack ``to``, a ``to`` that is no ISO date, and a
+    whole window that ends tomorrow."""
+    _profile(db_path)
+    for params in (
+        {"symbol": SYMBOL, "from": "2026-10-01", "to": "2026-11-01", "limit": "1000"},
+        {"symbol": SYMBOL, "from": "2025-11-01", "to": "2026-11-01", "limit": "100"},
+        {"symbol": SYMBOL, "from": "2025-11-01", "limit": "1000"},
+        {"symbol": SYMBOL, "from": "2025-11-01", "to": "soon", "limit": "1000"},
+    ):
+        _store(db_path, "sec-filings", params, pages.FILINGS, AT)
+    _filings(db_path, DAY + timedelta(days=1))
+    body = _get(client, TAB)
+    assert (body["filings"], body["calls"]) == (None, [])
 
 
 def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: Path) -> None:
@@ -504,8 +551,9 @@ def test_a_past_window_not_on_file_is_fetched_once(
 def test_a_window_that_ends_today_goes_through_the_pass_through(
     with_passthrough: TestClient, vendor: Vendor, db_path: Path
 ) -> None:
-    """Today's window may still gain filings: a copy stored past the reuse window is not read from
-    the store, the pass-through asks the vendor; inside the window it reuses its copy."""
+    """A ``to`` of today is answered (tomorrow's is a 400), and today's window may still gain
+    filings: a copy stored past the reuse window is not read from the store, the pass-through asks
+    the vendor; inside the window it reuses its copy."""
     _profile(db_path)
     _filings(db_path, DAY, pages.FILINGS[:2], at=STALE)
     _answering(vendor, pages.FILINGS)
@@ -574,6 +622,7 @@ NOT_WHOLE = "Input should be a valid integer, unable to parse string as an integ
         (f"{FILINGS}?to=soon", BAD_TO),
         (f"{FILINGS}?to=2025-02-30", BAD_TO),
         (f"{FILINGS}?to=0001-12-31", BAD_TO),  # its window would start before the calendar
+        (f"{FILINGS}?to=2026-11-02", FUTURE_TO),  # tomorrow: a window that has not ended
         (FILINGS, "to: Field required"),
     ],
 )
