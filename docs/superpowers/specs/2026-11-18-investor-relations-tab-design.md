@@ -8,7 +8,9 @@ press releases wait in the backlog, and the look (version 1 of the mockup: "It l
 Two of his rulings for the whole page shape this design too: the page's data is stored, not
 fetched when a page opens (section 6), and Fairband computes no new figure for it (7.4). Every
 other choice below is Claude's, marked *my call* where it is more than a reading of those
-requests, and can be overturned as any other. Nothing is built yet.
+requests, and can be overturned as any other. The founder approved this design on 2026-11-18
+("Approved"); the plan is `docs/superpowers/plans/2026-11-18-investor-relations-tab-plan.md`.
+Nothing is built yet.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -244,7 +246,7 @@ call*: no filter of their own until a reader asks).
 | Filed | the filing date, as `9 Nov 2026` |
 | Form | the form type as the vendor gives it |
 | What it is | the form in plain words, from a table in the page's code (below); nothing for a form the table lacks; an amendment (`8-K/A`) reads `Amendment: ` and the form's words |
-| On the SEC's site | two links, `Document` (the vendor's `finalLink`) and `All files` (its `link`), each opening in a new tab; a link the row lacks is left out |
+| On the SEC's site | two links, `Document` (the vendor's `finalLink`) and `All files` (its `link`), each opening in a new tab; a link the row lacks, or one that does not start `https://`, is left out |
 
 The plain words, as the mockup holds them, for the forms met most: `10-K`, `10-Q`, `8-K`,
 `DEF 14A`, `DEFA14A`, `3`, `4`, `5`, `144`, `424B2`, `FWP`, `25-NSE`, `SD`, `11-K`, `S-8`,
@@ -357,7 +359,8 @@ with no vendor call, as the other tabs' reads are. It answers:
   ISO date is dropped. Empty where no list is stored.
 - `filings`: `{from, to, rows, truncated}` of the usable stored `sec-filings` answer whose
   `to` is the latest (the newest among equals), the rows newest first, each `{form, filed,
-  document, files}`; `truncated` true where the answer holds `FILINGS_LIMIT` rows. Null where
+  document, files}`, a link null unless it starts `https://`; `truncated` true where the answer
+  holds `FILINGS_LIMIT` rows. Null where
   none is stored. An agent's list of an older window has an earlier `to`, so it never stands
   in for the refresh's.
 
@@ -557,3 +560,7 @@ filings; how `fetch_company` runs a call that depends on another's answer.
   transcript that cannot be read draws (7.4); the speaker's line and the questions' rule,
   exactly (7.4); the calls joined to the earnings rows by label and date, counted over 297
   calls (section 5); where the addresses, the header and the readers live in the code (8.2, 9).
+- **2026-11-18, the approval.** Claude gave the founder the design with the two corrections
+  named (the refresh stores the tab's data; no gap to the estimate). The founder: "Approved".
+  While writing the plan Claude added one rule: a filing's link is drawn only where it starts
+  `https://` (7.5, 8.2), so a vendor's row can put no other kind of address behind a press.
