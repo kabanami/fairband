@@ -134,6 +134,19 @@ def test_blank_lines_and_windows_line_ends_split_no_word() -> None:
         ("Ada", "One. Two."),
         ("Bo", "Three."),
     ]
+    assert speaker_turns("Ada: One.\rTwo.\rBo: Three.") == [("Ada", "One. Two."), ("Bo", "Three.")]
+
+
+@pytest.mark.parametrize("mark", ["\x85", "\v", "\f", "\x1c", "\x1d", "\x1e", " ", " "])
+def test_a_line_ends_only_at_a_line_feed_or_a_carriage_return(mark: str) -> None:
+    turns = speaker_turns(f"Ada Park: Revenue rose{mark}Bo Chan: in every region.")
+    assert turns == [("Ada Park", f"Revenue rose{mark}Bo Chan: in every region.")]
+
+
+def test_a_mis_read_ellipsis_starts_no_turn_and_is_kept() -> None:
+    turns = speaker_turns("Ada Park: Revenue rose\x85Bo Chan: in every region.")
+    assert turns == [("Ada Park", "Revenue rose\x85Bo Chan: in every region.")]
+    assert "\x85" in turns[0][1]
 
 
 def test_a_content_of_no_words_has_no_turn() -> None:
@@ -460,9 +473,46 @@ def test_filing_rows() -> None:
     ]
 
 
-def test_the_filings_keep_the_answer_s_order() -> None:
-    rows = [filed("10-Q", "2026-07-30"), filed("10-K", "2026-11-01"), filed("8-K", "2026-08-01")]
-    assert [row["filed"] for row in filing_rows(rows)] == ["2026-07-30", "2026-11-01", "2026-08-01"]
+def forms(payload: Any) -> list[str]:
+    return [row["form"] for row in filing_rows(payload)]
+
+
+def test_the_filings_of_an_answer_oldest_first_stand_newest_first() -> None:
+    rows = [filed("10-Q", "2026-04-30"), filed("8-K", "2026-07-30"), filed("10-K", "2026-11-01")]
+    assert forms(rows) == ["10-K", "8-K", "10-Q"]
+    assert [row["filed"] for row in filing_rows(rows)] == ["2026-11-01", "2026-07-30", "2026-04-30"]
+
+
+def test_the_filings_of_an_answer_in_mixed_order_stand_newest_first() -> None:
+    rows = [
+        filed("10-Q", "2026-07-30 00:00:00"),
+        filed("10-K", "2026-11-01 00:00:00"),
+        filed("4", "2025-12-02 00:00:00"),
+        filed("8-K", "2026-08-01 00:00:00"),
+    ]
+    assert forms(rows) == ["10-K", "8-K", "10-Q", "4"]
+
+
+def test_the_filings_of_one_day_keep_the_answer_s_order() -> None:
+    rows = [
+        filed("4", "2026-10-30 18:00:00"),
+        filed("SC 13G/A", "2026-08-01"),
+        filed("8-K", "2026-10-30 09:00:00"),
+        filed("4/A", "2026-10-30"),
+        filed("144", "2026-11-02"),
+    ]
+    assert forms(rows) == ["144", "4", "8-K", "4/A", "SC 13G/A"]
+
+
+def test_a_filing_with_no_day_stands_last_in_the_answer_s_order() -> None:
+    rows = [
+        filed("ARS", None),
+        filed("10-Q", "2026-07-30"),
+        filed("DEF 14A", "early spring"),
+        filed("10-K", "2026-11-01"),
+        filed("S-8", None),
+    ]
+    assert forms(rows) == ["10-K", "10-Q", "ARS", "DEF 14A", "S-8"]
 
 
 @pytest.mark.parametrize(

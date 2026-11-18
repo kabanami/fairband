@@ -14,8 +14,9 @@ the tab's reads hand them the stored ``transcript``, ``transcript-dates``, ``ear
   its quarter from the ``earnings`` row of its label dated near it (``calls``); nothing is
   computed, no gap to an estimate among them. Every figure is in US dollars, as the Estimates
   tab's (``page_fmp.money``).
-- A filing is a row of the filing list, its two links kept only where they start ``https://``,
-  so a vendor's row can put no other kind of address behind a press (``filing_rows``).
+- A filing is a row of the filing list, the rows newest first by their filing day, its two links
+  kept only where they start ``https://``, so a vendor's row can put no other kind of address
+  behind a press (``filing_rows``).
 - An answer of the wrong shape (FMP's ``{"Error Message": ...}``, ``null``, a text, a list of
   anything but objects) reads as no answer: no words, no call, no filing. None of the readers
   raises on any JSON value.
@@ -37,6 +38,7 @@ SPEAKER_WORDS = 6  # the most words in a speaker's name
 
 _NAME_CHARS = range(2, 61)  # a speaker's name is 2 to 60 characters
 _OPERATOR, _QUESTION = "operator", "question"
+_LINE_END = re.compile(r"\r\n|\r|\n")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")  # a `.`, `!` or `?` and the space after it
 _USD = "USD"
 _HTTPS = "https://"
@@ -51,13 +53,16 @@ _FIGURES = (
 
 
 def speaker_turns(content: str) -> list[Turn]:
-    """The turns of a transcript's text, line by line (7.4). A speaker's line, ``Name: words``,
-    starts a turn: the name is the text before the line's first ``": "``, of 2 to 60 characters,
-    with no colon in it and of ``SPEAKER_WORDS`` words at most. Any other line that is not blank
-    joins the turn before it after one space; before any speaker's line it starts a turn with no
-    name. A line's spaces at either end are dropped; its words are kept as given."""
+    """The turns of a transcript's text, line by line (7.4), a line ending at a line feed, a
+    carriage return or the two together and at no other character (not at ``\\x85``, which a
+    mis-read ellipsis becomes, nor at a form feed or a Unicode line separator). A speaker's line,
+    ``Name: words``, starts a turn: the name is the text before the line's first ``": "``, of 2
+    to 60 characters, with no colon in it and of ``SPEAKER_WORDS`` words at most. Any other line
+    that is not blank joins the turn before it after one space; before any speaker's line it
+    starts a turn with no name. A line's spaces at either end are dropped; its words are kept as
+    given."""
     turns: list[tuple[str | None, list[str]]] = []  # a turn's lines, joined at the end
-    for line in (raw.strip() for raw in content.splitlines()):
+    for line in (raw.strip() for raw in _LINE_END.split(content)):
         if not line:
             continue
         spoken = _speaker_line(line)
@@ -159,26 +164,29 @@ def calls(dates: Any, earnings: Any) -> list[dict[str, Any]]:
 
 
 def filing_rows(payload: Any) -> list[dict[str, Any]]:
-    """The rows of a ``sec-filings`` answer, in its order, put in no other: each object row with a
-    ``formType`` that is a text and not blank, as ``{"form", "filed", "document",
-    "files"}`` (7.5, 8.2). ``form`` is the form as given; ``filed`` the ISO date of the
-    ``filingDate``, ``None`` without one; ``document`` the ``finalLink``, the filing's main
-    document, and ``files`` the ``link``, its index page, each ``None`` unless a text that starts
-    ``https://``. Any other row is dropped."""
-    out: list[dict[str, Any]] = []
+    """The rows of a ``sec-filings`` answer, each object row with a ``formType`` that is a text and
+    not blank, as ``{"form", "filed", "document", "files"}`` (7.5, 8.2). ``form`` is the form as
+    given; ``filed`` the ISO date of the ``filingDate``, ``None`` without one; ``document`` the
+    ``finalLink``, the filing's main document, and ``files`` the ``link``, its index page, each
+    ``None`` unless a text that starts ``https://``. Any other row is dropped.
+
+    The rows stand newest first by ``filed``, whatever the answer's order, so the last row with a
+    day is the oldest filing (after a list cut at its limit, 7.5's next window ends on its day).
+    The sort is stable: rows of one day keep the answer's order among themselves, and the rows
+    with no ``filed`` stand last, in the answer's order."""
+    found: list[tuple[date | None, dict[str, Any]]] = []
     for row in objects(payload):
         form = text(row.get("formType"))
         if form is None:
             continue
-        out.append(
-            {
-                "form": form,
-                "filed": _iso(parse_date(row.get("filingDate"))),
-                "document": _https(row.get("finalLink")),
-                "files": _https(row.get("link")),
-            }
+        filed = parse_date(row.get("filingDate"))
+        document, files = _https(row.get("finalLink")), _https(row.get("link"))
+        found.append(
+            (filed, {"form": form, "filed": _iso(filed), "document": document, "files": files})
         )
-    return out
+    days = [(filed, row) for filed, row in found if filed is not None]
+    days.sort(key=lambda pair: pair[0], reverse=True)  # stable: one day's rows keep their order
+    return [row for _, row in days] + [row for filed, row in found if filed is None]
 
 
 def _speaker_line(line: str) -> Turn | None:
