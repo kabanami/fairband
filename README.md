@@ -15,10 +15,11 @@ with Codex coming soon.
 flowchart LR
     you(["You"]) -- "read, ask, decide" --> pages["Pages in your browser"]
     agent(["Your agent: Claude Code"]) -- "55 tools" --> mcp["MCP server"]
-    pages --> server["Fairband server: valuation engine and store"]
+    pages --> server["Fairband server and valuation engine"]
     mcp --> server
-    server -- "your key" --> fmp[("Financial Modeling Prep")]
-    server -- "your key" --> gf[("GuruFocus")]
+    server --> db[("SQLite database on your disk")]
+    server -- "your key" --> fmp["Financial Modeling Prep"]
+    server -- "your key" --> gf["GuruFocus"]
 ```
 
 **You bring**
@@ -46,23 +47,22 @@ flowchart LR
 
 ## The pages
 
-**The screen.** One row a company: its phase, its value, the band of prices close to the value,
-and where the price stands against it.
+**The screen.** Every company in one table, with its phase, its fair value and how its price
+compares.
 
 ![The screen: one row a company](docs/images/screen.png)
 
-**A company's overview.** The business, the value with its levels, the price and the key
+**A company's overview.** What the company does, its fair value, its price and its key
 statistics.
 
 ![A company's Overview tab](docs/images/company-overview.png)
 
-**A company's financials.** The three statements, the segments and the ratios, by year or by
-quarter, with a chart of any line.
+**A company's financials.** The income statement, the balance sheet, the cash flow, the segments
+and the ratios, by year or by quarter.
 
 ![A company's Financials tab](docs/images/company-financials.png)
 
-**A company's research.** The report an agent wrote, with the records it rests on beside the text
-and the charts beside the paragraphs they belong to.
+**A company's research.** The report your agent wrote, with its charts.
 
 ![The financial section of a research report, with its charts](docs/images/research-charts.png)
 
