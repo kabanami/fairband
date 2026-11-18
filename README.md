@@ -13,7 +13,7 @@ with Codex coming soon.
 
 ```mermaid
 flowchart LR
-    you(["You"]) -- "read, ask, decide" --> pages["Pages in your browser"]
+    you(["You"]) -- "read, ask, decide" --> pages["Fairband web interface"]
     agent(["Your agent: Claude Code"]) -- "55 tools" --> mcp["MCP server"]
     pages --> server["Fairband server and valuation engine"]
     mcp --> server
