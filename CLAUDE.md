@@ -48,6 +48,14 @@ Use `uv run` for every command; dependencies are locked in `uv.lock`. Run before
 uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run pytest -q
 ```
 
+A commit of documents alone (Markdown files and files under `docs/`; nothing under `src/` or
+`tests/`, no `pyproject.toml` and no `uv.lock`) runs this shorter check in its place, the tests
+that read a document (the founder, 2026-11-18):
+
+```
+uv run ruff check . && uv run ruff format --check . && uv run pytest -q tests/test_method_doc.py tests/test_playbook.py tests/reports/test_render.py tests/web/test_design_tokens.py
+```
+
 ## Commits
 
 - The message is one plain sentence in the imperative; see `git log` for the style.
