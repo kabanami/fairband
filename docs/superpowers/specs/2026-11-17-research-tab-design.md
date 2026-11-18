@@ -6,11 +6,11 @@ company's head and tabs; that the agents write nothing new for it (way B of sect
 look (version 3 of the mockup, which is version 1 with the chart corrections: "it looks good",
 then "I prefer the apple version. Let's just go with that"). Every other choice below is
 Claude's, marked *my call* where it is more than a reading of those requests, and can be
-overturned as any other. The plan is built on the branch `worktree-research-tab`, on 2026-11-17
-and 2026-11-18, and not yet merged; the decision log's entries on the build and on the look
-record where the build differs from this design, and the sections below say so in place,
-"(the build's ruling, decision log)". The merge and the acceptance of section 12 wait for the
-founder's word.
+overturned as any other. The plan was built on 2026-11-17 and 2026-11-18 and merged to main on
+the founder's word on 2026-11-18 (`bc18aad`), the server started from it; the decision log's
+entries on the build and on the look record where the build differs from this design, and the
+sections below say so in place, "(the build's ruling, decision log)". The acceptance of
+section 12 is read out in the decision log's last entry; its step 4, the founder's look, is his.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -880,3 +880,48 @@ The readout goes in the decision log: the heights of the seven, and what the eye
      paragraph keeps its 27rem, its charts' column is never under 300 px, and the charts stand
      under the paragraph where the panel cannot hold both (7.4 rule 3). B-244 keeps three
      findings left as they are, and B-218's range runs to `855a405`.
+- **2026-11-18, the merge and the acceptance on the live data (section 12).** The short check
+  of the last round found every item done; its five small items of words went to B-244
+  (`bc18aad`). The founder took the first of the three ways to finish, "Merge back to main
+  locally". Main went from `f0599f7` to `bc18aad` by a fast-forward, and the checks and the
+  4,580 tests passed on the merged main. No refresh was running; the live server was stopped
+  by its process ids and started from main. No migration, no refresh, no backup. Nothing is
+  pushed.
+  1. All 33 reports open in the tab at `#company/<symbol>/research/<id>`, in headless
+     Chromium at 2,000 px: no error in the console, no failed request, and no `NaN`,
+     `undefined` or `null` in a panel. Against `GET /api/reports/{id}`: each panel's heading is
+     the section's, in order; every cite of every section stands in its panel; every line and
+     table cell of every section's text stands in its panel, but for the layout's own changes
+     of words (the Summary's `Stance: <stance>.` line, which the bar shows; a block's name
+     without its colon as a card's or a column's title; a side's "The bull case" or "The bear
+     case" as its head, the first letter after it upper case); the references' count and each
+     source; Appendix A names the report's snapshot; Appendix B's count of terms. With the
+     three closed parts open the tabs run from 17,227 px (AAPL) to 22,846 px (CLS).
+  2. The seven at 2,000 px with the closed parts closed: AAPL 10,381 px, NVDA 11,876 px, AVGO
+     11,714 px (revision 2, the valuation review), FRVO 11,355 px, RKLB 10,913 px, PLTR
+     10,867 px, ASML 10,847 px; their Records views run from 3,021 px to 6,598 px. At 400 px
+     the page and the panel are 400 px wide on all seven. No error in the console at either
+     width in either theme. Claude's eye, on screenshots of the live tab: at 2,000 px in the
+     dark theme the top of each of the seven, NVDA's financial section, AAPL's Valuation and
+     Price and multiples, RKLB's Valuation and PLTR's Records; FRVO's top in the light theme;
+     at 400 px NVDA's top in the dark theme and ASML's Summary in the light one. Each of the
+     seven from its top to its foot was read on the scratch copy of the same data during the
+     build's looks. What the eye found:
+     - NVDA: "reviewed", "The mechanical value was $451.42", "on the data of 10 Nov 2026,
+       priced 9 Nov 2026"; its financial section stands the six groups as titled blocks, then
+       the text, since no paragraph names a group.
+     - AVGO: the bar says "reuses the full report of 10 Nov 2026" and the list holds two
+       reports; the review has ten sections.
+     - FRVO: "reviewed, secondary valuation", $6.01 against $12.05; no stamp in the head.
+     - RKLB: reviewed $4.57 against $66.04; the changes card lists debt, cash and diluted
+       shares, the debt's line with its step's refusal.
+     - PLTR: Records holds five kill criteria, six guidance records and two overrides.
+     - ASML: the line under the bar reads "Reports in EUR; one ADS is one ordinary share;
+       every per-share figure here is per ADS; valued at EUR 0.9092 per USD".
+     - One fault: RKLB's meter prints the fair band's two end labels over each other, the
+       price being 14.47 times the value. The Overview's meter does the same and did before
+       this build, so it is the design system's meter at an extreme, filed in B-244.
+  3. `#report/AAPL` opens `#company/AAPL/research`; `#report/AVGO/10` and `#report/AVGO/11`
+     open the tab on that report. The Inbox holds 33 links to the tab, one a report; the
+     first, ADBE's, opens the tab on report 33.
+  4. The founder's look is his.
