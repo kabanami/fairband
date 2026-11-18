@@ -817,3 +817,14 @@ The readout goes in the decision log: the heights of the seven, and what the eye
      one print rule for the cite's number shows the marks and sizes nothing; B-218's range runs
      to `f929a94`; and `docs/method.md` 16.6 names the groups' titles and "By quarter" over the
      earnings call's charts.
+  4. The controller's second look, after `f929a94`, found the blocks and the tracks right
+     (NVDA's financial section 2,050 px, the Growth pair's charts 317 px at a 1,440 px window,
+     nothing wider than a 400 px window) and one fault that wider tracks did not cure (320 to
+     380 px tried): under a bar chart of six bars ending in the trailing twelve months, the last
+     fiscal year's tick and "to date" ran into each other ("2026to date"; at 2,000 px NVDA's
+     Operating margin, Free cash flow, Stock compensation to revenue and Buybacks and dividends,
+     PLTR's and ASML's Operating margin), since the design system's axis printed every tick of
+     seven bars or fewer whatever the chart's width. The bar chart now thins its year ticks by
+     its width, one tick each 56 px of plot, seven at most and two at least, so a chart as wide
+     as the report page's prints as before: the design system's own chart patched once, in
+     `HistoryBars` (a `fairband:` patch, B-40 and B-221), in `a379a95`; B-218's range runs to it.
