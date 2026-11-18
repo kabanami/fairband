@@ -41,7 +41,9 @@ words for it (2026-11-16): "all related filings and investor call logs".
    page, with the quarter's reported EPS and revenue beside the analysts' estimates.
 2. A reader finds a company's filing by its form and its date and opens it on the SEC's site in
    one press.
-3. The tab opens from the store: its lists and its newest call wait on no vendor.
+3. The tab opens from the store: its lists wait on no vendor, and its newest call waits on none
+   where a refresh stored its words (a call the store holds no words for is read through the
+   pass-through, 7.6).
 4. What a refresh stored and what an agent fetched for a report are the same copies: one store,
    read by the tab and by the agents' tools.
 
@@ -229,9 +231,11 @@ label and no button.
 **A call with no words on file** (the vendor answers no row, or a row with no text) draws its
 title, its date and its figures, and one sentence: "No transcript on file for this call."
 
-**A transcript that cannot be read now** (it is not stored, and the vendor cannot be asked or
-its call fails) draws the title, the date, the figures and "The transcript could not be read:
-<reason>.", the reason as the pass-throughs word it (`no FMP key`).
+**A transcript that cannot be read now** (it is not stored, and the vendor cannot be asked, its
+call fails, or it answers its error in place of a transcript) draws the title, the date, the
+figures and "The transcript could not be read: <reason>.", the reason as the pass-throughs word
+it (`no FMP key`), or the call's read's own sentence for the vendor's error, `FMP answered no
+transcript for <symbol>` (8.2; the build's ruling, decision log).
 
 **The call's read** (8.2) is made as the reader first shows a call, the newest as soon as the
 Earnings calls view opens on it, and kept for the page's life by company, fiscal year and
@@ -282,7 +286,9 @@ rows under the table's; the line's first date moves back.
 - Where the oldest window read is cut (the vendor's answer holds its limit of 1,000 rows, so
   its oldest filings are missing), the next window ends on the filing day of the oldest row
   shown, and a row already in the table is not drawn twice (the same `files` link, form and
-  day). The line adds "The vendor's list is cut at 1,000 filings a window."
+  day). While the cut window is the oldest read, the line adds "The vendor's list is cut at
+  1,000 filings a window."; a whole window read behind it completes the span, and the sentence
+  goes (the build's ruling, decision log).
 - A window that answers no filing takes the button away.
 
 The older windows read are kept for the page's life by company and by the first window's last
@@ -304,17 +310,25 @@ The page's rules (its design, 7.5) hold: while a read is out the tab keeps what 
 faded, with no spinner; a block whose answer the store lacks draws its sentence of 7.3 or 7.5.
 What a press can add:
 
-- **An older call read for the first time** waits on the vendor, the reader showing its title,
-  its date and its figures, faded (7.4). If it cannot be read, 7.4's sentence stands in the
-  reader and the list stays.
+- **A call read for the first time**, any call first shown, the newest on opening among them,
+  goes through the pass-through where the store has no copy of it with words (8.2), and waits
+  on the vendor, the reader showing its title, its date and its figures, faded (7.4). If it
+  cannot be read, 7.4's sentence stands in the reader and the list stays; where the vendor
+  answers its error in place of a transcript, the reason is the read's 502 sentence, `FMP
+  answered no transcript for <symbol>` (the build's ruling, decision log).
 - **An older window** waits on the vendor. If it cannot be read, the table stays and one
   sentence stands under it: "The older filings could not be read: <reason>."
 - **The data date**, at the right end of the tabs' row (the page's design, 7.4): the oldest
-  day among the stored answers the view draws. On the Earnings calls view these are the list
-  of calls, the `earnings` rows and the transcript shown; on the Filings view, the filing
-  lists read. So the page shows, on the Earnings calls view, the older of the first read's
-  `dataDate` and the shown transcript's `observedDay`, and on the Filings view the oldest
-  `observedDay` among the filing lists read (8.2).
+  day among the stored answers the view draws. On the Earnings calls view these are the head's
+  quote, the list of calls and the `earnings` rows, and the page shows the first read's
+  `dataDate` alone: the transcript shown is not counted, since a call's words do not age and
+  the reader carries the call's own date, as the page's design leaves the news out of its data
+  date. On the Filings view they are the head's quote and the `earnings` rows behind the line
+  of the next earnings report, drawn beside the lists, and the filing lists read: the page shows
+  the oldest of the first read's `dataDate` and the `observedDay` of each filing list read, the
+  first and every older window (8.2), and the `dataDate` where no list is on file. That
+  `dataDate` counts the list of calls too, which the Filings view does not draw, so its caption
+  can read a day older than it must (the build's rulings, decision log).
 
 After the build's first start and before its first refresh the store holds a list for few
 companies: the tab draws its two sentences for the rest, as any tab draws a company not yet
@@ -330,24 +344,31 @@ file.`, `No transcript on file for this call.`, `The transcript could not be rea
 <reason>.`, the five filters of 7.5, `Filed`, `Form`, `What it is`, `On the SEC's site`,
 `Document`, `All files`, `Filed from <date> to <date>.`, `The vendor's list is cut at 1,000
 filings a window.`, `Show older filings`, `No filing on file.`, `The older filings could not
-be read: <reason>.` Dates read as the page's (`2 Nov 2026`). A speaker's name is the vendor's,
-as given.
+be read: <reason>.` The call's read's own reason where the vendor answers its error, drawn in
+`The transcript could not be read: <reason>.`: `FMP answered no transcript for <symbol>` (8.2).
+Dates read as the page's (`2 Nov 2026`). A speaker's name is the vendor's, as given.
 
 ### 7.8 Width and print
 
 Below 860px (*my call*, the mockup's) the list of calls stands over the reader, in a box of
 its own that scrolls, and the four figures stand one under the other. The filings' table
 scrolls sideways inside its own box; the page never does. Nothing is wider than a 400px
-window: where the window cannot hold the five tabs and the data date on one line, the tabs
-wrap onto a second line and the date stands on a line of its own at the row's right end (the
-build's ruling, decision log).
+window: the date takes a line of its own, at the row's right end, where it does not fit beside
+the tabs; the tabs wrap where the window cannot hold the five (the build's ruling, decision
+log).
 
-Print shows the open view alone: the selected call's title, figures and whole transcript, or
-the filings' table as filtered with the line of the windows read under it. The tab's top row,
-the switch and the line of the next earnings report, is left out on both views (the build's
-ruling, decision log), and so are the list of calls, the tools, the filters and the buttons.
-The company's tabs' row still prints over the view; the build ruled that it leave print on
-this tab, as on the Research tab, and has not built it yet (decision log).
+Print shows the open view alone: the selected call's title, figures and whole transcript, the
+transcript at its reading width as on screen (wider than the column of an A4 or a Letter page
+upright, which it fills; kept on a page turned sideways), or the filings' table as filtered
+with the line of the windows read under it. The tab's top row, the switch and the line of the
+next earnings report, is left out on both views (the build's ruling, decision log), and so are
+the list of calls, the tools and the buttons. Over the table the filter pressed alone prints,
+as plain text with its count and no button's look, and the other four are left out, so the
+paper says which filings it holds. Where the tab is drawn, the company's tab list, the head's
+price and its actions are left out too, and the row's caption, the data date, prints at the
+row's right end: a printed call or filing list has no other date of its data. The Research
+tab's own print rule, which leaves out its whole row with its caption, stands as it was (the
+build's rulings, decision log).
 
 ## 8. The data
 
@@ -407,9 +428,13 @@ with no vendor call, as the other tabs' reads are. It answers:
 - `filings`: `{from, to, rows, truncated, observedDay}` of the tab's filing list: the usable
   stored `sec-filings` answer of a whole window, its params exactly those of
   `page_params("sec-filings", symbol, <its to>)` (365 days, `FILINGS_LIMIT`), whose `to` is on
-  or before today, the latest `to` among those, the newest among equals. A stored answer whose
-  `to` is no ISO date, or whose params are any other window (an agent's narrower or wider list,
-  or one that ends in the future), is never the tab's. The rows newest first, each `{form,
+  or before today and on or before the day the answer was observed, the latest `to` among
+  those, the newest among equals. A stored answer whose `to` is no ISO date, or whose params
+  are any other window (an agent's narrower or wider list, or one that ends in the future), is
+  never the tab's; nor is a whole window observed before its last day (an agent's `filings`
+  asked for a window not yet over), which lacks what was filed after it, on that day or after
+  it, while a refresh's own window, observed on its last day, is (the build's ruling, decision
+  log). The rows newest first, each `{form,
   filed, document, files}`, a link null unless it starts `https://`; `truncated` true where the
   answer holds `FILINGS_LIMIT` rows; `observedDay` the day the stored answer was observed. Null
   where none is stored.
@@ -424,20 +449,29 @@ questions' first turn, or null; `observedDay` the day the copy was fetched.
   `content`). Such a copy is used whatever its age (*my call*): a call's words do not change
   once the vendor holds them.
 - With none, it asks the `transcript` pass-through, which reuses a copy inside its window (an
-  answer with no words among them) and calls the vendor past it. An answer with no words gives
-  `turns` empty.
+  answer with no words among them) and calls the vendor past it. An answer with no words, an
+  empty list or a row with no text, gives `turns` empty.
 - Where the pass-through cannot ask or its call fails, the read fails as the pass-through
   route does: 503 with `no FMP key` or the busy sentence, 502 with the vendor's sentence,
-  scrubbed. The page draws 7.4's sentence from it.
+  scrubbed. Where the pass-through's answer is not a list (FMP's error object, which the
+  `transcript` pass-through, having no test of a usable answer, stores and reuses as an
+  answer), the read is a 502, "FMP answered no transcript for <symbol>", as the filings read
+  answers a list that is no list; a stored error object hides no older copy with words. The
+  agents' `transcript` tool and the pass-through are unchanged (the build's ruling, decision
+  log). The page draws 7.4's sentence from each.
 
 **`GET /api/companies/{symbol}/page/investor-relations/filings?to=<ISO date>`** answers
 `{from, to, rows, truncated, observedDay}` for the 365 days that end on `to`, through the
 `filings` pass-through. A `to` after today is refused (the page never asks a window that has
 not ended); a `to` of today is allowed. A stored usable answer of that exact window is used
-whatever its age where `to` is before today (*my call*: a past year's list does not change);
-else the pass-through's window holds. It fails as the call read does, and a list FMP answers
-with its error object is a 502, "FMP answered no filing list for <symbol>", so the page keeps
-**Show older filings** (the build's ruling, decision log).
+whatever its age where it was observed after `to`, the window's last day (*my call*: a year's
+list observed once the year was over does not change). One observed on that day or before
+it, as every refresh's own window is, lacks what was filed after it: the read then goes
+through the pass-through, which reuses a copy inside its window and fetches again past it, and
+the copy it keeps, observed after the day, is then used whatever its age (the build's ruling,
+decision log). A `to` of today always goes through the pass-through. It fails as the call read
+does, and a list FMP answers with its error object is a 502, "FMP answered no filing list for
+<symbol>", so the page keeps **Show older filings** (the build's ruling, decision log).
 
 The last two may call a vendor. So each carries the header `X-Fairband-Request: 1`, else 403,
 as the pass-through routes do (`app`, D11): their paths join `_VENDOR_READS` (`web/app.py`),
@@ -463,8 +497,12 @@ questions' start, the calls joined to the earnings rows, a filing list's rows.
   full refresh at the most, on about 1.25 GB.
 - Once: the newest call's transcript for every company that has one, about 1,570 calls and
   about 80 MB at the median size. After that, a company's new call each quarter.
-- A reader's press: one call for an older transcript read for the first time, one for an
-  older window.
+- A reader's press or the tab's opening: one call for a transcript first shown where the store
+  holds no copy of it with words, the newest among them where no refresh has stored its words
+  yet (before the build's first refresh, or a call the vendor held no words for at the last
+  one); and one for an older window the store holds no copy of observed after its last day, so
+  a refresh's own window, observed on its last day, is asked once more when a reader reaches
+  it a year later.
 
 ## 9. The page's code
 
@@ -487,7 +525,8 @@ As built:
   other tabs are, its data date's function on `P.companyPage.dataDate`, its two later reads,
   and, on `P.investor` for the tests, the two views, the tab's function and its data date's,
   and the pure pieces: the list's fiscal years, the find box's marking, a call's title, the
-  filters, the forms' plain words, the next window's last day (`olderTo`) and the rows of the
+  filters, the forms' plain words, the insider forms (`INSIDER`, which a test holds equal to
+  `filings_api.OWNERSHIP_FORMS`), the next window's last day (`olderTo`) and the rows of the
   windows read with no row twice (`merged`).
 - `static/index.html`: the tab's rules, with the page's tokens and no colour of their own, the
   tabs' row's wrap (7.8), the print rules and the script.
@@ -535,10 +574,16 @@ companies of `tests/fixtures/fmp/`):
    none with words is stored, not fetched where one is, and not fetched without a usable list;
    a failure of any of the three costing no valuation; a 429 stopping the fetch.
 3. **The reads**: the first read with no header and no vendor call; its `calls`, `filings` (the
-   latest `to` winning over a newer copy of an older window), `nextEarnings` and `dataDate`;
-   the empty answers; the two other reads' 403 without the header; the 400s and the 404 of
-   8.2; a transcript with words used whatever its age, one without words asked again past the
-   window; a past window's list used whatever its age; the 503s and the 502.
+   latest `to` winning over a newer copy of an older window; a whole window of 365 days only,
+   never an agent's narrower or wider list asked the same day; never a window that ends in the
+   future; never a whole window observed before its last day, on that day or after it, while a
+   refresh's window observed on its last day is), `nextEarnings` and `dataDate`; the empty
+   answers; the two other reads' 403 without the header; the 400s and the 404 of 8.2; a
+   transcript with words used whatever its age, one without words asked again past the window,
+   a stored error object hiding no older copy with words; a past window's list used whatever
+   its age where it was observed after its last day, and one observed on its last day fetched
+   again, the new copy then used with no further call; the 503s and the 502s, a vendor's error
+   object for a call or for a window among them.
 4. **The page**: the tab in the row and its three addresses, a bad address put right, a change
    of call or of view reading the tab's read for nothing; the list by fiscal year with five
    years and **Show all**; the figures row with every figure, with a dash, and no row; no gap
@@ -553,9 +598,11 @@ companies of `tests/fixtures/fmp/`):
 On the live data, after the build is merged, the server restarted and one full refresh run (no
 migration):
 
-1. The refresh's readout: its calls and its time against 8.3, the bytes added, the count of
-   companies with a list of calls, with a filing list and with a newest transcript, and no
-   valuation moved by the new calls (the snapshots' values against the refresh before).
+1. The refresh's readout: its calls, and its measured time against 8.3's estimate; the bytes
+   added; the count of companies with a list of calls, with a filing list and with a newest
+   transcript, and the count of those whose newest call has no words on file, each of which
+   costs one call at every refresh (8.1); and no valuation moved by the new calls (the
+   snapshots' values against the refresh before).
 2. The tab opens for AAPL, ASML (a foreign issuer: `20-F` and `6-K`), NVS (the transcript with
    no speaker's line), TSM (earnings rows dated 28 days off their calls), FRVO (listed in 2026:
    few calls and filings) and one company with no call on file: no error in the browser's
@@ -644,7 +691,9 @@ never runs after a 429; 8.1).
   (7.6).
 - **2026-11-18, the build's ruling:** the tab's filing list is a whole 365-day window that ends
   on or before today, since a narrower list an agent asked for the same day, or one that ends in
-  the future, would otherwise stand in for the refresh's (8.2).
+  the future, would otherwise stand in for the refresh's (8.2). A whole window asked before its
+  last day still stood in once that day came, until the whole-branch review's rule on the day a
+  copy was observed (below).
 - **2026-11-18, the build's rulings.** The plan was built subagent-driven on the branch
   `worktree-investor-relations-tab`, each of its six tasks of code built by a subagent and
   reviewed: the readers (Task 1, `16aa1c1`, `11aff7a`); the refresh's calls (Task 2,
@@ -667,8 +716,10 @@ never runs after a 429; 8.1).
      kept among the rows of one day and the rows with no day last. The plan kept the vendor's
      order, which is no promise; 7.5 and 8.2 say newest first, and one sort in the reader serves
      both filing reads (7.5).
-  4. A transcript's line ends only at a line feed or a carriage return, so a mis-read character
-     (`\x85`, a Unicode line separator) starts no turn and its words are kept (7.4).
+  4. A transcript's line ends only at a line feed or a carriage return, so neither `\x85` (NEL,
+     "next line", a C1 control that a mis-read ellipsis becomes) nor U+2028 (the Unicode line
+     separator), two characters `str.splitlines` breaks at, starts a turn, and their words are
+     kept (7.4).
   5. The store gains `store.vendor.usable_responses`, every usable stored answer of a company to
      an endpoint, newest first: whether the store holds a call's words cannot be judged from the
      newest copy alone (8.1).
@@ -695,9 +746,10 @@ never runs after a 429; 8.1).
      would risk more than it saves (7.1).
   10. A found word is marked on `accent-quiet`, the builder's call: the page has no highlight
       token, and the brand book keeps `caution` for aging (7.4).
-  11. The tabs' row wraps where the window cannot hold its five tabs and the data date, the date
-      on a line of its own: five tabs do not fit a 400px window where four did, and 7.8 rules
-      out a page that scrolls sideways. The row takes two lines on a phone (7.8).
+  11. The data date takes a line of its own where it does not fit beside the tabs, and the tabs
+      wrap where the window cannot hold the five: five tabs do not fit a 400px window where four
+      did, and 7.8 rules out a page that scrolls sideways. The row takes two lines on a phone
+      (7.8).
   12. The reader stands as built on three points this design was silent on: while a call's read
       is out it shows the new call's title, date and figures, faded, with no transcript; a call
       older than the five newest fiscal years shows every year; and a failed read is read again
@@ -714,7 +766,59 @@ never runs after a 429; 8.1).
       again, two filings with no `files` link, of one form and one day, one in each of two
       windows, are drawn once, and an empty first window has no "Filed from" line (7.5).
   15. Print on this tab leaves the company's tabs' row out too, as the Research tab's print
-      does, since 7.8 prints the open view alone. Not built at this entry: the whole-branch
-      review's fix wave is to build it (7.8).
+      does, since 7.8 prints the open view alone. Not built at this entry; the whole-branch
+      review's entry below replaces it (7.8).
 
   What the tasks' reviews left open is B-250.
+- **2026-11-18, the whole-branch review.** One review of the whole branch (`2de3e86..52ae9fb`,
+  eleven commits) found no critical fault and gave its verdict, "ready to merge with fixes". The
+  controller ruled on its findings, each for the founder to overturn, and one fix wave built
+  them, each test first (`c1cf0f0`):
+  1. An older filing window could be drawn from a copy stored on its own last day. Every
+     refresh stores the window that ends on its day, observed that day; a year and a day later
+     **Show older filings** asks exactly that window, and the read used the copy whatever its
+     age, so the filings of that day accepted after the refresh were missing while the line
+     claimed the whole span. A deferred finding of the same kind: a whole window an agent asked
+     before its last day became the tab's first list once that day came. One rule on the day a
+     copy was observed closes both: the older-window read uses a stored copy whatever its age
+     only where it was observed after the window's last day, and else goes through the
+     pass-through, which reuses a copy inside its window and fetches again past it; and the
+     tab's first list is a whole window whose `to` is on or before the day its copy was
+     observed, so a refresh's own window counts and one asked ahead of its last day never does
+     (8.2).
+  2. The Earnings calls view's caption is the first read's `dataDate` alone: a call's words do
+     not age, and the reader carries the call's own date. This reverses the transcript's part
+     of the build's ruling on the data date (above), which made the default view read a week or
+     a quarter old beside a fresh list. The Filings view's caption is the oldest of the first
+     read's `dataDate` and the `observedDay` of each filing list read, since the view draws the
+     head's quote and the line of the next earnings report beside the lists; it counts the list
+     of calls too, which that view does not draw, so it can read a day older than it must (7.6).
+  3. A call's read drew FMP's error object, which the `transcript` pass-through stores as an
+     answer, as a call with no words, "No transcript on file for this call.", a wrong
+     statement. Where the pass-through's answer is not a list the read is now a 502, "FMP
+     answered no transcript for <symbol>", as the filings read has its own sentence for a list
+     that is no list; an empty list or a row with no words is still a call with no words, and
+     the agents' `transcript` tool is unchanged (7.4, 7.7, 8.2).
+  4. "The vendor's list is cut at 1,000 filings a window." stands only where the oldest window
+     read is cut: a whole window behind a cut one completes the span (7.5).
+  5. Print: where this tab is drawn, the company's tab list, the head's price and its actions are
+     left out, and the row's caption, the data date, prints, since a printed call or filing list
+     has no other date of its data; the Research tab's own rule, which leaves out its whole row
+     with its caption, stays as it was. This replaces item 15 above and the controller's interim
+     ruling that took the Research tab's rule whole. Over the filings' table the filter pressed
+     prints alone, as plain text with its count, so a table under "Without insider forms" no
+     longer reads on paper as every filing. The transcript keeps its reading width in print,
+     wider than the column of an A4 or a Letter page upright, which it fills (7.8).
+  6. With them: the page's insider forms are tied by a test to `filings_api.OWNERSHIP_FORMS`;
+     a read's test no longer gives its error row a later `to` than the copy it must lose to; the
+     reads' module docstring says what the filings read does with its `to`; 11.3 names the new
+     cases; and 12 counts the companies whose newest call has no words.
+
+  The review's other deferred findings stay in B-250. The points it declined to judge (whether
+  FMP revises a transcript; a line such as `Revenue: $1.2 billion` read as a speaker's, and a
+  paragraph broken after `Mr.`; the store's growth from a filings key dated by the day; the
+  vendor's host in a failure's sentence; one heading a speaker for a screen reader; a 429 on a
+  page call refusing the company in that run; the earnings in US dollars for a foreign issuer)
+  are set aside: each follows this design or an earlier ruling, or needs evidence the store does
+  not hold, and the acceptance readout measures the store's growth and counts the companies whose
+  newest call has no words (12).
