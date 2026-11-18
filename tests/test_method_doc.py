@@ -731,9 +731,11 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
     six and draws section 5's three charts by quarter, the trailing and the estimate bars and the
     line under a chart that has one, which names the EPS estimates' basis where their cells carry
     it, as the export's line under the growth table does (the whole-branch review's I2); that the
-    axis prints every bar's tick up to seven bars and every other one on more, none within a
-    stride of the last bar's or of the trailing twelve months', which print always, as the
-    first's does (its I3); that a chart table's cell is empty where the table holds no figure,
+    axis prints as many ticks as its plot's width holds, one to 70px for the bars, 64px for the
+    price against the band and 56px for the ROIC chart, seven at most and two at least, the P/E
+    charts keeping their own count (the Research tab's design, 7.9), none within a stride of the
+    last bar's or of the trailing twelve months', which print always, as the first's does (its
+    I3); that a chart table's cell is empty where the table holds no figure,
     which a trailing or an estimate cell may not measure; and that a chart table with no rows
     reads "No data on file." in the export, as on the page (its M8)."""
     sixteen = _section(16)
@@ -762,11 +764,17 @@ def test_the_page_draws_the_bars_past_the_fiscal_year_and_by_quarter() -> None:
             " tooltip naming each by the column's label"
         ),
         (
-            "and its axis prints every bar's tick up to seven bars and every other one on more,"
-            " none within a stride of the last bar's or of the trailing twelve months', which"
-            " print always, as the first's does (eight quarters print the first, third, fifth and"
-            " eighth ticks; nine bars ending in the trailing twelve months' and three estimates"
-            " the first, third, sixth and ninth):"
+            "and its axis prints as many ticks as its plot's width holds, one to 70 px of plot,"
+            " seven at most and two at least (spec 2026-11-17 research tab, 7.9; the price against"
+            " the band's axis holds one to 64 px and the ROIC chart's one to 56 px, and the P/E"
+            " charts keep their own count), every k-th where the bars outnumber them, k the bars"
+            " over the ticks held rounded up, none within a stride of the last bar's or of the"
+            " trailing twelve months', which print always, as the first's does (on a chart about"
+            " 550 px wide, as the report page drew them, six bars print every tick, eight quarters"
+            " the first, third, fifth and eighth, and nine bars ending in the trailing twelve"
+            " months' and three estimates the first, third, sixth and ninth; at 320 px six bars"
+            " ending in the trailing twelve months' print the first, third and sixth, and at"
+            " 334 px eight quarters the first, fourth and eighth):"
         ),
         (
             "the fiscal years', each ticked by its year, then the trailing twelve months' filled"

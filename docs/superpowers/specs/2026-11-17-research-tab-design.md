@@ -219,10 +219,11 @@ Each section is a panel on `surface-raised` with its heading. Inside:
   It takes the panel's whole width where a cell is above 44 characters, else its own.
 - **Cards** at the right of the first run of text, in a column that stays in view while the
   panel scrolls. The cards' column is never under 300 px, and the text keeps at least 28rem and
-  at most the reading width. Where the panel holds the reading text and a cards column of 300 px
-  side by side, they stand side by side, the text narrower than the reading width where it must
-  be, never under 28rem; where it cannot, the cards stand under that text across the panel. The
-  panel's own width decides, not the window's (the look at a 1,200 px window, decision log). A
+  at most the reading width. Where the panel holds 28rem of text, the gap between them and a
+  cards column of 300 px side by side, they stand side by side, the text growing to the reading
+  width first and the cards taking what is left; where it cannot, the cards stand under that
+  text across the panel. The panel's own width decides, not the window's (the look at a
+  1,200 px window, decision log). A
   card with nothing to list, the kill criteria, the news or the judgments of a report that has
   none, is left out (the build's ruling, decision log).
 
@@ -251,7 +252,11 @@ order, text and wide tables, as the report page draws them today.
    paragraph names stands in a row of its own after them. Where fewer than four paragraphs
    name a group, every chart stands first, by group, and the text follows. The count is of the
    groups named, so a second paragraph that names a group already named counts for none (the
-   build's ruling, decision log).
+   build's ruling, decision log). A pair keeps its paragraph's width, 27rem at most, and its
+   charts' column is never under 300 px: where the panel holds both side by side they stand
+   side by side, and where it cannot the charts stand under the paragraph across the panel,
+   the panel's own width deciding; below 980 px the pair is one column (the look after the
+   whole-branch review's fixes, decision log).
 4. **The last earnings call.** The three charts by quarter in one row, then the blocks.
 5. **The bull case and the bear case.** Where the section is exactly two paragraphs that open
    "The bull case" and "The bear case", they stand in two columns, each under those words as
@@ -353,6 +358,16 @@ wrap; a block is as wide as its charts at 320 px a chart and the gaps between th
 than the row, and where it must shrink its charts wrap inside it. The earnings call's three
 charts are one such block across the panel (the look after the whole-branch review's fixes,
 decision log).
+
+A chart's axis prints as many ticks as its plot's width holds, seven at most and two at least:
+one to 70 px of plot on a bar chart, the room the last year's tick and "to date" need side by
+side, one to 64 px on the price against the band, whose quarter ticks are wider, and one to
+56 px on the ROIC chart, the P/E charts keeping their own count. The first, the last and the
+trailing twelve months' ticks always print and a tick within a stride of them is left out, so
+the tab's narrow charts thin their ticks (B-244 keeps the one pair that can still meet, "to
+date" beside an estimate's tick), and at the report page's width a chart prints as it did but
+for seven bars, which print every other tick below 562 px (the design system's own charts
+patched once, B-40, B-221).
 
 ### 7.10 Records
 
@@ -853,4 +868,15 @@ The readout goes in the decision log: the heights of the seven, and what the eye
      cash flow, Stock compensation to revenue, Buybacks and dividends): the bar chart now takes
      70 px a tick, the room those two labels need, so at 418 px it prints four at most and none
      in the slot before "to date", and at the report page's 550 px all six still; the ROIC
-     chart keeps 56 px and the band chart 64 px. Both in `c9ec720`; B-218's range runs to it.
+     chart keeps 56 px and the band chart 64 px. Both in `c9ec720`.
+  6. The scoped check of these corrections found them done and left four items, done in
+     `855a405` and this entry's commit. `docs/method.md` 16.6 stated the old tick rule (every
+     tick up to seven bars, every other one on more), so it now states the ticks by width, with
+     the cases it prints, and 7.9 states them too; the bar chart's comment no longer says a
+     seven-bar chart prints as before at 550 px (it prints every other tick there, all seven
+     from 562 px, now pinned), and 7.4 says the cards stand beside the text from 28rem of text,
+     the gap and 300 px of cards. And the pair's charts were a sliver between a 980 px window
+     and about 1,085 px (198 px at 980 px), so the controller ruled the pair the cards' rule: its
+     paragraph keeps its 27rem, its charts' column is never under 300 px, and the charts stand
+     under the paragraph where the panel cannot hold both (7.4 rule 3). B-244 keeps three
+     findings left as they are, and B-218's range runs to `855a405`.
