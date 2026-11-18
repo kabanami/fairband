@@ -1197,11 +1197,16 @@
     gap: var(--space-3);
   }
   .app-research__judged .app-research__rechead { justify-content: space-between; }
+  /* A paragraph beside its group's charts (7.4 rule 3), as the text beside its cards: a row that
+     wraps, the paragraph keeping its width, 27rem at most, the charts at least 300px and taking
+     the rest; side by side where the panel holds both, the charts under the paragraph across
+     the panel where it cannot, the panel's own width deciding. */
   .app-research__pair {
-    display: grid; grid-template-columns: minmax(0, 27rem) minmax(0, 1fr);
-    gap: var(--space-3) var(--space-8); align-items: start; padding-top: var(--space-5);
-    border-top: 1px solid var(--hairline);
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3) var(--space-8);
+    padding-top: var(--space-5); border-top: 1px solid var(--hairline);
   }
+  .app-research__pair > .app-research__run { flex: 0 1 27rem; }
+  .app-research__pair > .app-research__minis { flex: 1 1 300px; }
   .app-research__body > .app-research__pair:first-child { padding-top: 0; border-top: 0; }
   /* The charts (7.9): the design system's charts need about 300px for their ticks, so a chart's
      track is never under 300px where its column allows it, and never wider than the column where
@@ -1314,7 +1319,8 @@
   /* Below 980px the tab is one column (7.3, 7.4, 7.11), as the mockup has it: the section list a
      row above the report, each of its lists a line that scrolls sideways, the reports on file
      first, in a line under the bar, the name in view and the report shown marked by an accent
-     lower edge; a pair's charts under its paragraph, as many to a row as the width holds, by the
+     lower edge; a pair's charts under its paragraph, one column, whatever the panel holds (a
+     grid, so the row's flex sizes do not apply), as many to a row as the width holds, by the
      charts' rule at every width, whose tracks and blocks are never wider than their column, so
      nothing is wider than a 400px window; Records one column; the panels' padding 16px. A
      section's cards take no rule here: the panel's own width sets them beside the text or under
@@ -1329,7 +1335,7 @@
       width: auto; white-space: nowrap; border-left: 0; border-bottom: 2px solid var(--hairline);
     }
     .app-research__link.is-on, .app-research__file.is-on { border-bottom-color: var(--accent); }
-    .app-research__pair { grid-template-columns: minmax(0, 1fr); }
+    .app-research__pair { display: grid; grid-template-columns: minmax(0, 1fr); }
     .app-research__sec, .app-research__panel { padding: var(--space-4); }
     .app-research__summary { padding: var(--space-3) var(--space-4); }
     .app-research__fold { padding: var(--space-1) var(--space-4) var(--space-4); }

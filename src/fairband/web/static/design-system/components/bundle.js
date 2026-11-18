@@ -2205,8 +2205,9 @@
           // fairband: the axis carries as many ticks as the plot's width holds, one to 70px, the
           // room the last year's tick and "to date", anchored at its end, need side by side, so a
           // chart as narrow as the Research tab's (320px to about 420px) thins its year ticks
-          // rather than print the last year's into the trailing twelve months' ("2026to date"),
-          // and one as wide as the report page's prints as before
+          // rather than print the last year's into the trailing twelve months' ("2026to date").
+          // At the report page's 550px six bars, eight and nine print as before; seven print
+          // every other tick, and all seven from 562px
           // (spec 2026-11-17 research tab, 7.9).
           h(XAxis, {
             series: series, x: function (i) { return X(i) + bw / 2; }, y: B, left: L, right: R,

@@ -852,7 +852,7 @@ def test_a_chart_is_never_narrower_than_its_labels_need() -> None:
     # test_below_980_px_the_tab_is_one_column)
     css = _static_file("index.html")
     assert "app-research__minis--all" not in css
-    assert len(re.findall(r"\.app-research__minis \{", css)) == 1
+    assert len(re.findall(r"(?m)^[ \t]*\.app-research__minis \{", css)) == 1
 
 
 # ------------------------------------------------------------------------------- the series

@@ -737,7 +737,7 @@ def test_below_980_px_the_tab_is_one_column() -> None:
             ".app-research__link.is-on, .app-research__file.is-on {"
             " border-bottom-color: var(--accent); }"
         ),
-        ".app-research__pair { grid-template-columns: minmax(0, 1fr); }",
+        ".app-research__pair { display: grid; grid-template-columns: minmax(0, 1fr); }",
         ".app-research__sec, .app-research__panel { padding: var(--space-4); }",
     ):
         assert rule in block, rule
@@ -769,6 +769,22 @@ def test_the_cards_stand_beside_the_text_where_the_panel_holds_both() -> None:
     assert _rule(".app-research__split > .app-research__cards {") == "flex: 1 1 300px;"
     cards = _rule(".app-research__cards {", "  ")
     assert "position: sticky;" in cards and "min-width: 0;" in cards
+
+
+def test_a_pair_s_charts_stand_beside_its_paragraph_where_the_panel_holds_both() -> None:
+    """The Research tab's design, 7.4 rule 3 (the scoped check of the look): a pair's charts
+    column is never under 300px. Its paragraph keeps its width, 27rem at most, and its charts take
+    the rest, at least 300px, in a row that wraps: where the panel holds both side by side they
+    stand side by side, and where it cannot the charts stand under the paragraph across the
+    panel; the panel's own width decides. Below 980px the pair stacks as before, one column
+    (test_below_980_px_the_tab_is_one_column)."""
+    pair = _rule(".app-research__pair {", "  ")
+    for declaration in ("display: flex;", "flex-wrap: wrap;", "align-items: flex-start;"):
+        assert declaration in pair, declaration
+    assert "grid-template-columns" not in pair
+    assert "border-top: 1px solid var(--hairline);" in pair  # a pair still opens with its rule
+    assert _rule(".app-research__pair > .app-research__run {") == "flex: 0 1 27rem;"
+    assert _rule(".app-research__pair > .app-research__minis {") == "flex: 1 1 300px;"
 
 
 def test_print_draws_the_report_view_alone() -> None:

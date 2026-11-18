@@ -304,6 +304,11 @@ def test_a_narrow_chart_thins_its_year_ticks_so_none_runs_into_the_trailing_one(
     everything = ["2021", "2022", "2023", "2024", "2025", "to date"]
     assert _ticks_at(six, 550) == everything
     assert _ticks_at(six, 560) == everything
+    # seven bars are the one count the report page's width no longer prints whole: 478px of plot
+    # holds six, so every other tick prints at 550px, and all seven from 562px (490px of plot)
+    seven = [*FISCAL, TO_DATE, AHEAD[0]]
+    assert _ticks_at(seven, 550) == ["2021", "2023", "to date", "2026E"]
+    assert _ticks_at(seven, 562) == [*everything, "2026E"]
     nine = [*FISCAL, TO_DATE, *AHEAD]
     printed = _ticks_at(nine, 320)
     slots = [[p["period"] for p in nine].index(tick) for tick in printed]
