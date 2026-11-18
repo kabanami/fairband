@@ -577,7 +577,10 @@
     display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-1);
     margin-top: var(--space-4); border-bottom: 1px solid var(--hairline);
   }
-  .app-company__tablist { display: flex; gap: var(--space-1); }
+  /* The tabs wrap onto a second line where the window cannot hold the five on one (the
+     Investor relations tab's design, 7.8: nothing is wider than a 400px window), and the data
+     date stands on a line of its own, at the row's right end, where it does not fit beside them. */
+  .app-company__tablist { display: flex; flex-wrap: wrap; gap: var(--space-1); }
   .app-company__tab {
     appearance: none; margin: 0 0 -1px; padding: var(--space-2) var(--space-3); background: none;
     border: 0; border-bottom: 2px solid transparent; color: var(--ink-muted); cursor: pointer;
@@ -1075,6 +1078,46 @@
     .app-ir__figure { border-right: 0; border-bottom: 1px solid var(--hairline); }
     .app-ir__figure:last-child { border-bottom: 0; }
   }
+  /* The Filings view (the Investor relations tab's design, 7.5 and 7.8), as its mockup lays it
+     out: the filters in a row that wraps, each a pill framed in a hairline, in ink-muted, its
+     count in ink-faint, the pressed one on surface-selected with an accent edge; then the table
+     in a box of its own that scrolls sideways, so a narrow window scrolls the table and never the
+     page: its head in label and ink-faint, each row over a hairline, the day, the form in 500 and
+     the links on one line, the plain words in ink-muted, the links apart; under it the line of
+     the windows read in ink-muted and Show older filings, wrapping. The view faded while an older
+     window's read is out. The tokens' colours alone; nothing moves. */
+  .app-ir__filings { margin-top: var(--space-4); }
+  .app-ir__filings[aria-busy="true"] { opacity: 0.5; }
+  .app-ir__filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .app-ir__filter {
+    appearance: none; margin: 0; padding: 4px 12px; color: var(--ink-muted); background: none;
+    border: 1px solid var(--hairline); border-radius: var(--radius-pill); cursor: pointer;
+  }
+  .app-ir__filter:hover { color: var(--ink); background: var(--surface-hover); }
+  .app-ir__filter[aria-pressed="true"] {
+    color: var(--ink); background: var(--surface-selected); border-color: var(--accent);
+  }
+  .app-ir__filter:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-ir__n { color: var(--ink-faint); }
+  .app-ir__scroll { margin-top: var(--space-3); overflow-x: auto; }
+  .app-ir__table { width: 100%; min-width: 560px; border-collapse: collapse; }
+  .app-ir__table th {
+    padding: 8px 10px; text-align: left; color: var(--ink-faint); font-weight: 500;
+    text-transform: uppercase; border-bottom: 1px solid var(--hairline);
+  }
+  .app-ir__table td {
+    padding: 8px 10px; text-align: left; vertical-align: baseline;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .app-ir__filed, .app-ir__form, .app-ir__links { white-space: nowrap; }
+  .app-ir__form { font-weight: 500; }
+  .app-ir__what { color: var(--ink-muted); }
+  .app-ir__link + .app-ir__link { margin-left: var(--space-3); }
+  .app-ir__foot {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4);
+    margin-top: var(--space-3);
+  }
+  .app-ir__window { margin: 0; color: var(--ink-muted); }
   /* The company page's Research tab (the Research tab's design, 7.2 to 7.9), as its
      mockup lays it out. Under the tabs' row the bar: Report and Records, a segmented control on a
      hairline, the chosen one on surface-selected; the report's line in ink-muted; Footnote marks
@@ -1488,16 +1531,25 @@
     .fb-report__scroll { overflow: visible; }
     .app-research .fb-report__table td { font-size: 12px; line-height: 16px; }
     .app-research .fb-report__table td .fb-cite { font-size: 12px; }
-    /* The Investor relations tab (its design, 7.8) prints the view it shows alone: on Earnings
+    /* The Investor relations tab (its design, 7.8) prints the view it shows alone, on either view
+       without the tab's top row, its switch and the line of the next earnings report. On Earnings
        calls the call shown, its title, its figures and its whole transcript across the page,
-       never faded; not the switch, the list of calls or the tools, whose buttons go with every
-       button of the page. A paragraph whole on a page, a name and the questions' label kept with
-       what follows them. */
-    .app-ir .app-fin__seg, .app-ir__list, .app-ir__tools { display: none !important; }
+       never faded; not the list of calls or the tools, whose buttons go with every button of the
+       page. A paragraph whole on a page, a name and the questions' label kept with what follows
+       them. */
+    .app-ir__bar { display: none !important; }
+    .app-ir__list, .app-ir__tools { display: none !important; }
     .app-ir__calls { display: block; }
     .app-ir__reader[aria-busy="true"] { opacity: 1; }
     .app-ir__words { break-inside: avoid; }
     .app-ir__who, .app-ir__part { break-after: avoid; }
+    /* On Filings the table as filtered, whole, its box not clipping it, under the line of the
+       windows read, never faded; not the filters, and Show older filings goes with every button
+       of the page. A row whole on a page. */
+    .app-ir__filters { display: none !important; }
+    .app-ir__filings[aria-busy="true"] { opacity: 1; }
+    .app-ir__scroll { overflow: visible; }
+    .app-ir__table tr { break-inside: avoid; }
   }
 </style>
 </head>

@@ -312,6 +312,16 @@ def test_the_tabs_and_the_data_date() -> None:
     assert classed(other, "app-company__asof") == []
 
 
+def test_the_tabs_row_wraps_where_the_window_cannot_hold_it() -> None:
+    """Five tabs and the data date are wider than a 400px window (the Investor relations tab's
+    design, 7.8: nothing is wider): the row wraps, its tabs onto a second line where they do not
+    fit on one, and the date onto a line of its own where it does not fit beside them, at the
+    row's right end, so the page never scrolls sideways."""
+    assert "flex-wrap: wrap;" in _rule(".app-company__tabs {")
+    assert "flex-wrap: wrap;" in _rule(".app-company__tablist {")
+    assert "margin: 0 0 var(--space-2) auto;" in _rule(".app-company__asof {")
+
+
 def test_a_tab_replaces_the_hash() -> None:
     """A tab, Research among them, opens through ``show``, which replaces the hash, so the
     browser's Back never steps through the tabs; the row links to no other page."""

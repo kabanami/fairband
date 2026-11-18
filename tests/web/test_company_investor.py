@@ -1,16 +1,20 @@
-"""The company page's Investor relations tab (the Investor relations tab's design, 7.1 to 7.4, 7.6,
-7.8 and 9): the fourth of the five tabs; one block the page's width, at its top the switch of the
-tab's two views, Earnings calls and Filings, and at the row's right end the line of the next
-earnings report; under it the view the address's word names, the Filings view for ``filings``,
-else the Earnings calls view. A view draws its sentence for a company with nothing on file.
+"""The company page's Investor relations tab (the Investor relations tab's design, 7.1 to 7.8 and
+9): the fourth of the five tabs; one block the page's width, at its top the switch of the tab's
+two views, Earnings calls and Filings, and at the row's right end the line of the next earnings
+report; under it the view the address's word names, the Filings view for ``filings``, else the
+Earnings calls view. A view draws its sentence for a company with nothing on file.
 
 The Earnings calls view: at its left the list of calls under their fiscal years' heads, newest
 first, five years unless all are asked for, the call shown marked; at its right the reader of
 that call, its title, its date, its four figures and its transcript, read once a call through
 the call's read with the request header and kept for the page's life, with the find box and the
-button to the questions. The Filings view's table comes with that view. The data date of the
-tabs' row is the view's: on Earnings calls the older of the read's and the transcript's shown, on
-Filings the filing list's day.
+button to the questions. The Filings view: five filters, each with its count, then the table of
+the filings the filter keeps, each row its day, its form, the form's plain words and its links
+to the SEC's site, in a box of its own that scrolls sideways; under it the line of the windows
+read and Show older filings, which reads one year more through the filings read with the
+request header and adds its rows under the table's, the windows kept by company for the page's
+life. The data date of the tabs' row is the view's: on Earnings calls the older of the read's and
+the transcript's shown, on Filings the oldest day of the filing lists read.
 
 company.js and company_investor.js run in node after the bundle and app.js (``support.page``),
 and the tests read the trees their builders return; ``investor.mjs`` drives the view's state, its
@@ -190,15 +194,16 @@ def test_a_company_with_a_profile_and_nothing_else_draws_its_two_sentences() -> 
 
 def test_a_view_with_data_draws_no_sentence() -> None:
     """A company with calls draws its list and its reader on the Earnings calls view, and one
-    with a filing list nothing yet on the Filings view, whose table is that view's own; neither
-    draws a sentence. A first window with no filing in it is no filing on file."""
+    with a filing list its filters and its table on the Filings view; neither draws a sentence.
+    A first window with no filing in it is no filing on file."""
     full = answers.investor()
     for word in (None, "2026Q3"):
         tree = _draw(full, word)
         assert _sentences(tree) == []
         assert tree["props"]["children"][1]["props"]["className"] == "app-ir__calls"
     filings = _draw(full, "filings")
-    assert _sentences(filings) == [] and filings["props"]["children"][1] is None
+    assert _sentences(filings) == []
+    assert filings["props"]["children"][1]["props"]["className"] == "app-ir__filings"
     calls_only = answers.investor() | {"filings": None}
     assert _sentences(_draw(calls_only)) == []
     assert _sentences(_draw(calls_only, "filings")) == [NO_FILING]
@@ -928,6 +933,662 @@ def test_the_data_date_is_the_view_s(answer: dict[str, Any], word: str | None, d
     assert node("investor.dataDate", [answer, word], *SCRIPTS) == day
 
 
+# ------------------------------------------------------------------------ the Filings view (7.5)
+
+FILTERS = ["Without insider forms", "10-K and 10-Q", "8-K", "Insider forms", "All"]
+# The mockup's table of the forms' plain words, as written there.
+FORMS = {
+    "10-K": "Annual report",
+    "10-Q": "Quarterly report",
+    "8-K": "Current report: an event the company must disclose",
+    "DEF 14A": "Proxy statement for the shareholders' meeting",
+    "DEFA14A": "Additional proxy material",
+    "3": "An insider's first statement of holdings",
+    "4": "A change in an insider's holdings",
+    "5": "An insider's yearly statement of holdings",
+    "144": "Notice of a planned sale of restricted shares",
+    "424B2": "Prospectus for securities on offer",
+    "FWP": "Free writing prospectus",
+    "25-NSE": "Notice that a security leaves an exchange",
+    "SD": "Specialized disclosure report",
+    "11-K": "Annual report of an employee stock plan",
+    "S-8": "Registration of shares for employee plans",
+    "S-3ASR": "Shelf registration of securities",
+    "20-F": "Annual report of a foreign issuer",
+    "6-K": "Report of a foreign issuer",
+    "SC 13G": "A large holder's statement of ownership",
+    "SC 13G/A": "A change to a large holder's statement",
+    "PX14A6G": "A shareholder's notice of exempt solicitation",
+    "ARS": "Annual report to shareholders",
+}
+CUT = "The vendor's list is cut at 1,000 filings a window."
+
+
+def test_the_five_filters() -> None:
+    """The filters (7.5), in order, each a name and a test of a form; the insider forms' test
+    takes an amendment (``4/A``), the first's leaves it out. Which forms each keeps:
+    test_each_filter_keeps_its_forms_and_a_press_reads_nothing."""
+    assert [f["name"] for f in node("investor.FILTERS", [], *SCRIPTS)] == FILTERS
+    assert node("investor.FILTERS.3.test", ["4/A"], *SCRIPTS) is True
+    assert node("investor.FILTERS.0.test", ["4/A"], *SCRIPTS) is False
+
+
+@pytest.mark.parametrize(
+    ("form", "words"),
+    [
+        ("10-K", "Annual report"),
+        ("8-K/A", "Amendment: Current report: an event the company must disclose"),
+        ("4/A", "Amendment: A change in an insider's holdings"),
+        ("DEF 14A/A", "Amendment: Proxy statement for the shareholders' meeting"),
+        ("SC 13G/A", "A change to a large holder's statement"),
+        ("NO-SUCH", ""),
+        ("NO-SUCH/A", ""),
+        ("toString", ""),
+        ("constructor/A", ""),
+        ("", ""),
+    ],
+)
+def test_a_form_s_plain_words(form: str, words: str) -> None:
+    """What it is (7.5): the form's words from the mockup's table; an amendment (``8-K/A``)
+    ``Amendment: `` and the form's words, unless the table holds the amendment's own
+    (``SC 13G/A``); nothing for a form the table lacks, whatever an object's own names are."""
+    assert node("investor.words", [form], *SCRIPTS) == words
+
+
+def test_the_forms_words_are_the_mockup_s() -> None:
+    """The table of the forms' plain words is the mockup's ``FORMS``, as written there, no form
+    added or left out."""
+    assert node("investor.FORMS", [], *SCRIPTS) == FORMS
+
+
+@pytest.mark.parametrize(
+    ("windows", "rows", "to"),
+    [
+        ([{"from": "2025-11-18", "to": "2026-11-18", "truncated": False}], [], "2025-11-17"),
+        (
+            [{"from": "2025-11-18", "to": "2026-11-18", "truncated": True}],
+            [{"filed": "2026-09-30"}, {"filed": "2026-08-04"}],
+            "2026-08-04",
+        ),
+        (
+            [{"from": "2025-11-18", "to": "2026-11-18", "truncated": True}],
+            [{"filed": "2026-09-30"}, {"filed": "2026-08-04"}, {"filed": None}],
+            "2026-08-04",
+        ),
+        (
+            [
+                {"from": "2025-11-18", "to": "2026-11-18", "truncated": True},
+                {"from": "2025-01-01", "to": "2026-01-01", "truncated": False},
+            ],
+            [{"filed": "2026-09-30"}, {"filed": "2025-03-04"}],
+            "2024-12-31",
+        ),
+        (
+            [
+                {"from": "2025-11-18", "to": "2026-11-18", "truncated": False},
+                {"from": "2024-03-01", "to": "2025-03-01", "truncated": True},
+            ],
+            [{"filed": "2026-09-30"}, {"filed": None}, {"filed": "2024-07-15"}],
+            "2024-07-15",
+        ),
+        ([{"from": "2024-03-01", "to": "2025-03-01", "truncated": False}], [], "2024-02-29"),
+        ([{"from": "2025-11-18", "to": "2026-11-18", "truncated": True}], [], "2025-11-17"),
+    ],
+)
+def test_the_next_window_ends_before_the_oldest_read(
+    windows: list[dict[str, Any]], rows: list[dict[str, Any]], to: str
+) -> None:
+    """The next window (7.5) ends the day before the oldest window's first day; where that
+    window is cut, on the filing day of the oldest row shown, a row with no day aside; a cut
+    window with no row with a day ends the day before its first day."""
+    assert node("investor.olderTo", [windows, rows], *SCRIPTS) == to
+
+
+def _filing(form: str, filed: str | None, n: int, document: bool = True, files: bool = True) -> Any:
+    """A filing row as the reads answer it, its invented links on the SEC's site numbered ``n``."""
+    base = f"https://www.sec.gov/Archives/edgar/data/2/{n:018d}"
+    return {
+        "form": form,
+        "filed": filed,
+        "document": f"{base}/filing-{n}.htm" if document else None,
+        "files": f"{base}/index.htm" if files else None,
+    }
+
+
+def test_a_row_drawn_already_is_not_added_twice() -> None:
+    """``merged`` adds the rows of a window read under those drawn, in their order, but a row
+    with the same ``files`` link, form and day as one drawn already, two rows with no ``files``
+    link among them; a row that differs in any of the three is added."""
+    first = [
+        _filing("8-K", "2026-05-02", 1),
+        _filing("10-Q", "2026-04-28", 2),
+        _filing("4", "2026-04-28", 3),
+    ]
+    first.append(_filing("SC 13G", "2026-04-28", 4, document=False, files=False))
+    more = [
+        _filing("10-Q", "2026-04-28", 2),
+        _filing("10-Q", "2026-04-28", 2, document=False),
+        _filing("10-Q/A", "2026-04-28", 2),
+        _filing("10-Q", "2026-04-27", 2),
+        _filing("10-Q", "2026-04-28", 5),
+        _filing("SC 13G", "2026-04-28", 6, document=False, files=False),
+        _filing("20-F", "2026-03-01", 7),
+    ]
+    found = node("investor.merged", [first, more], *SCRIPTS)
+    assert found == first + [more[2], more[3], more[4], more[6]]
+    assert node("investor.merged", [[], first], *SCRIPTS) == first
+    assert node("investor.merged", [first, []], *SCRIPTS) == first
+
+
+def _filters(tree: Any) -> list[tuple[str, str]]:
+    """Each filter's words, its name and its count, and whether it is pressed."""
+    return [(text(b), b["props"]["aria-pressed"]) for b in classed(tree, "app-ir__filter")]
+
+
+def _pressed(tree: Any) -> list[str]:
+    return [name for name, on in _filters(tree) if on == "true"]
+
+
+def _filed(tree: Any) -> list[tuple[str, str, str, list[str]]]:
+    """The table's rows: each its day, its form, its plain words and its links' words."""
+    [table] = classed(tree, "app-ir__table")
+    [body] = [e for e in elements(table) if e["type"] == "tbody"]
+    found = []
+    for row in (e for e in elements(body) if e["type"] == "tr"):
+        cells = [e for e in elements(row) if e["type"] == "td"]
+        assert len(cells) == 4
+        links = [text(a) for a in elements(cells[3]) if a["type"] == "a"]
+        found.append((text(cells[0]), text(cells[1]), text(cells[2]), links))
+    return found
+
+
+def _forms(tree: Any) -> list[str]:
+    return [form for _, form, _, _ in _filed(tree)]
+
+
+def _window_line(tree: Any) -> str | None:
+    found = classed(tree, "app-ir__window")
+    assert len(found) <= 1
+    return text(found[0]) if found else None
+
+
+def _older_button(tree: Any) -> list[dict[str, Any]]:
+    return classed(tree, "app-ir__older")
+
+
+def _faded(tree: Any) -> bool:
+    [block] = classed(tree, "app-ir__filings")
+    return block["props"].get("aria-busy") == "true"
+
+
+LFOX_FILED = [
+    ("30 Oct 2026", "6-K", "Report of a foreign issuer", ["Document", "All files"]),
+    ("17 Jul 2026", "6-K", "Report of a foreign issuer", ["All files"]),
+    ("28 Apr 2026", "20-F", "Annual report of a foreign issuer", ["Document", "All files"]),
+    ("11 Feb 2026", "SC 13G", "A large holder's statement of ownership", []),
+]
+LFOX_FILTERS = [
+    ("Without insider forms 4", "true"),
+    ("10-K and 10-Q 0", "false"),
+    ("8-K 0", "false"),
+    ("Insider forms 1", "false"),
+    ("All 5", "false"),
+]
+
+
+def test_the_filings_view_its_filters_its_table_and_its_line() -> None:
+    """The Filings view (7.5): the five filters, each a button with its count among the rows
+    read, the first pressed on opening; then the table, in a box of its own that scrolls
+    sideways, four columns, Filed, Form, What it is, On the SEC's site, the rows the filter keeps
+    newest first, each its day, its form as given, its plain words and its links, Document and
+    All files, a link the row lacks left out; under it the line of the window read and Show older
+    filings. The insider's form 4 is under Insider forms and All alone."""
+    tree = _draw(answers.investor(), "filings")
+    [block] = classed(tree, "app-ir__filings")
+    assert _filters(tree) == LFOX_FILTERS
+    for button in classed(tree, "app-ir__filter"):
+        assert button["type"] == "button" and button["props"]["type"] == "button"
+        assert button["props"]["className"] == "control app-ir__filter"
+        [count] = classed(button, "app-ir__n")
+        assert count["props"]["className"] == "figure-sm app-ir__n"
+    [table] = classed(tree, "app-ir__table")
+    [box] = [e for e in elements(block) if table in e["props"].get("children", [])]
+    assert box["type"] == "div" and box["props"]["className"] == "app-ir__scroll"
+    [head] = [e for e in elements(table) if e["type"] == "thead"]
+    heads = [e for e in elements(head) if e["type"] == "th"]
+    assert [text(th) for th in heads] == ["Filed", "Form", "What it is", "On the SEC's site"]
+    assert {th["props"]["className"] for th in heads} == {"label"}
+    assert _filed(tree) == LFOX_FILED
+    assert _window_line(tree) == "Filed from 1 Nov 2025 to 1 Nov 2026."
+    assert [text(b) for b in _older_button(tree)] == ["Show older filings"]
+    [button] = _older_button(tree)  # the design system's small button, undrawn here
+    assert button["props"]["size"] == "sm" and button["props"]["disabled"] is False
+    assert not _faded(tree)
+    assert CUT not in text(tree) and _sentences(tree) == []
+    found = list(elements(block))
+    order = [classed(block, name)[0] for name in ("app-ir__filters", "app-ir__scroll")]
+    assert found.index(order[0]) < found.index(order[1]) < found.index(button)
+
+
+def test_a_row_s_links_open_the_sec_s_site_in_a_new_tab() -> None:
+    """A row's links (7.5): Document, the filing's main document, and All files, its index page,
+    each opening in a new tab with ``rel="noopener"``; a link the row lacks, or one that does not
+    start ``https://``, is left out, the page checking it as the read does. A form the table
+    lacks has no plain words; a missing day is the dash."""
+    rows = [
+        _filing("8-K", "2026-10-02", 1),
+        {
+            "form": "8-K",
+            "filed": "2026-09-02",
+            "document": "http://www.sec.gov/a.htm",
+            "files": "https://www.sec.gov/Archives/edgar/data/2/b-index.htm",
+        },
+        {
+            "form": "NO-SUCH",
+            "filed": "2026-08-02",
+            "document": "javascript:alert(1)",
+            "files": "ftp://www.sec.gov/c-index.htm",
+        },
+        {"form": "10-K", "filed": None, "document": "HTTPS://www.sec.gov/d.htm", "files": None},
+    ]
+    answer = answers.investor()
+    answer["filings"]["rows"] = rows
+    tree = _draw(answer, "filings")
+    assert _filed(tree) == [
+        ("2 Oct 2026", "8-K", FORMS["8-K"], ["Document", "All files"]),
+        ("2 Sep 2026", "8-K", FORMS["8-K"], ["All files"]),
+        ("2 Aug 2026", "NO-SUCH", "", []),
+        ("—", "10-K", "Annual report", []),
+    ]
+    links = [e for e in elements(classed(tree, "app-ir__table")[0]) if e["type"] == "a"]
+    assert [a["props"]["href"] for a in links] == [
+        rows[0]["document"],
+        rows[0]["files"],
+        rows[1]["files"],
+    ]
+    for a in links:
+        assert a["props"]["target"] == "_blank" and a["props"]["rel"] == "noopener"
+        assert a["props"]["className"] == "app-link app-ir__link"
+
+
+@pytest.mark.parametrize("truncated", [True, False])
+def test_the_cut_line_only_where_a_window_is_cut(truncated: bool) -> None:
+    """The line adds "The vendor's list is cut at 1,000 filings a window." where the window read
+    holds the vendor's limit of rows, and only there."""
+    answer = answers.investor()
+    answer["filings"]["truncated"] = truncated
+    line = _window_line(_draw(answer, "filings"))
+    start = "Filed from 1 Nov 2025 to 1 Nov 2026."
+    assert line == (f"{start} {CUT}" if truncated else start)
+
+
+def test_no_filing_list_draws_its_sentence_and_no_button() -> None:
+    """Review Focus 2: a company with no filing list on file draws "No filing on file." and no
+    button; one whose first window is empty draws the sentence and the button, and no filter,
+    table or line."""
+    none = _draw(answers.profile_only_investor(), "filings")
+    assert _sentences(none) == [NO_FILING] and _older_button(none) == []
+    assert classed(none, "app-ir__filings") == []
+    empty = answers.investor()
+    empty["filings"]["rows"] = []
+    tree = _draw(empty, "filings")
+    assert _sentences(tree) == [NO_FILING]
+    assert [text(b) for b in _older_button(tree)] == ["Show older filings"]
+    for name in ("app-ir__filters", "app-ir__table", "app-ir__window"):
+        assert classed(tree, name) == [], name
+
+
+ROWS_OF_EVERY_KIND = [
+    _filing("8-K", "2026-11-10", 1),
+    _filing("4/A", "2026-11-05", 2),
+    _filing("10-Q", "2026-10-30", 3),
+    _filing("4", "2026-10-20", 4),
+    _filing("8-K/A", "2026-09-01", 5),
+    _filing("144", "2026-08-15", 6),
+    _filing("10-K/A", "2026-07-01", 7),
+    _filing("20-F", "2026-05-01", 8),
+    _filing("6-K", "2026-04-01", 9),
+    _filing("NO-SUCH", "2026-03-01", 10),
+    _filing("3", "2026-02-01", 11),
+    _filing("144/A", "2026-01-20", 12),
+    _filing("5", "2026-01-15", 13),
+    _filing("40-F", "2026-01-10", 14),
+    _filing("10-K", "2025-12-01", 15),
+    _filing("10-KT", "2025-11-20", 16),
+]
+
+
+def _filter(name: str, count: int) -> dict[str, Any]:
+    """The filter ``name``, with its count ``count``, is pressed."""
+    return {"do": "press", "class": "app-ir__filter", "text": f"{name} {count}"}
+
+
+def _older() -> dict[str, Any]:
+    return {"do": "press", "class": "app-ir__older", "text": "Show older filings"}
+
+
+def _with(rows: list[dict[str, Any]], **changes: Any) -> dict[str, Any]:
+    """LFOX's answer, its first window's rows ``rows``, with ``changes`` to that window."""
+    answer = answers.investor()
+    answer["filings"] |= {"rows": rows, **changes}
+    return answer
+
+
+def test_each_filter_keeps_its_forms_and_a_press_reads_nothing() -> None:
+    """Each filter keeps its forms (7.5), with its count among the rows read: ``4/A`` and
+    ``144/A`` under Insider forms; ``10-K/A`` and ``10-KT`` under 10-K and 10-Q; ``8-K/A`` under
+    8-K; ``20-F``, ``6-K``, ``40-F`` (no insider's form, though it starts with ``4``) and a form
+    the table lacks under the first and All alone. A press marks its filter, draws the page again
+    and reads nothing."""
+    counts = [10, 4, 2, 6, 16]
+    order = [1, 2, 3, 4, 0]
+    trace = _drive(
+        [
+            _shown(_with(ROWS_OF_EVERY_KIND), "filings"),
+            *(_filter(FILTERS[i], counts[i]) for i in order),
+        ]
+    )
+    opened, tens, eights, insiders, every, first = trace
+    named = [f"{name} {n}" for name, n in zip(FILTERS, counts, strict=True)]
+    assert [words for words, _ in _filters(opened["tree"])] == named
+    assert _pressed(opened["tree"]) == [named[0]] and opened["fetched"] == []
+    assert _forms(opened["tree"]) == [
+        "8-K",
+        "10-Q",
+        "8-K/A",
+        "10-K/A",
+        "20-F",
+        "6-K",
+        "NO-SUCH",
+        "40-F",
+        "10-K",
+        "10-KT",
+    ]
+    assert _forms(tens["tree"]) == ["10-Q", "10-K/A", "10-K", "10-KT"]
+    assert _forms(eights["tree"]) == ["8-K", "8-K/A"]
+    assert _forms(insiders["tree"]) == ["4/A", "4", "144", "3", "144/A", "5"]
+    assert _forms(every["tree"]) == [row["form"] for row in ROWS_OF_EVERY_KIND]
+    assert _forms(first["tree"]) == _forms(opened["tree"])
+    for step, i in zip((tens, eights, insiders, every, first), order, strict=True):
+        assert _pressed(step["tree"]) == [named[i]]
+        assert step["fetched"] == [] and step["redrawn"] == 1 and step["shows"] == []
+    words = {form: what for _, form, what, _ in _filed(every["tree"])}
+    assert words["4/A"] == "Amendment: " + FORMS["4"]
+    assert words["10-K/A"] == "Amendment: " + FORMS["10-K"]
+    assert words["NO-SUCH"] == ""
+
+
+def _older_url(to: str, company: str = LFOX) -> str:
+    """The filings read of ``company``'s window of the 365 days to ``to``."""
+    return f"{company}/page/investor-relations/filings?to={to}"
+
+
+def _window(start: str, to: str, rows: list[dict[str, Any]], **changes: Any) -> dict[str, Any]:
+    """The filings read's answer for the window from ``start`` to ``to``, stored on 20 Oct 2026."""
+    return {
+        "from": start,
+        "to": to,
+        "rows": rows,
+        "truncated": False,
+        "observedDay": "2026-10-20",
+    } | changes
+
+
+YEAR_BEFORE = [
+    _filing("20-F", "2025-04-29", 21),
+    _filing("4", "2025-03-03", 22),
+    _filing("6-K", "2025-02-10", 23),
+]
+
+
+def test_show_older_filings_reads_the_year_before_and_adds_its_rows() -> None:
+    """A press of Show older filings (7.5, 7.6) reads the window of the 365 days that end the
+    day before the first window's first day, through the filings read with the request header,
+    while the view waits, faded, a second press reading nothing; as it lands its rows stand under
+    the table's, the counts count them, the line's first date moves back and the row's data date
+    becomes the older window's day. A window that answers no filing takes the button away; the
+    line's first date moves back to it."""
+    first = _older_url("2025-10-31")
+    second = _older_url("2024-10-30")
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _older(),
+            _older(),
+            _answer(first, _window("2024-10-31", "2025-10-31", YEAR_BEFORE)),
+            _older(),
+            _answer(second, _window("2023-10-31", "2024-10-30", [], observedDay="2026-11-17")),
+        ]
+    )
+    opened, pressed, again, landed, more, ended = trace
+    assert opened["fetched"] == [] and opened["asOf"] == answers.FILINGS_DAY
+    [button] = _older_button(opened["tree"])
+    assert button["type"] == "button" and "fb-btn" in button["props"]["className"].split()
+    assert button["props"]["disabled"] is False
+    assert pressed["fetched"] == _get(first) and pressed["headers"] == [HEADER]
+    assert pressed["inFlight"] == [first] and pressed["redrawn"] == 1
+    assert _faded(pressed["tree"]) and _older_button(pressed["tree"])[0]["props"]["disabled"]
+    assert _filed(pressed["tree"]) == LFOX_FILED
+    assert again["fetched"] == [] and again["inFlight"] == [first]
+    assert landed["redrawn"] == 1 and not _faded(landed["tree"])
+    assert _filed(landed["tree"]) == LFOX_FILED + [
+        ("29 Apr 2025", "20-F", FORMS["20-F"], ["Document", "All files"]),
+        ("10 Feb 2025", "6-K", FORMS["6-K"], ["Document", "All files"]),
+    ]
+    assert _filters(landed["tree"]) == [
+        ("Without insider forms 6", "true"),
+        ("10-K and 10-Q 0", "false"),
+        ("8-K 0", "false"),
+        ("Insider forms 2", "false"),
+        ("All 8", "false"),
+    ]
+    assert _window_line(landed["tree"]) == "Filed from 31 Oct 2024 to 1 Nov 2026."
+    assert landed["asOf"] == "2026-10-20"
+    assert not _older_button(landed["tree"])[0]["props"]["disabled"]
+    assert more["fetched"] == _get(second) and more["headers"] == [HEADER]
+    assert ended["redrawn"] == 1 and _older_button(ended["tree"]) == []
+    assert _filed(ended["tree"]) == _filed(landed["tree"])
+    assert _window_line(ended["tree"]) == "Filed from 31 Oct 2023 to 1 Nov 2026."
+    assert ended["asOf"] == "2026-10-20"
+
+
+def test_after_a_cut_window_the_next_ends_on_the_oldest_row_s_day() -> None:
+    """Where the oldest window read is cut at the vendor's limit (7.5), the next window ends on
+    the filing day of the oldest row shown, and a row of it already in the table (the same
+    ``files`` link, form and day) is not drawn twice; the line says the list is cut."""
+    rows = answers.investor()["filings"]["rows"][:4]  # its oldest row the 20-F of 28 Apr 2026
+    twenty = rows[3]
+    url = _older_url("2026-04-28")
+    later = [twenty, _filing("8-K/A", "2026-03-02", 31), twenty | {"form": "20-F/A"}]
+    trace = _drive(
+        [
+            _shown(_with(rows, truncated=True), "filings"),
+            _older(),
+            _answer(url, _window("2025-04-28", "2026-04-28", later)),
+            _filter("All", 6),
+        ]
+    )
+    opened, pressed, landed, every = trace
+    assert _window_line(opened["tree"]) == f"Filed from 1 Nov 2025 to 1 Nov 2026. {CUT}"
+    assert pressed["fetched"] == _get(url)
+    assert _forms(every["tree"]) == ["6-K", "4", "6-K", "20-F", "8-K/A", "20-F/A"]
+    assert _window_line(landed["tree"]) == f"Filed from 28 Apr 2025 to 1 Nov 2026. {CUT}"
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "reason"),
+    [
+        (503, {"detail": "no FMP key"}, "no FMP key"),
+        (502, {"detail": "FMP answered 500"}, "FMP answered 500"),
+        (503, None, "the server answered 503"),
+    ],
+)
+def test_older_filings_that_cannot_be_read_keep_the_table(
+    status: int, body: Any, reason: str
+) -> None:
+    """An older window that cannot be read (7.6): the table stays as it was and one sentence
+    stands under it, "The older filings could not be read: <reason>.", the server's sentence;
+    the button stays, and a press reads the same window again."""
+    url = _older_url("2025-10-31")
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _older(),
+            _answer(url, body, status),
+            _older(),
+            _answer(url, _window("2024-10-31", "2025-10-31", YEAR_BEFORE)),
+        ]
+    )
+    _, _, failed, again, landed = trace
+    assert failed["redrawn"] == 1 and not _faded(failed["tree"])
+    assert _filed(failed["tree"]) == LFOX_FILED
+    assert _window_line(failed["tree"]) == "Filed from 1 Nov 2025 to 1 Nov 2026."
+    assert _sentences(failed["tree"]) == [f"The older filings could not be read: {reason}."]
+    [block] = classed(failed["tree"], "app-ir__filings")
+    [sentence] = classed(block, "app-ir__none")
+    found = list(elements(block))
+    assert found.index(classed(block, "app-ir__table")[0]) < found.index(sentence)
+    assert not _older_button(failed["tree"])[0]["props"]["disabled"]
+    assert failed["asOf"] == answers.FILINGS_DAY
+    assert again["fetched"] == _get(url) and _sentences(again["tree"]) == []
+    assert _sentences(landed["tree"]) == [] and len(_filed(landed["tree"])) == 6
+
+
+def test_older_filings_that_fail_on_the_network_keep_the_table() -> None:
+    url = _older_url("2025-10-31")
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _older(),
+            {"do": "fail", "url": url, "message": "Failed to fetch"},
+        ]
+    )
+    assert _sentences(trace[-1]["tree"]) == [
+        "The older filings could not be read: Failed to fetch."
+    ]
+    assert _filed(trace[-1]["tree"]) == LFOX_FILED and _older_button(trace[-1]["tree"])
+
+
+def test_an_empty_first_window_reads_the_year_before() -> None:
+    """A first window with no filing draws the sentence and the button (7.5); a press reads the
+    year before it, and its rows draw the filters, the table and the line; a window before that
+    with no filing takes the button away."""
+    trace = _drive(
+        [
+            _shown(_with([]), "filings"),
+            _older(),
+            _answer(_older_url("2025-10-31"), _window("2024-10-31", "2025-10-31", YEAR_BEFORE)),
+        ]
+    )
+    opened, pressed, landed = trace
+    assert _sentences(opened["tree"]) == [NO_FILING]
+    assert pressed["fetched"] == _get(_older_url("2025-10-31"))
+    assert _sentences(landed["tree"]) == []
+    assert _forms(landed["tree"]) == ["20-F", "6-K"]
+    assert _window_line(landed["tree"]) == "Filed from 31 Oct 2024 to 1 Nov 2026."
+    [*_, ended] = _drive(
+        [
+            _shown(_with([]), "filings"),
+            _older(),
+            _answer(_older_url("2025-10-31"), _window("2024-10-31", "2025-10-31", [])),
+        ]
+    )
+    assert _sentences(ended["tree"]) == [NO_FILING] and _older_button(ended["tree"]) == []
+
+
+def test_the_windows_read_are_kept_for_the_page_s_life_by_company() -> None:
+    """The windows read are kept by company for the page's life: the reader who leaves the view,
+    or the company, and comes back sees them, with no read made again. An older window that
+    lands while another company is shown draws nothing and is kept under its own company; the
+    other company has its own windows, its own button and its first filter."""
+    other = answers.investor() | {"symbol": "OTHR"}
+    url = _older_url("2025-10-31")
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _filter("Insider forms", 1),
+            _older(),
+            _shown(other, "filings"),
+            _answer(url, _window("2024-10-31", "2025-10-31", YEAR_BEFORE)),
+            _shown(None, "filings"),
+            _shown(None, None),
+            _shown(None, "filings"),
+        ]
+    )
+    _, insiders, pressed, opened, late, back, calls, again = trace
+    assert pressed["fetched"] == _get(url)
+    assert _pressed(opened["tree"]) == ["Without insider forms 4"]
+    assert not _faded(opened["tree"]) and _filed(opened["tree"]) == LFOX_FILED
+    assert late["redrawn"] == 0 and late["tree"] == opened["tree"]
+    assert late["asOf"] == answers.FILINGS_DAY
+    assert back["fetched"] == [] and _pressed(back["tree"]) == ["Without insider forms 6"]
+    assert _window_line(back["tree"]) == "Filed from 31 Oct 2024 to 1 Nov 2026."
+    assert back["asOf"] == "2026-10-20"
+    assert calls["fetched"] == _get(Q3)
+    assert again["fetched"] == [] and again["tree"] == back["tree"]
+    assert _pressed(insiders["tree"]) == ["Insider forms 1"]
+
+
+def test_the_filter_pressed_stays_while_the_view_changes() -> None:
+    """The filter pressed stays while the reader moves between the views of one company, and
+    another company's filings open on the first."""
+    other = answers.investor() | {"symbol": "OTHR"}
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _filter("All", 5),
+            _shown(None, None),
+            _shown(None, "filings"),
+            _shown(other, "filings"),
+        ]
+    )
+    *_, back, another = trace
+    assert _pressed(back["tree"]) == ["All 5"] and len(_filed(back["tree"])) == 5
+    assert _pressed(another["tree"]) == ["Without insider forms 4"]
+
+
+def test_a_new_first_window_starts_the_older_windows_again() -> None:
+    """The windows read stand on the first window they followed: where the tab's read answers a
+    newer first window (a refresh's), the view draws it alone, with no gap behind it, and the
+    next press reads the year before it."""
+    newer = _window("2025-11-18", "2026-11-18", [_filing("8-K", "2026-11-17", 41)])
+    newer["observedDay"] = "2026-11-18"
+    url = _older_url("2025-10-31")
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _older(),
+            _answer(url, _window("2024-10-31", "2025-10-31", YEAR_BEFORE)),
+            _shown(answers.investor() | {"filings": newer}, "filings"),
+            _older(),
+        ]
+    )
+    *_, refreshed, pressed = trace
+    assert _forms(refreshed["tree"]) == ["8-K"]
+    assert _window_line(refreshed["tree"]) == "Filed from 18 Nov 2025 to 18 Nov 2026."
+    assert refreshed["asOf"] == "2026-11-18" and refreshed["fetched"] == []
+    assert pressed["fetched"] == _get(_older_url("2025-11-17"))
+
+
+@pytest.mark.parametrize(
+    ("observed", "day"), [("2026-10-20", "2026-10-20"), ("2026-11-17", "2026-11-02")]
+)
+def test_the_filings_data_date_is_the_oldest_list_read(observed: str, day: str) -> None:
+    """On the Filings view the data date (7.6) is the oldest day among the filing lists read, the
+    first read's and every older window's; the page draws again as a window lands, so the row's
+    date moves."""
+    url = _older_url("2025-10-31")
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _older(),
+            _answer(url, _window("2024-10-31", "2025-10-31", YEAR_BEFORE, observedDay=observed)),
+        ]
+    )
+    assert trace[0]["asOf"] == answers.FILINGS_DAY
+    assert trace[-1]["asOf"] == day and trace[-1]["redrawn"] == 1
+
+
 def _scripts_but(*names: str) -> str:
     """Every page script but ``names``, one text."""
     return "\n".join(p.read_text() for p in sorted(STATIC.glob("*.js")) if p.name not in names)
@@ -937,8 +1598,15 @@ def _scripts_but(*names: str) -> str:
 
 
 TYPE_STYLES = {"heading", "label", "body", "caption", "figure", "figure-sm", "control"}
-# the panel's look, the Financials switch's and the design system's small button's
-SHARED = {"app-company__panel", "app-fin__seg", "fb-btn", "fb-btn--secondary", "fb-btn--sm"}
+# the panel's look, the Financials switch's, the design system's small button's and a link's
+SHARED = {
+    "app-company__panel",
+    "app-fin__seg",
+    "fb-btn",
+    "fb-btn--secondary",
+    "fb-btn--sm",
+    "app-link",
+}
 FRAME = {"app-ir", "app-ir__bar", "app-ir__view", "app-ir__next", "app-ir__day", "app-ir__none"}
 CALLS = {  # the Earnings calls view's
     "app-ir__calls",
@@ -968,6 +1636,23 @@ CALLS = {  # the Earnings calls view's
     "app-ir__who--operator",
     "app-ir__words",
 }
+FILINGS = {  # the Filings view's
+    "app-ir__filings",
+    "app-ir__filters",
+    "app-ir__filter",
+    "app-ir__n",
+    "app-ir__scroll",
+    "app-ir__table",
+    "app-ir__filed",
+    "app-ir__form",
+    "app-ir__what",
+    "app-ir__links",
+    "app-ir__link",
+    "app-ir__foot",
+    "app-ir__window",
+    "app-ir__cut",
+    "app-ir__older",
+}
 
 
 def _classes(element: dict[str, Any]) -> list[str]:
@@ -986,6 +1671,7 @@ def test_the_tab_s_classes_are_its_own_and_it_draws_no_markup() -> None:
         for word in (None, "filings")
     ]
     trees.append(_draw(answers.investor() | {"calls": _calls(21)}))
+    trees.append(_draw(_with(ROWS_OF_EVERY_KIND, truncated=True), "filings"))
     [*_, typed] = _drive([_shown(), _answer(Q3, _transcript()), _type("sensor")])
     trees.append(typed["tree"])
     drawn: set[str] = set()
@@ -995,7 +1681,7 @@ def test_the_tab_s_classes_are_its_own_and_it_draws_no_markup() -> None:
         assert "FMP" not in words and "Financial Modeling" not in words
         assert "%" not in words
     own = drawn - TYPE_STYLES - SHARED
-    assert FRAME | CALLS <= own
+    assert FRAME | CALLS | FILINGS <= own
     assert all(name == "app-ir" or name.startswith("app-ir__") for name in own), own
     others = _scripts_but("company_investor.js")
     for name in sorted(own):
@@ -1092,16 +1778,52 @@ def test_below_860px_the_list_stands_over_the_reader() -> None:
     _painted(css)
 
 
-def test_print_shows_the_call_alone() -> None:
-    """Print (7.8) shows the call shown alone: its title, its figures and its whole transcript;
-    the switch, the list of calls and the tools are left out (the buttons with every button of
-    the page), the reader across the page and never faded."""
+def test_the_filings_view_s_rules() -> None:
+    """The view as its mockup lays it out (7.5, 7.8): the filters wrap, each framed in a pill on
+    a hairline, its count in ink-faint, the pressed one on surface-selected with an accent edge;
+    the table in a box of its own that scrolls sideways, so a narrow window scrolls the table and
+    never the page; the day, the form and the links on one line, the plain words in ink-muted;
+    the line and the button under it, wrapping; the view faded while an older window's read is
+    out. Tokens alone."""
+    css = _rules(_static_file("index.html"))
+    filters = css[".app-ir__filters"]
+    assert "display: flex;" in filters and "flex-wrap: wrap;" in filters
+    one = css[".app-ir__filter"]
+    assert "border: 1px solid var(--hairline);" in one
+    assert "border-radius: var(--radius-pill);" in one
+    pressed = css['.app-ir__filter[aria-pressed="true"]']
+    assert "background: var(--surface-selected);" in pressed
+    assert "border-color: var(--accent);" in pressed
+    assert "color: var(--ink-faint);" in css[".app-ir__n"]
+    assert "overflow-x: auto;" in css[".app-ir__scroll"]
+    table = css[".app-ir__table"]
+    assert "width: 100%;" in table and "min-width: 560px;" in table
+    assert "white-space: nowrap;" in css[".app-ir__filed, .app-ir__form, .app-ir__links"]
+    assert "color: var(--ink-muted);" in css[".app-ir__what"]
+    foot = css[".app-ir__foot"]
+    assert "display: flex;" in foot and "flex-wrap: wrap;" in foot
+    assert "opacity: 0.5;" in css['.app-ir__filings[aria-busy="true"]']
+    _painted(css)
+
+
+def test_print_shows_the_open_view_alone() -> None:
+    """Print (7.8) shows the open view alone, with not the tab's top row, its switch and the line
+    of the next earnings report, on either view. On Earnings calls the call shown: its title, its
+    figures and its whole transcript, not the list of calls or the tools (the buttons with every
+    button of the page), the reader across the page and never faded. On Filings the table as
+    filtered, whole, under its line: not the filters, never faded, its box not clipping it, a row
+    whole on a page."""
     css = _rules(_media(_static_file("index.html"), "print"), "    ")
-    hidden = css[".app-ir .app-fin__seg, .app-ir__list, .app-ir__tools"]
-    assert "display: none !important;" in hidden
+    assert "display: none !important;" in css[".app-ir__bar"]
+    assert "display: none !important;" in css[".app-ir__list, .app-ir__tools"]
     assert "display: block;" in css[".app-ir__calls"]
     assert "opacity: 1;" in css['.app-ir__reader[aria-busy="true"]']
     assert "break-inside: avoid;" in css[".app-ir__words"]
+    assert "display: none !important;" in css[".app-ir__filters"]
+    assert "opacity: 1;" in css['.app-ir__filings[aria-busy="true"]']
+    assert "overflow: visible;" in css[".app-ir__scroll"]
+    assert "break-inside: avoid;" in css[".app-ir__table tr"]
+    assert not [s for s in css if "app-fin__seg" in s]  # the switch goes with the row
     _painted(css)
 
 

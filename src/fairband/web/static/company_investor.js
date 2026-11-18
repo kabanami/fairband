@@ -9,7 +9,7 @@
    newest. The word is the page's own: it never travels to the server, and a change of it never
    reads the tab again (company.js, load); a press of the switch replaces the hash
    (FairbandPage.show), as a tab's button does. A view with nothing on file draws its sentence,
-   No earnings call on file. or No filing on file.; the table of filings is its view's own (7.5).
+   No earnings call on file. or No filing on file.
 
    The Earnings calls view (7.3, 7.4): at its left the list of calls, under one head a fiscal
    year, newest first, the newest five years and Show all <n> calls where there are more, the call
@@ -29,10 +29,24 @@
    is put right to the tab alone once drawn, reading nothing of the tab. A change of call takes
    the page to its top, as a change of report does on the Research tab, and empties the find box.
 
+   The Filings view (7.5): five filters, each with its count, the first pressed as the view opens
+   for a company, a press drawing the page again and reading nothing; then the table of the
+   filings the filter keeps, newest first, in a box of its own that scrolls sideways, each row its
+   day, its form, the form's plain words (FORMS, the mockup's) and its links to the SEC's site,
+   each drawn only where it starts https:// and opening in a new tab. Under it the line of the
+   windows read, and Show older filings, which reads the window of the 365 days before the oldest
+   read (olderTo), through the filings read (GET .../investor-relations/filings?to=, with the
+   request header: it may call a vendor), and adds its rows under the table's, a row drawn
+   already left out (merged); a window that answers no filing takes the button away, one that
+   cannot be read leaves the table as it was with its sentence under it. The windows read are
+   kept by company and first window for the page's life; one that lands for a company or a first
+   window no longer shown is kept and draws nothing.
+
    The data date at the tabs' row's right end is the view's (7.6), the oldest day among the
-   stored answers it draws: company.js asks this script for it (dataDate) on every draw, so a
-   view's later reads, which draw the page again as they land (companyPage.redraw), move it with
-   no change to company.js. The tab's function hangs on companyPage.draw, its date's on
+   stored answers it draws, on Filings among the filing lists read: company.js asks this script
+   for it (dataDate) on every draw, so a view's later reads, which draw the page again as they
+   land (companyPage.redraw), move it with no change to company.js. The tab's function hangs on
+   companyPage.draw, its date's on
    companyPage.dataDate, and the pure pieces on FairbandPage.investor, for the tests, which read
    them in node. */
 (function () {
@@ -63,14 +77,24 @@
      { failed }, the server's sentence why not. */
   var held = { symbol: null, call: null, all: false, words: '', reads: {} };
 
+  /* The Filings view's state, for the page's life: the company it drew last and the filter
+     pressed for it, an index of FILTERS, the first for another company; the key of the windows
+     the page shows (keptKey), none while it shows the Earnings calls view; and by that key the
+     older windows read after a first window, oldest last, { windows, out, failed }: those read,
+     whether a read of one is out, and the server's sentence why the last could not be read, or
+     null. */
+  var filed = { symbol: null, filter: 0, shown: null, kept: {} };
+
   /* The view the address's word names: filings for the word filings, else calls, the Earnings
      calls view, on the tab alone or on a call. */
   function view(word) { return word === 'filings' ? 'filings' : 'calls'; }
 
   /* The tab on `answer` at the address's word `word` (7.2): its block, the row of the switch and
-     the line, then the view's own. */
+     the line, then the view's own; the Filings view says which windows it shows (filed.shown),
+     none on the Earnings calls view. */
   function tab(answer, word) {
     var shown = view(word);
+    filed.shown = null;
     return h('section', {
       className: 'app-company__panel app-ir', 'aria-label': 'Investor relations'
     },
@@ -365,11 +389,222 @@
 
   /* ------------------------------------------------------------------------ the Filings view */
 
-  /* The Filings view (7.5): a company with no filing list on file, or whose first window holds no
-     filing, draws its sentence. */
+  /* The forms in plain words (7.5), the mockup's table as written there: a line states what the
+     form is and judges nothing. */
+  var FORMS = {
+    '10-K': 'Annual report', '10-Q': 'Quarterly report',
+    '8-K': 'Current report: an event the company must disclose',
+    'DEF 14A': 'Proxy statement for the shareholders\' meeting',
+    'DEFA14A': 'Additional proxy material',
+    '3': 'An insider\'s first statement of holdings',
+    '4': 'A change in an insider\'s holdings',
+    '5': 'An insider\'s yearly statement of holdings',
+    '144': 'Notice of a planned sale of restricted shares',
+    '424B2': 'Prospectus for securities on offer', 'FWP': 'Free writing prospectus',
+    '25-NSE': 'Notice that a security leaves an exchange', 'SD': 'Specialized disclosure report',
+    '11-K': 'Annual report of an employee stock plan',
+    'S-8': 'Registration of shares for employee plans',
+    'S-3ASR': 'Shelf registration of securities', '20-F': 'Annual report of a foreign issuer',
+    '6-K': 'Report of a foreign issuer', 'SC 13G': 'A large holder\'s statement of ownership',
+    'SC 13G/A': 'A change to a large holder\'s statement',
+    'PX14A6G': 'A shareholder\'s notice of exempt solicitation',
+    'ARS': 'Annual report to shareholders'
+  };
+  var AMENDED = '/A'; /* an amendment's mark at a form's end: 8-K/A */
+  /* The insider forms, the agents' filing list's OWNERSHIP_FORMS (filings_api), which it leaves
+     out by default, as the first filter does. */
+  var INSIDER = ['3', '4', '5', '144'];
+  var HTTPS = 'https://'; /* the start of a link the table draws (7.5) */
+  var HEADS = ['Filed', 'Form', 'What it is', 'On the SEC\'s site'];
+  var DAY = 864e5; /* a day's milliseconds */
+
+  /* A form as the filters read it: as given, its outer spaces off and in upper case. */
+  function upper(form) { return String(form).trim().toUpperCase(); }
+
+  /* The form an amendment `form` amends (8-K for 8-K/A); null for a form that is no amendment. */
+  function amended(form) {
+    return form.slice(-AMENDED.length) === AMENDED ? form.slice(0, -AMENDED.length) : null;
+  }
+
+  /* Whether `form` is an insider's form, 3, 4, 5 or 144, or an amendment of one (4/A), as the
+     agents' filing list judges it. */
+  function insider(form) {
+    var f = upper(form);
+    return INSIDER.indexOf(amended(f) || f) !== -1;
+  }
+
+  /* Whether `form` starts with one of `heads`: 10-K/A and 10-KT start 10-K. */
+  function starts(form, heads) {
+    var f = upper(form);
+    return heads.some(function (head) { return f.indexOf(head) === 0; });
+  }
+
+  /* The five filters (7.5), each its name and the test of a form it keeps; the first pressed as
+     the view opens. A foreign issuer's 20-F and 6-K stand under the first and under All. */
+  var FILTERS = [
+    { name: 'Without insider forms', test: function (form) { return !insider(form); } },
+    { name: '10-K and 10-Q', test: function (form) { return starts(form, ['10-K', '10-Q']); } },
+    { name: '8-K', test: function (form) { return starts(form, ['8-K']); } },
+    { name: 'Insider forms', test: insider },
+    { name: 'All', test: function () { return true; } }
+  ];
+
+  /* The key the older windows of `symbol` read after its first window `list` are kept under:
+     the company and the first window's last day, so a newer first window (a refresh's) starts
+     them again and leaves no gap behind it. */
+  function keptKey(symbol, list) { return symbol + '/' + list.to; }
+
+  /* What it is (7.5): `form`'s words from the table; an amendment the table lacks, Amendment: and
+     its form's words; nothing for a form the table lacks. */
+  function what(form) {
+    var f = String(form == null ? '' : form);
+    var base = amended(f);
+    if (has(FORMS, f)) return FORMS[f];
+    return base !== null && has(FORMS, base) ? 'Amendment: ' + FORMS[base] : '';
+  }
+
+  function has(table, key) { return Object.prototype.hasOwnProperty.call(table, key); }
+
+  /* The day before the ISO day `iso`. */
+  function dayBefore(iso) {
+    return new Date(Date.parse(iso + 'T00:00:00Z') - DAY).toISOString().slice(0, 10);
+  }
+
+  /* The last day of the next window to read (7.5) after `windows`, the filing lists read, oldest
+     last, of which `rows` are the rows shown: the day before the oldest window's first day; where
+     that window is cut at the vendor's limit, so its oldest filings are missing, the filing day of
+     the oldest row shown, a row with no day aside, or, with none, the day before its first. */
+  function olderTo(windows, rows) {
+    var oldest = windows[windows.length - 1];
+    var day = null;
+    if (oldest.truncated) {
+      rows.forEach(function (row) { if (row.filed && (!day || row.filed < day)) day = row.filed; });
+    }
+    return day || dayBefore(oldest.from);
+  }
+
+  /* A row's identity among the windows read: its files link, its form and its day. */
+  function sameAs(row) { return JSON.stringify([row.files, row.form, row.filed]); }
+
+  /* `rows`, the rows drawn, and under them the rows of `more`, a window read, in their order, but
+     a row with the same files link, form and day as one drawn already (7.5): the next window after
+     a cut one starts on the cut one's oldest day, which both hold. */
+  function merged(rows, more) {
+    var drawn = Object.create(null);
+    rows.forEach(function (row) { drawn[sameAs(row)] = true; });
+    return rows.concat(more.filter(function (row) { return !drawn[sameAs(row)]; }));
+  }
+
+  /* The Filings view (7.5) on `answer`: a company with no filing list on file draws its sentence
+     and no button. Else the first window and the older ones read after it, their rows one under
+     the other: the filters, each with its count among them, the table of those the filter
+     pressed keeps, in a box of its own that scrolls sideways, and under it the line of the
+     windows read, the vendor's cut where one is cut, Show older filings until a window older
+     than the first answers no filing, and the sentence of an older window that could not be read.
+     A first window with no filing draws its sentence and the button alone. While an older window's
+     read is out the view waits, faded (aria-busy). */
   function filings(answer) {
     var list = answer.filings;
-    return list && list.rows.length ? null : none('No filing on file.');
+    if (filed.symbol !== answer.symbol) {
+      filed.symbol = answer.symbol;
+      filed.filter = 0;
+    }
+    if (!list) return none('No filing on file.');
+    var key = keptKey(answer.symbol, list);
+    var kept = filed.kept[key] || (filed.kept[key] = { windows: [], out: false, failed: null });
+    filed.shown = key;
+    var windows = [list].concat(kept.windows);
+    var rows = windows.reduce(function (all, w) { return merged(all, w.rows); }, []);
+    var more = windows.length === 1 || windows[windows.length - 1].rows.length > 0;
+    var press = function () { older(answer.symbol, key, kept, windows, rows); };
+    return h('div', { className: 'app-ir__filings', 'aria-busy': kept.out ? 'true' : null },
+      rows.length ? filters(rows) : none('No filing on file.'),
+      rows.length ? h('div', { className: 'app-ir__scroll' }, table(rows)) : null,
+      foot(rows.length ? line(windows) : null, more ? press : null, kept.out),
+      kept.failed != null ? none('The older filings could not be read: ' + kept.failed + '.')
+        : null);
+  }
+
+  /* Under the table (7.5): `words`, the line of the windows read, where rows are drawn, then
+     Show older filings, `press` its press, where a window may be read, disabled while one is
+     `out`. */
+  function foot(words, press, out) {
+    return h('div', { className: 'app-ir__foot' }, words,
+      press ? h(F.Button, {
+        size: 'sm', className: 'app-ir__older', disabled: out, onClick: press
+      }, 'Show older filings') : null);
+  }
+
+  /* The line of `windows`, the filing lists read, oldest last: from the oldest's first day to
+     the first's last, and the vendor's cut where one of them holds its limit of rows. */
+  function line(windows) {
+    var cut = windows.some(function (w) { return w.truncated; });
+    var oldest = windows[windows.length - 1];
+    return h('p', { className: 'body app-ir__window' },
+      'Filed from ' + C.day(oldest.from) + ' to ' + C.day(windows[0].to) + '.',
+      cut ? h('span', { className: 'app-ir__cut' },
+        ' The vendor\'s list is cut at 1,000 filings a window.') : null);
+  }
+
+  /* The row of the five filters over the table, the one pressed marked, each with its count
+     among `rows`; a press draws the page again with its rows and reads nothing. */
+  function filters(rows) {
+    return h('div', { className: 'app-ir__filters' }, FILTERS.map(function (f, i) {
+      var n = rows.filter(function (row) { return f.test(row.form); }).length;
+      return h('button', {
+        key: f.name, type: 'button', className: 'control app-ir__filter',
+        'aria-pressed': i === filed.filter ? 'true' : 'false',
+        onClick: function () { filed.filter = i; C.redraw(); }
+      }, f.name, ' ', h('span', { className: 'figure-sm app-ir__n' }, C.count(n)));
+    }));
+  }
+
+  /* The table (7.5) of the `rows` the filter pressed keeps, newest first, four columns: the day
+     filed, the form as the vendor gives it, the form's plain words, and its links. */
+  function table(rows) {
+    var test = FILTERS[filed.filter].test;
+    return h('table', { className: 'app-ir__table' },
+      h('thead', null, h('tr', null, HEADS.map(function (head) {
+        return h('th', { key: head, className: 'label' }, head);
+      }))),
+      h('tbody', null, rows.filter(function (row) { return test(row.form); }).map(
+        function (row, i) {
+          return h('tr', { key: i },
+            h('td', { className: 'figure app-ir__filed' }, C.day(row.filed)),
+            h('td', { className: 'body app-ir__form' }, row.form),
+            h('td', { className: 'body app-ir__what' }, what(row.form)),
+            h('td', { className: 'body app-ir__links' },
+              link(row.document, 'Document'), link(row.files, 'All files')));
+        })));
+  }
+
+  /* A link to the SEC's site that opens in a new tab, its words `words`, where `href` starts
+     https://, as the read gives none other; nothing else. */
+  function link(href, words) {
+    if (typeof href !== 'string' || href.indexOf(HTTPS) !== 0) return null;
+    return h('a', {
+      className: 'app-link app-ir__link', href: href, target: '_blank', rel: 'noopener'
+    }, words);
+  }
+
+  /* Show older filings (7.5, 7.6) for `symbol`'s windows `kept` under `key`, `windows` and `rows`
+     those drawn: unless a read is out, the next window's read (olderTo), with the request header,
+     the view faded meanwhile; as it lands, its window kept under its own key, or the server's
+     sentence why not, and the page drawn again where it still shows that key's windows. A late
+     answer of another company draws nothing. */
+  function older(symbol, key, kept, windows, rows) {
+    if (kept.out) return;
+    kept.out = true;
+    kept.failed = null;
+    C.readVendor('/api/companies/' + encodeURIComponent(symbol) + '/page/' + TAB +
+      '/filings?to=' + olderTo(windows, rows))
+      .then(function (answer) { kept.windows.push(answer); },
+        function (err) { kept.failed = err.message; })
+      .then(function () {
+        kept.out = false;
+        if (filed.shown === key) C.redraw();
+      });
+    C.redraw();
   }
 
   function none(text) { return h('p', { className: 'body app-ir__none' }, text); }
@@ -377,21 +612,32 @@
   /* The data date of the view the address's word names (7.6), the oldest day among the stored
      answers it draws: on the Earnings calls view the read's, which counts the head's quote, the
      list of calls and the earnings rows, or the day of the transcript shown where it is older,
-     once its read has landed with words; on the Filings view the day of the filing list it
-     draws, none without one. */
+     once its read has landed with words; on the Filings view the oldest day among the filing
+     lists read, the first read's and the older windows' read after it, none without one. */
   function dataDate(answer, word) {
-    if (view(word) === 'filings') return answer.filings ? answer.filings.observedDay : null;
+    if (view(word) === 'filings') return filingsDate(answer);
     if (!answer.calls.length || !answer.dataDate) return answer.dataDate;
     var kept = held.reads[keyOf(answer.symbol, chosen(answer.calls, word))];
     var shown = kept && kept.answer && kept.answer.turns.length ? kept.answer.observedDay : null;
     return shown && shown < answer.dataDate ? shown : answer.dataDate;
   }
 
+  /* The Filings view's data date on `answer`: the oldest day among its first window's and the
+     older windows' read after it; none without a filing list. */
+  function filingsDate(answer) {
+    var list = answer.filings;
+    if (!list) return null;
+    var kept = filed.kept[keptKey(answer.symbol, list)];
+    return [list].concat(kept ? kept.windows : []).reduce(function (oldest, w) {
+      return w.observedDay && (!oldest || w.observedDay < oldest) ? w.observedDay : oldest;
+    }, null);
+  }
+
   /* What the page and the tests use: the tab's function, draw['investor-relations'](answer,
      detail, word), and its data date's; the views and the pure pieces. */
   P.investor = {
     VIEWS: VIEWS, view: view, tab: tab, dataDate: dataDate, years: years, marked: marked,
-    title: title
+    title: title, FILTERS: FILTERS, FORMS: FORMS, words: what, olderTo: olderTo, merged: merged
   };
   C.draw[TAB] = function (answer, detail, word) { return tab(answer, word); };
   C.dataDate[TAB] = dataDate;

@@ -20,6 +20,8 @@
 // JSON holds no function, so an argument's value written {"$page": "<helper>"} is that helper of
 // window.FairbandPage, named as the helper is: a component can be handed one of the page's own
 // functions as a prop (ScreenTable's companyHref and onWatch; tests/web/test_ticker_link.py).
+// A name that is no function, a table a script hangs there ("investor.FILTERS"), answers its value
+// through JSON, which leaves its functions out; the arguments are then not read.
 //
 //   node page.mjs <bundle.js> <app.js> <helper> [<script.js> ...]  < arguments.json  > result.json
 import { readFileSync } from 'node:fs';
@@ -84,5 +86,5 @@ function revived(value) {
 const name = process.argv[4];
 const component = name.startsWith('Fairband.');
 const helper = component ? name.split('.').reduce((held, key) => held[key], window) : page(name);
-const result = helper(...revived(args));
+const result = typeof helper === 'function' ? helper(...revived(args)) : helper;
 process.stdout.write(JSON.stringify(component ? drawn(result) : result));
