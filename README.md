@@ -18,7 +18,7 @@ flowchart LR
     pages --> server["Fairband server and valuation engine"]
     mcp --> server
     server -. "starts a research session" .-> agent
-    server --> db[("SQLite database on your disk")]
+    server <--> db[("SQLite database on your disk")]
     server -- "your key" --> fmp["Financial Modeling Prep"]
     server -- "your key" --> gf["GuruFocus"]
 ```
