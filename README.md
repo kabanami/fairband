@@ -171,8 +171,8 @@ the values moved with it.
 
 ## Status
 
-Fairband is a personal project. I built it for my own investing and I share it as it is, with no
-promise of support. Issues are welcome. For a change, please open an issue before a pull request.
+Fairband is a personal project. I share it as it is, with no promise of support. Issues are
+welcome. For a change, please open an issue before a pull request.
 
 It is young, its method still changes, and it has no track record. Nothing in this repository is
 investment advice.
