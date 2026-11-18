@@ -188,4 +188,4 @@ section 6).
 
 ## Author
 
-Khalid Abanami.
+Khalid Abanami, on [LinkedIn](https://www.linkedin.com/in/khalid-abanami-a034108/).
