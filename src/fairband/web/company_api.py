@@ -53,31 +53,35 @@ Each tab's read answers ``quote``, the head's figures on every tab (``page_fmp.h
   that is the call's (``page_investor.calls``), empty without a list; ``filings``, ``{from, to,
   rows, truncated, observedDay}`` of the tab's filing list: of the usable stored filing lists
   (``sec-filings``) of a whole window, their params exactly those of the 365 days to their ``to``
-  at ``FILINGS_LIMIT`` rows (``fetch.page_params``), that end on or before the clock's day, the
-  one that ends latest, the newest among those that end on one day. So the refresh's, of the 365
-  days to its day, and never an agent's list of an older window, of a narrower or a wider one
-  asked the same day, or of one that ends in the future; a list whose ``to`` is no ISO date is
-  never the tab's either. It answers its window's first and last days, its rows newest first
-  (``page_investor.filing_rows``), ``truncated``, true where it holds the vendor's limit of
+  at ``FILINGS_LIMIT`` rows (``fetch.page_params``), that end on or before the clock's day and on
+  or before the day the list was observed, the one that ends latest, the newest among those that
+  end on one day. So the refresh's, of the 365 days to its day, observed that day, and never an
+  agent's list of an older window, of a narrower or a wider one asked the same day, or of one
+  asked before its last day, which lacks what was filed after it; a list whose ``to`` is no ISO
+  date is never the tab's either. It answers its window's first and last days, its rows newest
+  first (``page_investor.filing_rows``), ``truncated``, true where it holds the vendor's limit of
   ``FILINGS_LIMIT`` rows, so the window's oldest filings are missing, and the day it was
-  observed; ``null`` without one. Its ``dataDate`` counts the answers of the
-  Earnings calls view, the quote's row, the list of calls and the earnings, as the estimates read
-  counts its own, and not the filing list, which carries its own day: the page works out each
-  view's caption (the Investor relations tab's design, 7.6).
+  observed; ``null`` without one. Its ``dataDate`` counts the answers of the Earnings calls view,
+  the quote's row, the list of calls and the earnings, as the estimates read counts its own, and
+  not the filing list, which carries its own day: the page works out each view's caption (the
+  Investor relations tab's design, 7.6).
 - ``GET /api/companies/{symbol}/page/investor-relations/call?year=&quarter=`` answers ``{symbol,
   fiscalYear, quarter, date, turns, questionsAt, observedDay}``, the call of the fiscal ``year``
   and ``quarter`` (``page_investor.transcript``) and the day its copy was fetched: the newest
   usable stored ``transcript`` answer of that call that holds words (``page_investor.has_words``),
   whatever its age, since a call's words do not change once the vendor holds them; else the
   ``transcript`` pass-through's, reused inside its window, an answer with no words among them
-  (``turns`` empty), or fetched past it.
+  (``turns`` empty), or fetched past it. An answer of the pass-through that is no list (FMP's
+  error object, which the pass-through stores as an answer) is a 502, ``NO_TRANSCRIPT``.
 - ``GET /api/companies/{symbol}/page/investor-relations/filings?to=`` answers ``{from, to, rows,
   truncated, observedDay}`` of the filing list of the 365 days to the ISO date ``to``
   (``fetch.filings_window``), on or before the clock's day, as the tab's read answers its filing
-  list: where ``to`` is before the clock's day, the newest usable stored list of exactly that
-  window, whatever its age, since a past year's list does not change; else, ``to`` the clock's
-  day, or without one, the ``filings`` pass-through's, reused inside its window or fetched. A list the pass-through stored as unusable (FMP's error object) is
-  a 502, ``filings_api.NO_LIST``.
+  list: the newest usable stored list of exactly that window, whatever its age, where it was
+  observed after ``to``, since a past year's list observed once the year was over does not
+  change; else, a list observed on ``to`` or before it (every refresh's of its day), none, or
+  ``to`` the clock's day, the ``filings`` pass-through's, reused inside its window or fetched. A
+  list the pass-through stored as unusable (FMP's error object) is a 502,
+  ``filings_api.NO_LIST``.
 
 Rules for the overview, the estimates, the financials and the Investor relations tab's read:
 
@@ -138,10 +142,12 @@ profile.
 Only then, and only where the store cannot answer, the pass-through's failures as the pass-through
 route answers them: without a pass-through (the server has no FMP key) a 503, "no FMP key"; every
 slot taken a 503 with its ``BUSY``; a failed vendor call a 502 with the vendor's sentence,
-scrubbed. So a refused request calls no vendor and stores nothing. No answer of the tab's three
-reads carries a ref or a response id: no report cites them. The two reads are sync ones, as the
-pass-through route is: FastAPI runs them on its thread pool, where a vendor call waits at most ten
-seconds for one of the pass-through's slots.
+scrubbed; an answer that is no list, FMP's error object, a 502 with the read's own sentence
+(``NO_TRANSCRIPT``, ``filings_api.NO_LIST``). So a request refused before the store is read calls
+no vendor and stores nothing. No answer of the tab's three reads carries a ref or a response id:
+no report cites them. The two reads are sync ones, as the pass-through route is: FastAPI runs them
+on its thread pool, where a vendor call waits at most ten seconds for one of the pass-through's
+slots.
 """
 
 import json
@@ -243,6 +249,7 @@ _FILINGS = "sec-filings"
 BAD_QUARTER = "quarter must be 1 to 4"  # the transcript pass-through's sentence
 BAD_TO = "to must be an ISO date from 0002-01-01 on"  # its 365 days start in the calendar
 FUTURE_TO = "to must be today or earlier"
+NO_TRANSCRIPT = "FMP answered no transcript for {symbol}"  # as ``filings_api.NO_LIST``
 
 
 @dataclass(frozen=True)
@@ -448,6 +455,8 @@ def add_company_page_routes(
             copy = _with_words(conn, symbol, {"symbol": symbol, **asked})
         if copy is None:  # the store holds no words for the call: the pass-through's window holds
             copy = _asked(passthrough, "transcript", symbol, asked)
+            if not isinstance(copy.payload, list):  # FMP's error object, stored as an answer
+                raise HTTPException(502, NO_TRANSCRIPT.format(symbol=symbol))
         return {
             "symbol": symbol,
             "fiscalYear": year,
@@ -477,15 +486,18 @@ def add_company_page_routes(
 
 def _latest_window(conn: sqlite3.Connection, symbol: str, today: date) -> _Copy | None:
     """The tab's filing list (the Investor relations tab's design, 8.2): of the company's usable
-    stored filing lists of a whole window (``_whole_window``) that ends on or before ``today``, the
-    one that ends latest, the newest among those that end on one day; so the refresh's, of the 365
-    days to its day, and never an agent's list of an older window, of a narrower or a wider one
-    asked the same day, or of one that ends in the future. ``None`` without one, or when its
-    payload does not parse."""
+    stored filing lists of a whole window (``_whole_window``) that ends on or before ``today`` and
+    on or before the day it was observed, the one that ends latest, the newest among those that
+    end on one day; so the refresh's, of the 365 days to its day, observed that day, and never an
+    agent's list of an older window, of a narrower or a wider one asked the same day, or of one
+    asked before its last day, which lacks what was filed after it. ``None`` without one, or when
+    its payload does not parse."""
     whole = [
         (end, row)
         for row in usable_responses(conn, "fmp", _FILINGS, symbol)
-        if (end := _whole_window(row, symbol)) is not None and end <= today
+        if (end := _whole_window(row, symbol)) is not None
+        and end <= today
+        and end <= row.observed_at.date()
     ]
     if not whole:
         return None
@@ -508,11 +520,15 @@ def _whole_window(row: ResponseRow, symbol: str) -> date | None:
 
 def _stored_window(conn: sqlite3.Connection, symbol: str, end: date) -> _Copy | None:
     """The newest usable stored filing list of the 365 days to ``end``, under the params the
-    ``filings`` pass-through and the refresh store it with, whatever its age; ``None`` without
-    one, or when its payload does not parse."""
+    ``filings`` pass-through and the refresh store it with, whatever its age, where it was observed
+    after ``end``, the window's last day: a list observed on that day or before it, as every
+    refresh's is, lacks what was filed after it. ``None`` without one, or when its payload does not
+    parse."""
     found = latest_response(conn, "fmp", _FILINGS, symbol, page_params(_FILINGS, symbol, end))
-    payload = None if found is None else _parsed(response_payload(conn, found.id))
-    return None if found is None or payload is None else _Copy(found, payload)
+    if found is None or found.observed_at.date() <= end:
+        return None
+    payload = _parsed(response_payload(conn, found.id))
+    return None if payload is None else _Copy(found, payload)
 
 
 def _with_words(conn: sqlite3.Connection, symbol: str, params: dict[str, str]) -> _Copy | None:

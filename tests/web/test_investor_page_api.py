@@ -242,8 +242,8 @@ def test_the_latest_window_wins_over_a_newer_copy_of_an_older_one(
     client: TestClient, db_path: Path
 ) -> None:
     """An agent's list of the year before, fetched after the refresh's, ends earlier and never
-    stands in for it. Of two copies of the latest window the newest stands; a list stored with an
-    error is passed over, though its window ends later."""
+    stands in for it. Of two copies of the latest window the newest stands; a copy of that window
+    stored with an error is passed over, though it is newer still."""
     _profile(db_path)
     _filings(db_path, DAY)
     _filings(db_path, LAST_YEAR, OLDER, at=NOW)  # an agent's, fetched later
@@ -253,9 +253,31 @@ def test_the_latest_window_wins_over_a_newer_copy_of_an_older_one(
     again = pages.FILINGS[:2]
     _filings(db_path, DAY, again, at=AT + timedelta(minutes=5))
     error = {"Error Message": "Limit Reach"}
-    _filings(db_path, DAY + timedelta(days=1), error, at=NOW, error="unusable payload: {...}")
+    _filings(db_path, DAY, error, at=NOW, error="unusable payload: {...}")  # newer, its id too
     filings = _get(client, TAB)["filings"]
     assert (filings["to"], filings["rows"]) == ("2026-11-01", page_investor.filing_rows(again))
+
+
+def test_a_whole_window_stored_before_its_last_day_is_never_the_tab_s(
+    client_with_clock: Callable[[datetime], TestClient], db_path: Path
+) -> None:
+    """The whole-branch review's rule on the day a copy was observed: an agent's list of the 365
+    days to 1 Nov 2026, asked on 15 Oct, ends latest but was stored before its last day, so it
+    lacks what was filed after it; on that day, and five days after it, the tab keeps yesterday's
+    refresh's, stored on its own last day. Today's refresh's window, stored on its last day like
+    every refresh's, is the tab's."""
+    _profile(db_path)
+    yesterday = DAY - timedelta(days=1)
+    _filings(db_path, yesterday, pages.FILINGS[1:], at=AT - timedelta(days=1))
+    _filings(db_path, DAY, pages.FILINGS[:1], at=datetime(2026, 10, 15, 12, 0, tzinfo=UTC))
+    for later in (0, 5):
+        filings = _get(client_with_clock(NOW + timedelta(days=later)), TAB)["filings"]
+        assert (filings["to"], filings["observedDay"]) == ("2026-10-31", "2026-10-31"), later
+        assert filings["rows"] == page_investor.filing_rows(pages.FILINGS[1:])
+    _filings(db_path, DAY, pages.FILINGS, at=AT)  # the refresh of today, on its last day
+    filings = _get(client_with_clock(NOW), TAB)["filings"]
+    assert (filings["to"], filings["observedDay"]) == ("2026-11-01", "2026-11-01")
+    assert filings["rows"] == page_investor.filing_rows(pages.FILINGS)
 
 
 def test_a_narrower_or_wider_list_asked_the_same_day_is_not_the_tab_s(
@@ -374,7 +396,7 @@ def test_the_data_date_is_the_oldest_of_the_calls_view_s_answers(
     _quote(db_path, on("quote"))
     _calls(db_path, at=on("transcript-dates"))
     _earnings(db_path, at=on("earnings"))
-    _filings(db_path, DAY, at=datetime(2026, 10, 21, tzinfo=UTC))
+    _filings(db_path, date(2026, 10, 21), at=datetime(2026, 10, 21, tzinfo=UTC))
     body = _get(client, TAB)
     assert (body["dataDate"], body["quote"]["price"]) == ("2026-10-29", 182.4)
     assert body["filings"]["observedDay"] == "2026-10-21"
@@ -387,7 +409,7 @@ def test_a_filing_list_older_than_the_calls_keeps_its_own_day(
     data date at the calls' day and carries its older day as its own."""
     _profile(db_path)
     _calls(db_path, at=datetime(2026, 10, 30, 12, 0, tzinfo=UTC))
-    _filings(db_path, DAY, at=datetime(2026, 10, 25, 12, 0, tzinfo=UTC))
+    _filings(db_path, date(2026, 10, 25), at=datetime(2026, 10, 25, 12, 0, tzinfo=UTC))
     body = _get(client, TAB)
     assert (body["dataDate"], body["filings"]["observedDay"]) == ("2026-10-30", "2026-10-25")
 
@@ -399,7 +421,7 @@ def test_a_list_of_calls_older_than_the_filings_sets_the_data_date(
     its older day, and the filing list keeps its newer day as its own."""
     _profile(db_path)
     _calls(db_path, at=datetime(2026, 10, 25, 12, 0, tzinfo=UTC))
-    _filings(db_path, DAY, at=datetime(2026, 10, 30, 12, 0, tzinfo=UTC))
+    _filings(db_path, date(2026, 10, 30), at=datetime(2026, 10, 30, 12, 0, tzinfo=UTC))
     body = _get(client, TAB)
     assert (body["dataDate"], body["filings"]["observedDay"]) == ("2026-10-25", "2026-10-30")
 
@@ -480,6 +502,47 @@ def test_a_transcript_without_words_is_asked_again_past_the_window(
     assert asked == [{"symbol": SYMBOL, "year": "2026", "quarter": "1"}]
 
 
+def test_a_transcript_the_vendor_answers_with_its_error_is_a_502(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """The whole-branch review's M-3: FMP's error object for a call, HTTP 200 with no list, which
+    the transcript pass-through stores as an answer, is no call with no words: the read fails, a
+    502 with its sentence, as the filings read fails on a filing list that is no list. Read again
+    inside the reuse window, the pass-through's copy is the same error, and the read fails the
+    same, with no further call."""
+    _profile(db_path)
+    _answering(vendor, {"Error Message": "Limit Reach"})
+    for _ in range(2):
+        refused = with_passthrough.get(CALL, params=Q3)
+        assert _refused(refused) == (502, "FMP answered no transcript for LFOX")
+    assert vendor.paths == [TRANSCRIPT_PATH]
+
+
+@pytest.mark.parametrize("payload", [[], [pages.TRANSCRIPT[0] | {"content": ""}]])
+def test_an_empty_answer_is_a_call_with_no_words(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path, payload: Any
+) -> None:
+    """A list from the vendor, empty or a row with no words, is a call with no words on file: a
+    200 with ``turns`` empty, the page's "No transcript on file for this call.\""""
+    _profile(db_path)
+    _answering(vendor, payload)
+    body = _get(with_passthrough, CALL, **Q3)
+    assert (body["turns"], body["questionsAt"], body["observedDay"]) == ([], None, "2026-11-01")
+
+
+def test_a_stored_error_object_hides_no_older_copy_with_words(
+    client: TestClient, db_path: Path
+) -> None:
+    """FMP's error object for the call, stored as an answer after a copy with words, hides it
+    not: the read answers the words, on an app with no pass-through."""
+    _profile(db_path)
+    _transcript(db_path, pages.TRANSCRIPT, NOW - timedelta(days=60))
+    _transcript(db_path, {"Error Message": "Limit Reach"}, AT)
+    body = client.get(CALL, params=Q3, headers=HEADER).json()
+    assert body["turns"] == page_investor.transcript(pages.TRANSCRIPT)["turns"]
+    assert body["observedDay"] == "2026-09-02"
+
+
 def test_the_newest_copy_with_words_of_that_call_is_read(client: TestClient, db_path: Path) -> None:
     """A newer copy of the call without words, one with a blank content, does not hide an older
     one with words; another call's words are not this call's. An app with no pass-through, so a
@@ -499,23 +562,57 @@ def test_the_newest_copy_with_words_of_that_call_is_read(client: TestClient, db_
 # --- a year of filings -----------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "at",
+    [datetime(2025, 11, 2, 14, 0, tzinfo=UTC), datetime(2025, 11, 1, 0, 0, 1, tzinfo=UTC)],
+)
 def test_a_past_window_is_read_from_the_store_whatever_its_age(
-    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path, at: datetime
 ) -> None:
-    """The window to 31 Oct 2025, stored a year ago by an agent's list: the read answers it with
-    the day it was fetched and asks no vendor."""
+    """The window to 31 Oct 2025, stored a year ago by an agent's list after its last day, two
+    days after or a second into the next: the read answers it with the day it was fetched and asks
+    no vendor."""
     _profile(db_path)
-    _filings(db_path, LAST_YEAR, OLDER, at=datetime(2025, 11, 2, 14, 0, tzinfo=UTC))
+    _filings(db_path, LAST_YEAR, OLDER, at=at)
     body = _get(with_passthrough, FILINGS, to="2025-10-31")
     assert body == {
         "from": "2024-10-31",
         "to": "2025-10-31",
         "rows": page_investor.filing_rows(OLDER),
         "truncated": False,
-        "observedDay": "2025-11-02",
+        "observedDay": at.date().isoformat(),
     }
     assert [row["filed"] for row in body["rows"]] == ["2025-10-28", "2025-04-29"]
     assert vendor.paths == []
+
+
+def test_a_past_window_stored_on_its_last_day_is_fetched_again(
+    with_passthrough: TestClient,
+    client_with_clock: Callable[[datetime], TestClient],
+    vendor: Vendor,
+    db_path: Path,
+) -> None:
+    """The whole-branch review's I-1: the refresh of 31 Oct 2025 stored the window that ends that
+    day, observed that day, so a filing of the day accepted after it is missing. A year and a day
+    later Show older filings asks exactly that window: the copy is not used, the pass-through asks
+    the vendor and keeps its answer, which, fetched after the window's last day, a read a month
+    later on an app with no pass-through answers from the store, with no further call."""
+    _profile(db_path)
+    _filings(db_path, LAST_YEAR, OLDER, at=datetime(2025, 10, 31, 20, 0, tzinfo=UTC))
+    late = pages.FILINGS[0] | {
+        "filingDate": "2025-10-31 00:00:00",
+        "acceptedDate": "2025-10-31 21:15:00",
+    }
+    asked = _answering(vendor, [late, *OLDER])
+    first = _get(with_passthrough, FILINGS, to="2025-10-31")
+    assert (first["to"], first["observedDay"]) == ("2025-10-31", "2026-11-01")
+    assert first["rows"] == page_investor.filing_rows([late, *OLDER])
+    assert asked == [
+        {"symbol": SYMBOL, "from": "2024-10-31", "to": "2025-10-31", "page": "0", "limit": "1000"}
+    ]
+    later = client_with_clock(NOW + timedelta(days=30))
+    assert later.get(FILINGS, params={"to": "2025-10-31"}, headers=HEADER).json() == first
+    assert vendor.paths == [FILING_LIST]
 
 
 def test_a_past_window_not_on_file_is_fetched_once(

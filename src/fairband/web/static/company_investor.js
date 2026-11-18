@@ -44,12 +44,12 @@
    window no longer shown is kept and draws nothing.
 
    The data date at the tabs' row's right end is the view's (7.6), the oldest day among the
-   stored answers it draws, on Filings among the filing lists read: company.js asks this script
-   for it (dataDate) on every draw, so a view's later reads, which draw the page again as they
-   land (companyPage.redraw), move it with no change to company.js. The tab's function hangs on
-   companyPage.draw, its date's on
-   companyPage.dataDate, and the pure pieces on FairbandPage.investor, for the tests, which read
-   them in node. */
+   stored answers it draws: on Earnings calls the tab's read's alone, the transcript shown not
+   counted; on Filings the oldest of the tab's read's and the filing lists read. company.js asks
+   this script for it (dataDate) on every draw, so an older window, which draws the page again as
+   it lands (companyPage.redraw), moves it with no change to company.js. The tab's function hangs
+   on companyPage.draw, its date's on companyPage.dataDate, and the pure pieces on
+   FairbandPage.investor, for the tests, which read them in node. */
 (function () {
   'use strict';
 
@@ -413,7 +413,7 @@
   };
   var AMENDED = '/A'; /* an amendment's mark at a form's end: 8-K/A */
   /* The insider forms, the agents' filing list's OWNERSHIP_FORMS (filings_api), which it leaves
-     out by default, as the first filter does. */
+     out by default, as the first filter does; a test holds the two alike. */
   var INSIDER = ['3', '4', '5', '144'];
   var HTTPS = 'https://'; /* the start of a link the table draws (7.5) */
   var HEADS = ['Filed', 'Form', 'What it is', 'On the SEC\'s site'];
@@ -500,7 +500,7 @@
      and no button. Else the first window and the older ones read after it, their rows one under
      the other: the filters, each with its count among them, the table of those the filter
      pressed keeps, in a box of its own that scrolls sideways, and under it the line of the
-     windows read, the vendor's cut where one is cut, Show older filings until a window older
+     windows read, the vendor's cut where the oldest is cut, Show older filings until a window older
      than the first answers no filing, and the sentence of an older window that could not be read.
      A first window with no filing draws its sentence and the button alone. While an older window's
      read is out the view waits, faded (aria-busy). */
@@ -537,10 +537,11 @@
   }
 
   /* The line of `windows`, the filing lists read, oldest last: from the oldest's first day to
-     the first's last, and the vendor's cut where one of them holds its limit of rows. */
+     the first's last, and the vendor's cut where the oldest holds its limit of rows, so its
+     oldest filings are missing; a cut window with a whole one read behind it leaves no gap. */
   function line(windows) {
-    var cut = windows.some(function (w) { return w.truncated; });
     var oldest = windows[windows.length - 1];
+    var cut = !!oldest.truncated;
     return h('p', { className: 'body app-ir__window' },
       'Filed from ' + C.day(oldest.from) + ' to ' + C.day(windows[0].to) + '.',
       cut ? h('span', { className: 'app-ir__cut' },
@@ -612,33 +613,32 @@
 
   /* The data date of the view the address's word names (7.6), the oldest day among the stored
      answers it draws: on the Earnings calls view the read's, which counts the head's quote, the
-     list of calls and the earnings rows, or the day of the transcript shown where it is older,
-     once its read has landed with words; on the Filings view the oldest day among the filing
-     lists read, the first read's and the older windows' read after it, none without one. */
+     list of calls and the earnings rows, and not the transcript shown, whose words do not age and
+     whose call carries its own date; on the Filings view the oldest day among the read's, for the
+     head's quote and the line of the next earnings report drawn beside the lists, and the filing
+     lists read (filingsDate). */
   function dataDate(answer, word) {
-    if (view(word) === 'filings') return filingsDate(answer);
-    if (!answer.calls.length || !answer.dataDate) return answer.dataDate;
-    var kept = held.reads[keyOf(answer.symbol, chosen(answer.calls, word))];
-    var shown = kept && kept.answer && kept.answer.turns.length ? kept.answer.observedDay : null;
-    return shown && shown < answer.dataDate ? shown : answer.dataDate;
+    return view(word) === 'filings' ? filingsDate(answer) : answer.dataDate;
   }
 
-  /* The Filings view's data date on `answer`: the oldest day among its first window's and the
-     older windows' read after it; none without a filing list. */
+  /* The Filings view's data date on `answer`: the oldest day among its dataDate and the filing
+     lists read, its first window's and the older windows' read after it; its dataDate without a
+     filing list. */
   function filingsDate(answer) {
     var list = answer.filings;
-    if (!list) return null;
-    var kept = filed.kept[keptKey(answer.symbol, list)];
-    return [list].concat(kept ? kept.windows : []).reduce(function (oldest, w) {
+    var kept = list ? filed.kept[keptKey(answer.symbol, list)] : null;
+    var lists = list ? [list].concat(kept ? kept.windows : []) : [];
+    return lists.reduce(function (oldest, w) {
       return w.observedDay && (!oldest || w.observedDay < oldest) ? w.observedDay : oldest;
-    }, null);
+    }, answer.dataDate || null);
   }
 
   /* What the page and the tests use: the tab's function, draw['investor-relations'](answer,
      detail, word), and its data date's; the views and the pure pieces. */
   P.investor = {
     VIEWS: VIEWS, view: view, tab: tab, dataDate: dataDate, years: years, marked: marked,
-    title: title, FILTERS: FILTERS, FORMS: FORMS, words: what, olderTo: olderTo, merged: merged
+    title: title, FILTERS: FILTERS, FORMS: FORMS, INSIDER: INSIDER, words: what,
+    olderTo: olderTo, merged: merged
   };
   C.draw[TAB] = function (answer, detail, word) { return tab(answer, word); };
   C.dataDate[TAB] = dataDate;

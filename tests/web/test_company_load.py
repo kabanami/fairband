@@ -17,9 +17,9 @@ and the Investor relations tab's addresses, whose word after the tab's name (a c
 or ``filings``) never travels to the server, so a change of it, by the address or the tab's
 switch, draws the answer held again and never reads the tab again, even while the tab's own read
 is out, the Earnings calls view's one read its call's transcript, once a call; a call the company
-has none of put right to the tab alone, the row's date counting the transcript shown, and the
-page back at its top as the call changes (the Investor relations tab's design, 7.1, 7.4 and
-7.6)."""
+has none of put right to the tab alone, the row's date the tab's read's on the Earnings calls
+view whatever the transcript shown, and the page back at its top as the call changes (the
+Investor relations tab's design, 7.1, 7.4 and 7.6)."""
 
 import json
 import subprocess
@@ -741,7 +741,7 @@ def _ir(mark: str, word: str | None, price: float = 182.4) -> dict[str, Any]:
 
 IR_OPENED = OPENED | {"tab": "Investor relations"}
 ON_CALLS = "data 14 Nov 2026"  # the read's data date, the Earnings calls view's
-ON_FILINGS = "data 2 Nov 2026"  # the filing list's day, the Filings view's
+ON_FILINGS = "data 2 Nov 2026"  # the Filings view's: the list's day, older than the read's
 # The Earnings calls view's read of a call's transcript, with the request header: LFOX's newest
 # call, Q3 2026, and its others.
 CALL = INVESTOR + "/call?year={}&quarter={}"
@@ -838,10 +838,12 @@ def test_a_call_the_company_has_none_of_is_put_right_with_no_read_of_the_tab() -
     assert linked["page"] == IR_OPENED | {"drawn": _ir("ir 1", None)}
 
 
-def test_the_row_s_date_counts_the_transcript_shown() -> None:
-    """The Earnings calls view's data date (7.6) is the read's while its call's read is out,
-    then the older of it and the transcript's day once it lands with words: the page draws
-    again as it lands and the row's date moves."""
+def test_the_row_s_date_on_earnings_calls_is_the_read_s_alone() -> None:
+    """The Earnings calls view's data date (7.6) is the read's, before and after its call's read
+    lands with a transcript first stored a month earlier (the whole-branch review's ruling: a
+    call's words do not age, and the reader carries the call's own date); the page draws again
+    as it lands, and the row's date stays. The Filings view's is the older of the read's and the
+    filing list's day."""
     trace = _drive(
         [
             _hash(),
@@ -854,9 +856,9 @@ def test_the_row_s_date_counts_the_transcript_shown() -> None:
     )
     landed, read, filings, calls = trace[2:]
     assert landed["asOf"] == ON_CALLS
-    assert read["asOf"] == "data 16 Oct 2026" and read["page"]["faded"] is False
+    assert read["asOf"] == ON_CALLS and read["page"]["faded"] is False
     assert filings["asOf"] == ON_FILINGS
-    assert calls["asOf"] == "data 16 Oct 2026" and calls["fetched"] == []
+    assert calls["asOf"] == ON_CALLS and calls["fetched"] == []
 
 
 def test_a_change_of_call_takes_the_page_to_its_top() -> None:
@@ -946,9 +948,11 @@ def test_the_switch_replaces_the_hash_and_reads_nothing() -> None:
     assert calls["fetched"] == _get(CALL_Q3) and calls["inFlight"] == [CALL_Q3]
 
 
-def test_the_filings_view_without_a_filing_list_has_no_data_date() -> None:
-    """A company with no filing list on file: the Filings view's data date is none, the row
-    shows no date; the Earnings calls view's is the read's."""
+def test_the_filings_view_without_a_filing_list_has_the_read_s_data_date() -> None:
+    """A company with no filing list on file: the Filings view's data date is the read's, which
+    counts the head's quote and the earnings rows behind the line of the next earnings report
+    drawn there (the whole-branch review's ruling on 7.6); the Earnings calls view's is the
+    read's too."""
     trace = _drive(
         [
             _hash("filings"),
@@ -957,7 +961,7 @@ def test_the_filings_view_without_a_filing_list_has_no_data_date() -> None:
             _switch("Earnings calls"),
         ]
     )
-    assert (trace[2]["view"], trace[2]["asOf"]) == ("Filings", None)
+    assert (trace[2]["view"], trace[2]["asOf"]) == ("Filings", ON_CALLS)
     assert (trace[3]["view"], trace[3]["asOf"]) == ("Earnings calls", ON_CALLS)
     assert trace[3]["fetched"] == _get(CALL_Q3)
 

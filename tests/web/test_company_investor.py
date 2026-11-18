@@ -13,8 +13,8 @@ the filings the filter keeps, each row its day, its form, the form's plain words
 to the SEC's site, in a box of its own that scrolls sideways; under it the line of the windows
 read and Show older filings, which reads one year more through the filings read with the
 request header and adds its rows under the table's, the windows kept by company for the page's
-life. The data date of the tabs' row is the view's: on Earnings calls the older of the read's and
-the transcript's shown, on Filings the oldest day of the filing lists read.
+life. The data date of the tabs' row is the view's: on Earnings calls the read's alone, on
+Filings the oldest of the read's and the days of the filing lists read.
 
 company.js and company_investor.js run in node after the bundle and app.js (``support.page``),
 and the tests read the trees their builders return; ``investor.mjs`` drives the view's state, its
@@ -40,6 +40,7 @@ from support.page import BUNDLE, NODE, STATIC, classed, elements, node, text
 from support.web import _static_file
 
 from fairband.vendors import page_investor
+from fairband.web.filings_api import OWNERSHIP_FORMS
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
@@ -671,6 +672,11 @@ def test_a_call_with_no_words_on_file_draws_its_sentence() -> None:
     [
         (503, {"detail": "no FMP key"}, "no FMP key"),
         (502, {"detail": "FMP answered 500"}, "FMP answered 500"),
+        (
+            502,
+            {"detail": "FMP answered no transcript for LFOX"},
+            "FMP answered no transcript for LFOX",
+        ),
         (503, None, "the server answered 503"),
     ],
 )
@@ -888,26 +894,31 @@ def test_an_address_the_tab_reads_is_kept(word: str | None) -> None:
 
 
 @pytest.mark.parametrize(
-    ("observed", "status", "body", "day"),
+    ("observed", "status", "body"),
     [
-        ("2026-10-16", 200, None, "2026-10-16"),
-        ("2026-11-17", 200, None, "2026-11-14"),
-        ("2026-10-16", 200, {"turns": [], "questionsAt": None}, "2026-11-14"),
-        ("2026-10-16", 503, {"detail": "no FMP key"}, "2026-11-14"),
+        ("2026-10-16", 200, None),
+        ("2026-11-17", 200, None),
+        ("2026-10-16", 200, {"turns": [], "questionsAt": None}),
+        ("2026-10-16", 503, {"detail": "no FMP key"}),
     ],
 )
-def test_the_data_date_counts_the_transcript_shown(
-    observed: str, status: int, body: Any, day: str
+def test_the_calls_view_s_data_date_is_the_read_s_alone(
+    observed: str, status: int, body: Any
 ) -> None:
-    """On the Earnings calls view the data date (7.6) is the older of the read's and the day of
-    the transcript shown, once it lands with words; while its read is out, where it failed or
-    has no words, the read's. The page draws again as it lands, so the row's date moves."""
+    """The whole-branch review's ruling on 7.6: on the Earnings calls view the data date is the
+    read's ``dataDate`` alone, the head's quote, the list of calls and the earnings rows. The
+    transcript shown does not count, older or newer, with words or without, or failed: a call's
+    words do not age, and the reader carries the call's own date. The page still draws again as
+    it lands, and the date stays."""
     landed_body = _transcript(observedDay=observed) | (body or {}) if status == 200 else body
     trace = _drive([_shown(), _answer(Q3, landed_body, status), _shown(None, "filings")])
     opened, landed, filings = trace
     assert opened["asOf"] == "2026-11-14"
-    assert landed["asOf"] == day and landed["redrawn"] == 1
+    assert landed["asOf"] == "2026-11-14" and landed["redrawn"] == 1
     assert filings["asOf"] == answers.FILINGS_DAY
+
+
+OLDER_DATA = "2026-10-30"  # a data date older than LFOX's filing list's day
 
 
 @pytest.mark.parametrize(
@@ -916,19 +927,22 @@ def test_the_data_date_counts_the_transcript_shown(
         (answers.INVESTOR, None, "2026-11-14"),
         (answers.INVESTOR, "2026Q3", "2026-11-14"),
         (answers.INVESTOR, "filings", answers.FILINGS_DAY),
-        (answers.INVESTOR | {"filings": None}, "filings", None),
+        (answers.INVESTOR | {"dataDate": OLDER_DATA}, "filings", OLDER_DATA),
+        (answers.INVESTOR | {"filings": None}, "filings", "2026-11-14"),
         (answers.INVESTOR | {"dataDate": None}, None, None),
+        (answers.INVESTOR | {"dataDate": None}, "filings", answers.FILINGS_DAY),
         (answers.profile_only_investor(), None, None),
         (answers.profile_only_investor(), "filings", None),
     ],
 )
 def test_the_data_date_is_the_view_s(answer: dict[str, Any], word: str | None, day: str) -> None:
     """The data date at the row's right end (7.6), the oldest day among the stored answers the
-    view draws: on Earnings calls, before the call's transcript is in, the read's ``dataDate``,
-    its list of calls, its earnings rows and the head's quote; on Filings the day of the filing
-    list, none without one. The page asks the tab's script for it (``companyPage.dataDate``), on
-    the answer and the address's word. The transcript's day joins it as it lands
-    (test_the_data_date_counts_the_transcript_shown)."""
+    view draws: on Earnings calls the read's ``dataDate``, its list of calls, its earnings rows
+    and the head's quote; on Filings the oldest of that ``dataDate``, which counts the head's
+    quote and the earnings rows behind the line of the next earnings report drawn there, and the
+    filing list's day: the list's where the ``dataDate`` is newer, the ``dataDate`` where it is
+    older, and the ``dataDate`` alone without a list. The page asks the tab's script for it
+    (``companyPage.dataDate``), on the answer and the address's word."""
     assert node(f"companyPage.dataDate.{TAB}", [answer, word], *SCRIPTS) == day
     assert node("investor.dataDate", [answer, word], *SCRIPTS) == day
 
@@ -999,6 +1013,13 @@ def test_the_forms_words_are_the_mockup_s() -> None:
     """The table of the forms' plain words is the mockup's ``FORMS``, as written there, no form
     added or left out."""
     assert node("investor.FORMS", [], *SCRIPTS) == FORMS
+
+
+def test_the_insider_forms_are_the_agents_filing_list_s() -> None:
+    """The whole-branch review's M-4: the page's insider forms, kept by Insider forms and left out
+    by the first filter, are the set the agents' filing list leaves out by default
+    (``filings_api.OWNERSHIP_FORMS``, spec 7.5), in its order, so a change to one fails here."""
+    assert node("investor.INSIDER", [], *SCRIPTS) == list(OWNERSHIP_FORMS)
 
 
 @pytest.mark.parametrize(
@@ -1213,8 +1234,8 @@ def test_a_row_s_links_open_the_sec_s_site_in_a_new_tab() -> None:
 
 @pytest.mark.parametrize("truncated", [True, False])
 def test_the_cut_line_only_where_a_window_is_cut(truncated: bool) -> None:
-    """The line adds "The vendor's list is cut at 1,000 filings a window." where the window read
-    holds the vendor's limit of rows, and only there."""
+    """The line adds "The vendor's list is cut at 1,000 filings a window." where the oldest
+    window read, here the only one, holds the vendor's limit of rows, and only there."""
     answer = answers.investor()
     answer["filings"]["truncated"] = truncated
     line = _window_line(_draw(answer, "filings"))
@@ -1395,7 +1416,8 @@ def test_show_older_filings_reads_the_year_before_and_adds_its_rows() -> None:
 def test_after_a_cut_window_the_next_ends_on_the_oldest_row_s_day() -> None:
     """Where the oldest window read is cut at the vendor's limit (7.5), the next window ends on
     the filing day of the oldest row shown, and a row of it already in the table (the same
-    ``files`` link, form and day) is not drawn twice; the line says the list is cut."""
+    ``files`` link, form and day) is not drawn twice; the line says the list is cut while the cut
+    window is the oldest read, and not once a whole window behind it completes the span."""
     rows = answers.investor()["filings"]["rows"][:4]  # its oldest row the 20-F of 28 Apr 2026
     twenty = rows[3]
     url = _older_url("2026-04-28")
@@ -1412,7 +1434,23 @@ def test_after_a_cut_window_the_next_ends_on_the_oldest_row_s_day() -> None:
     assert _window_line(opened["tree"]) == f"Filed from 1 Nov 2025 to 1 Nov 2026. {CUT}"
     assert pressed["fetched"] == _get(url)
     assert _forms(every["tree"]) == ["6-K", "4", "6-K", "20-F", "8-K/A", "20-F/A"]
-    assert _window_line(landed["tree"]) == f"Filed from 28 Apr 2025 to 1 Nov 2026. {CUT}"
+    assert _window_line(landed["tree"]) == "Filed from 28 Apr 2025 to 1 Nov 2026."
+
+
+def test_the_cut_line_where_the_oldest_window_read_is_cut() -> None:
+    """A whole first window, then an older one cut at the vendor's limit (7.5): the line adds
+    that the list is cut, since the oldest window read misses its oldest filings."""
+    url = _older_url("2025-10-31")
+    trace = _drive(
+        [
+            _shown(None, "filings"),
+            _older(),
+            _answer(url, _window("2024-10-31", "2025-10-31", YEAR_BEFORE, truncated=True)),
+        ]
+    )
+    opened, _, landed = trace
+    assert _window_line(opened["tree"]) == "Filed from 1 Nov 2025 to 1 Nov 2026."
+    assert _window_line(landed["tree"]) == f"Filed from 31 Oct 2024 to 1 Nov 2026. {CUT}"
 
 
 @pytest.mark.parametrize(
@@ -1550,7 +1588,8 @@ def test_the_filter_pressed_stays_while_the_view_changes() -> None:
 def test_a_new_first_window_starts_the_older_windows_again() -> None:
     """The windows read stand on the first window they followed: where the tab's read answers a
     newer first window (a refresh's), the view draws it alone, with no gap behind it, and the
-    next press reads the year before it."""
+    next press reads the year before it. Its day, newer than the read's ``dataDate``, leaves the
+    data date at the ``dataDate``."""
     newer = _window("2025-11-18", "2026-11-18", [_filing("8-K", "2026-11-17", 41)])
     newer["observedDay"] = "2026-11-18"
     url = _older_url("2025-10-31")
@@ -1566,26 +1605,32 @@ def test_a_new_first_window_starts_the_older_windows_again() -> None:
     *_, refreshed, pressed = trace
     assert _forms(refreshed["tree"]) == ["8-K"]
     assert _window_line(refreshed["tree"]) == "Filed from 18 Nov 2025 to 18 Nov 2026."
-    assert refreshed["asOf"] == "2026-11-18" and refreshed["fetched"] == []
+    assert refreshed["asOf"] == answers.DATA_DATE and refreshed["fetched"] == []
     assert pressed["fetched"] == _get(_older_url("2025-11-17"))
 
 
 @pytest.mark.parametrize(
-    ("observed", "day"), [("2026-10-20", "2026-10-20"), ("2026-11-17", "2026-11-02")]
+    ("observed", "data", "day"),
+    [
+        ("2026-10-20", answers.DATA_DATE, "2026-10-20"),
+        ("2026-11-17", answers.DATA_DATE, answers.FILINGS_DAY),
+        ("2026-11-17", OLDER_DATA, OLDER_DATA),
+    ],
 )
-def test_the_filings_data_date_is_the_oldest_list_read(observed: str, day: str) -> None:
-    """On the Filings view the data date (7.6) is the oldest day among the filing lists read, the
-    first read's and every older window's; the page draws again as a window lands, so the row's
-    date moves."""
+def test_the_filings_data_date_is_the_oldest_list_read(observed: str, data: str, day: str) -> None:
+    """On the Filings view the data date (7.6) is the oldest day among the read's ``dataDate``
+    and the filing lists read, the first read's and every older window's; the page draws again
+    as a window lands, so the row's date moves. Where the ``dataDate`` is older than every list,
+    it is the date."""
     url = _older_url("2025-10-31")
     trace = _drive(
         [
-            _shown(None, "filings"),
+            _shown(answers.investor() | {"dataDate": data}, "filings"),
             _older(),
             _answer(url, _window("2024-10-31", "2025-10-31", YEAR_BEFORE, observedDay=observed)),
         ]
     )
-    assert trace[0]["asOf"] == answers.FILINGS_DAY
+    assert trace[0]["asOf"] == min(data, answers.FILINGS_DAY)
     assert trace[-1]["asOf"] == day and trace[-1]["redrawn"] == 1
 
 
@@ -1809,22 +1854,74 @@ def test_the_filings_view_s_rules() -> None:
 def test_print_shows_the_open_view_alone() -> None:
     """Print (7.8) shows the open view alone, with not the tab's top row, its switch and the line
     of the next earnings report, on either view. On Earnings calls the call shown: its title, its
-    figures and its whole transcript, not the list of calls or the tools (the buttons with every
-    button of the page), the reader across the page and never faded. On Filings the table as
-    filtered, whole, under its line: not the filters, never faded, its box not clipping it, a row
-    whole on a page."""
-    css = _rules(_media(_static_file("index.html"), "print"), "    ")
+    figures and its whole transcript at its reading width, as on screen, not the list of calls or
+    the tools (the buttons with every button of the page), the reader never faded. On Filings the
+    table as filtered, whole, under its line: over it the pressed filter alone, as plain text with
+    its count, by the attribute the drawn filter carries (``aria-pressed``), so the paper says
+    which filings it holds; never faded, its box not clipping it, a row whole on a page."""
+    block = _media(_static_file("index.html"), "print")
+    css = _rules(block, "    ")
     assert "display: none !important;" in css[".app-ir__bar"]
     assert "display: none !important;" in css[".app-ir__list, .app-ir__tools"]
     assert "display: block;" in css[".app-ir__calls"]
     assert "opacity: 1;" in css['.app-ir__reader[aria-busy="true"]']
     assert "break-inside: avoid;" in css[".app-ir__words"]
-    assert "display: none !important;" in css[".app-ir__filters"]
+    assert ".app-ir__filters" not in css  # the row stays, for the filter pressed
+    assert css['.app-ir__filter:not([aria-pressed="true"])'] == "display: none !important;"
+    plain = css['.app-ir__filter[aria-pressed="true"]']
+    for declaration in ("padding: 0;", "background: none;", "border: 0;", "border-radius: 0;"):
+        assert declaration in plain, declaration
     assert "opacity: 1;" in css['.app-ir__filings[aria-busy="true"]']
     assert "overflow: visible;" in css[".app-ir__scroll"]
     assert "break-inside: avoid;" in css[".app-ir__table tr"]
     assert not [s for s in css if "app-fin__seg" in s]  # the switch goes with the row
+    assert not [s for s in css if "app-ir__turns" in s]  # the reading width holds on paper
+    tab = block[block.index("/* The Investor relations tab") :]
+    comment = " ".join(tab[: tab.index("*/")].split())
+    assert "across the page" not in comment and "reading width" in comment
     _painted(css)
+    pressed = [
+        b
+        for b in classed(_draw(answers.investor(), "filings"), "app-ir__filter")
+        if b["props"]["aria-pressed"] == "true"
+    ]
+    assert [text(b) for b in pressed] == ["Without insider forms 4"]
+
+
+# The Research tab's print rule for the company's head and row, which leaves out its caption too.
+RESEARCH_HEAD = (
+    ".app-company:has(.app-research) :is(.app-company__quote, .app-company__actions,"
+    " .app-company__tabs) { display: none !important; }"
+)
+# This tab's: the tab list, the head's price and its actions, the row's caption kept.
+INVESTOR_HEAD = (
+    ".app-company:has(.app-ir) :is(.app-company__quote, .app-company__actions,"
+    " .app-company__tablist) { display: none !important; }"
+)
+
+
+def test_print_leaves_out_the_tab_list_the_price_and_the_actions() -> None:
+    """The whole-branch review's ruling on 7.8: printed where this tab is drawn, the company's tab
+    list, the head's price and its actions are left out, and the row's caption, the data date,
+    prints: a printed call or filing list has no other date of its data. The Research tab's rule,
+    which leaves out its whole row, the caption with it, is as it was, and no other tab's print
+    rule names the company's head or row."""
+    block = _media(_static_file("index.html"), "print")
+    code = " ".join(re.sub(r"/\*.*?\*/", "", block, flags=re.DOTALL).split())
+    assert INVESTOR_HEAD in code and RESEARCH_HEAD in code
+    rules = re.findall(r"([^{}]*)\{([^}]*)\}", code)
+    heads = [f"{s.strip()} {{ {b.strip()} }}" for s, b in rules if "app-company__" in s]
+    assert heads == [RESEARCH_HEAD, INVESTOR_HEAD]
+    assert "app-company__asof" not in code
+    # the names the rules key on are those the page draws its row and its head with
+    script = _static_file("company.js")
+    for drawn in (
+        "className: 'app-company__tablist'",
+        "className: 'caption app-company__asof'",
+        "className: 'app-company__quote'",
+        "className: 'app-company__actions'",
+    ):
+        assert drawn in script, drawn
 
 
 def test_the_script_loads_after_the_estimates_tab_s() -> None:
