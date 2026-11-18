@@ -218,9 +218,13 @@ Each section is a panel on `surface-raised` with its heading. Inside:
 - **A wide table** (more than four columns, or a cell above 44 characters) across the panel.
   It takes the panel's whole width where a cell is above 44 characters, else its own.
 - **Cards** at the right of the first run of text, in a column that stays in view while the
-  panel scrolls. Below 980 px the cards stand under that text. A card with nothing to list, the
-  kill criteria, the news or the judgments of a report that has none, is left out (the build's
-  ruling, decision log).
+  panel scrolls. The cards' column is never under 300 px, and the text keeps at least 28rem and
+  at most the reading width. Where the panel holds the reading text and a cards column of 300 px
+  side by side, they stand side by side, the text narrower than the reading width where it must
+  be, never under 28rem; where it cannot, the cards stand under that text across the panel. The
+  panel's own width decides, not the window's (the look at a 1,200 px window, decision log). A
+  card with nothing to list, the kill criteria, the news or the judgments of a report that has
+  none, is left out (the build's ruling, decision log).
 
 A **named block** is a list or a table directly under a line of 90 characters or fewer that
 ends in a colon. The line is its name.
@@ -398,7 +402,9 @@ decision log). The footnote marks print whatever Footnote marks says: on paper n
 cite's source, so with the switch off, the default, the marks still print and each number in
 the text points to its reference (the whole-branch review's ruling, decision log).
 
-The tab takes the company page's width. Below 980 px it is one column.
+The tab takes the company page's width. Below 980 px it is one column, the section list above
+the report (7.3). A section's cards stand beside its text or under it by the panel's own width,
+at every window's width (7.4).
 
 ## 8. The data
 
@@ -831,5 +837,20 @@ The readout goes in the decision log: the heights of the seven, and what the eye
      it, found the price against the band's seven quarter ticks run into each other at a
      1,440 px window, its column about 372 px wide (NVDA, AAPL, PLTR and ASML), so the one
      patch became the axis's tick count by width, `ticksHeld`, which the band chart takes at
-     64 px a tick and the ROIC chart at 56 px, as the bar chart does, in `b91c64e`; B-218's
-     range runs to it.
+     64 px a tick and the ROIC chart at 56 px, as the bar chart does, in `b91c64e`.
+  5. The fourth look, after `b91c64e`, found no tick overlapping at 1,440 px and 2,000 px, and
+     two faults at a 1,200 px window, both ruled on by the controller, since this design gave
+     one breakpoint, 980 px, and the first tick rule's 56 px was the controller's number. The
+     cards column was a sliver between about 980 px and 1,350 px: the split gave the text the
+     reading width and the cards what was left, so at 1,200 px a panel 932 px wide left the
+     cards about 164 px and Price and multiples' three charts 132 px each, every section's cards
+     squeezed alike. The text and the cards now stand in a row that wraps, the text at least
+     28rem and at most the reading width, the cards at least 300 px, side by side where the
+     panel holds both and the cards under the text across the panel where it cannot, the
+     panel's width deciding, not the window's (7.4, 7.11). And a pair's chart alone in its row,
+     about 418 px wide, held six ticks at 56 px a tick, so all six printed and "to date",
+     anchored at its end, ran into the year before it (PLTR and ASML: Operating margin, Free
+     cash flow, Stock compensation to revenue, Buybacks and dividends): the bar chart now takes
+     70 px a tick, the room those two labels need, so at 418 px it prints four at most and none
+     in the slot before "to date", and at the report page's 550 px all six still; the ROIC
+     chart keeps 56 px and the band chart 64 px. Both in `c9ec720`; B-218's range runs to it.
