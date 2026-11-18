@@ -340,6 +340,25 @@ def test_transcript_dates_is_one_call(env: Env) -> None:
     assert env.router.calls == {"transcript-dates": 2}
 
 
+def test_a_list_of_calls_that_is_not_a_list_is_stored_unusable(env: Env) -> None:
+    """Spec 2026-11-18 8.1: FMP answers some failures with HTTP 200 and ``{"Error Message":
+    ...}``. A list of calls that is not a list is stored with its error, answered as fetched, and
+    fetched again by the next request, as the segments' is, so neither the pass-through nor the
+    refresh, which stores the list under the same key, reuses it. A list is usable, the empty
+    list of a company with no call on file among them, and reused."""
+    env.router.bodies["transcript-dates"] = b'{"Error Message": "x"}'
+    passthrough = _passthrough(env)
+    first = passthrough.fetch("transcript-dates", "ACME", {})["transcript-dates"]
+    assert (first.reused, first.payload) == (False, {"Error Message": "x"})
+    assert first.row.error == 'unusable payload: {"Error Message": "x"}'
+    assert passthrough.fetch("transcript-dates", "ACME", {})["transcript-dates"].reused is False
+    env.router.bodies["transcript-dates"] = b"[]"
+    empty = passthrough.fetch("transcript-dates", "ACME", {})["transcript-dates"]
+    assert (empty.reused, empty.payload, empty.row.error) == (False, [], None)
+    assert passthrough.fetch("transcript-dates", "ACME", {})["transcript-dates"].reused is True
+    assert env.router.calls == {"transcript-dates": 3}
+
+
 def test_segments_fetch_two_endpoints(env: Env) -> None:
     passthrough = _passthrough(env)
     parts = passthrough.fetch("segments", "ACME", {})
@@ -589,7 +608,8 @@ def test_a_bad_request_is_a_value_error_before_any_call(
 
 def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     """The worker's client and the pass-through's take their slots from one ``RateLimiter``:
-    ``totals()`` counts both, and the pass-through's call waits behind the worker's."""
+    ``totals()`` counts both, and the pass-through's call waits behind the worker's. The fetch
+    stores ACME's newest call's transcript, fiscal 2026 Q3, so the pass-through asks Q2."""
     sleeps: list[float] = []
     pace = env.policy.refresh.fmp_calls_per_minute
     limiter = RateLimiter(pace, env.clock, sleeps.append)
@@ -604,15 +624,17 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
                 conn, worker_fmp, None, "ACME", env.policy, env.clock(), secrets
             )
         passthrough = Passthrough(passthrough_fmp, env.connect, env.policy, env.clock, secrets)
-        fetched = passthrough.fetch("transcript", "ACME", Q3)["transcript"]
+        q2 = {"year": "2026", "quarter": "2"}
+        fetched = passthrough.fetch("transcript", "ACME", q2)["transcript"]
     finally:
         worker_fmp.close()
         passthrough_fmp.close()
-    assert fetched.reused is False and outcome.calls == 29
-    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 29.
+    # The worker's 31 FMP calls and the newest call's transcript; no GuruFocus client.
+    assert fetched.reused is False and outcome.calls == 32
+    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 32.
     interval = limiter.interval.total_seconds()  # 60 / pace, to the microsecond
-    assert limiter.totals() == PaceTotals(30, pytest.approx(435 * interval), 0)
-    assert sleeps[-1] == pytest.approx(29 * interval)
+    assert limiter.totals() == PaceTotals(33, pytest.approx(528 * interval), 0)
+    assert sleeps[-1] == pytest.approx(32 * interval)
 
 
 class Held:

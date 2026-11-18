@@ -9,6 +9,7 @@ from fairband.store.vendor import (
     record_response,
     response_payload,
     responses_with_payload,
+    usable_responses,
 )
 
 T0 = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
@@ -109,6 +110,27 @@ def test_responses_with_payload(conn: sqlite3.Connection) -> None:
         error=None,
     )
     assert list(responses_with_payload(conn, [])) == []
+
+
+def test_usable_responses(conn: sqlite3.Connection) -> None:
+    """Every usable response of a provider, an endpoint and a symbol, whatever its params, newest
+    first by when it was observed, then by id: HTTP 200 and no error, as ``latest_response``
+    reads them."""
+    oldest = _ok(conn, T0)
+    later = T0 + timedelta(hours=1)
+    unusable = "unusable payload: []"
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", 200, "[]", unusable, later)
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", 500, "oops", None, later)
+    record_response(conn, "fmp", "income-statement", ANNUAL, "AAPL", None, None, "timeout", later)
+    record_response(conn, "fmp", "income-statement", ANNUAL, "MSFT", 200, "[]", None, later)
+    record_response(conn, "fmp", "balance", ANNUAL, "AAPL", 200, "[]", None, later)
+    record_response(conn, "gf", "income-statement", ANNUAL, "AAPL", 200, "[]", None, later)
+    newest = _ok(conn, later, {**ANNUAL, "limit": "5"})
+    tie = _ok(conn, later)  # observed with the newest, recorded after it
+    found = usable_responses(conn, "fmp", "income-statement", "AAPL")
+    assert [row.id for row in found] == [tie, newest, oldest]
+    assert found[1].params == {**ANNUAL, "limit": "5"}
+    assert usable_responses(conn, "fmp", "income-statement", "NVDA") == []
 
 
 def test_observed_at_is_stored_in_utc(conn: sqlite3.Connection) -> None:

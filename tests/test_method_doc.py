@@ -10,6 +10,7 @@ from fairband.engine.mature_growth import _fade
 from fairband.engine.overrides import OverrideTag, anchor_misfit
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
+from fairband.refresh.fetch import FILINGS_WINDOW_DAYS, PAGE_ENDPOINTS
 from fairband.reports.check import FAILURES
 from fairband.store.guidance import METRICS
 from fairband.web.reviews_api import DEPENDS_ON_A_FIGURE, FIXED_NUMBERS, NEEDS_A_FIGURE, REDERIVE
@@ -23,6 +24,43 @@ def _section(number: int) -> str:
     start = text.index(f"\n## {number}. ")
     end = text.find("\n## ", start + 1)
     return text[start:] if end == -1 else text[start:end]
+
+
+def test_section_10_counts_the_page_s_answers_and_names_the_newest_call_s_transcript() -> None:
+    """Spec 2026-11-18 10: the full refresh's sentence counts the FMP answers only the company
+    page shows (``fetch.PAGE_ENDPOINTS``), names the Investor relations tab's two and says the
+    newest call's transcript is fetched where the store holds none of it with words. 16.8 says
+    the refresh stores the filing list of its window under the agents' key."""
+    full = next(x for x in _section(10).splitlines() if x.startswith("- **Full refresh**"))
+    assert len(PAGE_ENDPOINTS) == 16 and FILINGS_WINDOW_DAYS == 365
+    for words in (
+        (
+            "a full or scoped refresh fetches for each company sixteen FMP answers that only the"
+            " company page shows and the method does not read (`fetch.PAGE_ENDPOINTS`, spec"
+            " 2026-11-16 company page, 10.1, spec 2026-11-17 financials tab, 8.1, and spec"
+            " 2026-11-18 investor relations tab, 8.1), among them its list of earnings calls"
+            " (`transcript-dates`) and its filings of the 365 days to the refresh's day"
+            " (`sec-filings`), each stored under the key of the agents' pass-through for the same"
+            " call"
+        ),
+        (
+            "then the transcript of the newest call on the stored list where the store holds no"
+            " copy of it with words: a copy with words is not fetched again, by a scoped refresh"
+            " either, and a call with none yet is asked again at every refresh, inside the reuse"
+            " window too."
+        ),
+        "None is required, and none gives a fact or an observation.",
+    ):
+        assert words in full, words
+    assert "fourteen FMP answers" not in full
+    filings = _section(16)[_section(16).index("### 16.8") : _section(16).index("### 16.9")]
+    assert "The refresh fetches none of the three; only a request does." not in filings
+    assert (
+        "Of the three, a refresh fetches the filing list alone, each company's of the 365 days to"
+        " the refresh's day, stored under the same key (section 10), so a request for that"
+        " window, the default on the day of the refresh, reuses it; only a request fetches"
+        " another window or a report."
+    ) in filings
 
 
 def test_section_14_names_every_override_tag() -> None:

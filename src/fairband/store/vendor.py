@@ -5,8 +5,8 @@ JSON (sorted keys), so a lookup matches the same parameters in any order. ``Resp
 out the payload, which can be large; ``response_payload`` reads it by id.
 
 A usable response is an HTTP 200 stored without an error; ``latest_response`` returns the newest
-one to a call, and ``responses_with_payload`` lists every one to some endpoints that holds a
-payload.
+one to a call, ``usable_responses`` lists every one of a company to an endpoint, newest first,
+and ``responses_with_payload`` lists every one to some endpoints that holds a payload.
 """
 
 import json
@@ -83,6 +83,22 @@ def latest_response(
         (provider, endpoint, symbol, _canonical(params)),
     ).fetchone()
     return None if row is None else _response_row(row)
+
+
+def usable_responses(
+    conn: sqlite3.Connection, provider: str, endpoint: str, symbol: str
+) -> list[ResponseRow]:
+    """Every usable response of ``provider`` to ``endpoint`` for ``symbol``, whatever its params,
+    newest first: HTTP 200 stored without an error, ordered as ``latest_response`` orders them."""
+    rows = conn.execute(
+        "SELECT id, provider, endpoint, params, symbol, http_status, observed_at, error"
+        " FROM vendor_responses"
+        " WHERE provider = ? AND endpoint = ? AND symbol = ?"
+        " AND http_status = 200 AND error IS NULL"
+        " ORDER BY observed_at DESC, id DESC",
+        (provider, endpoint, symbol),
+    )
+    return [_response_row(row) for row in rows]
 
 
 def responses_with_payload(

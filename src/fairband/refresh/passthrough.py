@@ -5,7 +5,10 @@ of one as ``response:<id>/<json pointer>``.
 The kinds and the endpoints they are stored under, provider ``fmp`` but the last:
 
 - ``transcript``: ``transcript``, the earnings call of the fiscal ``year`` and ``quarter`` (1 to 4),
-  both required;
+  both required; the refresh stores each company's newest call's transcript under the same key
+  where the store holds no copy of it with words (``fetch.TRANSCRIPT``, spec 2026-11-18 8.1), so
+  a call reuses the refresh's copy inside its window, and the refresh asks no call the store holds
+  words for, whoever stored them;
 - ``news``: ``news``, the newest ``limit`` stories, 1 to ``NEWS_LIMIT_MAX`` (``NEWS_LIMIT`` when
   left out); the refresh stores each company's news under the same key at 60
   (``fetch.NEWS_STORIES``, ``fetch.page_params``), so a call at 60 and the refresh reuse each
@@ -19,6 +22,8 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
   here and cuts the route's answer, never the call or the stored page;
 - ``transcript-dates``: ``transcript-dates``, the fiscal year, the quarter and the date of every
   earnings call on file, newest first, so the agent asks ``transcript`` for a call that exists;
+  the refresh stores each company's under the same key, the symbol alone (``fetch.page_params``,
+  spec 2026-11-18 8.1), so a call and the refresh reuse each other's copy;
 - ``dcf``: two calls, ``dcf`` and ``dcf-levered``, FMP's discounted cash flow value and its levered
   one, answered as the parts ``dcf`` and ``levered``: a cross-check a report may cite, never a
   value Fairband computes;
@@ -36,7 +41,9 @@ payload: ``KINDS`` stays that route's list, and ``unknown_kind`` names it alone.
 
 - ``filings``: ``sec-filings``, every filing from ``from`` to ``to``, ISO dates, both required and
   ``from`` on or before ``to`` (else ``BAD_WINDOW``), a page of ``FILINGS_LIMIT`` rows, which the
-  reuse key holds;
+  reuse key holds; the refresh stores each company's of the 365 days to its day under the same key
+  (``fetch.page_params``, ``fetch.filings_window``, spec 2026-11-18 8.1), so a call for that
+  window, the filing list's default on that day, and the refresh reuse each other's copy;
 - ``filing-reports``: ``filing-report-dates``, the fiscal year and the period of every filing
   report on file, newest first;
 - ``filing-report``: ``filing-report``, the 10-Q or the 10-K of the fiscal ``year`` and ``period``
@@ -45,12 +52,12 @@ payload: ``KINDS`` stays that route's list, and ``unknown_kind`` names it alone.
   filed, and a ``filing:`` ref names its stored copy by the response id, so a second copy would
   only split the cites of one filing over two ids. Nothing is deleted.
 
-A ``news``, a ``segments`` part, a ``filings`` or a ``filing-reports`` payload is usable when it
-is a list, a ``filing-report`` one when ``filing_report_usable``: FMP answers a period it does not
-hold, an unknown symbol, or some failures with HTTP 200 and ``{"Error Message": ...}``. An
-unusable one is stored with the error ``unusable payload: ...``, answered as fetched, never
-reused, as ``pe-history``'s is; so neither the pass-through nor the refresh reuses a ``news`` or a
-``segments`` error body.
+A ``news``, a ``segments`` part, a ``transcript-dates``, a ``filings`` or a ``filing-reports``
+payload is usable when it is a list, a ``filing-report`` one when ``filing_report_usable``: FMP
+answers a period it does not hold, an unknown symbol, or some failures with HTTP 200 and
+``{"Error Message": ...}``. An unusable one is stored with the error ``unusable payload: ...``,
+answered as fetched, never reused, as ``pe-history``'s is; so neither the pass-through nor the
+refresh reuses a ``news``, a ``segments``, a ``transcript-dates`` or a ``filings`` error body.
 
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (provider,
 endpoint, symbol and the call's logical params, ``symbol`` among them) stored without an error is
@@ -295,7 +302,8 @@ class Passthrough:
                 return [_Call(kind, "insider-trades", logical, send)]
             case "transcript-dates":
                 send = partial(fmp.transcript_dates, symbol)
-                return [_Call(kind, "transcript-dates", {"symbol": symbol}, send)]
+                logical = {"symbol": symbol}
+                return [_Call(kind, "transcript-dates", logical, send, usable=_is_list)]
             case "dcf":
                 return [
                     _Call("dcf", "dcf", {"symbol": symbol}, partial(fmp.dcf, symbol)),
@@ -367,8 +375,8 @@ def filing_report_usable(payload: Any) -> bool:
 
 
 def _is_list(payload: Any) -> bool:
-    """Whether a ``news``, a ``segments`` part, a ``filings`` or a ``filing-reports`` payload
-    reads: a list."""
+    """Whether a ``news``, a ``segments`` part, a ``transcript-dates``, a ``filings`` or a
+    ``filing-reports`` payload reads: a list."""
     return isinstance(payload, list)
 
 
