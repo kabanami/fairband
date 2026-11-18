@@ -156,7 +156,9 @@
       })
       .catch(function (err) {
         if (request !== latest) return;
-        var at = state.reading;
+        /* the read out, or, where the landing cleared it and then threw (a tab's function, the
+           following of the item, newer news), the address it was asked for */
+        var at = state.reading || want;
         state.whole = false;
         state.reading = null;
         if (state.symbol !== want.symbol && !mount.hidden) P.notesShown(want.symbol);

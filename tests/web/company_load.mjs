@@ -9,7 +9,8 @@
 // each draws { tab, mark, price }, the mark of the tab's answer it was handed and the price of the
 // detail; the Investor relations tab's adds { id }, the address's word the page handed it (the
 // Investor relations tab's design, 7.1), and draws the tab's own frame under it
-// (company_investor.js), so a step can press its switch.
+// (company_investor.js), so a step can press its switch. An answer that carries `throws` makes
+// the tab's function throw an error of that message, as a fault in a tab's script would.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "symbol", "tab", "id"?}  a link or a tab's button opens the company page there,
@@ -126,6 +127,7 @@ const IR = 'investor-relations';
 const frame = P.companyPage.draw[IR];
 for (const tab of ['overview', 'financials', 'estimates', IR, 'research']) {
   P.companyPage.draw[tab] = (answer, detail, id) => {
+    if (answer.throws) throw new Error(answer.throws);
     const props = { tab, mark: answer.mark, price: detail.result.price };
     if (tab !== IR) return { type: 'drawn', props };
     return { type: 'drawn', props: { ...props, id, children: [frame(answer, detail, id)] } };

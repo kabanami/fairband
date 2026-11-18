@@ -512,6 +512,64 @@ def test_a_failed_read_of_a_tab_draws_its_sentence_under_the_tabs() -> None:
     }
 
 
+def test_a_tab_whose_function_throws_as_its_read_lands_draws_the_failure_sentence() -> None:
+    """A tab's function that throws as its answer lands, a fault in its script, ends the read as
+    one that failed: the page draws the Words table's sentence with the error's message, no
+    longer faded, and no error escapes the loader. The page keeps the address asked for: opened
+    again, it reads that tab, and the Investor relations tab's word, whole, and draws them."""
+    fault = "the tab's function failed"
+    trace = _drive(
+        OPEN
+        + [
+            _show("LFOX", "estimates"),
+            _answer(ESTIMATES, _tab("estimates 1") | {"throws": fault}),
+            AGAIN,
+            _answer(LFOX, _detail(182.4)),
+            _answer(ESTIMATES, _tab("estimates 2")),
+        ]
+    )
+    failed, again, detail, landed = trace[4:]
+    assert failed["page"] == {
+        "faded": False,
+        "sentence": RETRY.format(fault),
+        "ticker": None,
+        "price": None,
+        "tab": None,
+        "drawn": None,
+    }
+    assert failed["hash"] == "#company/LFOX/estimates" and failed["inFlight"] == []
+    assert again["fetched"] == _get(LFOX)
+    assert detail["fetched"] == _get(ESTIMATES)
+    assert landed["page"] == OPENED | {
+        "tab": "Estimates",
+        "drawn": _drawn("estimates", "estimates 2", 182.4),
+    }
+
+    trace = _drive(
+        OPEN
+        + [
+            {"do": "hash", "hash": "#company/LFOX/investor-relations/filings"},
+            _answer(LFOX + "/page/investor-relations", answers.investor() | {"throws": fault}),
+            AGAIN,
+            _answer(LFOX, _detail(182.4)),
+            _answer(LFOX + "/page/investor-relations", answers.investor() | {"mark": "ir 2"}),
+        ]
+    )
+    failed, again, detail, landed = trace[4:]
+    assert failed["page"]["sentence"] == RETRY.format(fault)
+    assert failed["page"]["faded"] is False
+    assert failed["hash"] == "#company/LFOX/investor-relations/filings"
+    assert again["fetched"] == _get(LFOX)
+    assert detail["fetched"] == _get(LFOX + "/page/investor-relations")
+    assert landed["page"]["drawn"] == {
+        "tab": "investor-relations",
+        "mark": "ir 2",
+        "price": 182.4,
+        "id": "filings",
+    }
+    assert landed["view"] == "Filings"
+
+
 def test_a_read_that_lands_after_the_reader_left_the_view_leaves_the_notes_alone() -> None:
     """The reader turned the page to another company, then left the view before its read landed
     (the browser's Back, to the screen, where the drawer's Notes box may be open on a third
