@@ -877,4 +877,15 @@ never runs after a 429; 8.1).
   asks, and that every older call is read on selection already; and that reading the newest on
   selection too is one step taken out of the refresh, the page unchanged, at the cost of one
   vendor call on a company's first opening. Claude recommended the design as built. The founder
-  gave no ruling on it, so the design stands as built until he does.
+  gave no ruling on it then.
+- **2026-11-18, the founder's ruling on what a refresh stores for the tab.** After the merge and
+  the push, the founder: "add an item to the backlog relating to not downloading the latest
+  earnings call. The problem with downloading for all companies is users are mostly interested
+  in a very small subset of companies, and downloading for all would be a waist." Claude asked
+  whether the item covers the transcript alone or the two lists of 8.1 too, which cost about
+  59 MB at every refresh where the transcripts were read once. The founder: "yes I agree, file
+  for all of them". Filed as B-252: the list of calls, the filing list and the newest call's
+  transcript are to be read when a reader opens the tab and kept, not stored by a refresh for
+  every company. It is an exception to his ruling of 2026-11-16 that a page opens from the store
+  alone, and it overturns approach A of section 6 and 8.1 once it is built. Until then the tab
+  stands as built.
