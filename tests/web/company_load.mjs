@@ -8,9 +8,10 @@
 // answers them. The tabs' functions are the driver's own, so the trace reads what the page holds:
 // each draws { tab, mark, price }, the mark of the tab's answer it was handed and the price of the
 // detail; the Investor relations tab's adds { id }, the address's word the page handed it (the
-// Investor relations tab's design, 7.1), and draws the tab's own frame under it
-// (company_investor.js), so a step can press its switch. An answer that carries `throws` makes
-// the tab's function throw an error of that message, as a fault in a tab's script would.
+// Investor relations tab's design, 7.1), and draws the tab's own frame and view under it
+// (company_investor.js), so a step can press its switch, and its Earnings calls view reads its
+// call's transcript through the driver's fetch, as the page does. An answer that carries `throws`
+// makes the tab's function throw an error of that message, as a fault in a tab's script would.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "symbol", "tab", "id"?}  a link or a tab's button opens the company page there,

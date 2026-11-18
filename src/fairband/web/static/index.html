@@ -987,6 +987,94 @@
   .app-ir__next { margin: 0 0 0 auto; color: var(--ink-muted); }
   .app-ir__day { color: var(--ink); font-weight: 500; }
   .app-ir__none { margin: var(--space-4) 0 0; color: var(--ink-faint); }
+  /* The Earnings calls view (the Investor relations tab's design, 7.3 and 7.4), as its mockup
+     lays it out: the list of calls 236px wide at the left, staying in view while the transcript
+     scrolls and scrolling on its own where it is longer than the window; its fiscal years' heads
+     in label, ink-faint and upper case; each row on a 2px hairline at its left edge, its quarter
+     and its day in ink-muted, the call shown on surface-selected with a 2px accent edge, as the
+     Research tab marks its section; Show all under the rows. At the right the reader: the title
+     at 18px on a 24px line, its day in ink-muted; the four figures in a row on surface, framed
+     and parted by hairlines, each name in label and ink-faint over its figure in the text's own
+     colour; the find box framed in border, its count in ink-muted and Go to the questions beside
+     it; the transcript at the reading width, 15px on a 23px line, a turn a block over a hairline,
+     the speaker's name in 600, the operator's in ink-faint, a long word wrapping; the questions'
+     first turn under a heavier rule and its label in ink-faint. A found word on the accent's
+     quiet tint, the find being the reader's own act, in the text's own colour. The reader faded
+     while its call's read is out. The tokens' colours alone; nothing moves. */
+  .app-ir__calls {
+    display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: var(--space-6);
+    align-items: start; margin-top: var(--space-4);
+  }
+  .app-ir__list {
+    position: sticky; top: var(--space-3); display: flex; flex-direction: column;
+    max-height: 78vh; overflow-y: auto;
+  }
+  .app-ir__group { display: flex; flex-direction: column; }
+  .app-ir__year {
+    margin: var(--space-3) 0 var(--space-1); color: var(--ink-faint); text-transform: uppercase;
+  }
+  .app-ir__group:first-child .app-ir__year { margin-top: 0; }
+  .app-ir__call {
+    appearance: none; box-sizing: border-box; display: flex; align-items: baseline;
+    justify-content: space-between; gap: var(--space-2); width: 100%; margin: 0;
+    padding: 6px 10px; text-align: left; color: var(--ink-muted); background: none;
+    border: 0; border-left: 2px solid var(--hairline); cursor: pointer;
+  }
+  .app-ir__call:hover { color: var(--ink); background: var(--surface-hover); }
+  .app-ir__call[aria-current="true"] {
+    color: var(--ink); background: var(--surface-selected); border-left-color: var(--accent);
+  }
+  .app-ir__call:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-ir__date { color: var(--ink-muted); }
+  .app-ir__all { align-self: flex-start; margin-top: var(--space-3); }
+  .app-ir__reader { min-width: 0; }
+  .app-ir__reader[aria-busy="true"] { opacity: 0.5; }
+  .app-ir__title { margin: 0; font-size: 18px; line-height: 24px; overflow-wrap: anywhere; }
+  .app-ir__when { margin: 2px 0 0; color: var(--ink-muted); }
+  .app-ir__figures {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: var(--space-3);
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-md);
+  }
+  .app-ir__figure { min-width: 0; padding: 10px 14px; border-right: 1px solid var(--hairline); }
+  .app-ir__figure:last-child { border-right: 0; }
+  .app-ir__name { margin: 0; color: var(--ink-faint); text-transform: uppercase; }
+  .app-ir__amount { margin: 2px 0 0; }
+  .app-ir__tools {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) 14px;
+    margin-top: var(--space-4);
+  }
+  .app-ir__find {
+    flex: 0 1 260px; min-width: 0; margin: 0; padding: 6px 10px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  }
+  .app-ir__find:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .app-ir__count { color: var(--ink-muted); }
+  .app-ir__turns { max-width: 46rem; margin-top: var(--space-2); }
+  .app-ir__turn {
+    padding: 14px 0; border-top: 1px solid var(--hairline); scroll-margin-top: var(--space-3);
+  }
+  .app-ir__turn:first-child { border-top: 0; }
+  .app-ir__turn--questions { margin-top: var(--space-5); border-top: 2px solid var(--hairline); }
+  .app-ir__part { margin: 0 0 var(--space-2); color: var(--ink-faint); text-transform: uppercase; }
+  .app-ir__who { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .app-ir__who--operator { color: var(--ink-faint); font-weight: 500; }
+  .app-ir__words { margin: 6px 0 0; font-size: 15px; line-height: 23px; overflow-wrap: anywhere; }
+  .app-ir__words mark {
+    color: inherit; background: var(--accent-quiet); border-radius: var(--radius-sm);
+  }
+  /* Below 860px (7.8) the list of calls stands over the reader, in a box of its own on a hairline
+     that scrolls, and the four figures stand one under the other, parted by hairlines; nothing is
+     wider than a 400px window. */
+  @media (width < 860px) {
+    .app-ir__calls { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+    .app-ir__list {
+      position: static; max-height: 240px; padding: 10px; border: 1px solid var(--hairline);
+      border-radius: var(--radius-md);
+    }
+    .app-ir__figures { grid-template-columns: minmax(0, 1fr); }
+    .app-ir__figure { border-right: 0; border-bottom: 1px solid var(--hairline); }
+    .app-ir__figure:last-child { border-bottom: 0; }
+  }
   /* The company page's Research tab (the Research tab's design, 7.2 to 7.9), as its
      mockup lays it out. Under the tabs' row the bar: Report and Records, a segmented control on a
      hairline, the chosen one on surface-selected; the report's line in ink-muted; Footnote marks
@@ -1400,6 +1488,16 @@
     .fb-report__scroll { overflow: visible; }
     .app-research .fb-report__table td { font-size: 12px; line-height: 16px; }
     .app-research .fb-report__table td .fb-cite { font-size: 12px; }
+    /* The Investor relations tab (its design, 7.8) prints the view it shows alone: on Earnings
+       calls the call shown, its title, its figures and its whole transcript across the page,
+       never faded; not the switch, the list of calls or the tools, whose buttons go with every
+       button of the page. A paragraph whole on a page, a name and the questions' label kept with
+       what follows them. */
+    .app-ir .app-fin__seg, .app-ir__list, .app-ir__tools { display: none !important; }
+    .app-ir__calls { display: block; }
+    .app-ir__reader[aria-busy="true"] { opacity: 1; }
+    .app-ir__words { break-inside: avoid; }
+    .app-ir__who, .app-ir__part { break-after: avoid; }
   }
 </style>
 </head>

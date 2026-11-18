@@ -15,8 +15,11 @@ of a tab; a read that lands after the reader left the view; the popups, which cl
 shown; the panel's place, back at its top as the company or the Research tab's report changes;
 and the Investor relations tab's addresses, whose word after the tab's name (a call, ``2026Q4``,
 or ``filings``) never travels to the server, so a change of it, by the address or the tab's
-switch, draws the answer held again and reads nothing, even while the tab's own read is out (the
-Investor relations tab's design, 7.1 and 7.6)."""
+switch, draws the answer held again and never reads the tab again, even while the tab's own read
+is out, the Earnings calls view's one read its call's transcript, once a call; a call the company
+has none of put right to the tab alone, the row's date counting the transcript shown, and the
+page back at its top as the call changes (the Investor relations tab's design, 7.1, 7.4 and
+7.6)."""
 
 import json
 import subprocess
@@ -739,27 +742,47 @@ def _ir(mark: str, word: str | None, price: float = 182.4) -> dict[str, Any]:
 IR_OPENED = OPENED | {"tab": "Investor relations"}
 ON_CALLS = "data 14 Nov 2026"  # the read's data date, the Earnings calls view's
 ON_FILINGS = "data 2 Nov 2026"  # the filing list's day, the Filings view's
+# The Earnings calls view's read of a call's transcript, with the request header: LFOX's newest
+# call, Q3 2026, and its others.
+CALL = INVESTOR + "/call?year={}&quarter={}"
+CALL_Q3 = CALL.format(2026, 3)
+CALL_Q2 = CALL.format(2026, 2)
+HEADER = {"X-Fairband-Request": "1"}
+
+
+def _call(year: int = 2026, quarter: int = 3, observed: str = "2026-11-15") -> dict[str, Any]:
+    """The call's read's answer: one turn of words, its copy fetched on ``observed``."""
+    return {
+        "symbol": "LFOX",
+        "fiscalYear": year,
+        "quarter": quarter,
+        "date": "2026-10-15",
+        "turns": [{"speaker": "Operator", "paragraphs": ["Good afternoon."]}],
+        "questionsAt": None,
+        "observedDay": observed,
+    }
 
 
 @pytest.mark.parametrize(
-    ("word", "kept"),
+    ("word", "kept", "call"),
     [
-        (None, None),
-        ("2026Q4", "2026Q4"),
-        ("filings", "filings"),
-        ("2026Q5", None),
-        ("nonsense", None),
-        ("12", None),
-        ("2026q4", None),
-        ("Filings", None),
+        (None, None, CALL_Q3),
+        ("2026Q2", "2026Q2", CALL_Q2),
+        ("filings", "filings", None),
+        ("2026Q5", None, CALL_Q3),
+        ("nonsense", None, CALL_Q3),
+        ("12", None, CALL_Q3),
+        ("2026q4", None, CALL_Q3),
+        ("Filings", None, CALL_Q3),
     ],
 )
-def test_the_tab_s_addresses(word: str | None, kept: str | None) -> None:
-    """#company/LFOX/investor-relations, /2026Q4 (a call: a fiscal year and Q1 to Q4) and
+def test_the_tab_s_addresses(word: str | None, kept: str | None, call: str | None) -> None:
+    """#company/LFOX/investor-relations, /2026Q2 (a call: a fiscal year and Q1 to Q4) and
     /filings are kept and written back; any other word (a fifth quarter, a word, a report's id)
     is put right to the tab alone (7.1). Each reads the detail, then the tab's own read with no
     query and no header, the word never travelling to the server, and the tab's function is
-    handed the word kept; the view and the data date follow it."""
+    handed the word kept; the view and the data date follow it. As it lands, the Earnings calls
+    view reads its call's transcript, the newest on the tab alone, with the request header."""
     hashed, detail, landed = _drive(
         [_hash(word), _answer(LFOX, _detail(182.4)), _answer(INVESTOR, _investor("ir 1"))]
     )
@@ -772,41 +795,110 @@ def test_the_tab_s_addresses(word: str | None, kept: str | None) -> None:
     assert landed["page"] == IR_OPENED | {"drawn": _ir("ir 1", kept)}
     assert landed["view"] == ("Filings" if kept == "filings" else "Earnings calls")
     assert landed["asOf"] == (ON_FILINGS if kept == "filings" else ON_CALLS)
+    assert landed["fetched"] == ([] if call is None else _get(call))
+    assert landed["headers"] == ([] if call is None else [HEADER])
 
 
 def test_the_tab_opens_from_a_link_on_its_word() -> None:
-    """``show('company', 'LFOX', 'investor-relations', '2026Q4')``, a link or a press, writes
+    """``show('company', 'LFOX', 'investor-relations', '2026Q2')``, a link or a press, writes
     the word in the hash and reads the tab with no query."""
     shown, detail, landed = _drive(
         [
-            _show("LFOX", "investor-relations", "2026Q4"),
+            _show("LFOX", "investor-relations", "2026Q2"),
             _answer(LFOX, _detail(182.4)),
             _answer(INVESTOR, _investor("ir 1")),
         ]
     )
-    assert shown["hash"] == IR + "/2026Q4"
+    assert shown["hash"] == IR + "/2026Q2"
     assert detail["fetched"] == _get(INVESTOR)
-    assert landed["page"]["drawn"] == _ir("ir 1", "2026Q4")
+    assert landed["page"]["drawn"] == _ir("ir 1", "2026Q2")
 
 
-def test_a_change_of_the_tab_s_word_reads_nothing() -> None:
-    """Review Focus 4: from /2026Q4 to /2026Q3, to /filings, to the tab alone, and a word put
-    right: each change draws the answer held again, at once and not faded, with the new word,
-    and reads nothing; the view and the data date follow the word."""
+def test_a_call_the_company_has_none_of_is_put_right_with_no_read_of_the_tab() -> None:
+    """An address naming a call the company has none of (7.1), /2026Q4 for LFOX, whose newest
+    is Q3 2026, is kept until the tab's read lands, which shows the newest call, and the address
+    is put right to the tab alone: the page draws the answer held on the tab alone, not faded,
+    and reads the newest call's transcript, never the tab again. A link to such a call later
+    does the same, reading nothing."""
     trace = _drive(
         [
             _hash("2026Q4"),
             _answer(LFOX, _detail(182.4)),
             _answer(INVESTOR, _investor("ir 1")),
+            _answer(CALL_Q3, _call()),
+            _hash("2019Q2"),
+        ]
+    )
+    hashed, _, landed, _, linked = trace
+    assert hashed["hash"] == IR + "/2026Q4"
+    assert landed["hash"] == IR
+    assert landed["page"] == IR_OPENED | {"drawn": _ir("ir 1", None)}
+    assert landed["fetched"] == _get(CALL_Q3) and landed["inFlight"] == [CALL_Q3]
+    assert linked["hash"] == IR and linked["fetched"] == [] and linked["inFlight"] == []
+    assert linked["page"] == IR_OPENED | {"drawn": _ir("ir 1", None)}
+
+
+def test_the_row_s_date_counts_the_transcript_shown() -> None:
+    """The Earnings calls view's data date (7.6) is the read's while its call's read is out,
+    then the older of it and the transcript's day once it lands with words: the page draws
+    again as it lands and the row's date moves."""
+    trace = _drive(
+        [
+            _hash(),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            _answer(CALL_Q3, _call(observed="2026-10-16")),
+            _switch("Filings"),
+            _switch("Earnings calls"),
+        ]
+    )
+    landed, read, filings, calls = trace[2:]
+    assert landed["asOf"] == ON_CALLS
+    assert read["asOf"] == "data 16 Oct 2026" and read["page"]["faded"] is False
+    assert filings["asOf"] == ON_FILINGS
+    assert calls["asOf"] == "data 16 Oct 2026" and calls["fetched"] == []
+
+
+def test_a_change_of_call_takes_the_page_to_its_top() -> None:
+    """Another call, by a link, takes the page to its top, as another report does on the
+    Research tab; the same call drawn again, as its read lands, keeps the reader's place."""
+    trace = _drive(
+        [
+            _hash("2026Q2"),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            {"do": "scroll", "top": 700},
+            _answer(CALL_Q2, _call(quarter=2)),
             _hash("2026Q3"),
+        ]
+    )
+    assert [step["scrollTop"] for step in trace[3:]] == [700, 700, 0]
+    assert trace[5]["fetched"] == _get(CALL_Q3)
+
+
+def test_a_change_of_the_tab_s_word_reads_nothing() -> None:
+    """Review Focus 4: from /2026Q2 to /2026Q3, to /filings, to the tab alone, and a word put
+    right: each change draws the answer held again, at once and not faded, with the new word,
+    and never reads the tab again: a call not read before is the view's one read, its
+    transcript's; one read before reads nothing. The view and the data date follow the word."""
+    trace = _drive(
+        [
+            _hash("2026Q2"),
+            _answer(LFOX, _detail(182.4)),
+            _answer(INVESTOR, _investor("ir 1")),
+            _answer(CALL_Q2, _call(quarter=2)),
+            _hash("2026Q3"),
+            _answer(CALL_Q3, _call()),
             _hash("filings"),
             _show("LFOX", "investor-relations"),
             _hash("nonsense"),
         ]
     )
-    q3, filings, calls, put_right = trace[3:]
-    for step in (q3, filings, calls, put_right):
+    q3, _, filings, calls, put_right = trace[4:]
+    assert q3["fetched"] == _get(CALL_Q3) and q3["headers"] == [HEADER]
+    for step in (filings, calls, put_right):
         assert step["fetched"] == [] and step["inFlight"] == []
+    for step in (q3, filings, calls, put_right):
         assert step["notesShown"] == []
     assert q3["hash"] == IR + "/2026Q3"
     assert q3["page"] == IR_OPENED | {"drawn": _ir("ir 1", "2026Q3")}
@@ -824,23 +916,26 @@ def test_a_change_of_the_tab_s_word_reads_nothing() -> None:
 def test_the_switch_replaces_the_hash_and_reads_nothing() -> None:
     """A press of Filings replaces the hash with the tab's /filings and draws the Filings view
     on the answer held, reading nothing; a press of Earnings calls replaces it with the tab
-    alone. A press of the view shown changes nothing: on a call, Earnings calls keeps the call."""
+    alone, the newest call, whose transcript is the view's one read. A press of the view shown
+    changes nothing: on a call, Earnings calls keeps the call."""
     trace = _drive(
         [
-            _hash("2026Q4"),
+            _hash("2026Q2"),
             _answer(LFOX, _detail(182.4)),
             _answer(INVESTOR, _investor("ir 1")),
+            _answer(CALL_Q2, _call(quarter=2)),
             _switch("Earnings calls"),
             _switch("Filings"),
             _switch("Filings"),
             _switch("Earnings calls"),
         ]
     )
-    same, filings, again, calls = trace[3:]
-    for step in (same, filings, again, calls):
+    same, filings, again, calls = trace[4:]
+    for step in (same, filings, again):
         assert step["fetched"] == [] and step["inFlight"] == []
+    for step in (same, filings, again, calls):
         assert step["page"]["faded"] is False
-    assert same["hash"] == IR + "/2026Q4" and same["page"]["drawn"] == _ir("ir 1", "2026Q4")
+    assert same["hash"] == IR + "/2026Q2" and same["page"]["drawn"] == _ir("ir 1", "2026Q2")
     assert filings["hash"] == IR + "/filings"
     assert filings["page"]["drawn"] == _ir("ir 1", "filings")
     assert (filings["view"], filings["asOf"]) == ("Filings", ON_FILINGS)
@@ -848,6 +943,7 @@ def test_the_switch_replaces_the_hash_and_reads_nothing() -> None:
     assert calls["hash"] == IR
     assert calls["page"]["drawn"] == _ir("ir 1", None)
     assert (calls["view"], calls["asOf"]) == ("Earnings calls", ON_CALLS)
+    assert calls["fetched"] == _get(CALL_Q3) and calls["inFlight"] == [CALL_Q3]
 
 
 def test_the_filings_view_without_a_filing_list_has_no_data_date() -> None:
@@ -863,7 +959,7 @@ def test_the_filings_view_without_a_filing_list_has_no_data_date() -> None:
     )
     assert (trace[2]["view"], trace[2]["asOf"]) == ("Filings", None)
     assert (trace[3]["view"], trace[3]["asOf"]) == ("Earnings calls", ON_CALLS)
-    assert trace[3]["fetched"] == []
+    assert trace[3]["fetched"] == _get(CALL_Q3)
 
 
 def test_a_change_of_the_word_while_the_tab_s_read_is_out_reads_nothing_more() -> None:
@@ -876,13 +972,14 @@ def test_a_change_of_the_word_while_the_tab_s_read_is_out_reads_nothing_more() -
             _hash(),
             _answer(LFOX, _detail(182.4)),
             _answer(INVESTOR, _investor("ir 1")),
+            _answer(CALL_Q3, _call()),
             AGAIN,
             _switch("Filings"),
             _answer(LFOX, _detail(190.0)),
             _answer(INVESTOR, _investor("ir 2")),
         ]
     )
-    again, pressed, detail, landed = trace[3:]
+    again, pressed, detail, landed = trace[4:]
     assert again["fetched"] == _get(LFOX)
     assert pressed["fetched"] == [] and pressed["inFlight"] == [LFOX]
     assert pressed["hash"] == IR + "/filings"
@@ -911,7 +1008,7 @@ def test_a_change_of_the_word_while_the_tab_s_read_is_out_reads_nothing_more() -
         assert step["page"] == OPENED | {"faded": True}
     assert call["hash"] == IR + "/2026Q4" and alone["hash"] == IR
     assert landed["page"] == IR_OPENED | {"drawn": _ir("ir 1", None)}
-    assert landed["inFlight"] == []
+    assert landed["fetched"] == _get(CALL_Q3) and landed["inFlight"] == [CALL_Q3]
 
 
 def test_the_switch_of_the_faded_tab_drops_another_tab_s_read() -> None:
@@ -939,8 +1036,9 @@ def test_the_switch_of_the_faded_tab_drops_another_tab_s_read() -> None:
 
 
 def test_another_tab_and_back_shows_the_tab_held() -> None:
-    """The tab held is shown again with no read when the reader comes back to it, on the word
-    the address names; another company's tab is read anew."""
+    """The tab held is shown again with no read of it when the reader comes back to it, on the
+    word the address names, whose call's transcript is the view's one read; another company's
+    tab is read anew."""
     trace = _drive(
         [
             _hash("filings"),
@@ -955,7 +1053,7 @@ def test_another_tab_and_back_shows_the_tab_held() -> None:
     overview, landed, back, other = trace[3:]
     assert overview["fetched"] == _get(OVERVIEW)
     assert landed["page"]["tab"] == "Overview"
-    assert back["fetched"] == [] and back["inFlight"] == []
+    assert back["fetched"] == _get(CALL_Q3) and back["inFlight"] == [CALL_Q3]
     assert back["page"] == IR_OPENED | {"drawn": _ir("ir 1", "2026Q3")}
     assert (back["view"], back["asOf"]) == ("Earnings calls", ON_CALLS)
     assert other["fetched"] == _get(BRK)
