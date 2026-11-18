@@ -109,10 +109,11 @@ def _references(count: int) -> list[dict[str, Any]]:
     return own + more
 
 
-def _rule(selector: str) -> str:
-    """The declarations of the page's one rule whose line opens with ``selector``, on one line."""
+def _rule(selector: str, indent: str = r"[ \t]*") -> str:
+    """The declarations of the page's one rule whose line opens with ``selector``, on one line;
+    with ``indent`` "  ", the one outside any ``@media`` block."""
     css = _static_file("index.html")
-    ends = [m.end() for m in re.finditer(r"(?m)^[ \t]*" + re.escape(selector), css)]
+    ends = [m.end() for m in re.finditer(r"(?m)^" + indent + re.escape(selector), css)]
     assert len(ends) == 1, selector
     return " ".join(css[ends[0] : css.index("}", ends[0])].split())
 
@@ -714,11 +715,13 @@ def test_print_opens_the_closed_parts_and_closes_those_it_opened() -> None:
 def test_below_980_px_the_tab_is_one_column() -> None:
     """The Research tab's design, 7.3, 7.4 and 7.11: below 980 px the tab is one column. The
     section list is a row above the report, each of its lists a line that scrolls sideways, the
-    reports on file first, in a line under the bar; a name marked by its lower edge. A section's
-    cards stand under its text, and a pair's charts under its paragraph, as many to a row as fit;
-    Records one column; the panels' padding the mockup's. The charts' tracks take no rule of
-    their own here: the one rule at every width, at least 300px and never wider than the column,
-    and a group's block never wider than its row, keep them inside a 400px window (7.9)."""
+    reports on file first, in a line under the bar; a name marked by its lower edge. A pair's
+    charts stand under its paragraph, as many to a row as fit; Records one column; the panels'
+    padding the mockup's. A section's cards and the charts' tracks take no rule of their own
+    here: the panel's own width sets the cards beside the text or under it, at every width
+    (test_the_cards_stand_beside_the_text_where_the_panel_holds_both), and the one rule of the
+    tracks, at least 300px and never wider than the column, and a group's block never wider
+    than its row, keep them inside a 400px window (7.9)."""
     block = _media("(width < 980px)")
     for rule in (
         ".app-research__records { grid-template-columns: minmax(0, 1fr); }",
@@ -734,13 +737,38 @@ def test_below_980_px_the_tab_is_one_column() -> None:
             ".app-research__link.is-on, .app-research__file.is-on {"
             " border-bottom-color: var(--accent); }"
         ),
-        ".app-research__split, .app-research__pair { grid-template-columns: minmax(0, 1fr); }",
-        ".app-research__cards { position: static; }",
+        ".app-research__pair { grid-template-columns: minmax(0, 1fr); }",
         ".app-research__sec, .app-research__panel { padding: var(--space-4); }",
     ):
         assert rule in block, rule
-    for name in ("app-research__minis", "app-research__groups", "app-research__block"):
+    for name in (
+        "app-research__split",
+        "app-research__cards",
+        "app-research__minis",
+        "app-research__groups",
+        "app-research__block",
+    ):
         assert name not in block, name
+
+
+def test_the_cards_stand_beside_the_text_where_the_panel_holds_both() -> None:
+    """The Research tab's design, 7.4 (the look at a 1,200px window): a section's cards column is
+    never under 300px. The first run of text and the cards stand in a row that wraps: the text
+    at least 28rem and at most the reading width (43rem), growing to it first, the cards at
+    least 300px, taking what is left; where the panel holds both side by side they stand side by
+    side, the cards' column staying in view while the panel scrolls, and where it cannot the
+    cards wrap under the text across the panel. The panel's own width decides it, not the
+    window's: no media rule names the row or the cards (test_below_980_px_the_tab_is_one_column),
+    and print stands the cards under the text (test_print_draws_the_report_view_alone)."""
+    row = _rule(".app-research__split {", "  ")
+    for declaration in ("display: flex;", "flex-wrap: wrap;", "align-items: flex-start;"):
+        assert declaration in row, declaration
+    assert "grid-template-columns" not in row
+    assert _rule(".app-research__split > .app-research__run {") == "flex: 10 1 28rem;"
+    assert "max-width: 43rem;" in _rule(".app-research__run {")
+    assert _rule(".app-research__split > .app-research__cards {") == "flex: 1 1 300px;"
+    cards = _rule(".app-research__cards {", "  ")
+    assert "position: sticky;" in cards and "min-width: 0;" in cards
 
 
 def test_print_draws_the_report_view_alone() -> None:
@@ -770,7 +798,7 @@ def test_print_draws_the_report_view_alone() -> None:
             " .app-company__tabs) { display: none !important; }"
         ),
         ".app-research__layout { display: block; }",
-        ".app-research__split { grid-template-columns: minmax(0, 1fr); }",
+        ".app-research__split { display: grid; grid-template-columns: minmax(0, 1fr); }",
         ".app-research__cards { position: static; }",
         ".app-research__card, .app-charts__chart { break-inside: avoid; }",
         (

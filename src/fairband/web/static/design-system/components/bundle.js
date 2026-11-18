@@ -2202,13 +2202,15 @@
             className: 'fb-c__capvalue', x: X(capped) + bw / 2,
             y: Y(series[capped].value) + (series[capped].value < 0 ? 14 : -7)
           }, fmt(series[capped].value)),
-          // fairband: the axis carries as many ticks as the plot's width holds, one to 56px, so a
-          // chart as narrow as the Research tab's (about 320px) thins its year ticks rather than
-          // print the last year's into the trailing twelve months' ("2026to date"), and one as
-          // wide as the report page's prints as before (spec 2026-11-17 research tab, 7.9).
+          // fairband: the axis carries as many ticks as the plot's width holds, one to 70px, the
+          // room the last year's tick and "to date", anchored at its end, need side by side, so a
+          // chart as narrow as the Research tab's (320px to about 420px) thins its year ticks
+          // rather than print the last year's into the trailing twelve months' ("2026to date"),
+          // and one as wide as the report page's prints as before
+          // (spec 2026-11-17 research tab, 7.9).
           h(XAxis, {
             series: series, x: function (i) { return X(i) + bw / 2; }, y: B, left: L, right: R,
-            most: ticksHeld(R - L, 56)
+            most: ticksHeld(R - L, 70)
           })
         ),
         h(Tip, { at: cur ? X(at) + bw / 2 : null },
@@ -2333,9 +2335,9 @@
           h('circle', { className: 'fb-c__dot fb-c__dot--1', cx: X(n - 1), cy: Y(last.roic), r: 4.5 }),
           h('text', { className: 'fb-c__endlabel', x: X(n - 1) + 12, y: Y(last.roic) + 4 }, pct(last.roic)),
           h('text', { className: 'fb-c__endlabel fb-c__endlabel--context', x: X(n - 1) + 12, y: Y(last.wacc) + 4 }, pct(last.wacc)),
-          // fairband: the axis carries as many ticks as the plot's width holds, one to 56px as
-          // the bar chart's, so no chart of the Research tab prints more year ticks than its
-          // width holds (spec 2026-11-17 research tab, 7.9).
+          // fairband: the axis carries as many ticks as the plot's width holds, one to 56px, a
+          // year's tick, so no chart of the Research tab prints more year ticks than its width
+          // holds (spec 2026-11-17 research tab, 7.9).
           h(XAxis, { series: series, x: X, y: B, left: L, right: R, most: ticksHeld(R - L, 56) })
         ),
         h(Tip, { at: cur ? X(at) : null },

@@ -3127,16 +3127,17 @@ def test_the_axis_always_prints_the_trailing_twelve_months_tick() -> None:
 def test_the_charts_axes_hold_as_many_ticks_as_their_width() -> None:
     """The Research tab's design, 7.9, one patch: `ticksHeld(width, per)`, the ticks a plot's
     width holds, one to `per` px, seven at most and two at least, gives the axis its `most` in
-    HistoryBars (56px a tick: a year, "to date"), BandHistory (64px: "Q4 2021") and SpreadChart
-    (56px), each call marked; so a chart as narrow as the tab's thins its ticks and one as wide
-    as the report page drew it prints as before. MultipleHistory keeps its own `most`. What the
-    axes print is read in node (tests/web/test_report_charts.py)."""
+    HistoryBars (70px a tick: the last year's and "to date", anchored at its end, side by side),
+    BandHistory (64px: "Q4 2021") and SpreadChart (56px: a year), each call marked; so a chart as
+    narrow as the tab's thins its ticks and one as wide as the report page drew it prints as
+    before. MultipleHistory keeps its own `most`. What the axes print is read in node
+    (tests/web/test_report_charts.py)."""
     bundle = _component_file("bundle.js")
     held = _function(bundle, "ticksHeld")
     lead = bundle.index("// fairband: the ticks a plot `width` px wide holds")
     assert "(spec 2026-11-17 research tab, 7.9)" in bundle[lead : bundle.index(held)]
     assert "return Math.min(7, Math.max(2, Math.floor(width / per)));" in held
-    for chart, per in (("HistoryBars", 56), ("BandHistory", 64), ("SpreadChart", 56)):
+    for chart, per in (("HistoryBars", 70), ("BandHistory", 64), ("SpreadChart", 56)):
         _in_order(
             _function(bundle, chart),
             "// fairband: the axis carries as many ticks as the plot's width holds",

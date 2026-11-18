@@ -1106,10 +1106,17 @@
     max-width: none; font: inherit; letter-spacing: inherit; text-transform: inherit;
     color: inherit;
   }
+  /* A section's first run of text and its cards (7.4): a row that wraps, so the panel's own
+     width, not the window's, decides. The text takes at least 28rem and at most the reading
+     width (its 43rem), growing to it first; the cards at least 300px, taking what is left. Where
+     the panel holds both side by side they stand side by side, the cards' column in view while
+     the panel scrolls; where it cannot, the cards wrap under the text across the panel, and,
+     the last in the row, they have no room to move there. */
   .app-research__split {
-    display: grid; grid-template-columns: minmax(0, 43rem) minmax(0, 1fr);
-    gap: var(--space-5) var(--space-8); align-items: start;
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-5) var(--space-8);
   }
+  .app-research__split > .app-research__run { flex: 10 1 28rem; }
+  .app-research__split > .app-research__cards { flex: 1 1 300px; }
   .app-research__cards {
     position: sticky; top: var(--space-3); display: flex; flex-direction: column;
     gap: var(--space-3); min-width: 0;
@@ -1307,10 +1314,11 @@
   /* Below 980px the tab is one column (7.3, 7.4, 7.11), as the mockup has it: the section list a
      row above the report, each of its lists a line that scrolls sideways, the reports on file
      first, in a line under the bar, the name in view and the report shown marked by an accent
-     lower edge; a section's cards under its text and a pair's charts under its paragraph, as many
-     to a row as the width holds, by the charts' rule at every width, whose tracks and blocks are
-     never wider than their column, so nothing is wider than a 400px window; Records one column;
-     the panels' padding 16px. */
+     lower edge; a pair's charts under its paragraph, as many to a row as the width holds, by the
+     charts' rule at every width, whose tracks and blocks are never wider than their column, so
+     nothing is wider than a 400px window; Records one column; the panels' padding 16px. A
+     section's cards take no rule here: the panel's own width sets them beside the text or under
+     it, at every width. */
   @media (width < 980px) {
     .app-research__records { grid-template-columns: minmax(0, 1fr); }
     .app-research__layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
@@ -1321,8 +1329,7 @@
       width: auto; white-space: nowrap; border-left: 0; border-bottom: 2px solid var(--hairline);
     }
     .app-research__link.is-on, .app-research__file.is-on { border-bottom-color: var(--accent); }
-    .app-research__split, .app-research__pair { grid-template-columns: minmax(0, 1fr); }
-    .app-research__cards { position: static; }
+    .app-research__pair { grid-template-columns: minmax(0, 1fr); }
     .app-research__sec, .app-research__panel { padding: var(--space-4); }
     .app-research__summary { padding: var(--space-3) var(--space-4); }
     .app-research__fold { padding: var(--space-1) var(--space-4) var(--space-4); }
@@ -1353,7 +1360,7 @@
     .app-company:has(.app-research) :is(.app-company__quote, .app-company__actions,
     .app-company__tabs) { display: none !important; }
     .app-research__layout { display: block; }
-    .app-research__split { grid-template-columns: minmax(0, 1fr); }
+    .app-research__split { display: grid; grid-template-columns: minmax(0, 1fr); }
     .app-research__cards { position: static; }
     .app-research__card, .app-charts__chart { break-inside: avoid; }
     .app-research h2, .app-research h3, .app-research h4,

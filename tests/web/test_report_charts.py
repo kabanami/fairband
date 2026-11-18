@@ -287,15 +287,23 @@ def test_a_narrow_chart_thins_its_year_ticks_so_none_runs_into_the_trailing_one(
     """The Research tab's design, 7.9 (the look after the whole-branch review's fixes): the
     design system's axis printed every tick of seven bars or fewer whatever the chart's width, so
     at the tab's 320px the last fiscal year's tick and "to date" ran into each other ("2026to
-    date"). HistoryBars tells its axis how many ticks its plot holds, one each 56px and seven at
-    most, two at least: on a chart of 320px, 248px of plot, four, so of five fiscal years and
-    the trailing twelve months it prints the first year, the third and "to date", and not the
-    last fiscal year; at 560px, as wide as the report page's, all six, as before. Nine bars with
-    estimates at 320px print no two ticks in adjacent slots."""
+    date"). HistoryBars tells its axis how many ticks its plot holds, one to 70px, the room the
+    last year's tick and "to date", anchored at its end, need side by side, seven at most and two
+    at least: on a chart of 320px, 248px of plot, three, so of five fiscal years and the trailing
+    twelve months it prints the first year, the third and "to date", and not the last fiscal
+    year; at 418px, a pair's chart alone in its row at a 1,200px window, 346px of plot, four,
+    still no tick in the slot before "to date" (at 56px a tick it printed all six there, and the
+    two ran together); at 550px, as wide as the report page's, all six, as before, and at 560px.
+    Nine bars with estimates at 320px print no two ticks in adjacent slots."""
     six = [*FISCAL, TO_DATE]
     assert _ticks_at(six, 320) == ["2021", "2023", "to date"]
     assert "2025" not in _ticks_at(six, 320)
-    assert _ticks_at(six, 560) == ["2021", "2022", "2023", "2024", "2025", "to date"]
+    at_418 = _ticks_at(six, 418)
+    assert at_418[0] == "2021" and at_418[-1] == "to date"
+    assert "2025" not in at_418  # the slot before "to date"
+    everything = ["2021", "2022", "2023", "2024", "2025", "to date"]
+    assert _ticks_at(six, 550) == everything
+    assert _ticks_at(six, 560) == everything
     nine = [*FISCAL, TO_DATE, *AHEAD]
     printed = _ticks_at(nine, 320)
     slots = [[p["period"] for p in nine].index(tick) for tick in printed]
