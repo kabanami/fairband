@@ -827,4 +827,9 @@ The readout goes in the decision log: the heights of the seven, and what the eye
      seven bars or fewer whatever the chart's width. The bar chart now thins its year ticks by
      its width, one tick each 56 px of plot, seven at most and two at least, so a chart as wide
      as the report page's prints as before: the design system's own chart patched once, in
-     `HistoryBars` (a `fairband:` patch, B-40 and B-221), in `a379a95`; B-218's range runs to it.
+     `HistoryBars` (a `fairband:` patch, B-40 and B-221), in `a379a95`. The third look, after
+     it, found the price against the band's seven quarter ticks run into each other at a
+     1,440 px window, its column about 372 px wide (NVDA, AAPL, PLTR and ASML), so the one
+     patch became the axis's tick count by width, `ticksHeld`, which the band chart takes at
+     64 px a tick and the ROIC chart at 56 px, as the bar chart does, in `b91c64e`; B-218's
+     range runs to it.
