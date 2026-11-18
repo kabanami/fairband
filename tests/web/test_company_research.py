@@ -217,9 +217,10 @@ def test_a_valuation_review_names_the_report_it_reuses_or_that_it_has_none() -> 
 
 def test_the_list() -> None:
     """The report's twelve headings in their order, then the three kept closed, References with
-    their count; ten headings for a valuation review. The reports on file with their count, each
-    with its date and revision over its mode and stance: the one shown marked and no link, the
-    other a link to its address on the tab. The name ``shown`` names is marked."""
+    their count after a space, as Records has its count, so its text and its name read "References
+    185", not one word; ten headings for a valuation review. The reports on file with their count,
+    each with its date and revision over its mode and stance: the one shown marked and no link,
+    the other a link to its address on the tab. The name ``shown`` names is marked."""
     answer = answers.answer()
     answer["report"]["references"] = _references(185)
     tree = _research("list", answer, "research-s1")
@@ -235,7 +236,7 @@ def test_the_list() -> None:
     links = classed(tree, "app-research__link")
     assert [text(e) for e in links] == [
         *HEADINGS,
-        "References185",
+        "References 185",
         "Appendix A",
         "Appendix B",
     ]
@@ -266,7 +267,7 @@ def test_the_list() -> None:
     count = len(review["report"]["references"])
     assert names == [
         *(h for h in HEADINGS if h not in HEADINGS[1:3]),
-        f"References{count}",
+        f"References {count}",
         "Appendix A",
         "Appendix B",
     ]
@@ -752,9 +753,12 @@ def test_print_draws_the_report_view_alone() -> None:
     company's name and ticker and the bar's line are. The report is one column, a section's cards
     under its text, a card and a chart whole on a page, a heading kept with what follows it; an
     agent's table prints whole at the floor of the type scale, as the report page's did
-    (``tests/web/test_app.py``, ``test_a_wide_table_prints_whole``). The other tabs print as they
-    did: the rule for the head names the tab, apart from the tab's own, so a browser that cannot
-    read it still hides the tab's controls."""
+    (``tests/web/test_app.py``, ``test_a_wide_table_prints_whole``). The footnote marks print
+    whatever Footnote marks says, since on paper no box shows a cite's source: with the switch
+    off, the default, the screen's rule hides them and the print rule shows them, so each number
+    in the text points to its reference. The other tabs print as they did: the rule for the head
+    names the tab, apart from the tab's own, so a browser that cannot read it still hides the
+    tab's controls."""
     block = _media("print")
     # a browser does not break a scroll container across pages: the company panel is no scroll
     # container in print, and runs to its end with no side padding
@@ -777,6 +781,7 @@ def test_print_draws_the_report_view_alone() -> None:
             ".app-research h2, .app-research h3, .app-research h4,"
             " .app-research__summary { break-after: avoid; }"
         ),
+        ".app-research:not(.app-research--marks) .fb-cite__n { display: inline; }",
     ):
         assert rule in tab, rule
     code = re.sub(r"/\*.*?\*/", "", block)

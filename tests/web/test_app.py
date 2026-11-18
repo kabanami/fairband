@@ -58,6 +58,7 @@ from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.reports.charts import (
     BAND_TITLE,
     GRID_TITLE,
+    QUARTERS_TITLE,
     SERIES_TITLES,
     TITLES,
     row_name,
@@ -2746,7 +2747,11 @@ def test_a_wide_table_prints_whole() -> None:
         ".app-research .fb-report__table td .fb-cite { font-size: 12px; }",
     ]
     assert re.search(r"\.fb-report[ {,]", code) is None
-    assert "fb-cite__n" not in code
+    # no print rule sizes the cite's number: the one print rule that names it shows the Research
+    # tab's marks whatever Footnote marks says (the Research tab's design, 7.11)
+    assert [line.strip() for line in code.splitlines() if "fb-cite__n" in line] == [
+        ".app-research:not(.app-research--marks) .fb-cite__n { display: inline; }"
+    ]
     sizes = [int(px) for px in re.findall(r"font-size:\s*(\d+)px", code)]
     assert sizes and min(sizes) >= 11, sizes
     assert "white-space" not in code
@@ -2779,31 +2784,35 @@ FINANCIAL_CHARTS = {
 
 def test_the_report_s_charts_are_titled_as_the_export_s(db_path: Path, policy: Policy) -> None:
     """Spec 18.4's table, drawn by charts.js on the Research tab. Financial performance and
-    health: a group per table, in the export's order (charts.TITLES), HistoryBars titled by their
-    rows' names there (charts.row_name): revenue, the operating margin as a percentage, the EPS;
-    free cash flow, stock compensation to revenue; net debt to EBITDA, interest coverage;
-    buybacks and dividends, one measure, and the share count's change; Altman's Z″ and
-    Piotroski's F; and ROIC against the hurdle rate the returns table carries (SpreadChart). The
-    last earnings call (spec 2026-11-15 6.5): the quarters table's revenue, operating margin and
-    EPS by quarter (HistoryBars three times), each titled by its row's name there. Valuation: the
-    readings the sections cite and the secondary valuation's grid (SensitivityGrid twice), titled
-    as their tables are. Price and multiples: the price against the band (BandHistory) and the
-    trailing and forward P/E (MultipleHistory twice), titled as their table and the year-end
-    table's columns. So the page and its Markdown export never differ."""
+    health: a group per table under its title in the export, in its order (charts.TITLES; the
+    Research tab's design, 7.9), HistoryBars titled by their rows' names there (charts.row_name):
+    revenue, the operating margin as a percentage, the EPS; free cash flow, stock compensation to
+    revenue; net debt to EBITDA, interest coverage; buybacks and dividends, one measure, and the
+    share count's change; Altman's Z″ and Piotroski's F; and ROIC against the hurdle rate the
+    returns table carries (SpreadChart). The last earnings call (spec 2026-11-15 6.5): the
+    quarters table's revenue, operating margin and EPS by quarter (HistoryBars three times),
+    under its title in the export (charts.QUARTERS_TITLE), each titled by its row's name there.
+    Valuation: the readings the sections cite and the secondary valuation's grid
+    (SensitivityGrid twice), titled as their tables are. Price and multiples: the price against
+    the band (BandHistory) and the trailing and forward P/E (MultipleHistory twice), titled as
+    their table and the year-end table's columns. So the page and its Markdown export never
+    differ."""
     script = _code(_static_file("charts.js"))
-    parts = re.findall(r"\{ table: '(\w+)', charts: \[", script)
-    assert parts == list(TITLES)
+    parts = re.findall(r"\{ table: '(\w+)', title: '([^']+)', charts: \[", script)
+    assert parts == list(TITLES.items())
     with closing(connect(db_path)) as conn:
         rows = {t.name: [r.name for r in t.rows] for t in financial_tables(conn, "AAPL", policy)}
         quarters = quarters_table(conn, "AAPL")
+    assert f"var QUARTERS_TITLE = '{QUARTERS_TITLE}';" in script
     quarterly = re.search(
-        r"var QUARTERLY = \{ table: '(\w+)', by: 'quarter', charts: \[(.*?)\] \};",
+        r"var QUARTERLY = \{ table: '(\w+)', title: QUARTERS_TITLE, by: 'quarter', charts: \[(.*?)\]"
+        r" \};",
         script,
         re.DOTALL,
     )
     assert quarterly is not None and quarterly.group(1) == quarters.name
     assert re.findall(r"\{ row: '(\w+)'", quarterly.group(2)) == [r.name for r in quarters.rows]
-    part = r"\{ table: '(\w+)', charts: \[(.*?)\] \}"
+    part = r"\{ table: '(\w+)', title: '[^']+', charts: \[(.*?)\] \}"
     blocks = re.findall(part, script, re.DOTALL)
     charted = {table: re.findall(r"\{ row: '(\w+)'", block) for table, block in blocks}
     assert charted == FINANCIAL_CHARTS

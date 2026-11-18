@@ -9,8 +9,9 @@ function draws the mark of the tab's answer and the price of the detail).
 The transitions: a tab held, shown with no read; a tab whose read is out, asked for again; a
 refresh that ends during a tab's read; a tab held, asked for while a read of the detail is out;
 another company, whose first company's late landing is dropped; a failed read of the detail and
-of a tab; a read that lands after the reader left the view; and the popups, which close as a view
-is shown."""
+of a tab; a read that lands after the reader left the view; the popups, which close as a view is
+shown; and the panel's place, back at its top as the company or the Research tab's report
+changes."""
 
 import json
 import subprocess
@@ -584,3 +585,59 @@ def test_another_company_opens_at_its_head_and_the_same_company_keeps_the_reader
         ]
     )
     assert [step["scrollTop"] for step in trace[3:]] == [900, 900, 900, 0]
+
+
+def test_another_report_opens_at_its_head_and_the_same_report_keeps_the_readers_place() -> None:
+    """The Research tab's design, 7.3: the section list stays in view while the report scrolls,
+    so a press on another report under Reports on file, deep in the page, would open it at the
+    depth the reader left: the loader takes the panel back to its top as the report the Research
+    tab shows changes, to another id or from an id to the latest, whether that report is read or
+    held. The same report's answer landing again (a refresh's end, a note taken), another tab and
+    the same report on coming back keep the reader's place."""
+    trace = _drive(
+        [
+            _show("LFOX", "research", 31),
+            _answer(LFOX, _detail(182.4)),
+            _answer(RESEARCH + "?report=31", _tab("report 31")),
+            {"do": "scroll", "top": 900},
+            AGAIN,
+            _answer(LFOX, _detail(182.4)),
+            _answer(RESEARCH + "?report=31", _tab("report 31, again")),
+            _show("LFOX", "overview"),
+            _answer(OVERVIEW, _tab("overview 1")),
+            _show("LFOX", "research", 31),
+            _show("LFOX", "research", 19),
+            _answer(RESEARCH + "?report=19", _tab("report 19")),
+            {"do": "scroll", "top": 700},
+            _show("LFOX", "research", 31),
+            {"do": "scroll", "top": 600},
+            _show("LFOX", "overview"),
+            _show("LFOX", "research", 19),
+            {"do": "scroll", "top": 500},
+            _show("LFOX", "research"),
+            _answer(RESEARCH, _tab("the latest report")),
+        ]
+    )
+    held = trace[9]
+    assert held["fetched"] == []
+    assert held["page"]["drawn"] == _drawn("research", "report 31, again", 182.4)
+    assert trace[13]["fetched"] == [] and trace[16]["fetched"] == []  # held: shown at once
+    assert [step["scrollTop"] for step in trace[3:]] == [
+        900,  # scrolled down report 31
+        900,  # a refresh's end reads the same report again
+        900,
+        900,  # its answer lands again
+        900,  # another tab
+        900,
+        900,  # back to the same report
+        0,  # another report
+        0,
+        700,
+        0,  # another report, held
+        600,
+        600,  # another tab
+        0,  # back to the tab on another report than it showed last
+        500,
+        0,  # from an id to the latest
+        0,
+    ]

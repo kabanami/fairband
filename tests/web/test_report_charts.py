@@ -13,9 +13,10 @@ the tree it draws.
 And the page's charts past the fiscal year and by quarter (spec 2026-11-15 6.5, 6.6): charts.js's
 ``points`` makes a point of each cell under its column, its tick, its kind and its label;
 ``kindsLine`` the line under a chart with a bar that is not a fiscal year; ``groupCharts`` the
-charts of Financial performance and health with those bars and that line, and ``quarterCharts``
-the last earnings call's three charts by quarter. Their trees come back as the page's script
-builds them, a bundle component's props unread by the stub.
+charts of Financial performance and health with those bars and that line, each group with its
+title, and ``quarterCharts`` the last earnings call's three charts by quarter with theirs, the
+export's titles. Their trees come back as the page's script builds them, a bundle component's
+props unread by the stub.
 
 And the company page's Research tab's charts (the Research tab's design, 7.4 rules 3, 4, 6 and 7,
 and 7.9): ``groupCharts``, ``quarterCharts``, ``gridCharts`` and ``priceCharts`` give the report's
@@ -29,6 +30,7 @@ import pytest
 from support import research_answers as answers
 from support.page import NODE, STATIC, classed, elements, node, text
 
+from fairband.reports.charts import QUARTERS_TITLE, TITLES
 from fairband.reports.tables import ANALYSTS_BASIS
 
 NOTE = "average invested capital is at or below zero"
@@ -437,13 +439,15 @@ LINE = "Grey: the 12 months to 30 Sep 2026. Outlined: analysts' estimates."
 def _groups(read: dict[str, Any]) -> list[Any]:
     """The charts ``groupCharts`` gives on the financial tables' read settled as ``read``, every
     group's in their order."""
-    drawn: dict[str, list[Any]] = _call("reportCharts.groupCharts", read)
-    return [chart for charts in drawn.values() for chart in charts]
+    drawn: dict[str, dict[str, Any]] = _call("reportCharts.groupCharts", read)
+    return [chart for group in drawn.values() for chart in group["charts"]]
 
 
 def _quarters(read: dict[str, Any]) -> Any:
-    """The charts by quarter ``quarterCharts`` gives on the read settled as ``read``."""
-    return _call("reportCharts.quarterCharts", read)
+    """The charts by quarter ``quarterCharts`` gives on the read settled as ``read``; none on an
+    answer without the quarters."""
+    drawn = _call("reportCharts.quarterCharts", read)
+    return None if drawn is None else drawn["charts"]
 
 
 def _body(**over: Any) -> dict[str, Any]:
@@ -625,19 +629,29 @@ def _charts(tree: Any) -> list[dict[str, Any]]:
 
 
 def test_group_charts_give_each_group_s_charts_at_the_height_asked_with_no_panel() -> None:
-    """Rule 3: the six groups by their tables' names, 3, 2, 2, 1, 2 and 2 charts, each the
-    report's chart, HistoryBars or SpreadChart, at the height given, on no raised panel; with no
-    height, the bundle's own."""
+    """Rule 3: the six groups by their tables' names, each with its title, the export's
+    (``charts.TITLES``), so the page and the Markdown never differ (7.9), and its charts, 3, 2,
+    2, 1, 2 and 2, each the report's chart, HistoryBars or SpreadChart, at the height given, on no
+    raised panel; with no height, the bundle's own."""
     drawn = _call("reportCharts.groupCharts", {"body": answers.TABLES}, SMALL)
     assert list(drawn) == GROUPS
-    assert [len(drawn[key]) for key in GROUPS] == [3, 2, 2, 1, 2, 2]
+    assert [drawn[key]["title"] for key in GROUPS] == [TITLES[key] for key in GROUPS]
+    assert [TITLES[key] for key in GROUPS] == [
+        "Growth and profitability",
+        "Cash flow",
+        "Balance sheet and solvency",
+        "Returns on capital",
+        "Capital allocation",
+        "Quality scores",
+    ]
+    assert [len(drawn[key]["charts"]) for key in GROUPS] == [3, 2, 2, 1, 2, 2]
     titles = []
     for key in GROUPS:
-        for chart in drawn[key]:
+        for chart in drawn[key]["charts"]:
             [props] = _charts(chart)
             assert props["height"] == SMALL
             titles.append(props["title"])
-        assert classed(drawn[key], "app-chart") == []
+        assert classed(drawn[key]["charts"], "app-chart") == []
     assert titles == [
         "Revenue",
         "Operating margin",
@@ -652,10 +666,11 @@ def test_group_charts_give_each_group_s_charts_at_the_height_asked_with_no_panel
         "Altman's Z″",
         "Piotroski's F",
     ]
-    [roic] = _charts(drawn["returns"])
+    [roic] = _charts(drawn["returns"]["charts"])
     assert roic["subtitle"] == "against the hurdle rate"  # the SpreadChart
     whole = _call("reportCharts.groupCharts", {"body": answers.TABLES})
-    assert all("height" not in props for key in GROUPS for props in _charts(whole[key]))
+    assert all("height" not in props for key in GROUPS for props in _charts(whole[key]["charts"]))
+    assert [whole[key]["title"] for key in GROUPS] == [TITLES[key] for key in GROUPS]
 
 
 def test_group_charts_of_a_refused_read_give_its_sentence() -> None:
@@ -666,15 +681,19 @@ def test_group_charts_of_a_refused_read_give_its_sentence() -> None:
 
 def test_quarter_charts_give_the_three_charts_by_quarter() -> None:
     """Rule 4: the revenue, the operating margin and the EPS by quarter at the height given, with
-    no panel; a refused read its sentence; an answer without the quarters none."""
+    no panel, under the export's title for them (``charts.QUARTERS_TITLE``, 7.9); a refused read
+    its sentence alone; an answer without the quarters none."""
     drawn = _call("reportCharts.quarterCharts", {"body": answers.TABLES}, SMALL)
-    assert len(drawn) == 3
-    charts = [props for chart in drawn for props in _charts(chart)]
+    assert list(drawn) == ["title", "charts"]
+    assert drawn["title"] == QUARTERS_TITLE == "By quarter"
+    assert len(drawn["charts"]) == 3
+    charts = [props for chart in drawn["charts"] for props in _charts(chart)]
     assert [c["title"] for c in charts] == ["Revenue", "Operating margin", "EPS"]
     assert all(c["by"] == "quarter" and c["height"] == SMALL for c in charts)
-    assert classed(drawn, "app-chart") == []
+    assert classed(drawn["charts"], "app-chart") == []
     refused = _call("reportCharts.quarterCharts", {"error": REFUSED}, SMALL)
-    assert text(refused) == f"The figures by quarter did not load: {REFUSED}."
+    assert list(refused) == ["refused"]
+    assert text(refused["refused"]) == f"The figures by quarter did not load: {REFUSED}."
     older = {k: v for k, v in answers.TABLES.items() if k != "quarters"}
     assert _call("reportCharts.quarterCharts", {"body": older}, SMALL) is None
 

@@ -36,8 +36,9 @@
    the text. A card draws the read's fields and stored records, and computes no figure. The
    charts (7.9) are charts.js's (FairbandPage.reportCharts) with no panel of their own: in
    Financial performance and health a paragraph stands beside its group's charts and a group no
-   paragraph names in a row of its own (rule 3); the last earnings call opens with its three
-   charts by quarter (rule 4); those of a pair and of the quarters' row drawn smaller.
+   paragraph names in a row of its own, under the group's title (rule 3); the last earnings call
+   opens with its three charts by quarter, under By quarter (rule 4); those of a pair and of the
+   quarters' row drawn smaller.
 
    The series the charts read (8.2) are read each on its own after the report lands, each with
    the request header: the financial tables, the multiples history, five years of closes, the
@@ -51,11 +52,11 @@
    chart's place. The financial tables' charts are built for the section that stands them alone.
 
    A cited number (7.7) is the design system's cite: the CSS gives it the text's colour and its
-   [n] shows while Footnote marks is on, the choice kept in the browser's localStorage under
-   fairband.research.marks, read and written inside a try, off where it keeps nothing. Its source,
-   the reference's number and its words (source), shows in one box of the tab's own on hover and
-   on keyboard focus, each cite made focusable; the cite's own title, its ref, is taken off as the
-   box shows, so the browser shows no second one.
+   [n] shows while Footnote marks is on, and in print whatever it says (7.11), the choice kept in
+   the browser's localStorage under fairband.research.marks, read and written inside a try, off
+   where it keeps nothing. Its source, the reference's number and its words (source), shows in one
+   box of the tab's own on hover and on keyboard focus, each cite made focusable; the cite's own
+   title, its ref, is taken off as the box shows, so the browser shows no second one.
 
    Print (7.11) draws the three closed parts open: before the page prints, the tab opens those
    that are closed, and after it closes again those it opened (openForPrint); the stylesheet does
@@ -229,7 +230,8 @@
   }
 
   /* A name in the list: a press scrolls to its panel `id` and opens it where it is closed (go);
-     `n`, a count after the name where given; marked where it is the panel `shown`. */
+     `n`, a count after the name and a space where given, as Records has its count ("References
+     185"); marked where it is the panel `shown`. */
   function link(id, name, n, shown) {
     return h('li', { key: id },
       h('button', {
@@ -237,7 +239,7 @@
         'aria-current': id === shown ? 'true' : null,
         onClick: function () { go(id); }
       },
-        h('span', null, name),
+        h('span', null, name), n == null ? null : ' ',
         n == null ? null : h('span', { className: 'figure-sm app-research__n' }, C.count(n))));
   }
 
@@ -359,32 +361,42 @@
   }
 
   /* A paragraph beside the charts of its group (rule 3): the paragraph at the reading width, as a
-     run draws it, and the group's charts of `drawn` (groupCharts, drawn smaller), none before
-     they land; where the tables did not load, the sentence in the `first` pair alone. */
+     run draws it, and the group's charts of `drawn` (groupCharts, drawn smaller) with no title,
+     since the paragraph's bold lead word names the group (7.9), none before they land; where the
+     tables did not load, the sentence in the `first` pair alone. */
   function pair(r, footnotes, key, drawn, first) {
-    var charts = !drawn ? null : drawn.refused ? (first ? drawn.refused : null) : drawn[r.group];
+    var charts = !drawn ? null : drawn.refused ? (first ? drawn.refused : null)
+      : drawn[r.group].charts;
     return h('div', { key: key, className: 'app-research__pair' },
       run([r.block], footnotes, 'text'),
       h('div', { key: 'charts', className: 'app-research__minis' }, charts));
   }
 
-  /* The charts of the groups no paragraph names, alone, in a row at their own height (rule 3);
-     nothing before they land; where the tables did not load, the sentence where the row is the
-     `first` to stand charts. */
+  /* The charts of the groups no paragraph names, alone, in a row at their own height (rule 3),
+     each group's title over its charts (7.9); nothing before they land; where the tables did not
+     load, the sentence alone, no title, where the row is the `first` to stand charts. */
   function groups(r, key, drawn, first) {
     if (!drawn || (drawn.refused && !first)) return null;
-    var charts = drawn.refused || [].concat.apply([], r.groups.map(function (g) {
-      return drawn[g];
-    }));
+    var charts = drawn.refused || r.groups.map(function (g) { return titled(g, drawn[g]); });
     return h('div', { key: key, className: 'app-research__minis app-research__minis--all' },
       charts);
   }
 
-  /* The last earnings call's first row (rule 4): its three charts by quarter, drawn smaller, or
-     the sentence of the tables' refusal; none on an answer without the quarters. */
+  /* The last earnings call's first row (rule 4): its three charts by quarter, drawn smaller,
+     under the export's title for them, By quarter (7.9), or the sentence of the tables' refusal
+     alone; none on an answer without the quarters. */
   function quarterRow(tables) {
     var drawn = P.reportCharts.quarterCharts(tables, SMALL);
-    return drawn ? h('div', { key: 'quarters', className: 'app-research__minis' }, drawn) : null;
+    if (!drawn) return null;
+    return h('div', { key: 'quarters', className: 'app-research__minis' },
+      drawn.refused || titled('quarters', drawn));
+  }
+
+  /* A group of charts under `key`, { title, charts }: its title across the row of charts, in the
+     label's look the report page gave a part (app-research__part), then its charts. */
+  function titled(key, group) {
+    return h(React.Fragment, { key: key },
+      h('h3', { className: 'label app-research__part' }, group.title), group.charts);
   }
 
   /* Two columns, each its block under its label. */
@@ -547,21 +559,29 @@
 
   /* Changes to Fairband's inputs (7.6): for a report on a review, a line a change in the bridge's
      order, its label, its figures before and after in its input's unit and its effect on the
-     value a share, signed, or its refusal; for one with none, that it changes no input, where
-     its snapshot has a mechanical value for that to be. */
+     value a share, signed, or its refusal, their count in the head; where the review's bridge
+     holds no line, a review that refused, the bridge's refusal where it has one and the count of
+     the overrides inside the review in the head where it holds any, `none` where it holds none.
+     For a report on no review, `none` and that it changes no input, where its snapshot has a
+     mechanical value for that to be. */
   function changesCard(report) {
     var a = report.appendixA;
     var lines = a.bridge ? a.bridge.lines : [];
     var units = {};
     a.overrides.forEach(function (o) { units[o.id] = o.unit; });
-    var body = lines.length
-      ? h('ul', { className: 'app-research__recs' }, lines.map(function (line, i) {
+    var count = lines.length || (a.bridge ? a.overrides.length : 0);
+    var body = null;
+    if (lines.length) {
+      body = h('ul', { className: 'app-research__recs' }, lines.map(function (line, i) {
         return change(line, units[line.overrideId], i);
-      }))
-      : a.snapshot.value != null ? h('p', { className: 'body app-research__muted' }, NO_CHANGE)
-        : null;
+      }));
+    } else if (a.bridge) {
+      if (a.bridge.refusal) body = h('p', { className: 'body app-refusal' }, a.bridge.refusal);
+    } else if (a.snapshot.value != null) {
+      body = h('p', { className: 'body app-research__muted' }, NO_CHANGE);
+    }
     return card('changes', 'app-research__changes', 'Changes to Fairband\'s inputs',
-      lines.length ? C.count(lines.length) : 'none', body);
+      count ? C.count(count) : 'none', body);
   }
 
   function change(line, unit, key) {

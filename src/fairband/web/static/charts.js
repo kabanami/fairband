@@ -2,21 +2,22 @@
    draws (the Research tab's design, 7.4 rules 3, 4, 6 and 7, and 7.9), loaded after
    report_parts.js: the tab reads the series the sections cite and hands them here, and lays out
    the lists it is given. groupCharts gives the charts of Financial performance and health by
-   their table's name, quarterCharts the last earnings call's three charts by quarter, gridCharts
-   the grids of Valuation and priceCharts the charts of Price and multiples, the first two at the
-   height the tab asks for. In the design system's look (charts.md): one measure per chart, each
-   with a BasisChip in its header, mechanical for the tables and the series and reviewed for a
-   grid an agent's inputs move, each with no raised panel of its own, on its section's panel; no
-   chart has a table, the hover giving a point's figures (spec 2026-11-16 company page, 8.4 and
-   13). The titles are the export's (reports/charts.py), so the page and its Markdown never
-   differ: each chart of a financial table by its row's name there; a reading's grid by its
-   read's title, the secondary valuation's grid by its table's; the price against the band by its
-   table's; each P/E series by its column's in the year-end table. A cell with no value is left
-   out, a gap, never a zero; a chart with no point shows its title and "No data on file."; a read
-   the server refused shows its sentence in the chart's place, as it arrives. A ROIC year on
-   average invested capital at or below zero, whose figure has the wrong sign and no meaning, is
-   left out of the ROIC chart, and a line under the chart names the years and why (B-8; the
-   export's table writes the note in the cell).
+   their table's name, each group with its title, quarterCharts the last earnings call's three
+   charts by quarter with theirs, gridCharts the grids of Valuation and priceCharts the charts of
+   Price and multiples, the first two at the height the tab asks for. In the design system's look
+   (charts.md): one measure per chart, each with a BasisChip in its header, mechanical for the
+   tables and the series and reviewed for a grid an agent's inputs move, each with no raised panel
+   of its own, on its section's panel; no chart has a table, the hover giving a point's figures
+   (spec 2026-11-16 company page, 8.4 and 13). The titles are the export's (reports/charts.py),
+   so the page and its Markdown never differ: a group of Financial performance and health by its
+   table's title, each of its charts by its row's name there; the quarters by the export's title
+   for them, By quarter; a reading's grid by its read's title, the secondary valuation's grid by
+   its table's; the price against the band by its table's; each P/E series by its column's in
+   the year-end table. A cell with no value is left out, a gap, never a zero; a chart with no
+   point shows its title and "No data on file."; a read the server refused shows its sentence in
+   the chart's place, as it arrives. A ROIC year on average invested capital at or below zero,
+   whose figure has the wrong sign and no meaning, is left out of the ROIC chart, and a line under
+   the chart names the years and why (B-8; the export's table writes the note in the cell).
 
    Past the fiscal year (spec 2026-11-15 6.5, 6.6): a chart's bars stand under its table's
    columns, the tooltip naming each by the label the server gives its column.
@@ -34,40 +35,42 @@
   var QUARTER_ENDS = { 1: '-03-31', 2: '-06-30', 3: '-09-30', 4: '-12-31' };
   var SHORT_LOG = 5; /* the fewest forward readings drawn as a line (13.7) */
 
-  /* Financial performance and health (18.4's table): the six tables in the export's order
-     (charts.TITLES), each its charts by its rows, each titled by its row's name there
-     (charts.row_name). Buybacks and dividends is one measure, the cash returned (`returned`). A
-     lower net debt over EBITDA and a falling share count are the better ones: crossing zero, they
-     take the diverging pair the other way round (`inverse`). */
+  /* Financial performance and health (18.4's table): the six tables in the export's order, each
+     under its title there (charts.TITLES), its charts by its rows, each titled by its row's name
+     there (charts.row_name). Buybacks and dividends is one measure, the cash returned
+     (`returned`). A lower net debt over EBITDA and a falling share count are the better ones:
+     crossing zero, they take the diverging pair the other way round (`inverse`). */
   var FINANCIAL = [
-    { table: 'growth', charts: [
+    { table: 'growth', title: 'Growth and profitability', charts: [
       { row: 'revenue', title: 'Revenue' },
       { row: 'operating_margin', title: 'Operating margin' },
       { row: 'eps', title: 'EPS' }
     ] },
-    { table: 'cash_flow', charts: [
+    { table: 'cash_flow', title: 'Cash flow', charts: [
       { row: 'free_cash_flow', title: 'Free cash flow' },
       { row: 'stock_compensation_to_revenue', title: 'Stock compensation to revenue' }
     ] },
-    { table: 'solvency', charts: [
+    { table: 'solvency', title: 'Balance sheet and solvency', charts: [
       { row: 'net_debt_to_ebitda', title: 'Net debt to EBITDA', inverse: true },
       { row: 'interest_coverage', title: 'Interest coverage' }
     ] },
-    { table: 'returns', charts: [
+    { table: 'returns', title: 'Returns on capital', charts: [
       { row: 'roic', title: 'ROIC', hurdle: 'hurdle_rate' }
     ] },
-    { table: 'capital_allocation', charts: [
+    { table: 'capital_allocation', title: 'Capital allocation', charts: [
       { rows: ['buybacks', 'dividends'], title: 'Buybacks and dividends' },
       { row: 'share_count_change', title: 'Share count change', inverse: true }
     ] },
-    { table: 'quality', charts: [
+    { table: 'quality', title: 'Quality scores', charts: [
       { row: 'altman_z', title: "Altman's Z″" },
       { row: 'piotroski_f', title: "Piotroski's F" }
     ] }
   ];
-  /* The last earnings call (spec 2026-11-15 6.5): the quarters table's charts by its rows, each
-     titled by its row's name in the export, run by quarter. */
-  var QUARTERLY = { table: 'quarters', by: 'quarter', charts: [
+  /* The last earnings call (spec 2026-11-15 6.5): the quarters table under its title in the
+     export (charts.QUARTERS_TITLE), its charts by its rows, each titled by its row's name there,
+     run by quarter. */
+  var QUARTERS_TITLE = 'By quarter';
+  var QUARTERLY = { table: 'quarters', title: QUARTERS_TITLE, by: 'quarter', charts: [
     { row: 'revenue', title: 'Revenue' },
     { row: 'operating_margin', title: 'Operating margin' },
     { row: 'eps', title: 'EPS' }
@@ -410,28 +413,37 @@
 
   /* ------------------------------------------------------------- the exports */
 
-  /* Rule 3 (the Research tab's design, 7.4, 7.9): each group's charts by its table's name, from
-     growth to quality, each with no panel, at `height` where given; the server's sentence alone,
-     { refused }, when the tables did not load. */
+  /* Rule 3 (the Research tab's design, 7.4, 7.9): each group by its table's name, from growth to
+     quality, { title, charts }: its title, the export's, which the tab draws over a row of groups
+     and not beside a paragraph, whose lead word names the group; and its charts, each with no
+     panel, at `height` where given. The server's sentence alone, { refused }, when the tables
+     did not load. */
   function groupCharts(read, height) {
     if (read.error) return { refused: refused('The financial tables', read.error) };
     var look = { wrap: bare, height: height };
     var byName = tablesByName(read.body);
     var drawn = {};
     FINANCIAL.forEach(function (part) {
-      drawn[part.table] = chartsOf(part, byName[part.table], read.body.currency, look);
+      drawn[part.table] = {
+        title: part.title,
+        charts: chartsOf(part, byName[part.table], read.body.currency, look)
+      };
     });
     return drawn;
   }
 
-  /* Rule 4: the three charts by quarter, each with no panel, at `height` where given; the
-     server's sentence when the tables did not load; none on an answer from before the quarters
+  /* Rule 4: the three charts by quarter, { title, charts }: the export's title for them, By
+     quarter, and the charts, each with no panel, at `height` where given. The server's sentence
+     alone, { refused }, when the tables did not load; none on an answer from before the quarters
      were served. */
   function quarterCharts(read, height) {
-    if (read.error) return refused('The figures by quarter', read.error);
+    if (read.error) return { refused: refused('The figures by quarter', read.error) };
     var body = read.body;
     if (!body.quarters) return null;
-    return chartsOf(QUARTERLY, body.quarters, body.currency, { wrap: bare, height: height });
+    return {
+      title: QUARTERLY.title,
+      charts: chartsOf(QUARTERLY, body.quarters, body.currency, { wrap: bare, height: height })
+    };
   }
 
   /* Rule 6: Valuation's grids, each with no panel. */

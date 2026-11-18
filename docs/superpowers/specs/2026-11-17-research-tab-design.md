@@ -69,9 +69,11 @@ the tab, Records, lists the company's records on file.
 ## 4. Anti-goals
 
 - **A rule that hides or rewrites an agent's sentence.** A layout rule moves a block or sets
-  two blocks side by side. It never drops one, with one exception: the Summary's first line
-  where it is exactly `Stance: <word>.` and the word is the report's stance, which the bar
-  states (7.2).
+  two blocks side by side. It never drops or rewrites one, with two exceptions: the Summary's
+  first line where it is exactly `Stance: <word>.` and the word is the report's stance, which
+  the bar states (7.2); and the opening words of the bull and the bear paragraphs, "The bull
+  case" and "The bear case", which rule 5 takes off the paragraph's start to stand as its
+  column's label, the next letter set upper case (7.4).
 - **A figure no record holds.** A card draws stored records and the read's fields. The page
   computes none.
 - **Two readers of the text's shape.** The tab reads a section's blocks with the design
@@ -160,8 +162,9 @@ dates, and each record carries its own.
 
 Under the tabs' row, one bar:
 
-- At the left, **Report** and **Records**, the tab's two views, Records with the count of the
-  records on file. Report is shown first. The view is not in the address (*my call*).
+- At the left, **Report** and **Records**, the tab's two views, Records with its count after a
+  space, the sum of the rows the Records panels draw (7.10). Report is shown first. The view is
+  not in the address (*my call*).
 - In the Report view, the report's line: its stance in the Stance column's chip, faded once
   the report's validity has ended, with the title the report page gives it; its mode; its
   revision; its date and time; who wrote it; "valid until" with the date; and, for a valuation
@@ -189,10 +192,15 @@ At the left of the Report view, 196 px wide, a list that stays in view while the
 scrolls:
 
 - **The report**: the sections' headings in their order, twelve or ten.
-- **Kept closed**: References with their count, Appendix A, Appendix B.
+- **Kept closed**: References with their count after a space ("References 185"), Appendix A,
+  Appendix B.
 - **Reports on file**, with the count: every report and revision of the company, newest
   first, each with its date, its revision, its mode and its stance. The one shown is marked. A
-  press on another opens it at its address.
+  press on another opens it at its address, at its head: since the list stays in view while the
+  report scrolls, the page goes back to its top as the report the tab shows changes, to another
+  id or from an id to the latest, while the same report's answer landing again (a refresh's end,
+  a note taken) and a return from another tab to the same report keep the reader's place (the
+  whole-branch review's ruling, decision log).
 
 A press on a name scrolls to its panel, and opens it where it is one of the closed three. The
 section in view is marked as the app marks a selection: `surface-selected` and a 2 px `accent`
@@ -243,7 +251,8 @@ order, text and wide tables, as the report page draws them today.
 4. **The last earnings call.** The three charts by quarter in one row, then the blocks.
 5. **The bull case and the bear case.** Where the section is exactly two paragraphs that open
    "The bull case" and "The bear case", they stand in two columns, each under those words as
-   its label, the words taken off the paragraph's start.
+   its label, the words taken off the paragraph's start and the letter after them set upper
+   case (the second exception of section 4).
 6. **Valuation.** Cards: each sensitivity grid the section cites and the secondary
    valuation's grid, as today's charts draw them; then Changes to Fairband's inputs (7.6).
 7. **Price and multiples.** Cards: the price against the band, the trailing P/E, the forward
@@ -292,15 +301,19 @@ bridge names it, its figure before and after in the input's unit, and its effect
 a share, signed, to cents; the line's refusal where it has one. Appendix A keeps the whole
 bridge and each override's record. A report on a refused snapshot with no line draws `none` and
 no sentence, since its value is then not the mechanical value (the build's ruling, decision
-log).
+log). A report that rests on a review whose bridge holds no line, a review that refused with its
+overrides inside, draws the bridge's refusal where it has one, and in its head the count of the
+overrides inside the review where it holds any, else `none`; the sentence "changes no input" is
+for a report with no review alone (the whole-branch review's ruling, decision log).
 
 ### 7.7 A cited number
 
 A cite stays the design system's: the figure in the mono face with a dotted line under it. On
 the tab it takes the text's colour, and `accent` on hover and on focus. Its source, the
 reference's number and its words, shows in a small box on hover and on keyboard focus. Its
-footnote mark, `[n]`, is hidden until Footnote marks is on. In a table the dotted line is left
-out, and in a card a table's cells after the first are set right.
+footnote mark, `[n]`, is hidden on screen until Footnote marks is on, and printed whatever it
+says (7.11). In a table the dotted line is left out, and in a card a table's cells after the
+first are set right.
 
 ### 7.8 The closed parts
 
@@ -318,6 +331,15 @@ on their section's panel, with no panel of their own. In a pair of rule 3 and in
 they are drawn smaller, by the charts' `height` (*my call*: 120 px; the mockup's charts are
 its own and simpler, section 13). A read the server refused draws its sentence in the chart's
 place, as today.
+
+The titles over the charts are the report page's, the Markdown export's (`reports/charts.py`,
+`TITLES` and `QUARTERS_TITLE`), kept beside the groups in `charts.js`. Where no paragraph names
+a group, in a row of groups, the group's title stands over its charts in the label's look the
+report page gave a part: `Growth and profitability`, `Cash flow`, `Balance sheet and solvency`,
+`Returns on capital`, `Capital allocation`, `Quality scores`. A pair draws no title, since its
+paragraph's bold lead word names the group. The earnings call's three charts stand under `By
+quarter`. A refused read draws its sentence alone, with no title (the whole-branch review's
+ruling, decision log).
 
 ### 7.10 Records
 
@@ -363,7 +385,9 @@ page's print rules for an agent's table hold. The tab's script opens the closed 
 the page prints and closes those it opened after, since a stylesheet cannot open a closed
 `details` in every browser; and print from the Records view prints the Records, under a head
 that prints its logo, its badges and its caption with the name and ticker (the build's rulings,
-decision log).
+decision log). The footnote marks print whatever Footnote marks says: on paper no box shows a
+cite's source, so with the switch off, the default, the marks still print and each number in
+the text points to its reference (the whole-branch review's ruling, decision log).
 
 The tab takes the company page's width. Below 980 px it is one column.
 
@@ -712,3 +736,50 @@ The readout goes in the decision log: the heights of the seven, and what the eye
     screen's styles, and what the branch printed before `c76ea20` was not measured. With the print styles, after the fix,
     AAPL's PDF holds 13 pages (277 KB): the three closed parts print open and are closed again
     after, the head and the bar's line print, and the cards stand under their text.
+- **2026-11-18, the whole-branch review.** One reviewer read the whole branch after its eight
+  tasks. Its verdict: "ready to merge, with fixes". It found one Important item and five Minor
+  ones, each fixed in this entry's commit:
+  1. Important: a printed report had no footnote marks. The screen's rule that hides them held
+     in print, so with Footnote marks off, the default, AAPL's PDF listed 185 references and no
+     number in the text pointed to one, and the box that names a cite's source on screen does
+     not exist on paper. A print rule now shows the marks whatever the switch says (7.7, 7.11).
+  2. Minor: the list wrote References and its count with no space, "References185", in its
+     text and its accessible name, the slip already fixed for Records' count. A space now stands
+     between them, "References 185" (7.3). No other name of the list carries a count; "Reports
+     on file · n" is a group's head.
+  3. Minor: the financial groups' titles and "By quarter" had left `charts.js` with the report
+     page, against 7.9's "the same titles", so a row of groups drew twelve charts with no group
+     head and the earnings call's first row three charts with nothing to say they were by
+     quarter. The titles stand beside the groups in `charts.js` again, the export's words;
+     `groupCharts` answers each group's title with its charts and `quarterCharts` its title; a
+     row of groups draws each group's title over its charts, the earnings call's row stands
+     under "By quarter", a pair draws none, and a refused read its sentence alone (7.9).
+  4. Minor: another report opened at the depth the reader left, since the section list stays
+     in view while the report scrolls and the loader took the panel to its top only for another
+     company. It now does so too as the report the Research tab shows changes, to another id or
+     from an id to the latest; the same report's answer landing again and a return from another
+     tab keep the reader's place (7.3).
+  5. Minor: the changes card of a report on a review whose bridge holds no line, a review that
+     refused with its overrides inside, said "The report changes no input, so its value is the
+     mechanical value.", which is false there, and dropped the review's refusal. It now draws
+     the bridge's refusal and the count of the overrides inside the review in its head (7.6).
+  6. Minor: the documents. B-40 said the Button's `aria-pressed` patch had no caller, which
+     Footnote marks is; section 4 and the plan's Global Constraints named the stance line as the
+     one block a rule rewrites, where rule 5 takes the bull and the bear paragraphs' opening
+     words off too; and 7.2 counted Records "the records on file" where 7.10 counts the rows the
+     panels draw. Each is set right, and the plan's Words table gains the two names a screen
+     reader reads and the charts' titles.
+
+  It judged the build's 24 rulings and overturned none. Every deferred minor still true stays
+  in the backlog: B-222, B-243 to B-246 and B-40; B-244 gains two of the review's set-aside
+  items, the tab drawn again whole at each change of the section in view and each series that
+  lands, and every cite a stop of the keyboard's Tab. The controller's rulings on it, each for
+  the founder to overturn:
+  1. The footnote marks print whatever the switch says (7.11).
+  2. A row of groups and the earnings call's row carry their titles, a pair none (7.9).
+  3. The items it set aside stand as built: the "Today" sentence of the value card prints; none
+     is written where today's value is a secondary valuation; a cards column may be taller than
+     the window; and the multiples history is read again at each landing of the tab's read.
+     Rule 5 would take the words off a paragraph that opens "The bull case is …" and leave "Is
+     …"; none of the 33 reports on file opens so: 25 open "The bull case:", 6 "**The bull
+     case.**" and 2 "The bull case.".

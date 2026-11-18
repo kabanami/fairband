@@ -1202,6 +1202,14 @@
   }
   .app-research__minis--all { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .app-research__minis > .app-report__error { grid-column: 1 / -1; margin: 0; }
+  /* A group's title over its charts in a row of groups, and By quarter over the earnings call's
+     (7.9): across the row, in the label's look the report page gave a part, a group after another
+     set off by more space than its title from its charts. */
+  .app-research__part {
+    grid-column: 1 / -1; margin: var(--space-3) 0 0; color: var(--ink-muted);
+    text-transform: uppercase;
+  }
+  .app-research__part:first-child { margin-top: 0; }
   .app-research .fb-cite { color: inherit; border-bottom-color: var(--border); }
   .app-research .fb-cite:hover, .app-research .fb-cite:focus-visible {
     color: var(--accent); border-bottom-color: var(--accent);
@@ -1331,7 +1339,9 @@
        controls or the tabs' row, a rule of its own so a browser that cannot read it still hides
        the tab's controls, and the other tabs print as they did. The report in one column, a
        section's cards under its text, a card and a chart whole on a page and a heading kept with
-       what follows it. */
+       what follows it. The footnote marks print whatever Footnote marks says: on paper no box
+       shows a cite's source, so with the switch off, the default, the marks the screen hides
+       print, and each number in the text points to its reference. */
     .app-research__views, .app-research__actions, .app-research__list { display: none !important; }
     .app-company:has(.app-research) :is(.app-company__quote, .app-company__actions,
     .app-company__tabs) { display: none !important; }
@@ -1341,6 +1351,7 @@
     .app-research__card, .app-charts__chart { break-inside: avoid; }
     .app-research h2, .app-research h3, .app-research h4,
     .app-research__summary { break-after: avoid; }
+    .app-research:not(.app-research--marks) .fb-cite__n { display: inline; }
     /* the agent's table and a list item stay on one page (spec 2026-11-06 Tier 2, 18.4) */
     .fb-report__table, .fb-report__list li { break-inside: avoid; }
     /* the agent's table prints whole (spec 2026-11-15 9), as it did on the report page: its

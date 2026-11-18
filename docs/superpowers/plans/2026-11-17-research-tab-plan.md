@@ -31,7 +31,7 @@
 - No file under `src/fairband/engine/` or `src/fairband/policy/` changes. The method stays `fairband-mechanical/1.5` and the policy v16. No migration: the schema stays at 009. Nothing new is stored.
 - No agent's write changes: `report_submit`, the number check (`reports/check.py`), the playbook and the Markdown export stay as they are. `GET /api/reports/{id}`, `GET /api/companies/{symbol}/reports` and `GET /api/companies/{symbol}/research` keep their answers.
 - The tab's read calls no vendor. The tab writes nothing: no override, no kill criterion's state, no note of its own.
-- A layout rule moves a block or sets blocks side by side. It never drops or rewrites one, but for the Summary's first line where it is exactly `Stance: <word>.` and the word is the report's stance.
+- A layout rule moves a block or sets blocks side by side. It never drops or rewrites one, but for two exceptions: the Summary's first line where it is exactly `Stance: <word>.` and the word is the report's stance; and the opening words of the bull and the bear paragraphs, which rule 5 (spec 7.4) takes off the paragraph's start as its column's label, the next letter set upper case.
 - The page computes no figure: a card draws stored records and the read's fields. Money is written by `Fairband.formatMoney`, an input's figure by `P.inputFigure`.
 - One reader of the text's shape: the tab reads and draws a section's blocks with `Fairband.reportText` alone.
 - Every word a person reads is copied from this plan's Words table, which copies the spec's and the mockup's. A changed word is a spec change.
@@ -52,7 +52,9 @@
 | The bar, right | `Footnote marks`; `Download .md` |
 | The bar in Records | `The company's records on file, from any report.` |
 | No report | `No report yet.` |
-| The list | `The report`; `Kept closed`; `Reports on file · <n>`; an entry: `<date>, revision <n>` over `<mode>, <stance>` |
+| The list | `The report`; `Kept closed`; `References <n>`, `Appendix A`, `Appendix B`; `Reports on file · <n>`; an entry: `<date>, revision <n>` over `<mode>, <stance>` |
+| Names a screen reader reads | the views, `What the tab shows`; the list, `The report's sections` |
+| The charts' titles | over a row of groups, the export's `Growth and profitability`, `Cash flow`, `Balance sheet and solvency`, `Returns on capital`, `Capital allocation`, `Quality scores`; over the earnings call's charts, `By quarter` |
 | The closed parts | `References` and `<n> sources, one for each cited number`; `Appendix A` and `the audit of the records the report rests on`; `Appendix B` and `the glossary, <n> terms` |
 | The value card | `The report's call`; `on the data of <date>, priced that day` or `on the data of <date>, priced <date>`; `Value a share`; `mechanical`, `reviewed`, `reviewed, secondary valuation`; the meter's gap `<ratio> × the mechanical value`, `× the reviewed value`, `× the secondary valuation`; `buy below <money>`, `close to the value <money> to <money>`, `trim above <money>`; `Valid until <date>.`; `Today the mechanical value is <money> and the price <money>.` (`reviewed` for `mechanical` where the company's value today is a review's); `The mechanical value was <money>.` |
 | The changes card | `Changes to Fairband's inputs`; `none`, or the count; `The report changes no input, so its value is the mechanical value.`; a line: the bridge's label, `<from> → <to>`, `<+ or −><money> a share` |

@@ -23,6 +23,8 @@ from support import research_answers as answers
 from support.page import BUNDLE, NODE, STATIC, classed, elements, node, text
 from support.web import _static_file
 
+from fairband.reports.charts import QUARTERS_TITLE, TITLES
+
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 SCRIPTS = (
@@ -342,6 +344,49 @@ def test_the_changes_card() -> None:
     _clean(four)
 
 
+def _head(card: Any) -> list[str]:
+    """The words of a card's head: its name and the word on what it holds."""
+    return [text(e) for e in _one(card, "app-research__head")["props"]["children"]]
+
+
+def test_the_changes_card_of_a_review_with_no_line() -> None:
+    """Spec 7.6: "changes no input" is for a report with no review alone, and not for one on a
+    refused snapshot, whose value is then not the mechanical value. A report that rests on a
+    review whose bridge holds no line, a review that refused with its overrides inside, draws the
+    bridge's refusal and the count of the overrides inside the review in its head; one with no
+    refusal draws no sentence, and `none` in its head where it holds no override."""
+    no_change = "The report changes no input, so its value is the mechanical value."
+    unreviewed = answers.answer()["report"] | {"reviewId": None}
+    unreviewed["appendixA"]["bridge"] = None
+    unreviewed["appendixA"]["overrides"] = []
+    none = _research("changesCard", unreviewed)
+    assert _head(none) == ["Changes to Fairband's inputs", "none"]
+    assert [text(e) for e in classed(none, "app-research__muted")] == [no_change]
+
+    unreviewed["appendixA"]["snapshot"] |= {"value": None, "refusal": "no positive earnings"}
+    refused_snapshot = _research("changesCard", unreviewed)
+    assert _head(refused_snapshot) == ["Changes to Fairband's inputs", "none"]
+    assert no_change not in text(refused_snapshot)
+    assert classed(refused_snapshot, "app-refusal") == []
+
+    refusal = "The runway return leaves no value above zero."
+    report = _bridged([], {21: "ratio", 24: "ratio"})
+    report["appendixA"]["bridge"] |= {"refusal": refusal, "reviewedValue": None}
+    refused = _research("changesCard", report)
+    assert _head(refused) == ["Changes to Fairband's inputs", "2"]
+    assert [text(e) for e in classed(refused, "app-refusal")] == [refusal]
+    assert classed(refused, "app-research__rec") == []
+    assert no_change not in text(refused)
+    _clean(refused)
+
+    quiet = _research("changesCard", _bridged([], {}))
+    assert _head(quiet) == ["Changes to Fairband's inputs", "none"]
+    assert text(quiet) == "Changes to Fairband's inputsnone"  # no sentence, no line
+    one = _research("changesCard", _bridged([], {21: "ratio"}))
+    assert _head(one) == ["Changes to Fairband's inputs", "1"]
+    assert text(one) == "Changes to Fairband's inputs1"
+
+
 # ------------------------------------------------------------------------ the records' cards
 
 
@@ -607,12 +652,46 @@ def _drawn_blocks(tree: Any) -> int:
     )
 
 
+# The charts of each group of the financial tables, by their titles, in the order they stand.
+CHARTS = {
+    "growth": ["Revenue", "Operating margin", "EPS"],
+    "cash_flow": ["Free cash flow", "Stock compensation to revenue"],
+    "solvency": ["Net debt to EBITDA", "Interest coverage"],
+    "returns": ["ROIC"],
+    "capital_allocation": ["Buybacks and dividends", "Share count change"],
+    "quality": ["Altman's Z″", "Piotroski's F"],
+}
+
+
+def _heads(tree: Any) -> list[tuple[str, str]]:
+    """What a row of charts stands, in the document's order: each title over charts
+    (``app-research__part``) as ("part", its words) and each chart as ("chart", its title)."""
+    found: list[tuple[str, str]] = []
+    for e in elements(tree):
+        if "app-research__part" in str(e["props"].get("className") or "").split():
+            found.append(("part", text(e)))
+        elif "series" in e["props"]:
+            found.append(("chart", e["props"]["title"]))
+    return found
+
+
+def _titled(*keys: str) -> list[tuple[str, str]]:
+    """The groups ``keys`` in a row of groups: each group's title, the export's, then its
+    charts."""
+    return [
+        head
+        for key in keys
+        for head in [("part", TITLES[key]), *(("chart", c) for c in CHARTS[key])]
+    ]
+
+
 def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
     """Rule 3: a pair is its paragraph at the reading width beside its group's charts, drawn
-    smaller; a group no paragraph names stands in a row of its own, the charts alone at their
-    own height. Rule 4: the call opens with its three charts by quarter, drawn smaller. A refused
-    read draws its sentence once, in the place of the first charts. Every section's text is
-    drawn while no series has landed."""
+    smaller, with no title, since the paragraph's bold lead word names the group; a group no
+    paragraph names stands in a row of its own, the charts alone at their own height under the
+    group's title. Rule 4: the call opens with its three charts by quarter, drawn smaller, under
+    "By quarter". A refused read draws its sentence once, in the place of the first charts. Every
+    section's text is drawn while no series has landed."""
     tables = {"body": answers.TABLES}
     small = _charts_of("groupCharts", tables, SMALL)
     financial = HEADINGS.index("Financial performance and health")
@@ -622,7 +701,8 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
         run, charts = row["props"]["children"]
         assert "app-research__run" in run["props"]["className"]
         assert charts["props"]["className"] == "app-research__minis"
-        assert charts["props"]["children"] == [small[key]]
+        assert charts["props"]["children"] == [small[key]["charts"]]
+        assert _heads(row) == [("chart", title) for title in CHARTS[key]]  # no title
 
     parts = [
         p.replace("**Quality.**", "**Scores.**") if isinstance(p, str) else p
@@ -634,8 +714,7 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
         "app-research__run",
         "app-research__minis app-research__minis--all",
     ]
-    whole = _charts_of("groupCharts", tables)
-    assert rows[-1]["props"]["children"] == [whole["quality"]]
+    assert _heads(rows[-1]) == _titled("quality")
 
     refused = {"error": "no financial statements for LFOX"}
     rows = _rows(_section(financial, {"tables": refused}))
@@ -645,17 +724,76 @@ def test_a_pair_holds_its_group_s_charts_and_the_call_its_quarters() -> None:
     earnings = HEADINGS.index("The last earnings call")
     first, *rest = _rows(_section(earnings, {"tables": tables}))
     assert first["props"]["className"] == "app-research__minis"
-    assert first["props"]["children"] == [_charts_of("quarterCharts", tables, SMALL)]
+    assert _heads(first) == [
+        ("part", QUARTERS_TITLE),
+        ("chart", "Revenue"),
+        ("chart", "Operating margin"),
+        ("chart", "EPS"),
+    ]
+    assert QUARTERS_TITLE == "By quarter"
+    quarters = _charts_of("quarterCharts", tables, SMALL)
+    assert [c for c in elements(first) if "series" in c["props"]] == [
+        c for c in elements(quarters["charts"]) if "series" in c["props"]
+    ]
     assert rest == _rows(_section(earnings, {}))
+    [refusal] = _rows(_section(earnings, {"tables": refused}))[:1]
+    assert text(refusal) == "The figures by quarter did not load: no financial statements for LFOX."
+    assert _heads(refusal) == []  # the sentence alone, no title
 
     [mounted] = _drive([_mount()])
     for index in range(len(HEADINGS)):
         panel = _panel(mounted["tree"], index)
         assert _drawn_blocks(panel) == _laid_count(index), HEADINGS[index]
     assert _titles(mounted["tree"]) == []  # no chart before its series lands
+    assert classed(mounted["tree"], "app-research__part") == []  # nor a title over none
     pairs = classed(mounted["tree"], "app-research__pair")
     assert len(pairs) == 6
     assert all(p["props"]["children"][1]["props"]["children"] == [None] for p in pairs)
+
+
+def test_a_row_of_groups_draws_each_group_s_title_over_its_charts() -> None:
+    """Spec 7.9: the charts keep the report page's titles, the export's (``charts.TITLES``). A
+    row of groups draws each group's title over that group's charts, in the label's look the
+    report page gave a part, across the row: all six in their order where no paragraph names a
+    group, so every chart stands first; the two no paragraph names after the pairs. A pair draws
+    none. A refused read draws its sentence once and no title."""
+    tables = {"body": answers.TABLES}
+    financial = HEADINGS.index("Financial performance and health")
+    plain = ["Revenue grew and the cash stayed ahead of the debt."]
+    first, *rest = _rows(_section(financial, {"tables": tables}, plain))
+    assert first["props"]["className"] == "app-research__minis app-research__minis--all"
+    assert _heads(first) == _titled(*GROUPS)
+    assert [e["type"] for e in classed(first, "app-research__part")] == ["h3"] * 6
+    assert [e["props"]["className"] for e in classed(first, "app-research__part")] == [
+        "label app-research__part"
+    ] * 6
+    assert classed(rest, "app-research__part") == []
+
+    named = {"**Capital allocation.**": "**Payouts.**", "**Quality.**": "**Scores.**"}
+    parts = list(answers.FINANCIAL)
+    for lead, other in named.items():
+        parts = [p.replace(lead, other) if isinstance(p, str) else p for p in parts]
+    rows = _rows(_section(financial, {"tables": tables}, parts))
+    two = rows[-1]  # after the pairs and the paragraphs that name no group
+    assert two["props"]["className"] == "app-research__minis app-research__minis--all"
+    assert _heads(two) == _titled("capital_allocation", "quality")
+    pairs = [r for r in rows if r["props"]["className"] == "app-research__pair"]
+    assert len(pairs) == 4 and classed(pairs, "app-research__part") == []
+
+    refused = {"error": "no financial statements for LFOX"}
+    first = _rows(_section(financial, {"tables": refused}, plain))[0]
+    sentence = "The financial tables did not load: no financial statements for LFOX."
+    assert [text(e) for e in classed(first, "app-report__error")] == [sentence]
+    assert text(first) == sentence
+    assert classed(first, "app-research__part") == []
+
+    title = _rule(".app-research__part {")
+    for declaration in (
+        "grid-column: 1 / -1;",
+        "color: var(--ink-muted);",
+        "text-transform: uppercase;",
+    ):
+        assert declaration in title, declaration
 
 
 # ------------------------------------------------------------------------------- the series

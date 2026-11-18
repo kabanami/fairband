@@ -35,6 +35,8 @@
     symbol: null, /* the company whose page is shown */
     tab: 'overview', /* the tab shown */
     id: null, /* the report the Research tab shows, by its id; null for the latest and elsewhere */
+    report: null, /* the key (keyOf) of the report the Research tab showed last of the company
+                     shown, kept while another tab shows; null before the tab showed one */
     detail: null, /* GET /api/companies/{symbol}: the head */
     answers: {}, /* the shown company's tab reads, by tab and report (keyOf), as they landed */
     failed: null, /* the shown tab's read failed: the sentence drawn under the tabs */
@@ -70,15 +72,24 @@
      launch again (shown). A tab's read that fails draws its sentence under the tabs; the detail's
      draws its own (failure) alone. An Overview's read that lands draws its stored news,
      then asks for newer news where they are stale (newer); a tab held is shown with what it holds
-     and asks nothing. */
+     and asks nothing. The panel goes back to its top as the page turns to another company, and as
+     the Research tab turns to another report than it showed last, another id or the latest after
+     an id, read or held (the Research tab's design, 7.3), since its section list stays in view
+     while the report scrolls; the same report read again, another tab, and the same report on
+     coming back keep the reader's place. */
   function load() {
     var want = P.company;
     var key = keyOf(want);
     var request = ++latest;
     var held = !!state.detail && !state.error && state.symbol === want.symbol;
+    if (want.tab === 'research' && state.symbol === want.symbol && state.report != null &&
+      state.report !== key) {
+      mount.scrollTop = 0;
+    }
     if (held && key !== keyOf(state) && state.answers[key] && !state.whole) {
       state.tab = want.tab;
       state.id = want.id;
+      if (want.tab === 'research') state.report = key;
       state.failed = null;
       state.loading = false;
       state.reading = null;
@@ -112,6 +123,8 @@
         if (whole) state.answers = {};
         if (found.answer) state.answers[key] = found.answer;
         if (state.symbol !== want.symbol && !mount.hidden) P.notesShown(want.symbol);
+        if (state.symbol !== want.symbol) state.report = null;
+        if (want.tab === 'research') state.report = key;
         state.symbol = want.symbol;
         state.tab = want.tab;
         state.id = want.id;
@@ -127,6 +140,8 @@
         state.whole = false;
         state.reading = null;
         if (state.symbol !== want.symbol && !mount.hidden) P.notesShown(want.symbol);
+        if (state.symbol !== want.symbol) state.report = null;
+        if (want.tab === 'research') state.report = key;
         state.symbol = want.symbol;
         state.tab = want.tab;
         state.id = want.id;
