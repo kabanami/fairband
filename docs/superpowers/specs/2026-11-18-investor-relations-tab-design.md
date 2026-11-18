@@ -285,7 +285,9 @@ What a press can add:
 - **The data date**, at the right end of the tabs' row (the page's design, 7.4): the oldest
   day among the stored answers the view draws. On the Earnings calls view these are the list
   of calls, the `earnings` rows and the transcript shown; on the Filings view, the filing
-  lists read.
+  lists read. So the page shows, on the Earnings calls view, the older of the first read's
+  `dataDate` and the shown transcript's `observedDay`, and on the Filings view the oldest
+  `observedDay` among the filing lists read (8.2).
 
 After the build's first start and before its first refresh the store holds a list for few
 companies: the tab draws its two sentences for the rest, as any tab draws a company not yet
@@ -350,19 +352,21 @@ Three reads in `web/company_api.py`, beside the other tabs'.
 **`GET /api/companies/{symbol}/page/investor-relations`**, from the store alone, a plain GET
 with no vendor call, as the other tabs' reads are. It answers:
 
-- `symbol`, `quote` (the head's, as the other tabs' reads answer it) and `dataDate`.
+- `symbol`, `quote` (the head's, as the other tabs' reads answer it) and `dataDate`: the oldest
+  day among the head's quote, the list of calls and the `earnings` rows, as the Estimates read
+  counts its own answers. The filing list is not in it: it carries its own day (7.6).
 - `nextEarnings`: the day, or null.
 - `calls`: every call of the newest usable stored `transcript-dates` answer, newest first, each
   `{fiscalYear, quarter, date, epsReported, epsEstimate, revenueReported, revenueEstimate}`,
   the four figures null where no stored `earnings` row is the call's by 7.4's rule or the row
   lacks the figure. A row of the list without a whole fiscal year, a quarter of 1 to 4 and an
   ISO date is dropped. Empty where no list is stored.
-- `filings`: `{from, to, rows, truncated}` of the usable stored `sec-filings` answer whose
-  `to` is the latest (the newest among equals), the rows newest first, each `{form, filed,
-  document, files}`, a link null unless it starts `https://`; `truncated` true where the answer
-  holds `FILINGS_LIMIT` rows. Null where
-  none is stored. An agent's list of an older window has an earlier `to`, so it never stands
-  in for the refresh's.
+- `filings`: `{from, to, rows, truncated, observedDay}` of the usable stored `sec-filings`
+  answer whose `to` is the latest (the newest among equals), the rows newest first, each `{form,
+  filed, document, files}`, a link null unless it starts `https://`; `truncated` true where the
+  answer holds `FILINGS_LIMIT` rows; `observedDay` the day the stored answer was observed. Null
+  where none is stored. An agent's list of an older window has an earlier `to`, so it never
+  stands in for the refresh's.
 
 **`GET /api/companies/{symbol}/page/investor-relations/call?year=<y>&quarter=<q>`** answers
 `{symbol, fiscalYear, quarter, date, turns, questionsAt, observedDay}`: `turns` a list of
@@ -381,10 +385,10 @@ questions' first turn, or null; `observedDay` the day the copy was fetched.
   scrubbed. The page draws 7.4's sentence from it.
 
 **`GET /api/companies/{symbol}/page/investor-relations/filings?to=<ISO date>`** answers
-`{from, to, rows, truncated}` for the 365 days that end on `to`, through the `filings`
-pass-through. A stored usable answer of that exact window is used whatever its age where `to`
-is before today (*my call*: a past year's list does not change); else the pass-through's
-window holds. It fails as the call read does.
+`{from, to, rows, truncated, observedDay}` for the 365 days that end on `to`, through the
+`filings` pass-through. A stored usable answer of that exact window is used whatever its age
+where `to` is before today (*my call*: a past year's list does not change); else the
+pass-through's window holds. It fails as the call read does.
 
 The last two may call a vendor. So each carries the header `X-Fairband-Request: 1`, else 403,
 as the pass-through routes do (`app`, D11): their paths join `_VENDOR_READS` (`web/app.py`),
@@ -564,3 +568,6 @@ filings; how `fetch_company` runs a call that depends on another's answer.
   named (the refresh stores the tab's data; no gap to the estimate). The founder: "Approved".
   While writing the plan Claude added one rule: a filing's link is drawn only where it starts
   `https://` (7.5, 8.2), so a vendor's row can put no other kind of address behind a press.
+- **2026-11-18, the build's ruling:** the first read's data date covers the calls view's stored
+  answers, and each filing list carries its own day, so the page can give each view its caption
+  (7.6).

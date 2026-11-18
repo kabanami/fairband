@@ -181,6 +181,7 @@ def test_the_tab_s_read_whole(client: TestClient, db_path: Path) -> None:
             "to": "2026-11-01",
             "rows": page_investor.filing_rows(pages.FILINGS),
             "truncated": False,
+            "observedDay": "2026-11-01",
         },
     }
     calls = body["calls"]
@@ -310,24 +311,50 @@ def test_a_list_of_the_vendor_s_limit_is_truncated(client: TestClient, db_path: 
     assert _get(client, TAB)["filings"]["truncated"] is False
 
 
-@pytest.mark.parametrize("older", ["transcript-dates", "earnings", "sec-filings"])
-def test_the_data_date_is_the_oldest_of_the_three_answers(
+@pytest.mark.parametrize("older", ["quote", "transcript-dates", "earnings"])
+def test_the_data_date_is_the_oldest_of_the_calls_view_s_answers(
     client: TestClient, db_path: Path, older: str
 ) -> None:
-    """The oldest day among the answers the tab draws (7.6): the list of calls, the earnings rows
-    and the filing list, each in turn stored a day before the rest. The profile's day and the
-    quote's, older still, do not count."""
+    """The oldest day among the stored answers of the Earnings calls view (7.6), as the estimates
+    read counts its own: the head's quote, the list of calls and the earnings rows, each in turn
+    stored a day before the rest. The profile's day and the filing list's, older still, do not
+    count; the filing list carries its own day."""
 
-    def on(endpoint: str) -> datetime:
-        return datetime(2026, 10, 29 if endpoint == older else 30, 12, 0, tzinfo=UTC)
+    def on(answer: str) -> datetime:
+        return datetime(2026, 10, 29 if answer == older else 30, 12, 0, tzinfo=UTC)
 
     _profile(db_path, datetime(2026, 10, 20, tzinfo=UTC))
-    _quote(db_path, datetime(2026, 10, 21, tzinfo=UTC))
+    _quote(db_path, on("quote"))
     _calls(db_path, at=on("transcript-dates"))
     _earnings(db_path, at=on("earnings"))
-    _filings(db_path, DAY, at=on("sec-filings"))
+    _filings(db_path, DAY, at=datetime(2026, 10, 21, tzinfo=UTC))
     body = _get(client, TAB)
     assert (body["dataDate"], body["quote"]["price"]) == ("2026-10-29", 182.4)
+    assert body["filings"]["observedDay"] == "2026-10-21"
+
+
+def test_a_filing_list_older_than_the_calls_keeps_its_own_day(
+    client: TestClient, db_path: Path
+) -> None:
+    """The controller's ruling on 7.6: a filing list stored before the list of calls leaves the
+    data date at the calls' day and carries its older day as its own."""
+    _profile(db_path)
+    _calls(db_path, at=datetime(2026, 10, 30, 12, 0, tzinfo=UTC))
+    _filings(db_path, DAY, at=datetime(2026, 10, 25, 12, 0, tzinfo=UTC))
+    body = _get(client, TAB)
+    assert (body["dataDate"], body["filings"]["observedDay"]) == ("2026-10-30", "2026-10-25")
+
+
+def test_a_list_of_calls_older_than_the_filings_sets_the_data_date(
+    client: TestClient, db_path: Path
+) -> None:
+    """The other way round: the list of calls stored before the filing list gives the data date
+    its older day, and the filing list keeps its newer day as its own."""
+    _profile(db_path)
+    _calls(db_path, at=datetime(2026, 10, 25, 12, 0, tzinfo=UTC))
+    _filings(db_path, DAY, at=datetime(2026, 10, 30, 12, 0, tzinfo=UTC))
+    body = _get(client, TAB)
+    assert (body["dataDate"], body["filings"]["observedDay"]) == ("2026-10-25", "2026-10-30")
 
 
 # --- a call's transcript ---------------------------------------------------------------------
@@ -681,7 +708,6 @@ def test_the_reads_find_what_the_fetch_stores(
         "Operator",
         "2026-11-01",
     )
-    assert _get(with_passthrough, f"{tab}/filings", to="2026-11-01") == filings | {
-        "observedDay": "2026-11-01"
-    }
+    assert filings["observedDay"] == "2026-11-01"
+    assert _get(with_passthrough, f"{tab}/filings", to="2026-11-01") == filings
     assert vendor.paths == []

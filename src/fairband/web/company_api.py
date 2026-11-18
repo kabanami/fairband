@@ -51,14 +51,15 @@ Each tab's read answers ``quote``, the head's figures on every tab (``page_fmp.h
   earnings (``page_fmp.next_earnings``), else ``null``; ``calls``, every call of the list of calls
   (``transcript-dates``), newest first, each with its quarter's four figures from the earnings row
   that is the call's (``page_investor.calls``), empty without a list; ``filings``, ``{from, to,
-  rows, truncated}`` of the usable stored filing list (``sec-filings``) whose window ends latest,
-  the newest among those that end on one day, so the refresh's, of the 365 days to its day, and
-  never an agent's list of an older window fetched since: its window's first and last days, its
-  rows newest first (``page_investor.filing_rows``) and ``truncated``, true where it holds the
-  vendor's limit of ``FILINGS_LIMIT`` rows, so the window's oldest filings are missing; ``null``
-  without one. Its ``dataDate`` counts the three answers the tab draws, the list of calls, the
-  earnings and the filing list (the Investor relations tab's design, 7.6), not the profile or the
-  quote's row.
+  rows, truncated, observedDay}`` of the usable stored filing list (``sec-filings``) whose window
+  ends latest, the newest among those that end on one day, so the refresh's, of the 365 days to
+  its day, and never an agent's list of an older window fetched since: its window's first and
+  last days, its rows newest first (``page_investor.filing_rows``), ``truncated``, true where it
+  holds the vendor's limit of ``FILINGS_LIMIT`` rows, so the window's oldest filings are missing,
+  and the day it was observed; ``null`` without one. Its ``dataDate`` counts the answers of the
+  Earnings calls view, the quote's row, the list of calls and the earnings, as the estimates read
+  counts its own, and not the filing list, which carries its own day: the page works out each
+  view's caption (the Investor relations tab's design, 7.6).
 - ``GET /api/companies/{symbol}/page/investor-relations/call?year=&quarter=`` answers ``{symbol,
   fiscalYear, quarter, date, turns, questionsAt, observedDay}``, the call of the fiscal ``year``
   and ``quarter`` (``page_investor.transcript``) and the day its copy was fetched: the newest
@@ -68,10 +69,11 @@ Each tab's read answers ``quote``, the head's figures on every tab (``page_fmp.h
   (``turns`` empty), or fetched past it.
 - ``GET /api/companies/{symbol}/page/investor-relations/filings?to=`` answers ``{from, to, rows,
   truncated, observedDay}`` of the filing list of the 365 days to the ISO date ``to``
-  (``fetch.filings_window``): where ``to`` is before the clock's day, the newest usable stored
-  list of exactly that window, whatever its age, since a past year's list does not change; else,
-  or without one, the ``filings`` pass-through's, reused inside its window or fetched. A list the
-  pass-through stored as unusable (FMP's error object) is a 502, ``filings_api.NO_LIST``.
+  (``fetch.filings_window``), as the tab's read answers its filing list: where ``to`` is before
+  the clock's day, the newest usable stored list of exactly that window, whatever its age, since a
+  past year's list does not change; else, or without one, the ``filings`` pass-through's, reused
+  inside its window or fetched. A list the pass-through stored as unusable (FMP's error object) is
+  a 502, ``filings_api.NO_LIST``.
 
 Rules for the overview, the estimates, the financials and the Investor relations tab's read:
 
@@ -95,7 +97,8 @@ Rules for the overview, the estimates, the financials and the Investor relations
 - ``dataDate`` (7.4) is the day of the oldest observation among the answers the read drew, as ISO
   text, the news left out, since its stories carry their own days; ``null`` when it drew none. The
   financials' data date counts its ten answers alone, not the quote's row it answers for the head
-  (the Financials tab's design, 8.3), and the Investor relations tab's its three.
+  (the Financials tab's design, 8.3); the Investor relations tab's counts the quote's row, the
+  list of calls and the earnings, not the filing list (above).
 - ``news.stale`` (10.5) is true without a stored answer, or when it was observed at or before the
   clock's time less the effective policy's reuse window (``refresh.reuse_hours``).
 - The consensus keeps the rows dated after the newest fiscal year's period end on file
@@ -417,11 +420,10 @@ def add_company_page_routes(
             earnings = _stored(conn, "earnings", symbol)
             dates = _stored(conn, _CALL_DATES, symbol)
             window = _latest_window(conn, symbol)
-        filed = None if window is None else _Answer(window.payload, window.row.observed_at)
         upcoming = page_fmp.next_earnings(_payload(earnings), today)
         return {
             "symbol": symbol,
-            "dataDate": _data_date([dates, earnings, filed]),
+            "dataDate": _data_date([quote, dates, earnings]),  # the calls view's answers (7.6)
             "quote": page_fmp.head_quote(_payload(quote)),
             "nextEarnings": None if upcoming is None else upcoming["day"],
             "calls": investor.calls(_payload(dates), _payload(earnings)),
@@ -460,7 +462,7 @@ def add_company_page_routes(
             copy = _asked(passthrough, "filings", symbol, window)
             if copy.row.error is not None:  # FMP's error object, stored with its error
                 raise HTTPException(502, NO_LIST.format(symbol=symbol))
-        return _filing_list(copy) | {"observedDay": copy.row.observed_at.date().isoformat()}
+        return _filing_list(copy)
 
 
 def _latest_window(conn: sqlite3.Connection, symbol: str) -> _Copy | None:
@@ -531,14 +533,17 @@ def _window_to(text: str) -> tuple[date, date]:
 
 def _filing_list(copy: _Copy) -> dict[str, Any]:
     """A stored filing list as the tab's reads answer it: its window's first and last days, its
-    rows newest first (``page_investor.filing_rows``), and ``truncated``, true where it holds the
-    vendor's limit of ``FILINGS_LIMIT`` rows, so the window's oldest filings are missing."""
+    rows newest first (``page_investor.filing_rows``), ``truncated``, true where it holds the
+    vendor's limit of ``FILINGS_LIMIT`` rows, so the window's oldest filings are missing, and
+    ``observedDay``, the day it was observed, which the Filings view's data date counts (the
+    Investor relations tab's design, 7.6)."""
     payload = copy.payload
     return {
         "from": copy.row.params.get("from"),
         "to": copy.row.params.get("to"),
         "rows": investor.filing_rows(payload),
         "truncated": isinstance(payload, list) and len(payload) >= FILINGS_LIMIT,
+        "observedDay": copy.row.observed_at.date().isoformat(),
     }
 
 
