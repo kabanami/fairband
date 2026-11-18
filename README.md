@@ -17,6 +17,7 @@ flowchart LR
     agent(["Your agent: Claude Code"]) -- "55 tools" --> mcp["MCP server"]
     pages --> server["Fairband server and valuation engine"]
     mcp --> server
+    server -. "starts a research session" .-> agent
     server --> db[("SQLite database on your disk")]
     server -- "your key" --> fmp["Financial Modeling Prep"]
     server -- "your key" --> gf["GuruFocus"]
