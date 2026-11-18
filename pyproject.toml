@@ -1,8 +1,11 @@
 [project]
 name = "fairband"
 version = "0.1.0"
-description = "A local valuation screen for a value investor."
+description = "A local equity research workbench for you and your AI agents."
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Khalid Abanami" }]
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.162.0",

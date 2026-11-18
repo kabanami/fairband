@@ -33,7 +33,10 @@ Package in `src/fairband/`; tests in `tests/`, mirroring the package.
 
 - Never print, log, store or commit a key: not in a URL that is logged or stored, a log line,
   the database, an error message or a test fixture.
-- Never commit vendor data. Test fixtures are synthetic or hand-trimmed.
+- Never commit vendor data. Test fixtures are synthetic or hand-trimmed. The one exception is
+  the README's screenshots in `docs/images/`: they show the page as it runs, real companies and
+  their figures included (the founder, 2026-11-18). Do not remove them or redraw them on
+  invented companies.
 - Keys live in `~/.config/fairband/keys.toml`, outside the repository.
 - Data lives in `~/.local/share/fairband`.
 

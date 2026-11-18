@@ -1,0 +1,18 @@
+Fairband
+Copyright 2026 Khalid Abanami
+
+This product includes third-party software and fonts.
+
+React and ReactDOM 18.3.1
+  Copyright (c) Facebook, Inc. and its affiliates.
+  Licensed under the MIT License; the text is in
+  src/fairband/web/static/vendor/LICENSE-react.txt
+  Files: src/fairband/web/static/vendor/
+
+IBM Plex Sans and IBM Plex Mono
+  Copyright 2019 IBM Corp. All rights reserved.
+  Licensed under the SIL Open Font License, Version 1.1; the texts are in
+  src/fairband/web/static/design-system/fonts/LICENSE-IBMPlexSans.txt and
+  src/fairband/web/static/design-system/fonts/LICENSE-IBMPlexMono.txt
+  Files: src/fairband/web/static/design-system/fonts/, and the copies inside
+  the design system's archives under docs/design-system/
