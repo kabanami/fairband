@@ -1,9 +1,14 @@
-"""The company page's four reads (the company page's design, 7.2, 7.4, 10.3, 10.4 and 10.5, the
-Financials tab's design, 7.9 and 8.3, and the Research tab's design, 8.1), each from the store
-alone: none calls a vendor, so each is a plain GET that needs no request header.
+"""The company page's reads (the company page's design, 7.2, 7.4, 10.3, 10.4 and 10.5, the
+Financials tab's design, 7.9 and 8.3, the Research tab's design, 8.1, and the Investor relations
+tab's design, 7.5, 7.6 and 8.2). Each tab's own read is from the store alone: none calls a vendor,
+so each is a plain GET that needs no request header. The Investor relations tab's two later reads,
+of an earnings call and of a year of filings, answer from the store where it holds a copy that
+does not change, and else through the pass-throughs (``fairband.refresh.passthrough``); each may
+call a vendor, so each carries ``X-Fairband-Request: 1``, else 403 before anything else is read
+(``app``, D11).
 
-Each answers ``quote``, the head's figures on every tab (``page_fmp.head_quote``: ``{price,
-change, changePercent, day}``, each ``null`` without a quote's row).
+Each tab's read answers ``quote``, the head's figures on every tab (``page_fmp.head_quote``:
+``{price, change, changePercent, day}``, each ``null`` without a quote's row).
 
 - ``GET /api/companies/{symbol}/page/overview`` answers ``{symbol, dataDate, quote, company,
   statistics, trading, priceChange, prices, news}``: the Company block (``page_fmp.company``),
@@ -41,13 +46,39 @@ change, changePercent, day}``, each ``null`` without a quote's row).
   read serves them, each newest first, and ``ledgerCount``, the count of its ledger rows, which
   ``ledger`` cuts at the newest twenty. A report of another company is a 404, "report <id> is
   <its symbol>'s, not <symbol>'s"; an id that names none a 404, "no report <id>".
+- ``GET /api/companies/{symbol}/page/investor-relations`` answers ``{symbol, dataDate, quote,
+  nextEarnings, calls, filings}``: ``nextEarnings``, the day of the next earnings date of the
+  earnings (``page_fmp.next_earnings``), else ``null``; ``calls``, every call of the list of calls
+  (``transcript-dates``), newest first, each with its quarter's four figures from the earnings row
+  that is the call's (``page_investor.calls``), empty without a list; ``filings``, ``{from, to,
+  rows, truncated}`` of the usable stored filing list (``sec-filings``) whose window ends latest,
+  the newest among those that end on one day, so the refresh's, of the 365 days to its day, and
+  never an agent's list of an older window fetched since: its window's first and last days, its
+  rows newest first (``page_investor.filing_rows``) and ``truncated``, true where it holds the
+  vendor's limit of ``FILINGS_LIMIT`` rows, so the window's oldest filings are missing; ``null``
+  without one. Its ``dataDate`` counts the three answers the tab draws, the list of calls, the
+  earnings and the filing list (the Investor relations tab's design, 7.6), not the profile or the
+  quote's row.
+- ``GET /api/companies/{symbol}/page/investor-relations/call?year=&quarter=`` answers ``{symbol,
+  fiscalYear, quarter, date, turns, questionsAt, observedDay}``, the call of the fiscal ``year``
+  and ``quarter`` (``page_investor.transcript``) and the day its copy was fetched: the newest
+  usable stored ``transcript`` answer of that call that holds words (``page_investor.has_words``),
+  whatever its age, since a call's words do not change once the vendor holds them; else the
+  ``transcript`` pass-through's, reused inside its window, an answer with no words among them
+  (``turns`` empty), or fetched past it.
+- ``GET /api/companies/{symbol}/page/investor-relations/filings?to=`` answers ``{from, to, rows,
+  truncated, observedDay}`` of the filing list of the 365 days to the ISO date ``to``
+  (``fetch.filings_window``): where ``to`` is before the clock's day, the newest usable stored
+  list of exactly that window, whatever its age, since a past year's list does not change; else,
+  or without one, the ``filings`` pass-through's, reused inside its window or fetched. A list the
+  pass-through stored as unusable (FMP's error object) is a 502, ``filings_api.NO_LIST``.
 
-Rules for the overview, the estimates and the financials:
+Rules for the overview, the estimates, the financials and the Investor relations tab's read:
 
 - An answer is the company's newest HTTP 200 FMP answer with no error to its endpoint under the
-  params the fetch stores it with, whatever its age (``store.vendor.latest_response``), parsed.
-  An endpoint with none, or whose payload does not parse, has no answer, and its reader gives its
-  figures ``null`` and its lists empty.
+  params the fetch stores it with, whatever its age (``store.vendor.latest_response``), parsed;
+  the filing list is the one above. An endpoint with none, or whose payload does not parse, has no
+  answer, and its reader gives its figures ``null`` and its lists empty.
 - The quote's row (10.4) is the symbol's row (``page_fmp.quote_row``) in the payload of the
   response that the company's newest ``quote`` observation cites: a fetch's quote, or a price
   refresh's batch, which is stored under no symbol.
@@ -59,11 +90,12 @@ Rules for the overview, the estimates and the financials:
   (``income-annual``, ``income-quarter``, ``balance-annual``, ``balance-quarter``,
   ``cashflow-annual``, ``cashflow-quarter``), the ratios and the key metrics by fiscal year
   (``ratios-annual``, ``key-metrics-annual``) and the two segment answers (``segments-product``,
-  ``segments-geographic``).
+  ``segments-geographic``); the Investor relations tab's the quote's row, the earnings, the list
+  of calls and the filing list.
 - ``dataDate`` (7.4) is the day of the oldest observation among the answers the read drew, as ISO
   text, the news left out, since its stories carry their own days; ``null`` when it drew none. The
   financials' data date counts its ten answers alone, not the quote's row it answers for the head
-  (the Financials tab's design, 8.3).
+  (the Financials tab's design, 8.3), and the Investor relations tab's its three.
 - ``news.stale`` (10.5) is true without a stored answer, or when it was observed at or before the
   clock's time less the effective policy's reuse window (``refresh.reuse_hours``).
 - The consensus keeps the rows dated after the newest fiscal year's period end on file
@@ -88,6 +120,19 @@ with no stored profile a 404, "no page data for <symbol>"; on the overview and t
 a stored setting the policy refuses a 409 (``settings_api.effective``). A company needs no
 snapshot, but for the research read, which answers the same 404 for a company with none and needs
 no stored profile.
+
+The Investor relations tab's two later reads refuse, in the order they are judged, after the 403:
+a ``year`` or a ``quarter`` that is no whole number or left out, or ``to`` left out, the
+framework's 400 (``year: ...``, ``app``); a symbol that is not one; a ``quarter`` outside 1 to 4,
+``BAD_QUARTER``; a ``to`` that is no ISO date, or whose 365 days would start before the
+calendar's first day, ``BAD_TO``; each a 400, then the 404 of a company with no stored profile.
+Only then, and only where the store cannot answer, the pass-through's failures as the pass-through
+route answers them: without a pass-through (the server has no FMP key) a 503, "no FMP key"; every
+slot taken a 503 with its ``BUSY``; a failed vendor call a 502 with the vendor's sentence,
+scrubbed. So a refused request calls no vendor and stores nothing. No answer of the tab's three
+reads carries a ref or a response id: no report cites them. The two reads are sync ones, as the
+pass-through route is: FastAPI runs them on its thread pool, where a vendor call waits at most ten
+seconds for one of the pass-through's slots.
 """
 
 import json
@@ -95,7 +140,7 @@ import sqlite3
 from collections.abc import Callable, Iterable, Sequence
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -108,9 +153,12 @@ from fairband.refresh.fetch import (
     PAGE_ENDPOINTS,
     STATEMENT_QUARTERS,
     STATEMENT_YEARS,
+    TRANSCRIPT,
+    filings_window,
     page_params,
 )
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT, cadence_of, series_for
+from fairband.refresh.passthrough import Passthrough, PassthroughBusy, PassthroughNoKey
 from fairband.store.currency import reporting_currency
 from fairband.store.ledger import entry_count
 from fairband.store.observations import observations_for
@@ -120,16 +168,25 @@ from fairband.store.research import kill_criteria_for, news_items_for
 from fairband.store.reviews import review_row, reviews_for
 from fairband.store.secondary import secondaries_for, secondary_row
 from fairband.store.snapshots import latest_snapshot, snapshot_row
-from fairband.store.vendor import latest_response, response_payload
+from fairband.store.vendor import (
+    ResponseRow,
+    latest_response,
+    response_payload,
+    usable_responses,
+)
 from fairband.vendors import page_financials as financials
 from fairband.vendors import page_fmp
-from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT, StatementKind
+from fairband.vendors import page_investor as investor
+from fairband.vendors.fmp import ANNUAL_ESTIMATE_LIMIT, FILINGS_LIMIT, StatementKind
+from fairband.vendors.http import VendorError
 from fairband.web.agents_api import criterion_json, record_json
+from fairband.web.filings_api import NO_LIST
 from fairband.web.reports_api import checked_symbol, report_json, report_list
 from fairband.web.research_api import bridge_lines, research_records
 from fairband.web.research_page import of_report, report_call
 from fairband.web.reviews_api import review_json, secondary_json
 from fairband.web.settings_api import effective
+from fairband.web.vendor_api import NO_FMP_KEY
 
 # The page answers of the Key statistics (the design's 8.3).
 _STATISTICS = (
@@ -169,6 +226,13 @@ _ENGINE_PARAMS: dict[str, dict[str, str]] = {
     "balance-quarter": {"period": "quarter", "limit": str(STATEMENT_QUARTERS)},
     "cashflow-quarter": {"period": "quarter", "limit": str(STATEMENT_QUARTERS)},
 }
+# The Investor relations tab's answers as stored (the Investor relations tab's design, 8.1): the
+# list of calls under the fetch's params, and each filing list under the ``filings``
+# pass-through's, one a window.
+_CALL_DATES = "transcript-dates"
+_FILINGS = "sec-filings"
+BAD_QUARTER = "quarter must be 1 to 4"  # the transcript pass-through's sentence
+BAD_TO = "to must be an ISO date from 0002-01-01 on"  # its 365 days start in the calendar
 
 
 @dataclass(frozen=True)
@@ -179,17 +243,29 @@ class _Answer:
     observed_at: datetime
 
 
+@dataclass(frozen=True)
+class _Copy:
+    """A stored response the Investor relations tab draws: its row, which holds its params and
+    the time it was observed, and its payload parsed."""
+
+    row: ResponseRow
+    payload: Any
+
+
 def add_company_page_routes(
     app: FastAPI,
     conn_factory: Callable[[], sqlite3.Connection],
     policy: Policy,
     tax: TaxTable,
     clock: Callable[[], datetime],
+    passthrough: Passthrough | None,
 ) -> None:
-    """Register the company page's four reads; ``policy`` is the file's, which the user's settings
+    """Register the company page's reads; ``policy`` is the file's, which the user's settings
     overlay, ``tax`` the table a report's references read the statements with, and ``clock`` gives
-    the time the news is judged stale at and the day the next earnings date and the last dividend
-    payment are judged on."""
+    the time the news is judged stale at, the day the next earnings date and the last dividend
+    payment are judged on, and the day a filing window ending before it is a past one.
+    ``passthrough`` fetches what the store cannot answer on the Investor relations tab's two later
+    reads, which answer 503 without one."""
 
     @app.get("/api/companies/{symbol}/page/overview")
     def page_overview(symbol: str) -> dict[str, Any]:
@@ -330,6 +406,140 @@ def add_company_page_routes(
             **parts,
             "records": records,
         }
+
+    @app.get("/api/companies/{symbol}/page/investor-relations")
+    def page_investor_relations(symbol: str) -> dict[str, Any]:
+        symbol = checked_symbol(symbol)
+        today = clock().date()
+        with closing(conn_factory()) as conn:
+            _profile(conn, symbol)
+            quote = _quote(conn, symbol)
+            earnings = _stored(conn, "earnings", symbol)
+            dates = _stored(conn, _CALL_DATES, symbol)
+            window = _latest_window(conn, symbol)
+        filed = None if window is None else _Answer(window.payload, window.row.observed_at)
+        upcoming = page_fmp.next_earnings(_payload(earnings), today)
+        return {
+            "symbol": symbol,
+            "dataDate": _data_date([dates, earnings, filed]),
+            "quote": page_fmp.head_quote(_payload(quote)),
+            "nextEarnings": None if upcoming is None else upcoming["day"],
+            "calls": investor.calls(_payload(dates), _payload(earnings)),
+            "filings": None if window is None else _filing_list(window),
+        }
+
+    @app.get("/api/companies/{symbol}/page/investor-relations/call")
+    def page_investor_call(symbol: str, year: int, quarter: int) -> dict[str, Any]:
+        symbol = checked_symbol(symbol)
+        if not 1 <= quarter <= 4:
+            raise HTTPException(400, BAD_QUARTER)
+        asked = {"year": str(year), "quarter": str(quarter)}
+        with closing(conn_factory()) as conn:
+            _profile(conn, symbol)
+            copy = _with_words(conn, symbol, {"symbol": symbol, **asked})
+        if copy is None:  # the store holds no words for the call: the pass-through's window holds
+            copy = _asked(passthrough, "transcript", symbol, asked)
+        return {
+            "symbol": symbol,
+            "fiscalYear": year,
+            "quarter": quarter,
+            **investor.transcript(copy.payload),
+            "observedDay": copy.row.observed_at.date().isoformat(),
+        }
+
+    @app.get("/api/companies/{symbol}/page/investor-relations/filings")
+    def page_investor_filings(symbol: str, to: str) -> dict[str, Any]:
+        symbol = checked_symbol(symbol)
+        start, end = _window_to(to)
+        past = end < clock().date()
+        with closing(conn_factory()) as conn:
+            _profile(conn, symbol)
+            copy = _stored_window(conn, symbol, end) if past else None
+        if copy is None:  # today's window, or a past one not on file: the pass-through's holds
+            window = {"from": start.isoformat(), "to": end.isoformat()}
+            copy = _asked(passthrough, "filings", symbol, window)
+            if copy.row.error is not None:  # FMP's error object, stored with its error
+                raise HTTPException(502, NO_LIST.format(symbol=symbol))
+        return _filing_list(copy) | {"observedDay": copy.row.observed_at.date().isoformat()}
+
+
+def _latest_window(conn: sqlite3.Connection, symbol: str) -> _Copy | None:
+    """The company's usable stored filing list whose window ends latest, the newest among those
+    that end on one day (the Investor relations tab's design, 8.2): the refresh's, of the 365 days
+    to its day, never an agent's list of an older window fetched since. A window's ``to`` is an
+    ISO day, so its text orders as its day. ``None`` without one, or when its payload does not
+    parse."""
+    rows = usable_responses(conn, "fmp", _FILINGS, symbol)
+    if not rows:
+        return None
+    latest = max(rows, key=lambda row: (row.params.get("to", ""), row.id))
+    payload = _parsed(response_payload(conn, latest.id))
+    return None if payload is None else _Copy(latest, payload)
+
+
+def _stored_window(conn: sqlite3.Connection, symbol: str, end: date) -> _Copy | None:
+    """The newest usable stored filing list of the 365 days to ``end``, under the params the
+    ``filings`` pass-through and the refresh store it with, whatever its age; ``None`` without
+    one, or when its payload does not parse."""
+    found = latest_response(conn, "fmp", _FILINGS, symbol, page_params(_FILINGS, symbol, end))
+    payload = None if found is None else _parsed(response_payload(conn, found.id))
+    return None if found is None or payload is None else _Copy(found, payload)
+
+
+def _with_words(conn: sqlite3.Connection, symbol: str, params: dict[str, str]) -> _Copy | None:
+    """The newest usable stored ``transcript`` answer under ``params`` that holds words
+    (``page_investor.has_words``), whatever its age; ``None`` without one. A newer copy with no
+    words hides no older one with them."""
+    for row in usable_responses(conn, "fmp", TRANSCRIPT, symbol):
+        if row.params == params:
+            payload = _parsed(response_payload(conn, row.id))
+            if investor.has_words(payload):
+                return _Copy(row, payload)
+    return None
+
+
+def _asked(
+    passthrough: Passthrough | None, kind: str, symbol: str, params: dict[str, str]
+) -> _Copy:
+    """The pass-through's one stored response to ``kind`` for ``symbol``, the store's form: reused
+    inside its window, else fetched and stored. Its failures as the pass-through route answers
+    them: without a pass-through (the server has no FMP key) a 503, ``NO_FMP_KEY``; a parameter it
+    refuses a 400; every slot taken, or its vendor without a key, a 503; a failed call a 502 with
+    the vendor's sentence, which the pass-through has scrubbed."""
+    if passthrough is None:
+        raise HTTPException(503, NO_FMP_KEY)
+    try:
+        fetched = passthrough.fetch(kind, symbol, params)[kind]
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    except (PassthroughBusy, PassthroughNoKey) as exc:
+        raise HTTPException(503, str(exc)) from None
+    except VendorError as exc:
+        raise HTTPException(502, str(exc)) from None
+    return _Copy(fetched.row, fetched.payload)
+
+
+def _window_to(text: str) -> tuple[date, date]:
+    """The first and last days of the filing window of the 365 days to the ISO date ``text``
+    (``fetch.filings_window``); a 400, ``BAD_TO``, when it is no date or when the window would
+    start before the calendar's first day."""
+    try:
+        return filings_window(date.fromisoformat(text))
+    except (ValueError, OverflowError):
+        raise HTTPException(400, BAD_TO) from None
+
+
+def _filing_list(copy: _Copy) -> dict[str, Any]:
+    """A stored filing list as the tab's reads answer it: its window's first and last days, its
+    rows newest first (``page_investor.filing_rows``), and ``truncated``, true where it holds the
+    vendor's limit of ``FILINGS_LIMIT`` rows, so the window's oldest filings are missing."""
+    payload = copy.payload
+    return {
+        "from": copy.row.params.get("from"),
+        "to": copy.row.params.get("to"),
+        "rows": investor.filing_rows(payload),
+        "truncated": isinstance(payload, list) and len(payload) >= FILINGS_LIMIT,
+    }
 
 
 def _shown(

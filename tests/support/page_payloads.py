@@ -13,6 +13,12 @@ a quarter apart), the ratios and the key metrics by fiscal year (2024 and 2025),
 by product and by region (2023 to 2025), whose rows give ``fiscalYear`` as a number and name no
 currency, as FMP's segment answers do. Each statement holds a line FMP gives as 0 in every period,
 which the tab leaves out.
+
+The Investor relations tab's three answers: ``CALL_DATES``, the list of earnings calls newest first
+as FMP gives it, five calls from Q3 2025 to Q3 2026, each on the day of ``EARNINGS``' row of its
+quarter but the oldest, which has no row; ``TRANSCRIPT``, the Q3 2026 call, an invented call whose
+questions start at its third turn; and ``FILINGS``, a filing list of the year to 1 Nov 2026 out of
+date order, with a document link that is not ``https://`` and a row with no link.
 """
 
 from typing import Any
@@ -114,6 +120,8 @@ EARNINGS: list[dict[str, Any]] = [
         "revenueEstimated": 30150000000,
         "time": "bmo",
         "periodEnding": "2027-03-31",
+        "fiscalYear": 2027,
+        "fiscalPeriod": "Q1",
         "confirmed": False,
     },
     {
@@ -125,6 +133,8 @@ EARNINGS: list[dict[str, Any]] = [
         "revenueEstimated": 28420000000,
         "time": "amc",
         "periodEnding": "2026-12-31",
+        "fiscalYear": 2026,
+        "fiscalPeriod": "Q4",
         "confirmed": False,
     },
     {  # past, and FMP never filled its actuals
@@ -136,6 +146,8 @@ EARNINGS: list[dict[str, Any]] = [
         "revenueEstimated": 27300000000,
         "time": "amc",
         "periodEnding": "2026-09-30",
+        "fiscalYear": 2026,
+        "fiscalPeriod": "Q3",
     },
     {
         "symbol": SYMBOL,
@@ -146,6 +158,8 @@ EARNINGS: list[dict[str, Any]] = [
         "revenueEstimated": 26050000000,
         "time": "amc",
         "periodEnding": "2026-06-30",
+        "fiscalYear": 2026,
+        "fiscalPeriod": "Q2",
         "confirmed": True,
     },
     {
@@ -157,6 +171,8 @@ EARNINGS: list[dict[str, Any]] = [
         "revenueEstimated": 25100000000,
         "time": "amc",
         "periodEnding": "2026-03-31",
+        "fiscalYear": 2026,
+        "fiscalPeriod": "Q1",
         "confirmed": True,
     },
     {
@@ -168,6 +184,8 @@ EARNINGS: list[dict[str, Any]] = [
         "revenueEstimated": 23500000000,
         "time": "amc",
         "periodEnding": "2025-12-31",
+        "fiscalYear": 2025,
+        "fiscalPeriod": "Q4",
         "confirmed": True,
     },
 ]
@@ -620,4 +638,56 @@ SEGMENTS_GEOGRAPHIC: list[dict[str, Any]] = [
         (2024, 1180000000000, 740000000000, 520000000000),
         (2023, 1010000000000, 600000000000, 420000000000),
     )
+]
+
+CALL_DATES: list[dict[str, Any]] = [
+    {"quarter": quarter, "fiscalYear": year, "date": day}
+    for quarter, year, day in (
+        (3, 2026, "2026-10-15"),
+        (2, 2026, "2026-07-16"),
+        (1, 2026, "2026-04-16"),
+        (4, 2025, "2026-01-15"),
+        (3, 2025, "2025-10-16"),  # no earnings row of its quarter
+    )
+]
+
+TRANSCRIPT: list[dict[str, Any]] = [
+    {
+        "symbol": SYMBOL,
+        "period": "Q3",
+        "year": 2026,
+        "date": "2026-10-15 17:00:00",
+        "content": (
+            "Operator: Good afternoon, and welcome to the Lanternfield Optics third quarter call.\n"
+            "Mara Vellini: Thank you. Car makers took more of our sensors than we planned. "
+            "The fourth line at the sensor plant starts next year.\n"
+            "Operator: We will now take your questions. The first comes from Ines Dalgaard.\n"
+            "Ines Dalgaard: How much of the growth came from the new sensor line?\n"
+            "Mara Vellini: About a third of it."
+        ),
+    }
+]
+
+
+def _filing(form: str, day: str, number: int, document: str | None) -> dict[str, Any]:
+    """A row of FMP's filing list; ``number`` names its accession, ``document`` its main file
+    (``None`` for a row with no link)."""
+    accession = f"https://www.sec.gov/Archives/edgar/data/2/00000000022600{number:04d}"
+    return {
+        "symbol": SYMBOL,
+        "cik": "0000000002",
+        "filingDate": f"{day} 00:00:00",
+        "acceptedDate": f"{day} 16:05:12",
+        "formType": form,
+        "link": None if document is None else f"{accession}/0000000002-26-{number:06d}-index.htm",
+        "finalLink": document,
+    }
+
+
+FILINGS: list[dict[str, Any]] = [
+    _filing("4", "2026-10-20", 6, "https://www.sec.gov/Archives/edgar/data/2/form4.xml"),
+    _filing("6-K", "2026-10-30", 7, "https://www.sec.gov/Archives/edgar/data/2/lfox-6k.htm"),
+    _filing("6-K", "2026-07-17", 5, "http://www.sec.gov/Archives/edgar/data/2/lfox-6k-q2.htm"),
+    _filing("20-F", "2026-04-28", 3, "https://www.sec.gov/Archives/edgar/data/2/lfox-20f.htm"),
+    _filing("SC 13G", "2026-02-11", 2, None),
 ]

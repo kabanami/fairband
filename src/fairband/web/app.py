@@ -68,10 +68,12 @@ D11, for a server bound to 127.0.0.1: ``TrustedHostMiddleware`` answers 400 to a
 resolves here (DNS rebinding) cannot read the API; and a request other than ``GET`` or ``HEAD``
 must carry ``X-Fairband-Request: 1``, else 403. So must the reads that may call a vendor, the
 pass-through route (``/api/vendor/{kind}/{symbol}``), the multiples history read
-(``/api/companies/{symbol}/multiples-history``) and the filing reads
-(``/api/companies/{symbol}/filings``, ``/filing-report`` and ``/filing-report/search``): each
-spends a vendor's quota and stores its answer, and an image tag or a link on any other site passes
-the host check. The page's read and the MCP server's client send the header on every call. A
+(``/api/companies/{symbol}/multiples-history``), the filing reads
+(``/api/companies/{symbol}/filings``, ``/filing-report`` and ``/filing-report/search``) and the
+company page's reads of an earnings call and of a year of filings
+(``/api/companies/{symbol}/page/investor-relations/call`` and ``/filings``): each spends a
+vendor's quota and stores its answer, and an image tag or a link on any other site passes the host
+check. The page's read and the MCP server's client send the header on every call. A
 cross-site form cannot send that header, and a cross-origin script cannot without a CORS
 preflight, which the app never answers. The logo's read (``/api/companies/{symbol}/logo``) may
 fetch a file from FMP's image host and is not among them (B-203): the page reads it from an
@@ -188,6 +190,8 @@ _VENDOR_READS = re.compile(
     r"|/api/companies/[^/]+/filings"
     r"|/api/companies/[^/]+/filing-report"
     r"|/api/companies/[^/]+/filing-report/search"
+    r"|/api/companies/[^/]+/page/investor-relations/call"
+    r"|/api/companies/[^/]+/page/investor-relations/filings"
 )
 _NO_WORKER = "no refresh worker"
 
@@ -475,7 +479,7 @@ def create_app(
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
-    add_company_page_routes(app, conn_factory, policy, taxed, clock)
+    add_company_page_routes(app, conn_factory, policy, taxed, clock, passthrough)
     add_research_routes(app, conn_factory)
     add_history_routes(app, conn_factory)
     add_multiples_routes(app, conn_factory, passthrough)
