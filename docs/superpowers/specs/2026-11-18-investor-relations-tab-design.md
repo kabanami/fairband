@@ -10,9 +10,11 @@ fetched when a page opens (section 6), and Fairband computes no new figure for i
 other choice below is Claude's, marked *my call* where it is more than a reading of those
 requests, and can be overturned as any other. The founder approved this design on 2026-11-18
 ("Approved"); the plan is `docs/superpowers/plans/2026-11-18-investor-relations-tab-plan.md`.
-The plan was built on the branch `worktree-investor-relations-tab` on 2026-11-18 and is not yet
-merged; the decision log's entries on the build record where the build differs from this
-design, and the sections below say so in place, "(the build's ruling, decision log)".
+The plan was built on the branch `worktree-investor-relations-tab` on 2026-11-18, merged to main
+that day (`a50f749`) and accepted on the live data after refresh 68 (the decision log's readout);
+the founder's own look is open. The decision log's entries on the build record where the build
+differs from this design, and the sections below say so in place, "(the build's ruling, decision
+log)".
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value: the method stays `fairband-mechanical/1.5` and the policy v16. The schema stays at
@@ -822,3 +824,57 @@ never runs after a 429; 8.1).
   are set aside: each follows this design or an earlier ruling, or needs evidence the store does
   not hold, and the acceptance readout measures the store's growth and counts the companies whose
   newest call has no words (12).
+- **2026-11-18, the merge and the live steps.** On the hand-over the founder chose "1", merge
+  back to main locally. Main went from `2de3e86` to `a50f749` by a fast-forward (14 commits; the
+  checks clean and 4,900 tests on the merged main). The live database was copied to
+  `fairband-before-investor-relations-tab-2026-11-18.db` beside it (7,747,436,544 bytes), the
+  server was stopped by its process ids and started from main on 8470, with no migration, and
+  one full refresh ran, refresh 68. The worktree and its branch were removed after the merge.
+- **2026-11-18, the acceptance's readout** (section 12), on the live data after refresh 68:
+  1. The refresh took 31 minutes 53 seconds (16:59:19 to 17:31:12 UTC), its fetch 26 minutes 46
+     seconds and its valuing 5 minutes 7 seconds, against 8.3's estimate of 21 to 22 minutes
+     before this tab's calls. It ran 25 hours after refresh 67, outside the reuse window, so it
+     is the first whole refresh timed since the Financials tab's four calls. It stored 52,869
+     answers of 36 endpoints (refresh 66: 39,242 of 29), 1,057,634,696 bytes of payload, and the
+     database went from 7,747,436,544 to 9,272,549,376 bytes. Its fetch ran at 1,975 answers a
+     minute where refresh 66's ran at 2,767; the cause is not established (B-251). This tab's
+     share: 1,558 lists of calls (6.1 MB), 1,558 filing lists (53.2 MB) and, once, 1,482
+     transcripts (68.3 MB); none of the three failed and no call of the refresh met a 429.
+     1,558 companies, 1,363 valued, 2 failed, each on its three annual statements: RML, as in
+     refresh 67, and TXR, new to the universe that day. All 1,558 hold a list of calls, 1,512
+     with a call and 46 with none; all hold a filing list, 1,555 with a filing. The newest call
+     of each of the 1,512 has its words on file (1,482 read by this refresh, 30 held already
+     from agents' reads), so no company costs a call at every refresh today. No valuation was
+     moved by the new calls, on these grounds and not by the comparison 12 names: 588 of the
+     1,550 companies in both refreshes hold another value than in refresh 67 (13 another route,
+     9 another refusal), but refresh 68 fetched every answer anew a day later and 1,548 of them
+     hold another price, so the comparison cannot set the new calls apart. What stands: the
+     valuation reads none of the three answers (their endpoints are named only in the fetch,
+     the pass-through, the vendor's client, the page's readers and reads, the agents' vendor
+     reads and the MCP server), no file under `engine/` or `policy/` changed, and a refresh on
+     unchanged answers moves no value (refresh 67, inside refresh 66's reuse window: none of
+     1,569).
+  2. The tab opened for AAPL, ASML, NVS, TSM, FRVO and MORN, which has no call, at 400px in the
+     light theme and 1,440px in the dark, and for AAPL and TSM at 1,000, 1,200 and 2,000px: no
+     error in the console, the page as wide as its window, and on the first draw the tab's read
+     and the newest call's read alone, which stored no vendor answer. ASML's filings read `20-F`
+     and `6-K` with their words; MORN reads "No earnings call on file." over its 34 filings;
+     NVS's call of Q2 fiscal 2026 draws as one turn with no name.
+  3. AAPL's call of Q1 fiscal 2026, read for the first time, stored one answer and was not asked
+     again on a second reading. **Show older filings** read the year to 17 Nov 2025 once (one
+     stored answer), took the table from 24 rows to 50 and the line to "Filed from 17 Nov 2024
+     to 18 Nov 2026."
+  4. Every stored transcript draws: 1,547 calls with words, each with turns and each turn with a
+     paragraph, and no fault of a reader. The rule finds the questions' start in 1,473 of them
+     (95%), beside section 5's 52 of 65; 3 have no speaker's line at all.
+  5. Nothing was wider than its window at the five widths, and both themes were read by eye. A
+     form the words' table lacks (ASML's `S-8 POS`) shows its form alone, as 7.5 says.
+  6. The founder's look is open.
+- **2026-11-18, the founder's question on the transcripts.** While refresh 68 ran, the founder:
+  "why are we pulling the call scripts? why not just download the script when the user selects
+  the script from the page?" Claude answered that a refresh reads the newest call alone, once a
+  company and then once a new call, so the tab opens from the store as his ruling of 2026-11-16
+  asks, and that every older call is read on selection already; and that reading the newest on
+  selection too is one step taken out of the refresh, the page unchanged, at the cost of one
+  vendor call on a company's first opening. Claude recommended the design as built. The founder
+  gave no ruling on it, so the design stands as built until he does.
