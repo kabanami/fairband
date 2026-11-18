@@ -18,7 +18,7 @@
    quote too; and the Overview, where its stored news is stale, one read of the news
    pass-through after it draws them, which may call a vendor (10.5), as the Research tab's read
    of the multiples history may (company_research.js) and the Investor relations tab's reads of
-   an older call and an older year of filings (readVendor).
+   a call's transcript and of an older year of filings (readVendor).
    The parts the blocks are built from, a panel, a list of names and figures, a group, a small
    table, and the formatters of their figures (14.1), are on FairbandPage.companyPage with the
    head and the tabs' row, for those scripts and for the tests, which read them in node. */
@@ -533,9 +533,9 @@
     });
   }
 
-  /* A tab's read that may call a vendor (the Investor relations tab's design, 8.2: an older
-     call's transcript, an older year of filings): read with the header a write carries, without
-     which the server refuses it, as the Research tab's reads and newer news carry it. */
+  /* A tab's read that may call a vendor (the Investor relations tab's design, 8.2: a call's
+     transcript, an older year of filings): read with the header a write carries, without which
+     the server refuses it, as the Research tab's reads and newer news carry it. */
   function readVendor(url) {
     return read(url, { headers: { 'X-Fairband-Request': '1' } });
   }

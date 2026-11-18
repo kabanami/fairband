@@ -158,7 +158,10 @@ The mockup's row is Overview, Financials, Estimates, Investor relations, Researc
 three (*my call*): **Overview**, **Estimates** and **Research**. Research is a link to the
 report page (`#report/<symbol>`) until B-218 moves the reports into the tab. Financials and
 Investor relations join the row with their plans: a tab with nothing behind it is a dead
-control. The founder: "we have freedom to define the tabs as we like."
+control. The founder: "we have freedom to define the tabs as we like." Since the Investor
+relations tab (decision log, 2026-11-18) the row holds the mockup's five in its order,
+Overview, Financials, Estimates, Investor relations and Research, and wraps onto a second line
+where the window cannot hold them on one.
 
 ### 7.4 The data date
 
@@ -861,3 +864,15 @@ failed page calls by endpoint, the database's growth, and what the five foreign 
   since that design: 7.3's Research is a tab of the row, no longer a link to `#report/<symbol>`,
   which opens the tab on the same report, and section 13's report page left, its references, its
   appendixes and its charts drawn in the tab.
+- 2026-11-18, the Investor relations tab (B-217): designed in
+  `docs/superpowers/specs/2026-11-18-investor-relations-tab-design.md` and built on the branch
+  `worktree-investor-relations-tab` on 2026-11-18, not yet merged. What it changes of this
+  design: 7.3's row holds five tabs, Investor relations fourth, and wraps where the window
+  cannot hold them on one line; the data date of 7.4 may be a tab's script's own
+  (`companyPage.dataDate`), as the Investor relations tab's two views each count their own
+  answers; and two reads of that tab may call a vendor, each behind the request header: a call's
+  transcript as the reader first shows the call, the newest as soon as the Earnings calls view
+  opens on it, where the store holds no copy of the call with words; and an older year of
+  filings on a press of Show older filings. The tab's first draw is its own read of the store,
+  which waits on neither, so the anti-goal "No block's first draw depends on a vendor call"
+  (section 4) still holds.

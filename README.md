@@ -40,8 +40,8 @@ flowchart LR
 - **A store.** One SQLite database on your disk, with every vendor answer, every valuation and
   every record an agent writes.
 - **Pages.** A screen of all companies; a page for each company with its overview, financials,
-  estimates and research; and pages for groups, watchlists, the method, the settings and the
-  agents' inbox.
+  estimates, investor relations and research; and pages for groups, watchlists, the method, the
+  settings and the agents' inbox.
 - **An MCP server.** 55 tools through which an agent reads the store, asks the vendors for more,
   and writes notes, findings, changes to inputs and reports.
 
@@ -127,7 +127,9 @@ server on 127.0.0.1 and holds no database and no key. Its 55 tools are of three 
 - **26 read the store:** the screen, a company's valuation, its statements, quarters, estimates,
   prices, multiples and peers, the research on file, the policy and the method.
 - **10 read a vendor:** transcripts, news, segments, insider trades, filings and more. The server
-  fetches each with its own key and stores the answer, so a report can refer to it.
+  fetches each with its own key and stores the answer, so a report can refer to it. A company's
+  list of earnings calls and its filings of the past year may be answered from the copy a
+  refresh stored.
 - **19 write:** the agent's identity, the work inbox, notes, findings, guidance records, changes
   to inputs, a secondary valuation, reports, kill criteria and refreshes.
 

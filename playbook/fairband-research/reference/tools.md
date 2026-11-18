@@ -141,8 +141,12 @@ be left out.
 
 Ten vendor reads the engine does not use: seven pass-throughs, six from FMP and one from
 GuruFocus, then three filing reads from FMP. The server fetches each with its own key and stores
-the response, so a report can cite it. It reuses a response it fetched within the reuse window, a
-filing report at any age, so a repeated call costs no vendor call.
+the response, so a report can cite it. It reuses a response stored within the reuse window, a
+filing report at any age, so a repeated call costs no vendor call. A refresh stores five of these
+calls' responses for each company under the same keys, so within the reuse window such a call may
+answer from the refresh's copy, `reused` true: `segments`; `news` at a `limit` of 60;
+`transcript_dates`; `filings` with its default window, on the refresh's day; and `transcript` of
+the newest call, where the store held no copy of it with words.
 
 ### The seven pass-throughs
 
@@ -163,7 +167,9 @@ such as `response:731/0/revenue`.
   `tradeCount` says how many are on file; a trade keeps its place in the stored page, so its
   `response:` ref is the same at any limit.
 - `transcript_dates(symbol)`: the fiscal year, the quarter and the date of every earnings call on
-  file, newest first. It finds the last call, so you never guess a year.
+  file, newest first. It finds the last call, so you never guess a year. Where FMP answers its
+  error object in place of the list, the answer is that object, stored as an error and never
+  reused, so the next call asks FMP again.
 - `dcf(symbol)`: FMP's discounted cash flow value and its levered one, two responses under `dcf`
   and `levered`. Read it only where neither the route nor the review values the company, as a
   cross-check on the secondary valuation; never beside a route's value. Neither the engine nor the
@@ -198,7 +204,9 @@ under about 40,000 characters as you receive it. The counts below are upper boun
   index page on sec.gov, which lists its exhibits, and `finalLink` its main document; `nextRow`,
   the next `from_row`, or `null`; `count`, the filings the filter kept; `leftOut`, the rows it
   dropped; and `truncated`, `true` when FMP answered 1,000 filings, the most Fairband asks it for,
-  so older filings of the window are missing: ask again with an earlier `to_date` for them.
+  so older filings of the window are missing: ask again with an earlier `to_date` for them. On
+  the day of a refresh the default window is the one the refresh stored, so the answer may come
+  from its copy.
 - `filing_report(symbol, year?, period?, sheet?, from_row?, row?, col?, offset?)`: FMP's filing
   report, a part at a time. Its newest stored copy is reused without a limit, never one FMP
   answered with an error, so a report read once is not fetched again. Four views, by the arguments

@@ -1,10 +1,11 @@
 /* The company page's Investor relations tab (the Investor relations tab's design, 7), loaded after
-   company_estimates.js: #company/<symbol>/investor-relations, the company's earnings calls and its
-   filings, from the tab's read of the store (GET /api/companies/{symbol}/page/investor-relations),
-   which calls no vendor. One block the page's width (7.2): at its top a row, the switch of the
-   tab's two views, Earnings calls and Filings, at its left, drawn as the Financials tab's switch
-   of statements, and at its right end the line of the next earnings report, left out where the
-   read holds no coming date; under the row the view the address's word names (7.1), the Filings
+   company_financials_chart.js: #company/<symbol>/investor-relations, the company's earnings
+   calls and its filings, from the tab's read of the store
+   (GET /api/companies/{symbol}/page/investor-relations), which calls no vendor. One block the
+   page's width (7.2): at its top a row, the switch of the tab's two views, Earnings calls and
+   Filings, at its left, drawn as the Financials tab's switch of statements, and at its right
+   end the line of the next earnings report, left out where the read holds no coming date;
+   under the row the view the address's word names (7.1), the Filings
    view for filings, else the Earnings calls view, on the call the word names (2026Q4) or on the
    newest. The word is the page's own: it never travels to the server, and a change of it never
    reads the tab again (company.js, load); a press of the switch replaces the hash
