@@ -3124,6 +3124,23 @@ def test_the_axis_always_prints_the_trailing_twelve_months_tick() -> None:
     assert _code(bundle).count("periodLabel(") == 2  # its definition and XAxis, its one caller
 
 
+def test_the_bars_axis_holds_as_many_ticks_as_its_width() -> None:
+    """The Research tab's design, 7.9, a patch to HistoryBars alone: its axis is given `most`,
+    the ticks its plot's width holds, one each 56px, seven at most and two at least, so a bar
+    chart as narrow as the tab's thins its year ticks and one as wide as the report page's prints
+    as before; the other charts' axes are untouched. What the axis prints is read in node
+    (tests/web/test_report_charts.py)."""
+    bundle = _component_file("bundle.js")
+    bars = _function(bundle, "HistoryBars")
+    _in_order(
+        bars,
+        "// fairband: the axis carries as many ticks as the plot's width holds",
+        "(spec 2026-11-17 research tab, 7.9)",
+        "most: Math.min(7, Math.max(2, Math.floor((R - L) / 56)))",
+    )
+    assert _code(bundle).count("Math.floor((R - L) / 56)") == 1  # HistoryBars' axis alone
+
+
 def test_the_research_tab_s_reads_carry_the_request_header() -> None:
     """D11 and B-109: the server refuses the multiples history read, which may call GuruFocus,
     without ``X-Fairband-Request: 1``, as it refuses a write; the Research tab's one read helper

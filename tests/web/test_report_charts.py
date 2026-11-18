@@ -24,6 +24,7 @@ charts with no raised panel, the charts of a pair and of the quarters' row at a 
 own, and a read the server refused as its sentence in the chart's place; on
 ``support.research_answers``' series of LFOX."""
 
+from itertools import pairwise
 from typing import Any
 
 import pytest
@@ -274,6 +275,32 @@ def test_the_axis_always_prints_the_trailing_twelve_months_tick() -> None:
         "to date",
         "2026E",
     ]
+
+
+def _ticks_at(series: list[Any], width: int) -> list[str]:
+    """The ticks the bars' axis prints, in order, on a chart ``width`` px wide."""
+    [axis] = classed(_draw(series=series, width=width), "fb-c__xaxis")
+    return [text(tick) for tick in classed(axis, "fb-c__tick")]
+
+
+def test_a_narrow_chart_thins_its_year_ticks_so_none_runs_into_the_trailing_one() -> None:
+    """The Research tab's design, 7.9 (the look after the whole-branch review's fixes): the
+    design system's axis printed every tick of seven bars or fewer whatever the chart's width, so
+    at the tab's 320px the last fiscal year's tick and "to date" ran into each other ("2026to
+    date"). HistoryBars tells its axis how many ticks its plot holds, one each 56px and seven at
+    most, two at least: on a chart of 320px, 248px of plot, four, so of five fiscal years and
+    the trailing twelve months it prints the first year, the third and "to date", and not the
+    last fiscal year; at 560px, as wide as the report page's, all six, as before. Nine bars with
+    estimates at 320px print no two ticks in adjacent slots."""
+    six = [*FISCAL, TO_DATE]
+    assert _ticks_at(six, 320) == ["2021", "2023", "to date"]
+    assert "2025" not in _ticks_at(six, 320)
+    assert _ticks_at(six, 560) == ["2021", "2022", "2023", "2024", "2025", "to date"]
+    nine = [*FISCAL, TO_DATE, *AHEAD]
+    printed = _ticks_at(nine, 320)
+    slots = [[p["period"] for p in nine].index(tick) for tick in printed]
+    assert printed[0] == "2021" and "to date" in printed and printed[-1] == "2028E"
+    assert all(b - a > 1 for a, b in pairwise(slots)), slots
 
 
 def test_an_axis_with_no_trailing_point_prints_as_before() -> None:
