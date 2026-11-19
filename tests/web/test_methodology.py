@@ -160,7 +160,9 @@ def test_the_examples_are_dated_to_method_1_4() -> None:
     points to no phase; 3M's run-off names the years the consensus gives and the fade to zero with
     a flat terminal; the implied decline rate is named where the page sets it beside the trend's;
     the growth section's notes name the dollar ramp's. Re-read on 15 Nov 2026, they stand unchanged
-    under method 1.5: none has a revenue step the thin rule leaves out."""
+    under method 1.5: none has a revenue step the thin rule leaves out. Re-read on 19 Nov 2026, they
+    stand unchanged under method 1.6: none is an ADR or holds a vendor's ratio (spec 2026-11-19
+    6.2)."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     asof = html[html.index("Figures as of") :]
     asof = asof[: asof.index("</p>")]
@@ -169,7 +171,7 @@ def test_the_examples_are_dated_to_method_1_4() -> None:
         assert f'datetime="{day}"' in asof, day
     assert "Roku's is the close of" in asof
     assert "method 0.8" not in html and "method 0.9" not in asof and "method 1.0" not in asof
-    assert "14 Nov 2026</time> and are unchanged under method 1.5." in asof
+    assert "14 Nov 2026</time> and are unchanged under methods 1.5 and 1.6." in asof
     assert "methods 1.1, 1.2 and 1.3" not in asof
     # the balance sheet's period under each table that reads it, the minority interest where it is
     # above zero (CrowdStrike, 3M) and none where it is nil (Roku, Revolution Medicines)

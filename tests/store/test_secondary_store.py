@@ -46,9 +46,11 @@ PARTS = (Part("the business", PATH, 0.03, None), Part("a unit", (20.0,) * 5, 0.0
 DRIVERS = Drivers(3, (0.10, 0.08, 0.05), (0.20, 0.20, 0.20), 0.25, 2.0, 0.02)
 POLICY = load_policy()
 # The refusals an agent cannot fix (spec 2026-11-10 7.6), as the engine words them: no diluted
-# share count, the currency's four of 7.5 and the listed-share basis's.
+# share count, the currency's four of 7.5 and the listed-share basis's, as method 1.6 words it and
+# with the ratio a snapshot valued before 1.6 may carry (spec 2026-11-19 6.2).
 ABOVE_BOUND = "ARS: expected inflation 12.1% above the 10% bound"
-BASIS = (
+BASIS = "share basis unclear: the newest period's count 259.5 m against the quote's 194.9 m"
+BASIS_BEFORE_1_6 = (
     "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m (the ADR"
     " ratio 10)"
 )
@@ -59,6 +61,7 @@ CANNOT_FIX = (
     "no inflation projection for XYZ",
     ABOVE_BOUND,
     BASIS,
+    BASIS_BEFORE_1_6,
 )
 # The refusal the engine gave a foreign filer before method 1.1, which an old snapshot carries.
 FOREIGN_FILER = "foreign filer: currency and share-unit handling not built yet"

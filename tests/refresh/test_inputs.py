@@ -83,7 +83,6 @@ ROUTE_KEYS = {
     "next_earnings",
     "tax_rate_latest",
     "closes",
-    "adr_ratio",  # the ACME fixture's GuruFocus summary gives a ratio of 1
 }
 
 SHEET_SOURCE = "FMP balance-sheet-statement"
@@ -1027,7 +1026,6 @@ def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:
     assert p["street_ttm_eps"] == Provenance("FMP earnings", date(2026, 10, 30), NOW, NOW)
     assert p["next_earnings"] == Provenance("FMP earnings", TODAY, NOW, NOW)
     assert p["moat_score"] == Provenance("GuruFocus summary", TODAY, NOW, NOW)
-    assert p["adr_ratio"] == p["moat_score"]
     assert p["gf_eps_ttm"] == p["gf_eps_without_nri"]
     assert p["gf_eps_ttm"] == Provenance("GuruFocus keyratios", TODAY, NOW, NOW)
     assert p["closes"] == Provenance("FMP historical-price-eod/full", date(2026, 10, 30), NOW, None)
@@ -1699,14 +1697,38 @@ def _quote(count: float) -> list[dict[str, Any]]:
     return [{**row, "marketCap": row["price"] * count}]
 
 
-def test_an_adr_reads_its_counts_on_the_quotes_share_basis(store: Store) -> None:
-    """ACME with a ratio of 10 and a quote at a tenth of its count (10.4 m against 104 m): each
-    quarter's count, 101 m to 104 m, fits the newest's on the quote's basis only × 1 ÷ 10, so the
-    count reads ÷ 10 and the trailing EPS × 10; the street actuals stand."""
-    conn = store(**bodies(), summary=_summary("10"), quote=_quote(10.4 * M))
+def _profile(is_adr: bool) -> list[dict[str, Any]]:
+    """The ACME profile with FMP's ADR flag set to ``is_adr``."""
+    (row,) = json.loads((FIXTURES / "fmp" / "profile.ACME.json").read_text())
+    return [{**row, "isAdr": is_adr}]
+
+
+def test_assembly_finds_the_ratio_of_a_flagged_adr(store: Store) -> None:
+    """Spec 2026-11-19 6.2: ACME flagged as an ADR, its statements at 104 m shares and a quote whose
+    count is 1,040 m, and a stored GuruFocus ratio of 5, which is not read: the counts give 10, an
+    estimate under ``counts-ratio`` cited to the quote, and the count reads × 10."""
+    conn = store(**bodies(), profile=_profile(True), summary=_summary("5"), quote=_quote(1040 * M))
     inputs = build(conn)
     assert inputs.adr_ratio == 10.0
-    assert inputs.provenance["adr_ratio"] == Provenance("GuruFocus summary", TODAY, NOW, NOW)
+    assert inputs.estimate_methods["adr_ratio"] == "counts-ratio"
+    assert inputs.provenance["adr_ratio"].source == inputs.provenance["price"].source
+    assert inputs.provenance["adr_ratio"] == Provenance("FMP quote", date(2026, 10, 30), NOW, NOW)
+    assert inputs.notes["adr_ratio"] == (
+        "the whole number that brings the stored count, 104.0 m, to the quote's, 1,040.0 m"
+    )
+    assert inputs.shares_diluted == pytest.approx(1040 * M)
+    assert inputs.refusal is None
+
+
+def test_an_adr_reads_its_counts_on_the_quotes_share_basis(store: Store) -> None:
+    """ACME flagged as an ADR, with a quote at a tenth of its count (10.4 m against 104 m): the
+    counts give ρ 10, and each quarter's count, 101 m to 104 m, fits the newest's on the quote's
+    basis only × 1 ÷ 10, so the count reads ÷ 10 and the trailing EPS × 10; the street actuals
+    stand."""
+    conn = store(**bodies(), profile=_profile(True), quote=_quote(10.4 * M))
+    inputs = build(conn)
+    assert inputs.adr_ratio == 10.0
+    assert inputs.provenance["adr_ratio"] == Provenance("FMP quote", date(2026, 10, 30), NOW, NOW)
     assert inputs.refusal is None
     assert inputs.shares_diluted == pytest.approx(10.4 * M)
     assert inputs.trailing is not None and inputs.trailing.eps_diluted == pytest.approx(19.0)
@@ -1715,13 +1737,26 @@ def test_an_adr_reads_its_counts_on_the_quotes_share_basis(store: Store) -> None
         "shares_diluted": "basis-scaled",
         "eps_ttm": "basis-scaled",
     }
-    assert inputs.notes["eps_ttm"] == "×10 to the quote's share basis (the ADR ratio 10)"
+    assert inputs.notes["eps_ttm"] == "×10 to the quote's share basis (the ratio 10)"
     assert codes(inputs)[-1] == "basis-scaled"
 
 
-@pytest.mark.parametrize("ratio", ["0", None], ids=["zero", "absent"])
-def test_a_direct_listing_has_no_ratio(store: Store, ratio: str | None) -> None:
-    """GuruFocus gives a direct listing the ratio 0: no ratio, and the counts read as stored."""
+def test_assembly_reads_no_ratio_where_the_counts_agree(store: Store) -> None:
+    """A flagged ADR whose counts agree with the quote's (104 m against 100 m), with a GuruFocus
+    ratio of 5 on file: no ratio, and the counts read as stored."""
+    conn = store(**bodies(), profile=_profile(True), summary=_summary("5"))
+    inputs = build(conn)
+    assert inputs.is_adr is True
+    assert inputs.adr_ratio is None and "adr_ratio" not in inputs.provenance
+    assert "adr_ratio" not in inputs.notes and "adr_ratio" not in inputs.estimate_methods
+    assert inputs.shares_diluted == 104 * M and inputs.refusal is None
+    assert "basis-scaled" not in codes(inputs)
+
+
+@pytest.mark.parametrize("ratio", ["10", "0", None], ids=["ratio", "zero", "absent"])
+def test_a_row_without_the_adr_flag_reads_no_ratio(store: Store, ratio: str | None) -> None:
+    """ACME as FMP profiles it, no ADR, with a quote at a tenth of its count: whatever ratio
+    GuruFocus holds, the rule does not run, and the counts read as stored."""
     conn = store(**bodies(), summary=_summary(ratio), quote=_quote(10.4 * M))
     inputs = build(conn)
     assert inputs.adr_ratio is None and "adr_ratio" not in inputs.provenance
@@ -1731,15 +1766,13 @@ def test_a_direct_listing_has_no_ratio(store: Store, ratio: str | None) -> None:
 
 
 def test_the_tax_refusal_comes_before_the_basis_refusal(store: Store) -> None:
-    """A quote at an eighth of the count (13 m against 104 m), which neither 10, 1 ÷ 10 nor 1
-    explains: refused for the basis; with a tax table that lacks a year, refused for the tax rate
-    first (spec 2026-11-10 7.5)."""
-    conn = store(**bodies(), summary=_summary("10"), quote=_quote(13 * M))
-    refusal = (
-        "share basis unclear: the newest period's count 104.0 m against the quote's 13.0 m (the "
-        "ADR ratio 10)"
-    )
+    """A flagged ADR whose quote's count is 78 m against the statements' 104 m, a multiple of 0.75
+    that no whole number explains: refused for the basis; with a tax table that lacks a year,
+    refused for the tax rate first (spec 2026-11-10 7.5)."""
+    conn = store(**bodies(), profile=_profile(True), quote=_quote(78 * M))
+    refusal = "share basis unclear: the newest period's count 104.0 m against the quote's 78.0 m"
     assert build(conn).refusal == refusal
+    assert build(conn).adr_ratio is None
     from_2017 = {("United States", y): 0.25 for y in range(2017, 2027)}
     late = TaxTable(from_2017, "t", {"US": "United States"})
     assert build(conn, late).refusal == "no statutory tax rate for US 2015"

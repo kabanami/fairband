@@ -561,7 +561,7 @@ APPENDIX_A: dict[str, Any] = {
         },
     ],
     "versions": {
-        "method": "fairband-mechanical/1.5",
+        "method": "fairband-mechanical/1.6",
         "policy": "fairband-policy-v16",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "review": "fairband-review/1",
@@ -809,7 +809,7 @@ _REVIEW: dict[str, Any] = {
     "bridge": [_RECORD_LINE],
     "overrideIds": [12],
     "policyVersion": "fairband-policy-v16",
-    "methodVersion": "fairband-mechanical/1.5",
+    "methodVersion": "fairband-mechanical/1.6",
     "reviewMethod": "fairband-review/1",
     "settingsHash": EMPTY_SETTINGS_HASH,
     "decilesRefreshId": 3,

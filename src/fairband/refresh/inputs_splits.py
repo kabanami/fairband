@@ -69,10 +69,27 @@ period left and each consensus row left; without one every figure is read as sto
 is noted.
 
 ``apply_splits`` first reads an ADR's statements on the quote's share basis (spec 2026-11-10
-section 6.1) when GuruFocus's depositary receipt ratio ρ, ordinary shares per ADS, is neither 0
-nor 1, the quote gives its count Q and a diluted count D is on file; every other row reads as the
-split rule alone reads it. FMP's statements hold the listed-share (ADS) count, but on some
-periods one off by ρ or its inverse (``_basis_side``):
+section 6.1, spec 2026-11-19 6.2) when FMP flags the row as an ADR (``is_adr``), the quote gives
+its count Q and a diluted count D is on file; a row without the flag reads as the split rule alone
+reads it, whatever its counts. FMP's statements hold the listed-share (ADS) count, but on some
+periods one off by a whole number or its inverse, the depositary's ratio. No vendor on file states
+the ratio, so ``found_ratio`` finds it from the counts:
+
+- a count c *differs* from the count A it is judged against when neither c nor c × the ratio of
+  the pending splits after its period's end lies within the tolerance of A. For such a count the
+  multiple m is A ÷ c, then A ÷ (c × the splits' ratio). At m of 1.5 or more the candidate is the
+  whole number n nearest m, the factor n; at 1 ÷ 1.5 or less the whole number n nearest 1 ÷ m, the
+  factor 1 ÷ n; between the two there is none. A candidate fits when c × the factor, × the splits'
+  ratio on the second multiple, lies within the tolerance of A;
+- ρ is the n of the first count that differs and fits: D against Q; then, when D does not differ,
+  each trailing period oldest first, the newest against Q and each older one against D as stored.
+  A period that differs and fits no whole number is passed over, and so is a period without a
+  count; D so is the refusal "share basis unclear: the newest period's count <D> against the
+  quote's <Q>", every figure as given. With no ratio found the row reads as the split rule alone
+  reads it. The counts cannot say which way the depositary's ratio runs, so ρ is always the whole
+  number, and no whole number is too large to be one.
+
+With ρ found, ``_basis_side`` reads the counts by it:
 
 - a count c fits a factor f in 1, ρ and 1 ÷ ρ, tried in that order, when c × f, or c × f × the
   ratio of the splits after its period's end, lies within the tolerance of the count it is judged
@@ -84,8 +101,8 @@ periods one off by ρ or its inverse (``_basis_side``):
   read as it judges any;
 - a period whose count fits no factor, or two at different multiples, is read as stored and
   named with its reason, and so, when the rule notes anything, is a period without a count; D so
-  is the refusal "share basis unclear: the newest period's count <D> against the quote's <Q> (the
-  ADR ratio <ρ>)", every figure as given;
+  is the refusal "share basis unclear: the newest period's count <D> against the quote's <Q>",
+  every figure as given;
 - the street actuals, the consensus, GuruFocus's EPS and the closes are on the quote's basis
   already and take no factor.
 
@@ -93,7 +110,9 @@ The count and the trailing EPS so scaled are estimates under the method ``basis-
 takes the place of ``split-scaled`` on a figure both rules scaled, the note naming the split, then
 the factor. The row's note ``basis-scaled`` names the factor, the periods scaled and the two
 counts, and each period read as stored with its reason; with every factor 1 and no period so
-named there is none.
+named there is none. ρ itself is the DATA input ``adr_ratio`` (``SplitOutcome.adr_ratio``), an
+estimate under the method ``counts-ratio`` whose note names the count it was found on and the
+count that count was judged against.
 """
 
 import math
@@ -118,6 +137,9 @@ from fairband.store.vendor import latest_response
 
 SPLIT_SCALED = "split-scaled"
 BASIS_SCALED = "basis-scaled"
+COUNTS_RATIO = "counts-ratio"
+# A multiple at or above this, or at or below its inverse, has a whole number for a candidate.
+_PLAIN = 1.5
 _NO_COUNT = "No diluted count is on file, so the statements and the consensus are read as stored."
 _NO_QUOTE_COUNT = "The quote gives no share count, so the statements are read as stored."
 _POST_SPLIT = "FMP's statements and street actuals already read on the post-split basis."
@@ -172,17 +194,6 @@ _PART_OF = {
     "9": "a ninth of",
     "10": "a tenth of",
     "20": "a twentieth of",
-}
-_WORDS = {
-    "2": "two",
-    "3": "three",
-    "4": "four",
-    "5": "five",
-    "6": "six",
-    "7": "seven",
-    "8": "eight",
-    "9": "nine",
-    "10": "ten",
 }
 _MILLION = 1_000_000
 
@@ -240,8 +251,10 @@ class SplitOutcome:
     without a pending split; the note and the method of each scaled DATA input, by the
     engine's input name (``shares_diluted``, ``eps_ttm``, ``street_ttm_eps``, ``gf_eps_ttm``,
     ``gf_eps_without_nri``, ``ntm_eps``); the ``basis-scaled`` note, ``None`` when the
-    listed-share basis read nothing to note; and the refusal "share basis unclear: ...", with the
-    figures as given."""
+    listed-share basis read nothing to note; the refusal "share basis unclear: ...", with the
+    figures as given; and ``adr_ratio``, the ratio the counts of a flagged ADR gave, ``None``
+    without one, its note and its method ``counts-ratio`` under ``adr_ratio`` beside the
+    others'."""
 
     figures: SplitFigures
     flag: Flag | None
@@ -249,6 +262,7 @@ class SplitOutcome:
     estimate_methods: dict[str, str]
     basis_flag: Flag | None = None
     refusal: str | None = None
+    adr_ratio: float | None = None
 
 
 @dataclass(frozen=True)
@@ -311,19 +325,25 @@ def apply_splits(
     quote_market_cap: float | None,
     quote_price: float | None,
     tolerance: float,
-    adr_ratio: float | None = None,
+    is_adr: bool = False,
 ) -> SplitOutcome:
     """``figures`` on the share basis of the quote date (the module docstring states the rule);
-    ``statement_end`` is the newest trailing period's end and ``adr_ratio`` GuruFocus's depositary
-    receipt ratio, ordinary shares per ADS."""
+    ``statement_end`` is the newest trailing period's end and ``is_adr`` FMP's ADR flag, on which
+    the ratio is found from the counts and the listed-share basis read before the split rule."""
     oldest = figures.periods[0].end if figures.periods else statement_end
     pending = pending_splits(splits, oldest, price_date)
     quote_count = (
         None if quote_market_cap is None or not quote_price else quote_market_cap / quote_price
     )
     count = figures.shares_diluted
-    if adr_ratio is None or adr_ratio in (0, 1) or not quote_count or not count:
+    if not is_adr or not quote_count or not count:
         return _split_rule(figures, pending, statement_end, quote_count, tolerance)
+    found = _find_ratio(figures, pending, statement_end, quote_count, tolerance)
+    if found is None:
+        return _split_rule(figures, pending, statement_end, quote_count, tolerance)
+    if isinstance(found, str):
+        return SplitOutcome(figures, None, {}, {}, refusal=_unclear(count, quote_count))
+    adr_ratio, found_at = found
     newest = () if statement_end is None else _after(pending, statement_end)
     basis = _basis_side(figures, count, _ratio(newest), pending, quote_count, adr_ratio, tolerance)
     if basis.refusal is not None:
@@ -333,8 +353,115 @@ def apply_splits(
         name: f"{split.notes[name]} and {note}" if name in split.notes else note
         for name, note in basis.notes.items()
     }
-    methods = split.estimate_methods | basis.estimate_methods
-    return replace(split, notes=notes, estimate_methods=methods, basis_flag=basis.basis_flag)
+    notes["adr_ratio"] = _ratio_note(figures, found_at, quote_count)
+    methods = split.estimate_methods | basis.estimate_methods | {"adr_ratio": COUNTS_RATIO}
+    return replace(
+        split,
+        notes=notes,
+        estimate_methods=methods,
+        basis_flag=basis.basis_flag,
+        adr_ratio=adr_ratio,
+    )
+
+
+def found_ratio(
+    figures: SplitFigures,
+    pending: Sequence[SplitRow],
+    statement_end: date | None,
+    quote_count: float,
+    tolerance: float,
+) -> float | Literal["none"] | None:
+    """ρ, the ratio the counts of a flagged ADR give (the module docstring): a whole number, 2.0
+    or more; ``"none"`` when the diluted count differs from ``quote_count`` and fits no whole
+    number; ``None`` when no count that differs fits one, or without a diluted count."""
+    found = _find_ratio(figures, pending, statement_end, quote_count, tolerance)
+    return found if found is None or isinstance(found, str) else found[0]
+
+
+def _find_ratio(
+    figures: SplitFigures,
+    pending: Sequence[SplitRow],
+    statement_end: date | None,
+    quote_count: float,
+    tolerance: float,
+) -> tuple[float, int | None] | Literal["none"] | None:
+    """``found_ratio``'s ρ with where it was found: ``None`` for the diluted count, else the
+    trailing period's place in ``periods``. The diluted count first, against the quote's count;
+    then, when it does not differ, each period with a count, oldest first, the newest against the
+    quote's count and each older one against the diluted count as stored. A count or a quote's
+    count at or below zero gives none."""
+    count = figures.shares_diluted
+    if count is None or count <= 0 or quote_count <= 0:
+        return None
+    first = _whole_number(count, quote_count, pending, statement_end, tolerance)
+    if first is not None:
+        return first if isinstance(first, str) else (first, None)
+    newest = len(figures.periods) - 1
+    for k, period in enumerate(figures.periods):
+        own = period.shares_diluted
+        if own is None or own <= 0:
+            continue
+        against = quote_count if k == newest else count
+        found = _whole_number(own, against, pending, period.end, tolerance)
+        if isinstance(found, float):
+            return found, k
+    return None
+
+
+def _whole_number(
+    count: float,
+    against: float,
+    pending: Sequence[SplitRow],
+    end: date | None,
+    tolerance: float,
+) -> float | Literal["none"] | None:
+    """The whole number n that brings ``count`` within ``against``, as a float: ``None`` when the
+    count does not differ from it, as it is or × the ratio of the pending splits after ``end``;
+    else the first candidate that fits, the multiple ``against`` ÷ ``count`` tried first, then
+    that with the splits' ratio; ``"none"`` when neither fits."""
+    split = 1.0 if end is None else _ratio(_after(pending, end))
+    if _within(count, against, tolerance) or _within(count * split, against, tolerance):
+        return None
+    for multiple, scaled in ((against / count, 1.0), (against / (count * split), split)):
+        if multiple >= _PLAIN:
+            n = round(multiple)
+            factor = float(n)
+        elif multiple <= 1 / _PLAIN:
+            n = round(1 / multiple)
+            factor = 1 / n
+        else:
+            continue
+        if _within(count * factor * scaled, against, tolerance):
+            return float(n)
+    return "none"
+
+
+def _ratio_note(figures: SplitFigures, found_at: int | None, quote_count: float) -> str:
+    """The ``adr_ratio`` input's note: the count ρ was found on and the count it was judged
+    against, the stored diluted count against the quote's, or a trailing period's count against
+    the quote's (the newest) or the newest count (an older one)."""
+    count = figures.shares_diluted
+    assert count is not None  # ρ is found only with a diluted count
+    quote = f"the quote's, {_millions(quote_count)}"
+    if found_at is None:
+        return f"the whole number that brings the stored count, {_millions(count)}, to {quote}"
+    period = figures.periods[found_at]
+    own = period.shares_diluted
+    assert own is not None  # ρ is found only on a period with a count
+    words = _Words.of(figures)
+    named = "the fiscal year" if words.fiscal_year else f"the {words.one} ending {_day(period.end)}"
+    against = (
+        quote if found_at == len(figures.periods) - 1 else f"the newest count, {_millions(count)}"
+    )
+    return f"the whole number that brings the count of {named}, {_millions(own)}, to {against}"
+
+
+def _unclear(count: float, quote_count: float) -> str:
+    """The listed-share basis's refusal, the two counts in millions as stored."""
+    return (
+        f"share basis unclear: the newest period's count {_millions(count)} against the quote's "
+        f"{_millions(quote_count)}"
+    )
 
 
 def _split_rule(
@@ -688,11 +815,7 @@ def _basis_side(
     refusal when the count fits no factor or two. The split rule reads the figures it leaves."""
     found = _factor(count, adr_ratio, split_ratio, quote_count, tolerance)
     if isinstance(found, str):
-        refusal = (
-            f"share basis unclear: the newest period's count {_millions(count)} against the "
-            f"quote's {_millions(quote_count)} (the ADR ratio {_ratio_figure(adr_ratio)})"
-        )
-        return SplitOutcome(figures, None, {}, {}, refusal=refusal)
+        return SplitOutcome(figures, None, {}, {}, refusal=_unclear(count, quote_count))
     factor, read = found
     readings = _read_periods(
         figures.periods, pending, adr_ratio, quote_count, count * read, tolerance
@@ -803,7 +926,7 @@ def _on_basis(period: TrailingPeriod, factor: float) -> TrailingPeriod:
 def _basis_note(
     groups: Sequence[tuple[float, list[int]]], n: int, adr_ratio: float, words: _Words
 ) -> str:
-    """``÷10 to the quote's share basis (the ADR ratio 10)`` when every period scaled by one
+    """``÷10 to the quote's share basis (the ratio 10)`` when every period scaled by one
     factor, else ``... on 1 of 4 quarters`` (``on 1 of 2 half-years``), a part for each factor."""
     basis = f"to the quote's share basis{_adr(adr_ratio)}"
     if len(groups) == 1:
@@ -855,18 +978,8 @@ def _relation(read: float) -> str:
 
 
 def _adr(ratio: float) -> str:
-    """The ratio after a count: `` (the ADR ratio 10)``; below one with the ADSs to a share before
-    it, ``, three ADSs to one share (the ADR ratio 0.3333)``."""
-    named = f"(the ADR ratio {_ratio_figure(ratio)})"
-    if ratio > 1:
-        return f" {named}"
-    ads = _count(1 / ratio)
-    return f", {_WORDS.get(ads, ads)} ADSs to one share {named}"
-
-
-def _ratio_figure(ratio: float) -> str:
-    """The ADR ratio to four decimals at most: ``10``, ``0.3333``."""
-    return str(int(ratio)) if ratio.is_integer() else f"{ratio:.4f}".rstrip("0").rstrip(".")
+    """The ratio after a count: `` (the ratio 10)``."""
+    return f" (the ratio {_count(ratio)})"
 
 
 def _millions(count: float) -> str:

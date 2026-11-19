@@ -173,6 +173,11 @@ and never used (method 4.6; the founder's ruling of 2026-11-15): 28.15% on MGCO 
 their marginal 43.1%, and none on MSCO, whose capital did not grow by a fifth over the span.
 Every figure is unchanged; only the key is new.
 
+All seven re-captured under 1.6 on 2026-11-19 for the ADR ratio found from FMP's two share counts
+(spec 2026-11-19 6.2; method 4.2): no fixture carries the ADR flag or a ratio, so the rule does
+not run on any, no result carries the input `adr_ratio`, and all seven files are unchanged byte
+for byte.
+
 Run from the repository root:
 
 ```

@@ -209,7 +209,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/1.5"
+    assert METHOD_VERSION == "fairband-mechanical/1.6"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -1514,33 +1514,44 @@ def test_an_adr_or_another_currency_is_no_ground_for_refusal(
 def test_an_adr_s_results_carry_its_ratio(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    """The DATA input ``adr_ratio`` (unit ``ratio``) follows the base inputs on every result of an
-    ADR or a row with a ratio on file, citing the GuruFocus summary, ``None`` for an ADR without
-    one; a direct listing carries none (spec 2026-11-10 section 6.2), so the domestic rows' inputs
-    are as before."""
-    summary = Provenance("GuruFocus summary", date(2026, 10, 30), None, None)
-    cited = {**mg_inputs.provenance, "adr_ratio": summary}
-    for inputs, value, source in (
-        (replace(mg_inputs, is_adr=True), None, Provenance("unknown", None, None, None)),
-        (replace(mg_inputs, is_adr=True, adr_ratio=5.0, provenance=cited), 5.0, summary),
-        (replace(mg_inputs, adr_ratio=2.0, provenance=cited), 2.0, summary),
-    ):
-        r = value_company(inputs, deciles, policy, TODAY)
-        names = [i.name for i in r.inputs]
-        assert names[:6] == [*BASE_INPUTS, "adr_ratio"]
-        ratio = r.inputs[5]
-        assert (ratio.value, ratio.unit, ratio.tag, ratio.kind) == (
-            value,
-            "ratio",
-            "DATA",
-            "observed",
-        )
-        assert ratio.provenance == source
+    """Spec 2026-11-19 6.2: the DATA input ``adr_ratio`` (unit ``ratio``) follows the base inputs
+    on every result of a row the rule found a ratio on, an estimate under ``counts-ratio`` cited to
+    FMP's quote with its note; every other row carries none, so the domestic rows' inputs are as
+    before."""
+    quote = Provenance("FMP quote", date(2026, 10, 30), None, None)
+    note = "the whole number that brings the stored count, 145.8 m, to the quote's, 1,450.8 m"
+    found = replace(
+        mg_inputs,
+        is_adr=True,
+        adr_ratio=10.0,
+        provenance={**mg_inputs.provenance, "adr_ratio": quote},
+        estimate_methods={**mg_inputs.estimate_methods, "adr_ratio": "counts-ratio"},
+        notes={**mg_inputs.notes, "adr_ratio": note},
+    )
+    r = value_company(found, deciles, policy, TODAY)
+    names = [i.name for i in r.inputs]
+    assert names[:6] == [*BASE_INPUTS, "adr_ratio"]
+    ratio = r.inputs[5]
+    assert (ratio.value, ratio.unit, ratio.tag, ratio.kind, ratio.estimate_method) == (
+        10.0,
+        "ratio",
+        "DATA",
+        "estimate",
+        "counts-ratio",
+    )
+    assert (ratio.provenance, ratio.note) == (quote, note)
     for r in (
         value_company(mg_inputs, deciles, policy, TODAY),
         value_company(replace(mg_inputs, currency="EUR"), deciles, policy, TODAY),
     ):
         assert "adr_ratio" not in [i.name for i in r.inputs]
+
+
+def test_an_adr_whose_counts_agree_carries_no_adr_ratio_input(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    result = value_company(replace(mg_inputs, is_adr=True, adr_ratio=None), deciles, policy, TODAY)
+    assert "adr_ratio" not in {i.name for i in result.inputs}
 
 
 def test_a_decline_row_takes_its_route(
@@ -3130,7 +3141,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.5"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.6"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH

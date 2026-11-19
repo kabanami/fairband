@@ -108,8 +108,8 @@ its count of companies in the latest run.</desc>
 <p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
 Figures as of the data of <time datetime="2026-11-11">11 Nov 2026</time>, with the quarterly
 balance sheets of <time datetime="2026-11-14">14 Nov 2026</time>. They were valued under method 1.4
-on <time datetime="2026-11-14">14 Nov 2026</time> and are unchanged under method 1.5. Prices are
-the closes of <time datetime="2026-11-13">13 Nov 2026</time>, and Roku's is the close of
+on <time datetime="2026-11-14">14 Nov 2026</time> and are unchanged under methods 1.5 and 1.6.
+Prices are the closes of <time datetime="2026-11-13">13 Nov 2026</time>, and Roku's is the close of
 <time datetime="2026-11-06">6 Nov 2026</time>, the newest the vendor has. Each example links to
 today's row, whose figures may differ.</p>
 
@@ -444,9 +444,11 @@ reader's mark, and a margin has no currency.</p>
 <h3 class="heading">The share basis</h3>
 <p class="body">A depositary receipt (an ADS) stands for a set number of the company's ordinary
 shares. The data vendor states the share count and the earnings a share per ADS, the unit the US
-price is in. Some periods on file hold a count off by that number. Fairband reads such a period on
-the price's basis, and the row gets a note. Every figure a share, the value among them, is per
-ADS.</p>
+price is in. Some periods on file hold a count off by that number. No data vendor states the
+number. Fairband works it out from two counts: the one on file and the market value divided by the
+price. It does so only for a company the vendor marks as a depositary receipt. When one count is a
+whole number of times the other, Fairband reads that period on the price's basis, and the row gets
+a note. Every figure a share, the value among them, is per ADS.</p>
 
 <h3 class="heading">The bound</h3>
 <p class="body">A currency whose expected inflation is above
@@ -466,8 +468,8 @@ inflation is above <span data-policy="inflation_max">—</span>.</li>
 <li>“share basis unclear: ...”: a depositary receipt's newest share count matches the quote's on
 no basis.</li>
 </ul>
-<p class="body">The drawer and the company page's Research tab name the reporting currency, the
-rate and the ordinary shares an ADS stands for.</p>
+<p class="body">The drawer and the company page's Research tab name the reporting currency and the
+rate. On a depositary receipt they say every figure a share is per ADS.</p>
 </section>
 
 <section id="mature-growth">

@@ -255,8 +255,9 @@ class CompanyInputs:
     year's or a quarter's (``NewestSheet``, spec 2026-11-13 12.2), ``None`` without one.
     ``balance_years`` holds one ``BalanceYear`` per fiscal year of ``series`` with an annual
     balance sheet, oldest first; the Decline route reads them.
-    ``adr_ratio`` is GuruFocus's depositary receipt ratio, ordinary shares per ADS, ``None`` for a
-    direct listing or without one on file; assembly has read the counts on the quote's basis by it.
+    ``adr_ratio`` is the ratio assembly found from the share counts of a row with the ADR flag
+    (method 4.2), a whole number, ``None`` where the counts agree and on every other row; assembly
+    has read the counts on the quote's basis by it.
     ``stock_pay`` is the stock pay on file beside the trailing figure, the trailing periods at zero
     and the newest fiscal year above zero (``StockPayHistory``), ``None`` without statements; the
     Mature Growth route's ``stock-pay-missing`` note reads it.
@@ -705,15 +706,14 @@ def _refuse(
 
 def _base_inputs(i: CompanyInputs, policy: Policy) -> tuple[TaggedInput, ...]:
     """The inputs every result of ``value_company`` carries: the DATA inputs the guards and the
-    price facts read (the price the USD quote); for an ADR or a row with a ratio on file, the ADR
-    ratio the share count was read by, a direct listing carrying none; and for a row in another
+    price facts read (the price the USD quote); for a row assembly found an ADR ratio on, the ratio
+    the share count was read by, every other row carrying none; and for a row in another
     currency at a rate, the rate (``<code> per USD``) and the inflation differential, a RULE input
     cited to the inflation table with its note (spec 2026-11-10 7.2 and 7.3). A USD row carries
     neither."""
     years = [fy.year for fy in i.series]
     span = f"fiscal {years[0]} to {years[-1]}" if years else None
     earnings = None if i.next_earnings is None else i.next_earnings.isoformat()
-    listed = i.is_adr or i.adr_ratio is not None
     currency = (
         (
             data(i, "fx_rate", i.fx_rate, f"{i.currency} per USD"),
@@ -732,7 +732,7 @@ def _base_inputs(i: CompanyInputs, policy: Policy) -> tuple[TaggedInput, ...]:
         data(i, "shares_diluted", i.shares_diluted, "shares"),
         data(i, "next_earnings", None, "date", note=earnings),
         data(i, "closes", float(len(i.closes)), "daily closes"),
-        *((data(i, "adr_ratio", i.adr_ratio, "ratio"),) if listed else ()),
+        *((data(i, "adr_ratio", i.adr_ratio, "ratio"),) if i.adr_ratio is not None else ()),
         *currency,
     )
 

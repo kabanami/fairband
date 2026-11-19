@@ -67,10 +67,12 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
 - the stock splits: a split dated after the oldest trailing period's end and at or before the price
   date puts every share count and per-share figure on the quote date's basis, each trailing period
   read on its own count (``inputs_splits``), with the ``split-pending`` note;
-- the ADR ratio, the newest GuruFocus summary's ``depositary_receipt_ratio`` (ordinary shares per
-  ADS), ``None`` for a direct listing, whose ratio is 0, or without one: by it the split rule reads
-  an ADR's counts and trailing EPS on the quote's share basis first, with the ``basis-scaled``
-  note, or refuses the row when the newest count fits no basis.
+- the ADR ratio (spec 2026-11-19 6.2): on a row with the ADR flag, the whole number the split
+  rule finds from the share counts on file and the quote's (``inputs_splits.found_ratio``), by
+  which it reads an ADR's counts and trailing EPS on the quote's share basis first, with the
+  ``basis-scaled`` note, or refuses the row when the diluted count differs from the quote's and
+  no whole number explains it; ``None`` where the counts agree and on a row without the flag. It
+  is an estimate under ``counts-ratio``, cited to the quote. No vendor's ratio is read.
 
 ``provenance`` holds an entry under each key the route cites (``route`` module docstring) whose
 input the store supplied; an input it did not supply has none and cites "unknown". The source names
@@ -193,7 +195,6 @@ def build_inputs(
     actuals = cite("street_ttm_eps", money.actuals(street, policy))
     scores = read("gf-score")
     moat = cite("moat_score", _value(_field(scores, "moat_score"), _SUMMARY))
-    adr_ratio = cite("adr_ratio", _adr_ratio(scores))
     ttm_row, clean_row = _field(ratios, "eps_ttm"), _field(ratios, "eps_without_nri")
     ends = [period.end for period in stated.trailing_periods]
     eps_ttm = cite("gf_eps_ttm", money.mean(_value(ttm_row, _KEYRATIOS), ends, policy))
@@ -216,16 +217,20 @@ def build_inputs(
         quarter_estimates=quarters,
         annual_estimates=annual,
     )
+    quote_cap = _field(quote, "market_cap")
     split = apply_splits(
         read_figures,
         splits_for(conn, symbol),
         statement_end=None if stated.trailing is None else stated.trailing.period_end,
         price_date=None if price is None else price.as_of,
-        quote_market_cap=_float(_field(quote, "market_cap")),
+        quote_market_cap=_float(quote_cap),
         quote_price=_float(price),
         tolerance=policy.split_implied_count_tolerance,
-        adr_ratio=adr_ratio,
+        is_adr=is_adr,
     )
+    if split.adr_ratio is not None:
+        # found from the quote's count, its market cap ÷ its price, and the statements' counts
+        provenance["adr_ratio"] = _cite(_QUOTE, [r for r in (quote_cap, price) if r is not None])
     figures = split.figures
     notes.update(split.notes)
     flags = flags + tuple(f for f in (split.flag, split.basis_flag) if f is not None)
@@ -263,7 +268,7 @@ def build_inputs(
         cash=sums["cash"][0],
         sheet=sheet,
         balance_years=stated.balance_years,
-        adr_ratio=adr_ratio,
+        adr_ratio=split.adr_ratio,
         fx_rate=1.0 if money.rate is None else money.rate.rate,
         fx_date=None if money.rate is None else money.rate.date,
         inflation_differential=money.differential,
@@ -518,13 +523,6 @@ def _adr_flag(profile: Sequence[ObservationRow], company: CompanyRow | None) -> 
     if row is not None and row.value is not None:
         return row.value == 1
     return None if company is None else company.is_adr
-
-
-def _adr_ratio(rows: Sequence[ObservationRow]) -> _Cited[float | None]:
-    """GuruFocus's depositary receipt ratio, ordinary shares per ADS; none for a direct listing,
-    whose ratio is 0, or without one."""
-    found, source = _value(_field(rows, "depositary_receipt_ratio"), _SUMMARY)
-    return (found, source) if found else (None, None)
 
 
 def _next_earnings(rows: Sequence[ObservationRow], today: date) -> _Cited[date | None]:

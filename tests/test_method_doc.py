@@ -197,11 +197,12 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
         assert words in bullet, words
     assert "the terminal return stays at r" not in bullet
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-1].startswith(
+    rulings = rows[-2]  # the row before method 1.6's
+    assert rulings.startswith(
         "| 1.5, policy v16 | 2026-11-15 | The runway return's rulings (founder 2026-11-15"
     )
-    assert "The method is unchanged at 1.5: no mechanical value moves." in rows[-1]
-    assert "the moat's terminal rule reads it in place of the measure on every row" in rows[-1]
+    assert "The method is unchanged at 1.5: no mechanical value moves." in rulings
+    assert "the moat's terminal rule reads it in place of the measure on every row" in rulings
     # the marginal return at a constant margin: recorded, shown and never used (4.6)
     paragraph = next(
         x for x in four.splitlines() if x.startswith("The row records one more figure, shown and")
@@ -217,20 +218,92 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
         "The engine keeps the marginal (founder 2026-11-15)",
     ):
         assert words in paragraph, words
-    assert "`runway_return` gains `constant_margin`" in rows[-1]
+    assert "`runway_return` gains `constant_margin`" in rulings
     # the cap is a setting; the other calls stand, and no cap bounds a return on capital near zero
     value = next(x for x in four.splitlines() if "| `return_without_goodwill_cap` | yes |" in x)
     assert "a setting since the founder's ruling of 2026-11-15" in value
-    assert "`return_without_goodwill_cap` (25%), becomes a setting" in rows[-1]
-    assert "A return far above 100% on capital near zero stands with no cap" in rows[-1]
+    assert "`return_without_goodwill_cap` (25%), becomes a setting" in rulings
+    assert "A return far above 100% on capital near zero stands with no cap" in rulings
     # B-8's last part: the chart and its table do not print a ROIC on capital at or below zero
     sixteen = _section(16)
     assert (
         "a ROIC year on average invested capital at or below zero written as its note"
     ) in sixteen
     assert "as the page's ROIC chart leaves that year out and names it under the chart" in sixteen
-    assert "the report page's ROIC chart leaves a year on average invested capital" in rows[-1]
+    assert "the report page's ROIC chart leaves a year on average invested capital" in rulings
     assert "an agent set at r, which sets the terminal return at r too (14.4)" in four
+
+
+def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
+    """Spec 2026-11-19 6.2, method 1.6: 4.2 states the rule with its limits, FMP's ADR flag its
+    guard; section 2 reads no ratio from GuruFocus; 5.12 and 7.1 make the input an estimate from the
+    counts on the rows the rule found a ratio on; the note and the refusal lose "ADR ratio", the
+    refusal row naming the old ending; 11 has the 1.6 row last."""
+    four = _section(4)
+    for words in (
+        (
+            "when FMP flags the company as an ADR (the ADR flag of section 2), the quote gives its "
+            "count and a diluted count is on file. A row without the flag reads its counts as the "
+            "split rule alone reads them."
+        ),
+        "No vendor on file states the ratio, so the rule finds it from the counts.",
+        (
+            "For a count c that differs from the count A it is judged against, the multiple m is "
+            "A ÷ c, then A ÷ (c × the pending splits' ratio)."
+        ),
+        "A multiple between the two gives no candidate.",
+        (
+            "the diluted count against the quote's count; then, when the diluted count does not "
+            "differ, each trailing period"
+        ),
+        (
+            "oldest first, the newest against the quote's count and each older one against the "
+            "diluted count. A period that differs and fits no whole number is passed over"
+        ),
+        (
+            "\"share basis unclear: the newest period's count <c> against the quote's <Q>\", the "
+            "counts in millions to one decimal, every figure as stored."
+        ),
+        "With a ratio found, a count fits a factor f of 1, ρ and 1 ÷ ρ, tried in that order",
+        "1,450.8 m (the ratio 10)",
+        'a count a third of the quote\'s reads "a third (the ratio 3)"',
+        (
+            "No whole number is too large to be a ratio: a count held in thousands reads as a "
+            "ratio of 1,000."
+        ),
+        "so ρ is always the whole number, 3 where a vendor would state 0.3333",
+    ):
+        assert words in four, words
+    for gone in ("the ADR ratio 10", "whatever FMP's ADR flag", "ADSs to one share"):
+        assert gone not in four, gone
+    two = _section(2)
+    assert "| Moat score | GuruFocus `summary` |" in two and "depositary" not in two
+    five = _section(5)
+    assert "`adr_ratio` (unit `ratio`, an estimate under the method `counts-ratio`" in five
+    assert "absent on every other row, an ADR whose counts agree among them included" in five
+    seven = _section(7)
+    assert "no vendor on file states it" in seven
+    assert "GuruFocus's depositary receipt ratio" not in seven
+    eight = _section(8)
+    basis = next(x for x in eight.splitlines() if x.startswith("| `basis-scaled` |"))
+    assert "by the ratio or its inverse" in basis
+    assert "a flagged ADR the rule found a ratio on" in basis and "ADR ratio" not in basis
+    refusal = next(x for x in _section(9).splitlines() if x.startswith("| share basis unclear"))
+    assert refusal.startswith(
+        "| share basis unclear: the newest period's count <c> against the quote's <Q> (a snapshot "
+        'valued before method 1.6 may carry the ending " (the ADR ratio <ρ>)") | 4.2 |'
+    )
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-1].startswith(
+        "| 1.6, policy v16 | 2026-11-19 | The ADR ratio from FMP's two share counts (spec "
+        "2026-11-19 6.2"
+    )
+    for words in (
+        "No vendor's ratio is read",
+        "FMP's ADR flag guards the rule",
+        "On refresh 68, valued in memory on 2026-11-19, no value moved",
+    ):
+        assert words in rows[-1], words
 
 
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:
