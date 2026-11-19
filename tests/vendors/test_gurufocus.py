@@ -102,7 +102,7 @@ def test_summary_string_numbers_and_dashes() -> None:
                 "company_data": {
                     "moat_score": "7",
                     "z2score": "-",
-                    "depositary_receipt_ratio": None,
+                    "depositary_receipt_ratio": "-",
                 }
             }
         },
@@ -112,25 +112,24 @@ def test_summary_string_numbers_and_dashes() -> None:
         now,
     )
     by = {r.field: r.value for r in rows}
-    assert (
-        by["moat_score"] == Decimal(7)
-        and by["z2score"] is None
-        and by["depositary_receipt_ratio"] is None
-    )
+    assert by == {"moat_score": Decimal(7), "depositary_receipt_ratio": None}
 
 
 def test_summary_rows() -> None:
     assert summary_observations(load("summary.ACME"), "ACME", RID, OBSERVED, ENTERED) == [
         row("ACME", "gf-score", "moat_score", "7", "score"),
-        row("ACME", "gf-score", "z2score", "4.37", "ratio"),
         row("ACME", "gf-score", "depositary_receipt_ratio", "1", "ratio"),
     ]
 
 
-def test_summary_null_dash_and_missing_key_have_no_value() -> None:
+def test_summary_observations_leave_out_the_z_score() -> None:
+    rows = summary_observations(load("summary.ACME"), "ACME", RID, OBSERVED, ENTERED)
+    assert {r.field for r in rows} == {"moat_score", "depositary_receipt_ratio"}
+
+
+def test_summary_null_and_missing_key_have_no_value() -> None:
     assert summary_observations(load("summary.BOLT"), "BOLT", RID, OBSERVED, ENTERED) == [
         row("BOLT", "gf-score", "moat_score", None, "score"),
-        row("BOLT", "gf-score", "z2score", None, "ratio"),
         row("BOLT", "gf-score", "depositary_receipt_ratio", None, "ratio"),
     ]
 

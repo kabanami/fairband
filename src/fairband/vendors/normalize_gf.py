@@ -1,9 +1,9 @@
 """GuruFocus payloads to observations, the summary's scores and the key ratios' EPS, and the
 trailing P/E series to its rows (``pe_ttm_rows``), which the multiples history reads.
 
-- ``gf-score`` (``summary_observations``): ``moat_score`` (unit ``score``), ``z2score`` (Altman
-  Z″) and ``depositary_receipt_ratio`` (unit ``ratio`` both) from the legacy summary's
-  ``summary.company_data`` (gurufocus-dependencies; source-evidence P21).
+- ``gf-score`` (``summary_observations``): ``moat_score`` (unit ``score``) and
+  ``depositary_receipt_ratio`` (unit ``ratio``) from the legacy summary's ``summary.company_data``
+  (gurufocus-dependencies; source-evidence P21).
 - ``gf-ratio`` (``keyratios_observations``): ``eps_ttm`` from ``"EPS (TTM)"`` and
   ``eps_without_nri`` from ``"EPS without NRI"``, unit ``per-share`` (source-evidence P22). The
   key-ratios response is an object of category objects (``{"Basic": {...}, "Fundamental": {...},
@@ -31,7 +31,6 @@ type _Fields = tuple[tuple[str, str, str], ...]  # (field, GuruFocus key, unit)
 
 _SUMMARY: _Fields = (
     ("moat_score", "moat_score", SCORE),
-    ("z2score", "z2score", RATIO),
     ("depositary_receipt_ratio", "depositary_receipt_ratio", RATIO),
 )
 _KEYRATIOS: _Fields = (
@@ -54,7 +53,7 @@ def num(value: Any) -> Decimal | None:
 def summary_observations(
     payload: Any, symbol: str, response_id: int, observed_at: datetime, entered_at: datetime
 ) -> list[ObservationRow]:
-    """The three ``gf-score`` rows from ``summary.company_data``; none without it."""
+    """The two ``gf-score`` rows from ``summary.company_data``; none without it."""
     summary = payload.get("summary") if isinstance(payload, dict) else None
     company = summary.get("company_data") if isinstance(summary, dict) else None
     if not isinstance(company, dict):
