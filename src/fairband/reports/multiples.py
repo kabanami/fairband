@@ -14,24 +14,40 @@ Each series holds the points of the ten years to its newest day, from the same d
 before, and over them the four statistics, ``avg_10y``, ``median_10y``, ``high_10y`` and
 ``low_10y``, ``None`` each without a point. ``since`` is the series' first day on file, a loss day
 or a row with no forward P/E included: when the vendor's series or the log began.
+
+``built_series`` builds a trailing series from FMP's data (spec 2026-11-19 6.3, the text for
+``method.md`` 16.7): a day's P/E is its close ÷ the trailing diluted EPS of that day, the sum of
+``epsDiluted`` over the four quarters, or the two half-years of a company that reports twice a year
+(``cadence_of`` on the periods' ends, quarterly when they give none), with the latest period ends
+at or before the day, so the EPS changes at a period's end. The sum stands only when the periods
+are consecutive by that spacing (``consecutive_periods``), each holds its EPS and each is in the
+reporting currency; a day with no such sum is no row. A day whose trailing EPS is not above zero is
+a loss: a row with no point. A company in another currency has its close brought into the
+currency at the pair's last close at or before the day, and a day with none is no row. No split
+rule and no share-basis rule applies: FMP's closes are adjusted for splits and its EPS restated.
 """
 
 import json
 import sqlite3
+from bisect import bisect_right
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from statistics import fmean, median
 from typing import Any
 
+from fairband.engine.anchor import PERIODS_PER_YEAR, consecutive_periods
+from fairband.refresh.inputs_statements import cadence_of
 from fairband.store.multiples import MultiplesRow, multiples_log_for
 from fairband.store.vendor import latest_response, response_payload
+from fairband.vendors._fmp_parse import dated, number, text
 from fairband.vendors.gurufocus import PE_TTM, PROVIDER
 from fairband.vendors.normalize_gf import pe_ttm_rows
 
 SERIES = ("pe", "pe_forward")
 STATS = ("avg_10y", "median_10y", "high_10y", "low_10y")
 WINDOW_YEARS = 10
+_USD = "USD"
 
 
 @dataclass(frozen=True)
@@ -43,10 +59,85 @@ class Series:
     since: date | None
 
 
+@dataclass(frozen=True)
+class PeriodEps:
+    """One statement period of the trailing EPS: its end, its diluted EPS (``epsDiluted``;
+    ``None`` when the line is missing or holds no number) and its reported currency."""
+
+    end: date
+    eps: float | None
+    currency: str | None
+
+
 def trailing_series(payload: Any) -> Series | None:
     """The trailing series of a ``pe-history`` payload; ``None`` when it cannot be read."""
     rows = pe_ttm_rows(payload)
     return None if rows is None else _series(rows)
+
+
+def period_eps(payload: Any) -> list[PeriodEps] | None:
+    """The periods of an FMP ``income-statement`` answer, oldest first: each row with a date, its
+    ``epsDiluted`` and its ``reportedCurrency``; ``None`` when the payload is not a list."""
+    if not isinstance(payload, list):
+        return None
+    periods = []
+    for row, end in dated(payload):
+        eps = number(row.get("epsDiluted"))
+        currency = text(row.get("reportedCurrency"))
+        periods.append(PeriodEps(end, None if eps is None else float(eps), currency))
+    return sorted(periods, key=lambda period: period.end)
+
+
+def built_rows(
+    closes: Sequence[tuple[date, float]],
+    periods: Sequence[PeriodEps],
+    currency: str,
+    rates: Sequence[tuple[date, float]] | None,
+) -> list[tuple[date, float | None]]:
+    """Each day of ``closes`` that has a trailing EPS, with its P/E, in the order of ``closes``:
+    the close, brought into ``currency`` (the reporting currency) at the last of ``rates`` (units
+    of the currency per USD; ``None``, and not read, for USD) at or before the day, ÷ the trailing
+    EPS; a loss day is ``(day, None)``."""
+    ordered = sorted(periods, key=lambda period: period.end)
+    ends = [period.end for period in ordered]
+    trailing = _trailing_eps(ordered, currency)
+    pair = None if currency == _USD else sorted(rates or ())
+    rate_days = [day for day, _ in pair or ()]
+    rows: list[tuple[date, float | None]] = []
+    for day, close in closes:
+        newest = bisect_right(ends, day) - 1
+        eps = trailing[newest] if newest >= 0 else None
+        at = bisect_right(rate_days, day) - 1
+        if eps is None or (pair is not None and at < 0):
+            continue
+        price = close if pair is None else close * pair[at][1]
+        rows.append((day, price / eps if eps > 0 else None))
+    return rows
+
+
+def built_series(
+    closes: Sequence[tuple[date, float]],
+    periods: Sequence[PeriodEps],
+    currency: str,
+    rates: Sequence[tuple[date, float]] | None,
+) -> Series:
+    """The trailing series built from FMP's closes and periods (``built_rows``)."""
+    return _series(built_rows(closes, periods, currency, rates))
+
+
+def _trailing_eps(periods: Sequence[PeriodEps], currency: str) -> list[float | None]:
+    """By period, oldest first: the sum of the EPS over the year of periods it ends, ``None``
+    where there are too few, they are not consecutive, or one has no EPS or is in another
+    currency."""
+    cadence = cadence_of([period.end for period in periods]) or "quarterly"
+    count = PERIODS_PER_YEAR[cadence]
+    sums: list[float | None] = []
+    for newest in range(len(periods)):
+        year = periods[max(0, newest + 1 - count) : newest + 1]
+        eps = [p.eps for p in year if p.eps is not None and p.currency == currency]
+        whole = len(eps) == count and consecutive_periods([p.end for p in year], cadence)
+        sums.append(sum(eps) if whole else None)
+    return sums
 
 
 def forward_series(rows: Sequence[MultiplesRow]) -> Series:
