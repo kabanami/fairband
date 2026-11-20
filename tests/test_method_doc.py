@@ -306,6 +306,37 @@ def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
         assert words in rows[-1], words
 
 
+def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:
+    """Spec 2026-11-19 6.2: the counts cannot say which way a depositary's ratio runs, so 7.4's line
+    under the drawer's head names no ratio, the Research tab's being the same line; 16.2 and 16.6
+    give the ref's words; and 16.6's sentence on a refusal the agent cannot fix quotes the refusal
+    as method 1.6 words it."""
+    seven = _section(7)
+    for words in (
+        "the ADR ratio as a plain number",
+        "and the Research tab the same line under its bar",
+        '"Reports in TWD; an ADR: every per-share figure is per ADS; valued at TWD 32.96 per USD"',
+        "the line names no ratio, with one on file or none",
+        '("Reports in ARS; an ADR: every per-share figure is per ADS")',
+        "the whole number found between FMP's stored share count and the quote's (4.2)",
+    ):
+        assert words in seven, words
+    sixteen = _section(16)
+    assert (
+        "the ADR ratio, `adr_ratio`, the ratio between FMP's stored share count and the quote's"
+    ) in sixteen
+    assert (
+        "the input `adr_ratio` \"the ratio between FMP's stored share count and the quote's\""
+    ) in sixteen
+    assert (
+        "\"No secondary valuation: share basis unclear: the newest period's count 259.5 m against"
+        " the quote's 194.9 m\""
+    ) in sixteen
+    for text in (seven, sixteen):
+        for gone in ("ordinary shares per ADS", "one ADS is", "(the ADR ratio 10)"):
+            assert gone not in text, gone
+
+
 def test_the_one_time_item_comes_off_year_1_in_its_order() -> None:
     """Spec 2026-11-14 5: 5.2 states the order of the three subtractions and the form under a
     guided EPS, which does not read the one-time amount; 14.4 gives the input its bullet, and 11's

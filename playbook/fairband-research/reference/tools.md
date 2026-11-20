@@ -53,12 +53,14 @@ be left out.
   input scaled for a split is an estimate under the method `split-scaled` with a note naming the
   split, and the row's `split-pending` note names the rest. What the figures are in: `currency`, the
   reporting currency; `isAdr`, the ADR flag as the valuation reads it, the company profile's, else
-  the universe row's; `adrRatio`, the ordinary shares one ADS stands for, `null` without one;
-  `fxRate` and `fxDate`, the exchange rate the value was translated at, units of the currency per US
-  dollar, and its close's date, `null` on a company in US dollars and on one refused for its
-  currency, which has no rate ("no exchange rate for <code>", "no inflation projection for <code>"
-  or "<code>: expected inflation <π>% above the 10% bound"). An input in the currency names its code
-  as its unit (`TWD`, `TWD a share`); one read on the ADS basis is an estimate under `basis-scaled`.
+  the universe row's; `adrRatio`, the whole number Fairband found between FMP's stored share
+  count and the quote's, `null` where the counts agree; `fxRate` and `fxDate`, the exchange rate the
+  value was translated at, units of the currency per US dollar, and its close's date, `null` on a
+  company in US dollars and on one refused for its currency, which has no rate ("no exchange rate
+  for <code>", "no inflation projection for <code>" or "<code>: expected inflation <π>% above the
+  10% bound"). An input in the currency names its code as its unit (`TWD`, `TWD a share`); one
+  read on the ADS basis is an estimate under `basis-scaled`, and the input `adr_ratio`, the ratio
+  found, one under `counts-ratio`.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
 - `quarters(symbol)`: the newest eight stored quarters, oldest first, each by its fiscal label
@@ -349,10 +351,10 @@ and store nothing:
   secondary valuation refuses in the refusal's own words: "no diluted share count"; "reporting
   currency unknown", "no exchange rate for <code>", "no inflation projection for <code>" or
   "<code>: expected inflation <π>% above the 10% bound"; "share basis unclear: the newest
-  period's count <c> against the quote's <Q> (the ADR ratio <ρ>)". On a company in another
-  currency pass the path, the debt and the cash in the reporting currency; the value a share comes
-  back in US dollars. Its levels and its grid's cells are in US dollars too; its firm value, equity
-  and projection stay in the currency, and the record carries the rate as `fxRate`.
+  period's count <c> against the quote's <Q>". On a company in another currency pass the path,
+  the debt and the cash in the reporting currency; the value a share comes back in US dollars. Its
+  levels and its grid's cells are in US dollars too; its firm value, equity and projection stay in
+  the currency, and the record carries the rate as `fxRate`.
 - `sensitivity(symbol, row_tag, row_values, col_tag, col_values)`: the route's value a share
   across two inputs' values, at most five by five, stored to cite as `sensitivity:<id>/<i>/<j>`,
   and its axes' values as `sensitivity:<id>/rows/<i>` and `/cols/<j>`; nothing is overridden.

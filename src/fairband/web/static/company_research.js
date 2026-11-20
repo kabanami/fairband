@@ -10,10 +10,11 @@
    stance in the Stance column's chip, faded once its validity ended, its mode, its revision, its
    date and time, who wrote it, valid until and, for a valuation review, the full report it
    reuses; at its right Footnote marks and Download .md; under it, for a company in another
-   currency or an ADR, what its figures are in (FairbandPage.currencyLine of the detail, every
-   figure a share per ADS on an ADR; spec 2026-11-10, 6.2 and 7.4), a valuation review's note that
-   it reuses none and the Markdown's refusal. In the Records view the line's sentence, and under
-   the bar the company's records on file (7.10), which company_research_records.js draws
+   currency or an ADR, what its figures are in (FairbandPage.currencyLine of the detail, the
+   drawer's line, every figure a share per ADS on an ADR; spec 2026-11-10, 6.2 and 7.4, and spec
+   2026-11-19 6.2), a valuation review's note that it reuses none and the Markdown's refusal. In
+   the Records view the line's sentence, and under the bar the company's records on file (7.10),
+   which company_research_records.js draws
    (FairbandPage.researchRecords, loaded after this script and called as the tab draws). Then, in
    the Report view, the section list at the left (7.3): the report's headings, the three parts
    kept closed, References with their count, and the reports on file, the one shown marked, each
@@ -933,7 +934,7 @@
     }, [report ? report.id : null, view[0]]);
     var act = {
       today: props.detail ? props.detail.today : null,
-      currency: props.detail ? P.currencyLine(props.detail, true) : '',
+      currency: props.detail ? P.currencyLine(props.detail) : '',
       failed: failed[0] && report && failed[0].id === report.id ? failed[0].text : null,
       view: function (next) { view[1](next); },
       marks: function () {

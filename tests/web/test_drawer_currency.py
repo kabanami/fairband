@@ -23,9 +23,12 @@ APP = STATIC / "app.js"
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
-# The brief's line: TSM reports in TWD, one ADS is five ordinary shares, at 32.96 TWD a dollar.
+# The brief's line: TSM reports in TWD and is an ADR, here with a ratio of 5 on file, at 32.96 TWD
+# a dollar.
 TSM = {"currency": "TWD", "isAdr": True, "adrRatio": 5.0, "fxRate": 32.96, "fxDate": "2026-11-10"}
 DOMESTIC = {"currency": "USD", "isAdr": False, "adrRatio": None, "fxRate": None, "fxDate": None}
+# What the line says of an ADR, with a ratio on file or none (spec 2026-11-19 6.2).
+ADR = "an ADR: every per-share figure is per ADS"
 
 
 def _call(helper: str, *args: Any) -> Any:
@@ -71,7 +74,8 @@ def _texts(node: Any) -> list[str]:
         # the rate in units of the currency a dollar, four decimals below one
         ({"name": "fx_rate", "value": 32.96, "unit": "TWD per USD"}, "32.96"),
         ({"name": "fx_rate", "value": 0.86124, "unit": "EUR per USD"}, "0.8612"),
-        # the differential a percentage; the ADR ratio a number of shares, never a percentage
+        # the differential a percentage; the ADR ratio a plain number, never a percentage, 0.3333
+        # and none a snapshot's valued before method 1.6
         ({"name": "inflation_differential", "value": -0.00509, "unit": "ratio"}, "−0.5%"),
         ({"name": "adr_ratio", "value": 5.0, "unit": "ratio"}, "5"),
         ({"name": "adr_ratio", "value": 0.3333, "unit": "ratio"}, "0.3333"),
@@ -94,37 +98,29 @@ def test_an_override_or_a_bridge_line_reads_in_its_unit() -> None:
 @pytest.mark.parametrize(
     ("body", "line"),
     [
-        (TSM, "Reports in TWD; one ADS is five ordinary shares; valued at TWD 32.96 per USD"),
+        (TSM, f"Reports in TWD; {ADR}; valued at TWD 32.96 per USD"),
         (DOMESTIC, ""),  # a domestic row says nothing new
         (
             DOMESTIC | {"currency": "SEK", "fxRate": 8.0},
             "Reports in SEK; valued at SEK 8.00 per USD",
         ),
-        (
-            DOMESTIC | {"isAdr": True, "adrRatio": 2.0},
-            "Reports in USD; one ADS is two ordinary shares",
-        ),
-        (DOMESTIC | {"adrRatio": 1.0}, "Reports in USD; one ADS is one ordinary share"),
-        (
-            DOMESTIC | {"isAdr": True, "adrRatio": 20.0},
-            "Reports in USD; one ADS is 20 ordinary shares",
-        ),
-        (
-            DOMESTIC | {"isAdr": True, "adrRatio": 1.5},
-            "Reports in USD; one ADS is 1.5 ordinary shares",
-        ),
+        # an ADR in USD, its ratio found or none: the same words (spec 2026-11-19 6.2)
+        (DOMESTIC | {"isAdr": True, "adrRatio": 2.0}, f"Reports in USD; {ADR}"),
+        (DOMESTIC | {"isAdr": True}, f"Reports in USD; {ADR}"),
+        # a ratio on file without the flag, a snapshot valued before method 1.6: an ADR still
+        (DOMESTIC | {"adrRatio": 1.0}, f"Reports in USD; {ADR}"),
         (
             TSM | {"currency": "CNY", "adrRatio": 0.3333, "fxRate": 7.1234},
-            "Reports in CNY; three ADSs are one ordinary share; valued at CNY 7.12 per USD",
+            f"Reports in CNY; {ADR}; valued at CNY 7.12 per USD",
         ),
         (
             TSM | {"currency": "EUR", "adrRatio": None, "fxRate": 0.86124},
-            "Reports in EUR; the ADR ratio is not on file; valued at EUR 0.8612 per USD",
+            f"Reports in EUR; {ADR}; valued at EUR 0.8612 per USD",
         ),
         # refused for its currency (fix round 1): the code, but no rate, so no "valued at"
         (
             TSM | {"currency": "ARS", "adrRatio": 2.0, "fxRate": None, "fxDate": None},
-            "Reports in ARS; one ADS is two ordinary shares",
+            f"Reports in ARS; {ADR}",
         ),
     ],
 )
@@ -132,15 +128,22 @@ def test_the_head_says_what_the_figures_are_in(body: dict[str, Any], line: str) 
     assert _call("currencyLine", body) == line
 
 
-def test_the_research_tab_says_every_figure_a_share_is_per_ads() -> None:
-    """Spec 6.2: the report's words, "one ADS is five ordinary shares; every per-share figure here
-    is per ADS", which the Research tab draws under its bar (``tests/web/test_company_research.py``);
-    a company that is no ADR says nothing of it."""
-    assert _call("currencyLine", TSM, True) == (
-        "Reports in TWD; one ADS is five ordinary shares; every per-share figure here is per ADS;"
-        " valued at TWD 32.96 per USD"
-    )
-    assert _call("currencyLine", DOMESTIC | {"currency": "SEK", "fxRate": 8.0}, True) == (
+def test_an_adr_line_names_no_ratio() -> None:
+    """Spec 2026-11-19 6.2: the counts cannot say which way a depositary's ratio runs, so the line
+    names none, with or without a ratio on file."""
+    assert _call(
+        "currencyLine", {"currency": "TWD", "isAdr": True, "adrRatio": None, "fxRate": 32.96}
+    ) == ("Reports in TWD; an ADR: every per-share figure is per ADS; valued at TWD 32.96 per USD")
+    assert "ratio" not in _call("currencyLine", {"currency": "USD", "isAdr": True, "adrRatio": 10})
+
+
+def test_the_research_tab_says_every_figure_a_share_is_per_ads_once() -> None:
+    """Spec 2026-11-10 6.2 and spec 2026-11-19 6.2: the Research tab draws the drawer's line under
+    its bar (``tests/web/test_company_research.py``), which says once that every per-share figure
+    is per ADS; a company that is no ADR says nothing of it."""
+    line = _call("currencyLine", TSM)
+    assert line.count("per ADS") == 1 and "here" not in line
+    assert _call("currencyLine", DOMESTIC | {"currency": "SEK", "fxRate": 8.0}) == (
         "Reports in SEK; valued at SEK 8.00 per USD"
     )
 

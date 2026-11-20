@@ -155,10 +155,11 @@ def test_the_detail_read_names_the_currency_the_rate_and_the_share_basis(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:
     """Spec 2026-11-10 7.4: the company read carries the reporting currency, the universe row's
-    ADR flag, the ADR ratio the share count was read by, and the rate with its date, from the
-    snapshot's result: FXCO, spec 11.2's company in SEK at 8.0 a dollar, listed as an ADR of five
-    ordinary shares; AAPL reports in USD as a direct listing, so it carries no ratio and no
-    rate; a company with no universe row has no ADR flag."""
+    ADR flag, the ADR ratio the share count was read by (spec 2026-11-19 6.2: the whole number
+    found between FMP's stored share count and the quote's), and the rate with its date, from the
+    snapshot's result: FXCO, spec 11.2's company in SEK at 8.0 a dollar, listed as an ADR with a
+    ratio of 5; AAPL reports in USD as a direct listing, so it carries no ratio and no rate; a
+    company with no universe row has no ADR flag."""
     adr = replace(fx_inputs(), is_adr=True, adr_ratio=5.0)
     with closing(connect(db_path)) as conn:
         refresh = latest_refresh(conn)

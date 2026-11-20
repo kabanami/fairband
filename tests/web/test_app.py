@@ -1547,9 +1547,10 @@ def test_items_are_named_by_number_and_time() -> None:
 def test_the_drawer_s_head_and_appendix_a_say_what_the_figures_are_in() -> None:
     """Spec 2026-11-10 7.4 and 10: the line that names the reporting currency, the ADS and the rate
     (``currencyLine``, its words in ``tests/web/test_drawer_currency.py``) is in the drawer's head
-    under the company's name, and under the Research tab's bar, where it adds that every figure a
-    share is per ADS (``tests/web/test_company_research.py``); none on a domestic row. Appendix A's
-    secondary valuation reads its totals and its parts in the currency and names the rate."""
+    under the company's name, and under the Research tab's bar, the same line, which names no
+    ratio (spec 2026-11-19 6.2; ``tests/web/test_company_research.py``); none on a domestic row.
+    Appendix A's secondary valuation reads its totals and its parts in the currency and names the
+    rate."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
@@ -1558,7 +1559,7 @@ def test_the_drawer_s_head_and_appendix_a_say_what_the_figures_are_in() -> None:
         "currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },",
         "sector ? h('p', { key: 'sector',",
     )
-    assert "currency: props.detail ? P.currencyLine(props.detail, true) : ''," in (
+    assert "currency: props.detail ? P.currencyLine(props.detail) : ''," in (
         _function(_static_file("company_research.js"), "Research")
     )
     appendix = _function(_code(_static_file("report_parts.js")), "secondary")

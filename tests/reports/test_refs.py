@@ -219,12 +219,13 @@ def test_review_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[s
 def test_a_company_in_another_currency_resolves_its_rate_and_names_it(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
-    """Spec 2026-11-10 7.2 and 7.4 on FXCO, the company in SEK at 8.0 a dollar, here an ADR of five
-    ordinary shares: an input in SEK resolves to the read's unit as one in USD does (a total
+    """Spec 2026-11-10 7.2 and 7.4 on FXCO, the company in SEK at 8.0 a dollar, here an ADR with a
+    ratio of 5: an input in SEK resolves to the read's unit as one in USD does (a total
     ``currency``, a figure a share ``per-share``), so a bridge line of an override in SEK does too;
     the rate is a figure with no unit, the ADR ratio a multiple, the differential a percent; and
-    the references list names the rate, its date, the currency, the differential and the value in
-    the currency in words."""
+    the references list names the rate, its date, the currency, the differential, the value in the
+    currency and the ratio in words, the ratio as found between FMP's two share counts (spec
+    2026-11-19 6.2), not the ordinary shares an ADS stands for."""
     aapl = snapshot_row(conn, snapshots["AAPL"])
     assert aapl is not None
     inputs = replace(fx_inputs(), is_adr=True, adr_ratio=5.0)
@@ -263,7 +264,7 @@ def test_a_company_in_another_currency_resolves_its_rate_and_names_it(
             "the inflation differential against the US dollar",
         ),
         ("inputs/inflation_differential", "the inflation differential against the US dollar"),
-        ("inputs/adr_ratio", "the ADR ratio, ordinary shares per ADS"),
+        ("inputs/adr_ratio", "the ratio between FMP's stored share count and the quote's"),
     ):
         assert resolver.describe(f"{s}/{path}") == f"snapshot {sid}, {words}, {priced}", path
     assert resolver.describe(f"review:{review_id}/intermediates/fx_rate") == (

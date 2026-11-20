@@ -142,10 +142,12 @@ CANNOT_FIX = (
 # The refusal the engine gave a foreign filer before method 1.1, which the playbook names no more.
 OLD_FOREIGN_FILER = "currency and share-unit handling not built yet"
 # The listed-share basis's refusal whole, as assembly words it (``refresh.inputs_splits``), with its
-# placeholders: the counts in millions to one decimal, and the ratio.
-BASIS_UNCLEAR = (
-    "share basis unclear: the newest period's count <c> against the quote's <Q> (the ADR ratio <ρ>)"
-)
+# placeholders: the counts in millions to one decimal; since method 1.6 it prints no ratio (spec
+# 2026-11-19 6.2).
+BASIS_UNCLEAR = "share basis unclear: the newest period's count <c> against the quote's <Q>"
+# What `adrRatio` is since method 1.6 (spec 2026-11-19 6.2): the counts cannot say which way a
+# depositary's ratio runs, so the playbook calls it no count of ordinary shares an ADS stands for.
+ADR_RATIO = "the whole number Fairband found between FMP's stored share count and the quote's"
 # The refusals the agent meets, as the server words them; the playbook quotes each verbatim.
 REFUSALS = (
     IDENTIFY_FIRST,
@@ -1424,13 +1426,16 @@ def test_the_skill_reads_a_foreign_filer() -> None:
     across the two currencies, through `derive`; the override ranges and the guidance in the
     currency); step 8 reads `basis-scaled` and `fx-stale`; the overrides' ranges in dollars are in
     the currency; a part's free cash flow is in the currency; the citations' format rows name the
-    currency; the tools name the company read's fields and the secondary valuation's currency."""
+    currency; the tools name the company read's fields and the secondary valuation's currency. The
+    ADR ratio is the whole number found between FMP's two share counts, `null` where they agree,
+    which `basis-scaled` reads by, and no count of ordinary shares an ADS stands for (spec
+    2026-11-19 6.2)."""
     skill = _read(SKILL)
     steps = {n: _flat(text) for n, text in _steps(_frontmatter(skill)[1]).items()}
     for words in (
         "A foreign filer reports in another currency than the US dollar",
         "`currency`",
-        "`adrRatio`",
+        f"{ADR_RATIO} (`adrRatio`, `null` where the counts agree)",
         "`fxRate`",
         "every per-share figure is per ADS",
         "`snapshot:<id>/inputs/fx_rate`",
@@ -1449,7 +1454,7 @@ def test_the_skill_reads_a_foreign_filer() -> None:
     }
     assert "Thirteen flags ask for a decision of yours." in steps[8]
     for code, words in (
-        ("basis-scaled", ("the ADR ratio", "read as stored", "section 8")),
+        ("basis-scaled", ("comes from the two counts", "read as stored", "section 8")),
         ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),
     ):
         assert code in flags, code
@@ -1476,6 +1481,11 @@ def test_the_skill_reads_a_foreign_filer() -> None:
     company = _tool_entry("company")
     for words in ("`currency`", "`isAdr`", "`adrRatio`", "`fxRate`", "`fxDate`"):
         assert words in company, words
+    assert f"`adrRatio`, {ADR_RATIO}, `null` where the counts agree" in company
+    assert f"`adr_ratio` on an ADR {ADR_RATIO}, where the counts differ" in citations
+    for text in (_flat(skill), _flat(_read(TOOLS)), citations):
+        for gone in ("ordinary shares one ADS stands for", "one ADS is", "(the ADR ratio"):
+            assert gone not in text, gone
     secondary = _tool_entry("secondary_valuation")
     assert (
         "On a company in another currency pass the path, the debt and the cash in the reporting"

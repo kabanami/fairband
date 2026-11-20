@@ -371,7 +371,8 @@ def test_financial_tables_names_its_columns(api: FairbandClient) -> None:
 
 def test_company_names_the_currency_the_rate_and_the_share_basis(api: FairbandClient) -> None:
     """Spec 2026-11-10 7.4: the ``company`` read (web and MCP) carries the reporting currency, the
-    ADR flag and ratio, and the rate with its date; the tool's description says so."""
+    ADR flag and ratio, and the rate with its date; the tool's description says so, the ratio as
+    found between FMP's two share counts (spec 2026-11-19 6.2)."""
     server = build_server(api)
 
     async def listed() -> list[Any]:
@@ -382,7 +383,11 @@ def test_company_names_the_currency_the_rate_and_the_share_basis(api: FairbandCl
     company = next(t.description or "" for t in tools if t.name == "company")
     for words in (
         "the reporting currency (`currency`)",
-        "the ADR flag and ratio (`isAdr`, `adrRatio`)",
+        "the ADR flag (`isAdr`)",
+        (
+            "the whole number Fairband found between FMP's stored share count and the quote's"
+            " (`adrRatio`, null where the counts agree)"
+        ),
         "the exchange rate and its date (`fxRate`, `fxDate`)",
     ):
         assert words in company, words

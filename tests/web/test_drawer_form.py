@@ -90,7 +90,7 @@ def test_the_parts_in_order() -> None:
     assert text(head[3]) == "WIDE MOAT"
     assert text(head[4]) == "Lanternfield Optics Ltd"
     assert text(head[5]) == (
-        "Reports in TWD; one ADS is five ordinary shares; valued at TWD 32.40 per USD"
+        "Reports in TWD; an ADR: every per-share figure is per ADS; valued at TWD 32.40 per USD"
     )
     assert head[5]["props"]["className"] == "caption app-muted app-drawer__currency"
 

@@ -95,17 +95,17 @@ intermediate or a vendor field. An engine input's unit maps onto them: a currenc
 ``currency``, ``<code> a share`` ``per-share``, ``ratio`` ``percent``, ``shares`` and the other
 counted things ``count``; so a figure of a company in another currency (spec 2026-11-10 7.4),
 its input, an override's bridge line or a sensitivity axis, reads as a USD one does. The ADR ratio
-(``adr_ratio``, ordinary shares per ADS) and the sales-to-capital (``sales_to_capital``, revenue
-over invested capital) are each a ``multiple``, not a fraction; the rate
-(``fx_rate``, ``<code> per USD``) has no unit. The period is the fiscal year (``2025``), the
-quarter (``2026-Q4``), ``ttm``, a table's estimate column (``2026E``), or the close's or the
-multiple's date for the forms that have one, a finding's and a guidance record's as recorded;
-``None`` for the others. The snapshot is the record's own for ``snapshot:``, ``review:``,
-``secondary:`` and ``sensitivity:``, and for ``derived:`` the snapshot its operands rest on, the
-first operand's that rests on one (``rests_on``); ``None`` for the others, a finding and a
-guidance record being facts of the company. ``snapshots_of`` gives every snapshot a ref rests on,
-for a ``derived:`` ref those of all its operands through nested derivations, which the check's
-snapshot test reads (spec 2026-11-15 7.4).
+(``adr_ratio``, the ratio between FMP's stored share count and the quote's, spec 2026-11-19 6.2)
+and the sales-to-capital (``sales_to_capital``, revenue over invested capital) are each a
+``multiple``, not a fraction; the rate (``fx_rate``, ``<code> per USD``) has no unit. The period
+is the fiscal year (``2025``), the quarter (``2026-Q4``), ``ttm``, a table's estimate column
+(``2026E``), or the close's or the multiple's date for the forms that have one, a finding's and a
+guidance record's as recorded; ``None`` for the others. The snapshot is the record's own for
+``snapshot:``, ``review:``, ``secondary:`` and ``sensitivity:``, and for ``derived:`` the snapshot
+its operands rest on, the first operand's that rests on one (``rests_on``); ``None`` for the
+others, a finding and a guidance record being facts of the company. ``snapshots_of`` gives every
+snapshot a ref rests on, for a ``derived:`` ref those of all its operands through nested
+derivations, which the check's snapshot test reads (spec 2026-11-15 7.4).
 
 A ref resolves to ``None`` when it names nothing: a malformed ref, a record or a field that does
 not exist, a figure that is a table rather than a number or a word, or a record of another
@@ -289,8 +289,8 @@ _DRIVER_LISTS = frozenset({"revenue_growth", "operating_margin"})
 _GUIDANCE_FIGURES = frozenset({"low", "high", "midpoint", "step"})
 _GUIDANCE_RECORD = re.compile(r"guidance:(\d+)")
 # The inputs whose engine unit the read's units do not follow: the price, a figure a share whose
-# unit names its currency; the ADR ratio, ordinary shares per ADS, and the sales-to-capital,
-# revenue over invested capital, whose ``ratio`` is no fraction.
+# unit names its currency; the ADR ratio, the ratio between FMP's stored share count and the
+# quote's, and the sales-to-capital, revenue over invested capital, whose ``ratio`` is no fraction.
 _INPUT_UNITS = {"price": "per-share", "adr_ratio": "multiple", "sales_to_capital": "multiple"}
 # A step of a path that is not there, told apart from a figure stored as null.
 _ABSENT = object()
@@ -466,7 +466,7 @@ _SNAPSHOT_PATH_WORDS = {
     "intermediates/currency": "the reporting currency",
     "intermediates/inflation_differential": _DIFFERENTIAL_WORDS,
     "inputs/inflation_differential": _DIFFERENTIAL_WORDS,
-    "inputs/adr_ratio": "the ADR ratio, ordinary shares per ADS",
+    "inputs/adr_ratio": "the ratio between FMP's stored share count and the quote's",
     # the newest balance sheet the firm-value routes read debt and cash from, a quarter's or a
     # fiscal year's (spec 2026-11-13 12.2), and the two lines of it the Decline floor reads
     "intermediates/balance_sheet/label": "the period of the newest balance sheet",

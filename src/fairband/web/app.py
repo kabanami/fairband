@@ -383,9 +383,12 @@ def create_app(
         was valued or refused in (``types.money_of``: USD for a USD row, the code for a row refused
         for its currency); ``isAdr``, the ADR flag as assembly reads it, the latest stored
         profile's, else the universe row's, ``None`` with neither (``inputs.adr_flag``);
-        ``adrRatio``, the ADR ratio the share count was read by, the result's ``adr_ratio`` input,
-        ``None`` without one; ``fxRate`` and ``fxDate``, the rate the value was translated at and
-        its close's date, ``None`` on a row with no rate (``types.rated``). And ``launchReady``
+        ``adrRatio``, the ADR ratio the share count was read by, the whole number Fairband found
+        between FMP's stored share count and the quote's (spec 2026-11-19 6.2), the result's
+        ``adr_ratio`` input, ``None`` without one, an ADR whose counts agree included; neither
+        line names it, since the counts cannot say which way a depositary's ratio runs;
+        ``fxRate`` and ``fxDate``, the rate the value was translated at and its close's date,
+        ``None`` on a row with no rate (``types.rated``). And ``launchReady``
         (spec 2026-11-16 agent launch, 9), whether launching is set up: the launch file in the
         config folder, read at each request, can be used and its window command holds a word
         (``launch.settings``); the open item's ``launch`` is read at the clock's time."""

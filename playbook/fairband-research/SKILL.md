@@ -122,17 +122,18 @@ so in section 9.
 
 A foreign filer reports in another currency than the US dollar, or trades as American depositary
 shares (ADS). `company` names its reporting currency (`currency`), whether it is an ADR
-(`isAdr`), the ordinary shares one ADS stands for (`adrRatio`), and the exchange rate with its
-date (`fxRate`, `fxDate`), units of the currency per US dollar. Every figure is in the reporting
-currency except the price, the value, the levels, a close and a grid's cells, which are US
-dollars: the statements, the consensus, the inputs (their unit names the code, `TWD` or
-`TWD a share`), the intermediates and a secondary valuation's totals. On an ADR every per-share
-figure is per ADS, the unit the quote prices, and the report says so once: "one ADS is five
-ordinary shares; every per-share figure here is per ADS". Any arithmetic across US dollars and
-the currency goes through `derive`, with the rate cited as `snapshot:<id>/inputs/fx_rate`: a
-`ratio` of a figure in the currency and the rate is that figure in US dollars. On such a company
-the override ranges in dollars are in the reporting currency (see "Overrides"). Step 8 reads
-`basis-scaled` and `fx-stale`.
+(`isAdr`), the whole number Fairband found between FMP's stored share count and the quote's
+(`adrRatio`, `null` where the counts agree), and the exchange rate with its date (`fxRate`,
+`fxDate`), units of the currency per US dollar. The counts cannot say which way the depositary's
+ratio runs; the filing states it. Every figure is in the reporting currency except the price, the
+value, the levels, a close and a grid's cells, which are US dollars: the statements, the
+consensus, the inputs (their unit names the code, `TWD` or `TWD a share`), the intermediates and a
+secondary valuation's totals. On an ADR every per-share figure is per ADS, the unit the quote
+prices, and the report says so once: "every per-share figure here is per ADS". Any arithmetic
+across US dollars and the currency goes through `derive`, with the rate cited as
+`snapshot:<id>/inputs/fx_rate`: a `ratio` of a figure in the currency and the rate is that figure
+in US dollars. On such a company the override ranges in dollars are in the reporting currency
+(see "Overrides"). Step 8 reads `basis-scaled` and `fx-stale`.
 
 A money figure you record (a finding's value, a guidance record's low and high, a kill
 criterion's threshold) is in the currency the company states it in. Pass `currency`, its code,
@@ -513,11 +514,12 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   2-for-1 split of 27 Jan 2027". A period-tied override whose input the split rescaled drops as "the
   input the override corrected changed": make it again on the new basis.
 - `basis-scaled`: an ADR's share count or trailing EPS was read on the quote's share basis by the
-  ADR ratio or its inverse, because FMP held a period's count off by it, or a trailing period was
-  read as stored for the basis. The sentence names the factor, the periods scaled, the stored
-  count against the quote's with the ADR ratio, and each period read as stored with its reason. A
-  period read as stored may sit on another basis: check its count and EPS against the filing's
-  ADS ratio before you read the trailing EPS, and say in section 8 which periods were scaled.
+  ratio or its inverse, because FMP held a period's count off by it, or a trailing period was read
+  as stored for the basis. The ratio comes from the two counts, FMP's stored share count and the
+  quote's (`adrRatio`). The sentence names the factor, the periods scaled, the stored count
+  against the quote's with the ratio, and each period read as stored with its reason. A period
+  read as stored may sit on another basis: check its count and EPS against the filing's ADS ratio
+  before you read the trailing EPS, and say in section 8 which periods were scaled.
 - `fx-stale`: the rate the value was translated at, the pair's newest close, is more than
   `fx_stale_days` (`policy()`) before the price date, so the value in US dollars rests on an old
   rate. The sentence names the pair and both dates. Call `refresh_start("price")`, which quotes

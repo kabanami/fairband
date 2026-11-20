@@ -204,9 +204,11 @@ def build_server(client: FairbandClient) -> MCPServer:
 
     @server.tool(
         description="The company's latest snapshot in full: value, levels, inputs, intermediates,"
-        " phase and flags; its universe row; the reporting currency (`currency`), the ADR flag and"
-        " ratio (`isAdr`, `adrRatio`) and the exchange rate and its date (`fxRate`, `fxDate`) its"
-        " figures are read by; and the company brief, FMP's paragraph on what the company does."
+        " phase and flags; its universe row; the reporting currency (`currency`), the ADR flag"
+        " (`isAdr`), the whole number Fairband found between FMP's stored share count and the"
+        " quote's (`adrRatio`, null where the counts agree) and the exchange rate and its date"
+        " (`fxRate`, `fxDate`) its figures are read by; and the company brief, FMP's paragraph on"
+        " what the company does."
     )
     def company(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_company(symbol)))

@@ -201,7 +201,7 @@
      by year, an input's figure in its unit, the secondary valuation's rows and path, the guidance
      table, the phase evidence, pairs, a date, a total in a currency, an exchange rate and a
      count; the line that says what the figures are in (currencyLine) is the drawer's and the
-     Research tab's, which adds that every figure a share is per ADS. The company page
+     Research tab's, the same line in both. The company page
      (company.js; the company page's design, 7) draws its head with the logo, the phase
      numbers, the moat stamp (moatStamp), the Notes control as the drawer's bar draws it
      (notesControl, 11.1) and Request research with a request of its own (asking), whose
@@ -1843,9 +1843,9 @@
      euro's 0.8612 keeps its figures (32.96, 8.00, 0.8612). */
   function rate(v) { return decimals(v, Math.abs(v) < 1 ? 4 : 2); }
 
-  /* The ADR ratio, ordinary shares per ADS: a number of shares, to four decimals at most (5,
-     1.5, 0.3333). */
-  function shares(v) {
+  /* The ADR ratio, `adr_ratio`: a plain number, to four decimals at most (10; a snapshot valued
+     before method 1.6 may hold 0.3333). */
+  function adrFigure(v) {
     return minus(Number(v).toLocaleString('en-US', { maximumFractionDigits: 4 }));
   }
 
@@ -1855,8 +1855,8 @@
   /* By unit: a price to cents, a total to whole units, a ratio to one decimal of a percent. A
      price and a total share the unit USD; a price is under a million. On a row in another
      currency a money input's unit is the code, SEK or SEK a share (spec 2026-11-10 7.4), and it
-     reads with the code; the rate, `<code> per USD`, reads as a rate; the ADR ratio, ordinary
-     shares per ADS, as a number of shares, though its unit is `ratio`. */
+     reads with the code; the rate, `<code> per USD`, reads as a rate; the ADR ratio as a plain
+     number, though its unit is `ratio`. */
   var CODE = /^[A-Z]{3}$/;
   var CODE_A_SHARE = /^([A-Z]{3}) a share$/;
   var PER_USD = / per USD$/;
@@ -1865,7 +1865,7 @@
     var unit = i.unit || '';
     var share = CODE_A_SHARE.exec(unit);
     if (i.value == null) return '—';
-    if (i.name === 'adr_ratio') return shares(i.value);
+    if (i.name === 'adr_ratio') return adrFigure(i.value);
     if (PER_USD.test(unit)) return rate(i.value);
     if (share) return money(i.value, share[1]);
     if (CODE.test(unit)) {
@@ -1876,45 +1876,22 @@
   }
 
   /* What a company's figures are in (spec 2026-11-10 6.2, 7.4 and 10), the line under the head of
-     the drawer and under the Research tab's bar, from the company read:
-     the reporting currency, the ordinary shares an ADS stands for, and the rate its value was
-     translated at, "Reports in TWD; one ADS is five ordinary shares; valued at TWD 32.96 per
-     USD". The Research tab (`perAds`) adds that every figure a share is per ADS. A company in USD
-     that is no ADR, and has no ratio on file, has none: ''. */
-  function currencyLine(body, perAds) {
+     the drawer and under the Research tab's bar, the same line in both, from the company read:
+     the reporting currency, that every per-share figure of an ADR is per ADS, and the rate its
+     value was translated at, "Reports in TWD; an ADR: every per-share figure is per ADS; valued
+     at TWD 32.96 per USD". It names no ratio, with one on file or none: the counts the ratio is
+     found from cannot say which way a depositary's ratio runs (spec 2026-11-19 6.2). A company in
+     USD that is no ADR, and has no ratio on file, has none: ''. */
+  function currencyLine(body) {
     var code = body.currency || 'USD';
     var listed = !!body.isAdr || body.adrRatio != null;
     if (!foreign(code) && !listed) return '';
     var parts = ['Reports in ' + code];
-    if (listed) {
-      parts.push(adsWords(body.adrRatio));
-      if (perAds) parts.push('every per-share figure here is per ADS');
-    }
+    if (listed) parts.push('an ADR: every per-share figure is per ADS');
     if (foreign(code) && body.fxRate != null) {
       parts.push('valued at ' + code + ' ' + rate(body.fxRate) + ' per USD');
     }
     return parts.join('; ');
-  }
-
-  /* The ordinary shares an ADS stands for, by the ADR ratio: "one ADS is five ordinary shares",
-     "three ADSs are one ordinary share" for a ratio of a third; a ratio within 1% of a whole
-     number reads as that number, in words up to ten. */
-  var NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
-    'nine', 'ten'];
-
-  function adsWords(ratio) {
-    if (ratio == null) return 'the ADR ratio is not on file';
-    if (ratio < 1 && nearWhole(1 / ratio)) {
-      return counted(Math.round(1 / ratio)) + ' ADSs are one ordinary share';
-    }
-    var n = nearWhole(ratio) ? Math.round(ratio) : ratio;
-    return 'one ADS is ' + counted(n) + ' ordinary share' + (n === 1 ? '' : 's');
-  }
-
-  function nearWhole(x) { return Math.abs(x - Math.round(x)) <= 0.01 * x; }
-
-  function counted(n) {
-    return Number.isInteger(n) && n <= 10 ? NUMBER_WORDS[n] : shares(n);
   }
 
   /* Each input on one row, its nine fields stacked so they fit a narrow column: the name, tag,
