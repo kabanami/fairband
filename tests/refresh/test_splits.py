@@ -31,6 +31,7 @@ from fairband.refresh.inputs_splits import (
     SplitOutcome,
     SplitRow,
     apply_splits,
+    found_ratio,
     pending_splits,
     splits_for,
 )
@@ -1214,6 +1215,21 @@ def test_period_that_fits_no_whole_number_is_passed_over() -> None:
     out = _apply(figures, splits=(), market_cap=_quoted(400.0 * M), is_adr=True)
     assert (out.adr_ratio, out.refusal, out.basis_flag) == (None, None, None)
     assert out == _apply(figures, splits=(), market_cap=_quoted(400.0 * M))
+
+
+def test_found_ratio_gives_the_whole_number_none_or_no_ratio() -> None:
+    """``found_ratio``'s three answers, no split pending: CX's stored count, a tenth of the
+    quote's, gives 10.0; GDS's diluted count, which differs and fits no whole number, ``"none"``;
+    an oldest quarter that differs and fits none, the diluted count agreeing, no ratio."""
+
+    def found(figures: SplitFigures, quote_count: float) -> float | str | None:
+        return found_ratio(figures, (), END, quote_count, 0.15)
+
+    ratio = found(_figures(count=145.8 * M), 1450.8 * M)
+    assert isinstance(ratio, float) and ratio == 10.0
+    assert found(_figures(count=259.5 * M), 194.9 * M) == "none"
+    passed_over = _figures(count=400.0 * M, counts=(286.0 * M,) + (400.0 * M,) * 3)
+    assert found(passed_over, 400.0 * M) is None
 
 
 def test_ratio_with_a_pending_split_reads_the_count_on_the_quotes_basis() -> None:

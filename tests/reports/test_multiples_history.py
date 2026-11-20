@@ -103,6 +103,18 @@ def test_period_eps_reads_the_rows_oldest_first() -> None:
     ]
 
 
+@pytest.mark.parametrize("huge", ["1e400", "-1e400"])
+def test_an_eps_that_is_not_a_finite_number_is_none(huge: str) -> None:
+    """``1e400`` parses to a number no float holds: no EPS, so a day whose year of periods holds
+    it has no row, not a P/E of 0 that would pull the ten-year low to zero."""
+    payload = [
+        {"date": end.isoformat(), "epsDiluted": huge if end == Q[3] else 1.0} for end in Q[:4]
+    ]
+    periods = period_eps(payload)
+    assert periods is not None and periods[3].eps is None
+    assert built_rows([(date(2026, 1, 5), 50.0)], periods, "USD", None) == []
+
+
 def test_a_rate_holds_until_the_pairs_next_close() -> None:
     closes = [(date(2026, 1, 6), 10.0), (date(2026, 1, 8), 10.0)]
     rates = [(date(2026, 1, 7), 15.0), (date(2026, 1, 2), 30.0)]

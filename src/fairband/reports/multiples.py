@@ -66,7 +66,7 @@ class Series:
 @dataclass(frozen=True)
 class PeriodEps:
     """One statement period of the trailing EPS: its end, its diluted EPS (``epsDiluted``;
-    ``None`` when the line is missing or holds no number) and its reported currency."""
+    ``None`` when the line is missing or holds no finite number) and its reported currency."""
 
     end: date
     eps: float | None
@@ -99,14 +99,17 @@ def _positive(figure: float) -> bool:
 
 def period_eps(payload: Any) -> list[PeriodEps] | None:
     """The periods of an FMP ``income-statement`` answer, oldest first: each row with a date, its
-    ``epsDiluted`` and its ``reportedCurrency``; ``None`` when the payload is not a list."""
+    ``epsDiluted`` (``None`` without a finite number, ``"1e400"`` say) and its
+    ``reportedCurrency``; ``None`` when the payload is not a list."""
     if not isinstance(payload, list):
         return None
     periods = []
     for row, end in dated(payload):
-        eps = number(row.get("epsDiluted"))
-        currency = text(row.get("reportedCurrency"))
-        periods.append(PeriodEps(end, None if eps is None else float(eps), currency))
+        figure = number(row.get("epsDiluted"))
+        eps = None if figure is None else float(figure)
+        if eps is not None and not math.isfinite(eps):
+            eps = None
+        periods.append(PeriodEps(end, eps, text(row.get("reportedCurrency"))))
     return sorted(periods, key=lambda period: period.end)
 
 

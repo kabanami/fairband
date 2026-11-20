@@ -15,8 +15,10 @@ for t in whole:
 syms = ["AAPL","MSFT","KO","PG","NVDA","WMT","NVO","CRM","TTMI","AMZN","CX","RELX","V","GDS","FRVO","JNJ","SIMO","GPC","APD","TSLA","COST","HD"]
 q = ",".join("?" * len(syms))
 c.execute(f"INSERT INTO main.companies SELECT * FROM live.companies WHERE refresh_id=68 AND symbol IN ({q})", syms)
-c.execute(f"INSERT INTO main.snapshots SELECT * FROM live.snapshots WHERE id IN (SELECT max(id) FROM live.snapshots WHERE symbol IN ({q}) GROUP BY symbol)", syms)
+c.execute(f"INSERT INTO main.snapshots SELECT * FROM live.snapshots WHERE id IN (SELECT max(id) FROM live.snapshots WHERE symbol IN ({q}) GROUP BY symbol) OR id IN (SELECT snapshot_id FROM live.reports WHERE symbol IN ({q}) UNION SELECT snapshot_id FROM live.reviews WHERE symbol IN ({q}))", syms * 3)
 c.execute(f"INSERT INTO main.vendor_responses SELECT * FROM live.vendor_responses WHERE id IN (SELECT max(id) FROM live.vendor_responses WHERE provider='fmp' AND endpoint='profile' AND symbol IN ({q}) GROUP BY symbol)", syms)
 c.execute(f"INSERT INTO main.refresh_items SELECT * FROM live.refresh_items WHERE refresh_id=68 AND symbol IN ({q})", syms)
+c.execute(f"INSERT INTO main.observations SELECT * FROM live.observations WHERE dataset='profile' AND symbol IN ({q})", syms)
+c.execute(f"INSERT INTO main.multiples_log SELECT * FROM live.multiples_log WHERE symbol IN ({q})", syms)
 c.commit()
 print("snapshots", c.execute("select count(*) from main.snapshots").fetchone(), "companies", c.execute("select count(*) from main.companies").fetchone())

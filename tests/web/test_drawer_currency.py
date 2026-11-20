@@ -74,8 +74,8 @@ def _texts(node: Any) -> list[str]:
         # the rate in units of the currency a dollar, four decimals below one
         ({"name": "fx_rate", "value": 32.96, "unit": "TWD per USD"}, "32.96"),
         ({"name": "fx_rate", "value": 0.86124, "unit": "EUR per USD"}, "0.8612"),
-        # the differential a percentage; the ADR ratio a plain number, never a percentage, 0.3333
-        # and none a snapshot's valued before method 1.6
+        # the differential a percentage; the ADR ratio a plain number, never a percentage: a ratio
+        # of 0.3333 and a null come only from a snapshot valued before method 1.6
         ({"name": "inflation_differential", "value": -0.00509, "unit": "ratio"}, "−0.5%"),
         ({"name": "adr_ratio", "value": 5.0, "unit": "ratio"}, "5"),
         ({"name": "adr_ratio", "value": 0.3333, "unit": "ratio"}, "0.3333"),

@@ -163,8 +163,8 @@ def test_the_report_view_says_what_the_figures_are_in() -> None:
     carried to the tab: in the Report view, under the bar, for a company in another currency or
     an ADR, what its figures are in, every figure a share per ADS on an ADR
     (``FairbandPage.currencyLine`` of the detail the tab is handed, the drawer's line; spec
-    2026-11-19 6.2), in caption and ink-faint, before the bar's other lines; none for a company in US dollars that is no ADR,
-    none in the Records view and none for a company with no report."""
+    2026-11-19 6.2), in caption and ink-faint, before the bar's other lines; none for a company in
+    US dollars that is no ADR, none in the Records view and none for a company with no report."""
     adr, records = _drive({}, [_mount(), _press("app-research__view", RECORDS_VIEW)])
     line = _one(adr["tree"], "app-research__currency")
     assert line["type"] == "p"

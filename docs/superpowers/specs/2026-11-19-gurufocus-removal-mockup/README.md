@@ -10,7 +10,7 @@ changed the page in the browser before each screenshot.
 
 | File | What it is |
 |---|---|
-| `make_scratch.py` | Makes a scratch database: the migrations, then, from the live store opened read-only, the small tables whole and 22 companies' newest universe row, snapshot and profile |
+| `make_scratch.py` | Makes a scratch database: the migrations, then, from the live store opened read-only, the small tables whole and 22 companies' newest universe row, snapshot and profile, and for the company page their profile observations (the ADR flag), multiples log and the snapshots their reports and reviews point to |
 | `pw.mjs` | Opens the cached Chromium through `playwright-core` from the npx cache, in a light or a dark theme |
 | `dots.mjs` | On the screen, puts the mark before the mechanical value of six rows, in the forms compared, and takes a screenshot of each form in both themes |
 | `moat.mjs` | On a company page, draws the six states of the moat control after the stamp and takes a screenshot of each in both themes |
