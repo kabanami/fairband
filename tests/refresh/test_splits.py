@@ -1072,6 +1072,8 @@ BASIS_KEYS = {"shares_diluted", "eps_ttm"}
 COUNTS_RATIO = {"adr_ratio": "counts-ratio"}
 # A 1-for-2 reverse split after the newest quarter, before the price date.
 REVERSE = SplitRow(date(2026, 10, 15), 1.0, 2.0)
+# A 5-for-2 split there: its ratio, 2.5, near enough to ρ 2 that a count can fit both.
+FIVE_FOR_TWO = SplitRow(date(2026, 10, 15), 5.0, 2.0)
 
 
 def _quoted(count: float) -> float:
@@ -1354,6 +1356,39 @@ def test_an_older_period_off_by_the_ratio_scales_alone() -> None:
         "The trailing EPS (÷10 on the quarter ending 31 Dec 2025) is read on the quote's share "
         "basis: the stored count, 1,000.0 m, lies within the tolerance of the quote's, 1,000.0 m "
         "(the ratio 10)."
+    )
+
+
+def test_a_diluted_count_fitting_two_factors_is_refused() -> None:
+    """A 5-for-2 split after the newest quarter and the diluted count, 1,000 m, against the quote's
+    2,250 m: × 2.5 brings it 11% off, so it does not differ, and the oldest quarter, half of it,
+    gives ρ 2. The basis rule then finds the diluted count fits two factors at different multiples,
+    × 1 with the split (2.5) and × 2 (2): refused, every figure as given and no ratio."""
+    figures = _figures(count=1000.0 * M, counts=(500.0 * M,) + (1000.0 * M,) * 3)
+    out = _apply(figures, splits=(FIVE_FOR_TWO,), market_cap=_quoted(2250.0 * M), is_adr=True)
+    assert out.refusal == (
+        "share basis unclear: the newest period's count 1,000.0 m against the quote's 2,250.0 m"
+    )
+    assert out.adr_ratio is None
+    assert out.figures == figures and out.notes == {} and out.estimate_methods == {}
+    assert out.flag is None and out.basis_flag is None
+
+
+def test_an_older_period_fitting_two_factors_reads_as_stored_and_is_named() -> None:
+    """The same split, the diluted count and the quote's both 1,000 m: the oldest quarter, 444 m,
+    lies within 15% of the diluted count × 2.5, so it does not differ and is passed over, and the
+    next, half of it, gives ρ 2. The basis rule reads that quarter × 2; the oldest fits two
+    factors at different multiples, × 1 with the split and × 2, so the basis rule reads it as
+    stored and names it with its reason, and the split rule then judges it as it judges any."""
+    figures = _figures(count=1000.0 * M, counts=(444.0 * M, 500.0 * M, 1000.0 * M, 1000.0 * M))
+    out = _apply(figures, splits=(FIVE_FOR_TWO,), market_cap=_quoted(1000.0 * M), is_adr=True)
+    assert out.refusal is None and out.adr_ratio == 2.0
+    assert [p.eps_diluted for p in out.figures.periods] == pytest.approx([0.4, 0.5, 1.0, 1.0])
+    assert _basis_sentence(out) == (
+        "The trailing EPS (÷2 on the quarter ending 31 Mar 2026) is read on the quote's share "
+        "basis: the stored count, 1,000.0 m, lies within the tolerance of the quote's, 1,000.0 m "
+        "(the ratio 2). The quarter ending 31 Dec 2025 fits two share bases of the newest count "
+        "and is read as stored."
     )
 
 
