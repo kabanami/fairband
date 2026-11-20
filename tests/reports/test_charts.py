@@ -4,7 +4,6 @@ fixture of ``conftest.py``: AAPL with ACME's synthetic statements (revenue $2,10
 $2,000 m in 2024, and five quarters to 30 Sep 2026), the consensus for 2026 and 2027 and its
 closes, valued and priced 30 Oct 2026."""
 
-import json
 import sqlite3
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -14,6 +13,7 @@ import pytest
 from refresh.synthetic import NOW, bodies
 from support.engine_companies import fx_inputs, universe_deciles
 from support.payloads import store_payloads
+from support.pe_history import closes_payload, store_pe_history, unit_quarters
 from support.web import TODAY
 
 from fairband.engine.route import refusal_result, value_company
@@ -41,7 +41,6 @@ from fairband.store.reports import ReportRow, insert_report, report_row
 from fairband.store.secondary import insert_secondary
 from fairband.store.sensitivities import insert_sensitivity, sensitivity_row
 from fairband.store.snapshots import insert_snapshot, snapshot_row
-from fairband.store.vendor import record_response
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 EVIDENCE = [{"kind": "filing", "ref": "10-K", "note": None}]
@@ -489,18 +488,20 @@ def test_section_9_holds_the_statistics_and_the_year_end_points(
     assert stats.rows == (("Trailing P/E", "", "", "", "", ""), ("Forward P/E", "", "", "", "", ""))
     assert [row[0] for row in stats.rows] == list(year_end.header[1:])
     assert year_end.rows == ()
-    rows = [
-        ["2016-10-29", 30.0, 30.0, 30.0, 30.0],  # a day before the ten years
-        ["2016-10-30", 20.0, 20.0, 20.0, 20.0],
-        ["2016-12-30", 18.0, 18.0, 18.0, 18.0],
-        ["2021-06-30", "At Loss", 0, 0, 0],
-        ["2025-12-31", 22.0, 22.0, 22.0, 22.0],
-        ["2026-10-29", 23.0, 23.0, 23.0, 23.0],
-        ["2026-10-30", 24.0, 24.0, 24.0, 24.0],
-    ]
+    closes = {  # a trailing EPS of 1.00 a day, but the loss year from 31 March 2021
+        "2016-10-29": 30.0,  # a day before the ten years
+        "2016-10-30": 20.0,
+        "2016-12-30": 18.0,
+        "2021-06-30": 50.0,  # a loss
+        "2025-12-31": 22.0,
+        "2026-10-29": 23.0,
+        "2026-10-30": 24.0,
+    }
     at = datetime(2026, 11, 1, tzinfo=UTC)
-    payload = json.dumps(rows)
-    record_response(conn, "gf", "pettm", {"symbol": "AAPL"}, "AAPL", 200, payload, None, at)
+    quarters = unit_quarters("AAPL", losses=[date(2021, 3, 31)])
+    store_pe_history(
+        conn, "AAPL", {"closes": closes_payload("AAPL", closes), "quarters": quarters}, at
+    )
     for day, pe_forward in (("2025-12-30", 21.0), ("2026-10-29", 21.5), ("2026-10-31", 22.5)):
         log_multiples(
             conn, "AAPL", date.fromisoformat(day), 150.0, None, None, pe_forward, 1, 1, at

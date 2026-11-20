@@ -951,7 +951,7 @@ def test_a_429_on_a_new_call_stops_the_fetch(
 def env_passthrough(env: Env) -> Passthrough:
     """The pass-through over the environment's clients and database."""
     clients = env.clients
-    return Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets, clients.gf)
+    return Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets)
 
 
 def env_fetch(env: Env, symbol: str) -> FetchOutcome:

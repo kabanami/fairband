@@ -78,7 +78,6 @@ SPEC_TOOLS = (
     "insider_trades",
     "transcript_dates",
     "dcf",
-    "pe_history",
     "filings",
     "filing_report",
     "filing_search",
@@ -139,7 +138,6 @@ READS: dict[str, tuple[dict[str, Any], str]] = {
     "insider_trades": ({"symbol": "AAPL"}, "/api/vendor/insider-trades/AAPL"),
     "transcript_dates": ({"symbol": "AAPL"}, "/api/vendor/transcript-dates/AAPL"),
     "dcf": ({"symbol": "AAPL"}, "/api/vendor/dcf/AAPL"),
-    "pe_history": ({"symbol": "AAPL"}, "/api/vendor/pe-history/AAPL"),
     "filings": (
         {
             "symbol": "AAPL",
@@ -311,6 +309,9 @@ def test_every_spec_tool_is_registered(api: FairbandClient) -> None:
     tools = anyio.run(listed)
     assert TOOL_NAMES == SPEC_TOOLS
     assert [tool.name for tool in tools] == list(SPEC_TOOLS)
+    # GuruFocus's series and its tool went (spec 2026-11-19 6.3): multiples_history serves the
+    # series Fairband builds from FMP's data.
+    assert "pe_history" not in TOOL_NAMES and len(TOOL_NAMES) == 54
     for tool in tools:  # one sentence each
         description = tool.description or ""
         assert description.endswith(".") and ". " not in description, tool.name
@@ -467,10 +468,10 @@ def test_every_read_tool_reads_its_route(api: FairbandClient, client: TestClient
         else:
             refusal = {"refused": expected.json()["detail"], "status": expected.status_code}
             assert answer == refusal, name
-    # the seven pass-throughs and the three filing reads reach their routes, which have no FMP key
+    # the six pass-throughs and the three filing reads reach their routes, which have no FMP key
     # here
-    vendor = answers[-10:]
-    assert vendor == [{"refused": "no FMP key", "status": 503}] * 10
+    vendor = answers[-9:]
+    assert vendor == [{"refused": "no FMP key", "status": 503}] * 9
 
 
 def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
@@ -761,10 +762,10 @@ def test_multiples_history_answers_the_last_point_of_each_month_unless_daily() -
     assert rest == {k: v for k, v in canned["pe"].items() if k != "points"}
     assert monthly["symbol"] == "AAPL" and monthly["peNote"] is None
     assert _call(server, "multiples_history", {"symbol": "AAPL", "daily": True}) == canned
-    unserved = canned | {"pe": None, "peNote": "no GuruFocus key"}
+    unserved = canned | {"pe": None, "peNote": "no FMP key"}
     server = build_server(_Canned(unserved))  # type: ignore[arg-type]
     answered = _call(server, "multiples_history", {"symbol": "AAPL"})
-    assert (answered["pe"], answered["peNote"]) == (None, "no GuruFocus key")
+    assert (answered["pe"], answered["peNote"]) == (None, "no FMP key")
 
 
 @pytest.mark.usefixtures("secondaries")

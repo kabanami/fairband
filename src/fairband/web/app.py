@@ -22,10 +22,10 @@ a newer server's page with an older build's script. Nothing here reads a key. Th
 whose thread calls the vendors; without one they answer 503. ``serve`` always passes one; without
 an FMP key its runs refuse every kind but a revalue, and a refusal is a 400. The pass-through
 route, the multiples history read and the filing reads alone call a vendor from a request: they
-call FMP, or GuruFocus for the trailing P/E series, on FastAPI's sync-route thread through the
-``Passthrough`` that ``serve`` builds with the keys, FMP paced by the one limiter the worker's runs
-share, and answer the stored payload scrubbed, so no answer carries a key; without a pass-through
-(no FMP key) the route and the filing reads answer 503 and the read's trailing series is ``null``.
+call FMP on FastAPI's sync-route thread through the ``Passthrough`` that ``serve`` builds with the
+FMP key, paced by the one limiter the worker's runs share, and answer the stored payload scrubbed,
+so no answer carries a key; without a pass-through (no FMP key) the route and the filing reads
+answer 503 and the read serves the trailing series stored before, ``null`` with none.
 What is bounded: four vendor calls in flight; a request that finds them all taken waits at most
 ten seconds for a slot, holding its pool thread meanwhile, and past that answers 503. The logo's
 read fetches a company's logo from FMP's image host with ``fetch_logo``, which ``serve`` passes;

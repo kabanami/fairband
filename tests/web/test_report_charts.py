@@ -841,12 +841,10 @@ def test_price_charts_give_the_band_and_the_two_p_e_or_a_refusal_in_their_place(
         ["Forward P/E"],
     ]
     assert classed(drawn, "app-chart") == []
-    refused = _call(
-        "reportCharts.priceCharts", landed | {"multiples": {"error": "GuruFocus refused"}}
-    )
+    refused = _call("reportCharts.priceCharts", landed | {"multiples": {"error": "FMP refused"}})
     assert len(refused) == 2
     assert [c["title"] for c in _charts(refused[0])] == ["The price against the band by quarter"]
-    assert text(refused[1]) == "The P/E history did not load: GuruFocus refused."
+    assert text(refused[1]) == "The P/E history did not load: FMP refused."
     assert _call("reportCharts.priceCharts", {"closes": landed["closes"]}) == []
     alone = _call("reportCharts.priceCharts", {"multiples": landed["multiples"]})
     assert [[c["title"] for c in _charts(chart)] for chart in alone] == [

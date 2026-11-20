@@ -3155,7 +3155,7 @@ def test_the_charts_axes_hold_as_many_ticks_as_their_width() -> None:
 
 
 def test_the_research_tab_s_reads_carry_the_request_header() -> None:
-    """D11 and B-109: the server refuses the multiples history read, which may call GuruFocus,
+    """D11 and B-109: the server refuses the multiples history read, which may call FMP,
     without ``X-Fairband-Request: 1``, as it refuses a write; the Research tab's one read helper
     for the series sends it on every read, as the page's writes do, and its refusal stays the
     server's sentence."""
@@ -3171,7 +3171,7 @@ def test_the_research_tab_s_reads_carry_the_request_header() -> None:
 
 
 def test_each_series_lands_as_its_read_settles() -> None:
-    """The multiples history may wait on GuruFocus (13.7): each series lands in what the Research
+    """The multiples history may wait on FMP (13.7): each series lands in what the Research
     tab holds of its report as its own read settles and the page draws again, so the charts of
     the local reads never wait for it; a chart draws once the series it reads are in. The latest
     read wins (``tests/web/test_company_research_cards.py`` runs them)."""

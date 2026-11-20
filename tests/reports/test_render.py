@@ -2,7 +2,6 @@
 on the ``snapshots`` fixture of ``conftest.py``: AAPL's report generated from its records, a review
 under an applied belief override and a secondary valuation beside it."""
 
-import json
 import re
 import sqlite3
 from dataclasses import replace
@@ -20,6 +19,7 @@ from support.engine_companies import (
     universe_deciles,
 )
 from support.payloads import store_payloads
+from support.pe_history import closes_payload, store_pe_history, unit_quarters
 from support.splits import (
     AFTER,
     BEFORE,
@@ -57,7 +57,6 @@ from fairband.store.reports import ReportRow, insert_report, report_row
 from fairband.store.reviews import insert_review
 from fairband.store.secondary import insert_secondary
 from fairband.store.snapshots import insert_snapshot, snapshot_row
-from fairband.store.vendor import record_response
 
 METHOD = Path(__file__).parent.parent.parent / "docs" / "method.md"
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
@@ -1035,10 +1034,8 @@ def test_the_markdown_carries_the_chart_tables(
     secondary valuation; section 9's statistics and year-end points; no section else carries
     one."""
     sid = snapshots["AAPL"]
-    rows = [["2025-12-31", 22.0, 22.0, 22.0, 22.0], ["2026-10-30", 24.0, 24.0, 24.0, 24.0]]
-    record_response(
-        conn, "gf", "pettm", {"symbol": "AAPL"}, "AAPL", 200, json.dumps(rows), None, NOW
-    )
+    closes = closes_payload("AAPL", {"2025-12-31": 22.0, "2026-10-30": 24.0})  # EPS 1.00 a year
+    store_pe_history(conn, "AAPL", {"closes": closes, "quarters": unit_quarters("AAPL")}, NOW)
     secondary_id = _drivers_secondary(conn, policy, sid)
     report = _stored(conn, sid, secondary_id=secondary_id)
     text = markdown(

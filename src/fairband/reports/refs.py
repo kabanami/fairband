@@ -47,8 +47,9 @@ A ref is ``<form>:<path>``. The forms, each read for one company, the symbol ``r
 - ``multiple:<symbol>/<series>/<date>`` and ``/<stat>``: a point of the trailing (``pe``) or the
   forward (``pe_forward``) P/E history by its ISO date, or one of its statistics over the ten years
   to its newest day, ``avg_10y``, ``median_10y``, ``high_10y``, ``low_10y``
-  (``fairband.reports.multiples``): the trailing series is the newest stored ``pe-history``
-  response's, the forward one the multiples log's; a statistic of a series with no point holds no
+  (``fairband.reports.multiples``): the trailing series is the one built from the newest usable
+  stored answers of the P/E history (FMP's closes and quarters, and the pair's closes in another
+  currency), the forward one the multiples log's; a statistic of a series with no point holds no
   figure;
 - ``peer:<symbol>/<peer>/<field>``: a figure of one of the company's mature peers as assembly
   reads it (``market_cap``, ``margin``, ``margin_years``, ``sales_to_capital``, ``roic``);

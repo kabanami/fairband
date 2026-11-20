@@ -33,7 +33,7 @@ from fairband.launch.run import run_launcher
 from fairband.mcp.server import main as run_mcp
 from fairband.policy import load_policy
 from fairband.policy.tax import TaxTable, load_tax_table
-from fairband.refresh.clients import build_clients, build_fmp, build_gurufocus
+from fairband.refresh.clients import build_clients, build_fmp
 from fairband.refresh.passthrough import Passthrough
 from fairband.refresh.run import KINDS, UNCLASSIFIED, Progress, Refresh
 from fairband.refresh.worker import RefreshWorker
@@ -50,10 +50,7 @@ logger = logging.getLogger("fairband")
 
 _HOST = "127.0.0.1"  # the screen is for this machine only (D11)
 _PRIVATE_BITS = 0o077  # group and other
-_NO_GF_KEY = (
-    "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched, and the pe-history"
-    " pass-through is off"
-)
+_NO_GF_KEY = "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched"
 _WAY_OUT = "Start the server, or run migrate, to mark an interrupted refresh."
 
 
@@ -146,12 +143,11 @@ def _serve(args: argparse.Namespace) -> int:
     """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. The
     server runs refreshes on its worker; each run reads the effective policy and builds its
     clients as it starts (``make_refresh``). With an FMP key it also builds the agent's vendor
-    pass-through, whose calls run on the request threads, with a GuruFocus client of its own when
-    a GuruFocus key is present, not paced as the refresh's is not, its token among the secrets
-    scrubbed; without one the pe-history pass-through answers 503. One limiter paces every FMP
-    call of both: made at the pace of the effective policy as the server starts (the file's, when
-    a stored setting no longer applies, which the worker then refuses), paced again by each run to
-    the policy it runs under, and read by the pass-through, whose reuse window is the start's.
+    pass-through, whose FMP calls run on the request threads, the FMP key the secret it scrubs.
+    One limiter paces every FMP call of both: made at the pace of the effective policy as the
+    server starts (the file's, when a stored setting no longer applies, which the worker then
+    refuses), paced again by each run to the policy it runs under, and read by the pass-through,
+    whose reuse window is the start's.
     Without an FMP key the worker runs a revalue only and refuses the other kinds, and the
     pass-through route answers 503. With or without one the app fetches a company's logo
     (``vendors.logos.fetch_logo``): FMP's image host takes no key, and the fetch goes through
@@ -178,10 +174,8 @@ def _serve(args: argparse.Namespace) -> int:
     if keys.fmp is None:
         logger.warning("%s; the server runs a revalue only", MissingKey("fmp"))
     else:
-        secrets = tuple(key for key in (keys.fmp, keys.gurufocus) if key)
         fmp = build_fmp(keys, started, limiter=limiter)
-        gurufocus = build_gurufocus(keys, started)
-        passthrough = Passthrough(fmp, conn_factory, started, utcnow, secrets, gurufocus)
+        passthrough = Passthrough(fmp, conn_factory, started, utcnow, (keys.fmp,))
     worker = RefreshWorker(
         lambda cancel, on_progress: make_refresh(
             conn_factory, keys, tax, cancel, on_progress, limiter

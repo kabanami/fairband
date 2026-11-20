@@ -7,22 +7,24 @@ note}``: the points oldest first as ``{day, value, ref}``, the statistics ``avg1
 ``since`` the series' first day on file (ISO text, ``null`` with none), and the refs
 ``multiple:<symbol>/<series>/<date>`` and ``/<stat>`` (``avg_10y`` and its siblings).
 
-- ``pe``, the trailing P/E: the ``pe-history`` pass-through's answer (``responseId`` the stored
-  response's), the stored response when one is inside its seven days, else fetched and stored. A
-  fetched payload the series cannot be read from (no dated row, or no point above zero) is stored
-  as unusable, and the next read fetches again: the read serves the newest usable stored series,
-  whatever its age, with ``peNote`` "the series could not be read", so the read and the refs
-  agree; with none stored, the fetched one with no points and that ``note``, ``peNote`` ``null``.
-  When the fetch cannot be had, the read serves the newest usable stored series, whatever its
-  age, the series the ``multiple:`` refs resolve against, and ``peNote`` says why: "no GuruFocus
-  key: the pe-history pass-through is off", "no FMP key" on a server with no pass-through, the
-  busy sentence, or the vendor's failure, scrubbed. ``pe`` is ``null`` only when none is stored;
-  ``peNote`` is ``null`` when the fetch answered a series.
+- ``pe``, the trailing P/E: the series Fairband builds from FMP's closes and quarterly EPS, and
+  the pair's closes for a company in another currency (spec 2026-11-19 6.3), the P/E history's
+  three answers through the pass-through (``SERIES_KIND``), each reused inside ``reuse_hours``,
+  else fetched and stored; ``responseId`` is the closes' stored response's. A fetched answer the
+  series cannot be read from (one that is not a list) is stored as unusable, and the next read
+  fetches it again: the read serves the series of the newest usable stored answers, whatever
+  their age, with ``peNote`` "the series could not be read", so the read and the refs agree; with
+  none stored, the fetched closes with no points and that ``note``, ``peNote`` ``null``. When the
+  fetch cannot be had, the read serves the series of the newest usable stored answers, whatever
+  their age, the series the ``multiple:`` refs resolve against, and ``peNote`` says why: "no FMP
+  key" on a server with no pass-through, the busy sentence, or the vendor's failure, scrubbed.
+  ``pe`` is ``null`` only when none is stored; ``peNote`` is ``null`` when the fetch answered a
+  series.
 - ``peForward``, the forward P/E: the multiples log's, ``responseId`` and ``note`` ``null``.
 
-The read may call GuruFocus, so a request carries ``X-Fairband-Request: 1`` as a write does,
-else 403 before anything else is read (``app``, D11). A symbol that is not one is a 400. The route
-is a sync one, as the pass-through route is: the fetch runs on FastAPI's thread pool, under the
+The read may call FMP, so a request carries ``X-Fairband-Request: 1`` as a write does, else 403
+before anything else is read (``app``, D11). A symbol that is not one is a 400. The route is a
+sync one, as the pass-through route is: the fetch runs on FastAPI's thread pool, under the
 pass-through's slots and its wait.
 """
 
@@ -34,7 +36,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from fairband.policy.settings import exchange_symbol
-from fairband.refresh.passthrough import Passthrough, PassthroughBusy, PassthroughNoKey
+from fairband.refresh.passthrough import SERIES_KIND, Passthrough, PassthroughBusy
 from fairband.reports.multiples import (
     STATS,
     Series,
@@ -43,6 +45,7 @@ from fairband.reports.multiples import (
     trailing_series,
 )
 from fairband.reports.refs import multiple_ref
+from fairband.store.currency import reporting_currency
 from fairband.store.multiples import multiples_log_for
 from fairband.vendors.http import VendorError
 from fairband.web.vendor_api import NO_FMP_KEY
@@ -78,19 +81,22 @@ def _trailing(
 ) -> tuple[dict[str, Any] | None, str | None]:
     """The trailing series as the read answers it, and why the fetch could not be had or read,
     if so."""
-    unread: int | None = None  # a fetched response the series cannot be read from
+    unread: int | None = None  # the fetched closes, when the series cannot be read from the fetch
     if passthrough is None:
         reason = NO_FMP_KEY
     else:
         try:
-            fetched = passthrough.fetch("pe-history", symbol, {})["pe-history"]
-        except (PassthroughNoKey, PassthroughBusy, VendorError) as exc:
+            parts = passthrough.fetch(SERIES_KIND, symbol, {})
+        except (PassthroughBusy, VendorError) as exc:
             reason = str(exc)
         else:
-            series = trailing_series(fetched.payload)
+            with closing(conn_factory()) as conn:
+                currency = reporting_currency(conn, symbol)
+            payloads = {part: fetched.payload for part, fetched in parts.items()}
+            series, closes_id = trailing_series(payloads, currency), parts["closes"].row.id
             if series is not None:
-                return _trailing_json(symbol, fetched.row.id, series), None
-            reason, unread = UNREADABLE, fetched.row.id
+                return _trailing_json(symbol, closes_id, series), None
+            reason, unread = UNREADABLE, closes_id
     with closing(conn_factory()) as conn:
         stored = stored_trailing(conn, symbol)
     if stored is not None:

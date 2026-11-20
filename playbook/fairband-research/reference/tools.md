@@ -91,15 +91,19 @@ be left out.
   its `estimate:` ref.
 - `price_history(symbol, years?)`: the stored daily closes, oldest first, each with its `close:`
   ref; `years` keeps the latest years only.
-- `multiples_history(symbol, daily?)`: the trailing P/E (`pe`, GuruFocus's daily series) and the
-  forward P/E (`peForward`, Fairband's own log, kept since `since`) over the ten years on file,
-  the last point of each month; `daily` answers every point, about 2,500 a series, which
-  overflows the host's result. Each point is `{day, value, ref}`; each statistic, `avg10y`,
+- `multiples_history(symbol, daily?)`: the trailing P/E (`pe`) and the forward P/E (`peForward`,
+  Fairband's own log, kept since `since`) over the ten years on file, the last point of each
+  month; `daily` answers every point, about 2,500 a series, which overflows the host's result.
+  Fairband builds the trailing series from FMP's daily closes and quarterly diluted EPS: a day's
+  close ÷ the EPS of the four quarters (two half-years for a company that reports twice a year)
+  ended by that day, the close brought into the reporting currency at the day's rate for a
+  company in another currency; a loss day has no point. It fetches FMP's answers when you call
+  and reuses them for a day. Each point is `{day, value, ref}`; each statistic, `avg10y`,
   `median10y`, `high10y` and `low10y`, is `{value, unit, ref}` over every daily point, its ref
   `multiple:<symbol>/pe/avg_10y` and its siblings. `peNote` says why the trailing series could
   not be fetched or read, when it could not ("the series could not be read"); the read then
-  serves the newest one stored. Read this, not `pe_history`, for the points and the statistics
-  with their refs.
+  serves the newest one stored. An EPS near zero gives a very large P/E: the median is the safe
+  statistic.
 - `peers(symbol)`: the company's mature peers with their figures, each with its `peer:` ref, and
   where the list of peers came from.
 - `watchlists()`: the watchlists with their companies.
@@ -141,16 +145,16 @@ be left out.
 
 ## The vendor pass-throughs
 
-Ten vendor reads the engine does not use: seven pass-throughs, six from FMP and one from
-GuruFocus, then three filing reads from FMP. The server fetches each with its own key and stores
-the response, so a report can cite it. It reuses a response stored within the reuse window, a
-filing report at any age, so a repeated call costs no vendor call. A refresh stores five of these
+Nine vendor reads the engine does not use: six pass-throughs, all from FMP, then three filing
+reads from FMP. The server fetches each with its own key and stores the response, so a report can
+cite it. It reuses a response stored within the reuse window, a filing report at any age, so a
+repeated call costs no vendor call. A refresh stores five of these
 calls' responses for each company under the same keys, so within the reuse window such a call may
 answer from the refresh's copy, `reused` true: `segments`; `news` at a `limit` of 60;
 `transcript_dates`; `filings` with its default window, on the refresh's day; and `transcript` of
 the newest call, where the store held no copy of it with words.
 
-### The seven pass-throughs
+### The six pass-throughs, all from FMP
 
 Each answers the stored response whole, `{responseId, observedAt, reused, payload}`. `segments`
 and `dcf` answer two of them, `{responses: {product: ..., geographic: ...}}` and `{responses:
@@ -176,9 +180,6 @@ such as `response:731/0/revenue`.
   and `levered`. Read it only where neither the route nor the review values the company, as a
   cross-check on the secondary valuation; never beside a route's value. Neither the engine nor the
   secondary valuation reads it.
-- `pe_history(symbol)`: GuruFocus's daily trailing P/E series, reused for seven days. It answers
-  the whole daily series, thousands of rows. Read `multiples_history` instead for the points and
-  the statistics with their refs; it reads the same stored series.
 
 ### The three filing reads
 
@@ -277,8 +278,6 @@ The vendor reads' refusals:
   again.
 - "no FMP key" (503): the server has no FMP key, so it serves no pass-through and no filing read;
   use the host's own tools and record findings.
-- "no GuruFocus key: the pe-history pass-through is off" (503): the server has no GuruFocus key;
-  `multiples_history` still serves the trailing series stored before, if any, and the forward one.
 - A vendor call that failed (502), with the vendor's sentence.
 
 The filing reads add their own. The first four refuse before any vendor call, so they cost none

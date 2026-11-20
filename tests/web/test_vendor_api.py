@@ -1,11 +1,10 @@
-"""The vendor pass-through routes through the app, with a ``Passthrough`` over FMP, and GuruFocus
-where a test gives it one, on a mock transport that serves the fixtures (``support.vendor``), and
-the ``serve`` command that builds it beside the worker on one limiter. The keys are fake."""
+"""The vendor pass-through routes through the app, with a ``Passthrough`` over FMP on a mock
+transport that serves the fixtures (``support.vendor``), and the ``serve`` command that builds it
+beside the worker on one limiter. The keys are fake."""
 
 import json
 import logging
 import threading
-from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
 from typing import Any
@@ -14,7 +13,8 @@ import httpx
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
-from support.vendor import FIXTURES, GF_FIXTURES, GF_TOKEN, KEY, Vendor, passthrough_client
+from support.pe_history import closes_payload, unit_quarters
+from support.vendor import FIXTURES, GF_TOKEN, KEY, Vendor
 from support.web import HEADER, HOST, NOW
 
 from fairband import __main__ as cli
@@ -24,42 +24,14 @@ from fairband.refresh import passthrough as passthrough_module
 from fairband.refresh.passthrough import Passthrough
 from fairband.store.db import connect
 from fairband.store.settings import write_settings
-from fairband.vendors import gurufocus as gurufocus_api
 from fairband.vendors.fmp import Fmp
-from fairband.vendors.gurufocus import GuruFocus
-from fairband.vendors.http import VendorHttp
 from fairband.vendors.limiter import RateLimiter
 
 Q3 = {"year": "2026", "quarter": "3"}
-NO_GF_KEY = "no GuruFocus key: the pe-history pass-through is off"
 
 
 def _fixture(name: str, fixtures: Path = FIXTURES) -> Any:
     return json.loads((fixtures / name).read_text())
-
-
-@pytest.fixture
-def gurufocus(policy: Policy, vendor: Vendor) -> Iterator[GuruFocus]:
-    with VendorHttp(
-        gurufocus_api.BASE_URL,
-        [GF_TOKEN],
-        policy.refresh,
-        transport=vendor.transport,
-        sleep=lambda _: None,
-        clock=lambda: NOW,
-    ) as http:
-        yield GuruFocus(http, GF_TOKEN)
-
-
-@pytest.fixture
-def with_gurufocus(
-    tmp_path: Path, db_path: Path, policy: Policy, fmp: Fmp, gurufocus: GuruFocus
-) -> Iterator[TestClient]:
-    """A pass-through over FMP and GuruFocus."""
-    secrets = (KEY, GF_TOKEN)
-    both = Passthrough(fmp, lambda: connect(db_path), policy, lambda: NOW, secrets, gurufocus)
-    with passthrough_client(tmp_path, db_path, policy, both) as client:
-        yield client
 
 
 def test_no_passthrough_is_503(client: TestClient) -> None:
@@ -71,39 +43,41 @@ def test_no_passthrough_is_503(client: TestClient) -> None:
     "url",
     [
         "/api/vendor/transcript/ACME?year=2026&quarter=3",
-        "/api/vendor/pe-history/ACME",
         "/api/vendor/filings/ACME",  # refused before the kind is read
         "/api/companies/ACME/multiples-history",
     ],
 )
 def test_a_read_that_may_call_a_vendor_needs_the_request_header(
-    with_gurufocus: TestClient, vendor: Vendor, url: str
+    with_passthrough: TestClient, vendor: Vendor, url: str
 ) -> None:
     """D11 and B-109: a read that may call a vendor spends its quota and stores its answer, and an
     image tag on any other site passes the host check, so the read carries
     ``X-Fairband-Request: 1`` as a write does, else 403 with the writes' sentence and no vendor
     called. The other reads need none."""
-    bare = TestClient(with_gurufocus.app, base_url=HOST)
+    bare = TestClient(with_passthrough.app, base_url=HOST)
     for method in (bare.get, bare.head):
         refused = method(url)
         assert refused.status_code == 403, method
     assert bare.get(url).json() == {"detail": "missing X-Fairband-Request header"}
     assert bare.get(url, headers={"X-Fairband-Request": "0"}).status_code == 403
     assert vendor.paths == []
-    assert with_gurufocus.get(url).status_code in (200, 400)  # with it: served, or the kind's 400
+    assert with_passthrough.get(url).status_code in (200, 400)  # with it: served, or the kind's 400
     for read in ("/api/screen", "/api/companies/AAPL", "/api/companies/AAPL/band-history"):
         assert bare.get(read).status_code == 200, read  # a read of the store alone needs none
 
 
+@pytest.mark.parametrize("kind", ["filings", "pe-history"])
 def test_an_unknown_kind_is_400(
-    with_passthrough: TestClient, client: TestClient, vendor: Vendor
+    with_passthrough: TestClient, client: TestClient, vendor: Vendor, kind: str
 ) -> None:
+    """A filing kind, and the P/E history, whose answers the multiples history read alone asks
+    since GuruFocus's series went (spec 2026-11-19 6.3), are no kinds of the route."""
     detail = (
-        "unknown vendor kind: filings (transcript, news, segments, insider-trades,"
-        " transcript-dates, dcf or pe-history)"
+        f"unknown vendor kind: {kind} (transcript, news, segments, insider-trades,"
+        " transcript-dates or dcf)"
     )
     for app_client in (with_passthrough, client):  # with a key or without
-        response = app_client.get("/api/vendor/filings/ACME", headers=HEADER)
+        response = app_client.get(f"/api/vendor/{kind}/ACME", headers=HEADER)
         assert (response.status_code, response.json()) == (400, {"detail": detail})
     assert vendor.paths == []
 
@@ -228,25 +202,6 @@ def test_dcf_over_the_api(with_passthrough: TestClient, vendor: Vendor) -> None:
     assert dcf["payload"] == _fixture("discounted-cash-flow.ACME.json")
     assert levered["payload"] == _fixture("levered-discounted-cash-flow.ACME.json")
     assert vendor.paths == ["/stable/discounted-cash-flow", "/stable/levered-discounted-cash-flow"]
-
-
-def test_pe_history_over_the_api(with_gurufocus: TestClient, vendor: Vendor) -> None:
-    first = with_gurufocus.get("/api/vendor/pe-history/acme")
-    second = with_gurufocus.get("/api/vendor/pe-history/ACME")
-    assert first.status_code == second.status_code == 200
-    payload = _fixture("pettm.ACME.json", GF_FIXTURES)
-    answer = {"responseId": 1, "observedAt": NOW.isoformat(), "reused": False, "payload": payload}
-    assert first.json() == answer and second.json() == {**answer, "reused": True}
-    assert vendor.paths == ["/public/user/<token>/stock/ACME/pettm"]
-    assert GF_TOKEN not in first.text
-
-
-def test_pe_history_without_a_gurufocus_key_is_503(
-    with_passthrough: TestClient, vendor: Vendor
-) -> None:
-    response = with_passthrough.get("/api/vendor/pe-history/ACME")
-    assert (response.status_code, response.json()) == (503, {"detail": NO_GF_KEY})
-    assert vendor.paths == []
 
 
 def test_no_key_in_the_answer(
@@ -427,64 +382,45 @@ def test_serve_paces_the_runs_and_the_pass_through_on_one_limiter(
     assert paces == [2850, 600]
 
 
-def test_serve_hands_the_pass_through_a_gurufocus_client_and_closes_it(
+def test_serve_builds_the_pass_through_on_fmp_alone_and_closes_it(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vendor: Vendor
 ) -> None:
-    """With a GuruFocus key, ``serve`` builds the pass-through's GuruFocus client, its token
-    among the secrets: the pe-history route and the multiples read answer through it, with no
-    token in either, and the client closes when the server stops."""
+    """With a GuruFocus key too, ``serve`` builds the pass-through over FMP alone (spec 2026-11-19
+    6.3): the multiples read builds the trailing series from FMP's closes and quarters, with no key
+    in its answer and no GuruFocus call, and the pass-through's FMP client closes when the server
+    stops."""
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("FAIRBAND_FMP_KEY", KEY)
     monkeypatch.setenv("FAIRBAND_GURUFOCUS_KEY", GF_TOKEN)
     closed: list[str] = []
-    build_fmp, build_gurufocus = cli.build_fmp, cli.build_gurufocus
+    build_fmp = cli.build_fmp
 
     def passthrough_fmp(keys: Keys, policy: Policy, *, limiter: RateLimiter | None = None) -> Fmp:
-        return build_fmp(keys, policy, transport=vendor.transport, limiter=limiter)
-
-    def passthrough_gurufocus(keys: Keys, policy: Policy) -> GuruFocus | None:
-        client = build_gurufocus(keys, policy, transport=vendor.transport)
-        assert client is not None
+        client = build_fmp(keys, policy, transport=vendor.transport, limiter=limiter)
         close = client.close
-        monkeypatch.setattr(client, "close", lambda: (closed.append("gurufocus"), close()))
+        monkeypatch.setattr(client, "close", lambda: (closed.append("fmp"), close()))
         return client
 
-    answers: list[httpx.Response] = []
+    answers = {  # a trailing EPS of 1.00: the P/E is the close
+        "/stable/historical-price-eod/full": closes_payload("ACME", {"2026-10-30": 40.0}),
+        "/stable/income-statement": unit_quarters("ACME"),
+    }
+    vendor.answer = lambda request: httpx.Response(200, json=answers[request.url.path])
+    history: list[httpx.Response] = []
 
     def run_app(app: Any, **kwargs: Any) -> None:
         with TestClient(app, base_url=HOST, headers=HEADER) as client:
-            answers.append(client.get("/api/vendor/pe-history/ACME"))
-            answers.append(client.get("/api/companies/ACME/multiples-history"))
+            history.append(client.get("/api/companies/ACME/multiples-history"))
         assert closed == []  # still serving
 
     monkeypatch.setattr(cli, "build_fmp", passthrough_fmp)
-    monkeypatch.setattr(cli, "build_gurufocus", passthrough_gurufocus)
     monkeypatch.setattr(uvicorn, "run", run_app)
     assert cli.main(["serve"]) == 0
-    fetched, history = answers
-    assert fetched.status_code == history.status_code == 200
-    assert fetched.json()["payload"] == _fixture("pettm.ACME.json", GF_FIXTURES)
-    assert history.json()["pe"]["responseId"] == fetched.json()["responseId"]  # reused
-    assert GF_TOKEN not in fetched.text + history.text
-    assert vendor.paths == ["/public/user/<token>/stock/ACME/pettm"]
-    assert closed == ["gurufocus"]
-
-
-def test_serve_without_a_gurufocus_key_builds_no_gurufocus_client(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    monkeypatch.setenv("FAIRBAND_FMP_KEY", KEY)
-    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
-    answers: list[httpx.Response] = []
-
-    def run_app(app: Any, **kwargs: Any) -> None:
-        with TestClient(app, base_url=HOST, headers=HEADER) as client:
-            answers.append(client.get("/api/vendor/pe-history/ACME"))
-
-    monkeypatch.setattr(uvicorn, "run", run_app)
-    assert cli.main(["serve"]) == 0
-    [answer] = answers
-    assert (answer.status_code, answer.json()) == (503, {"detail": NO_GF_KEY})
+    [answer] = history
+    assert answer.status_code == 200 and answer.json()["peNote"] is None
+    points = [(point["day"], point["value"]) for point in answer.json()["pe"]["points"]]
+    assert points == [("2026-10-30", 40.0)]
+    assert vendor.paths == ["/stable/historical-price-eod/full", "/stable/income-statement"]
+    assert KEY not in answer.text and GF_TOKEN not in answer.text
+    assert closed == ["fmp"]

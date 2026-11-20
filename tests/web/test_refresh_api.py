@@ -606,8 +606,7 @@ def test_serve_builds_a_worker_with_the_keys(
     warned = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert warned == [cli._NO_GF_KEY]
     assert cli._NO_GF_KEY == (
-        "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched, and the"
-        " pe-history pass-through is off"
+        "no GuruFocus key: the moat score and the GuruFocus EPS are not fetched"
     )
     response, body = served
     assert (response.status_code, response.json()) == (200, {"refreshId": 1})

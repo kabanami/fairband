@@ -1,36 +1,39 @@
 """The multiples history (spec 2026-11-06 Tier 2, 13.7; ``method.md`` 16.7): the two P/E series a
 report reads the price against, as the read serves them and the refs resolve them.
 
-- The trailing P/E (``pe``): GuruFocus's daily ``pettm`` series as the newest usable stored
-  ``pe-history`` response holds it, whatever its age, each row's closing P/E
-  (``normalize_gf.pe_ttm_rows``). A loss row has no point; nothing fills its days, so the series
-  keeps the gap. A payload without the series' shape, or with no point above zero, gives no
-  series (``None``); the pass-through stores such a payload as unusable, so the newest usable one
-  holds the series.
+- The trailing P/E (``pe``): built from FMP's data (spec 2026-11-19 6.3), the three answers the
+  pass-through stores for the P/E history (``refresh.passthrough.series_answers``): the daily
+  closes, the quarterly income statements and, for a company in another currency, the pair's
+  closes (``trailing_series``). The stored series is the one of the newest usable answer of each,
+  whatever its age (``stored_trailing``).
 - The forward P/E (``pe_forward``): the multiples log's forward P/E by day; a row with none has no
   point.
 
 Each series holds the points of the ten years to its newest day, from the same day ten years
 before, and over them the four statistics, ``avg_10y``, ``median_10y``, ``high_10y`` and
 ``low_10y``, ``None`` each without a point. ``since`` is the series' first day on file, a loss day
-or a row with no forward P/E included: when the vendor's series or the log began.
+or a row with no forward P/E included: the first close the trailing series could read, or when
+the log began.
 
-``built_series`` builds a trailing series from FMP's data (spec 2026-11-19 6.3, the text for
-``method.md`` 16.7): a day's P/E is its close ÷ the trailing diluted EPS of that day, the sum of
-``epsDiluted`` over the four quarters, or the two half-years of a company that reports twice a year
-(``cadence_of`` on the periods' ends, quarterly when they give none), with the latest period ends
-at or before the day, so the EPS changes at a period's end. The sum stands only when the periods
-are consecutive by that spacing (``consecutive_periods``), each holds its EPS and each is in the
-reporting currency; a day with no such sum is no row. A day whose trailing EPS is not above zero is
-a loss: a row with no point. A company in another currency has its close brought into the
-currency at the pair's last close at or before the day, and a day with none is no row. No split
-rule and no share-basis rule applies: FMP's closes are adjusted for splits and its EPS restated.
+The trailing series (``built_series``, the text of ``method.md`` 16.7): a day's P/E is its close ÷
+the trailing diluted EPS of that day, the sum of ``epsDiluted`` over the four quarters, or the two
+half-years of a company that reports twice a year (``cadence_of`` on the periods' ends, quarterly
+when they give none), with the latest period ends at or before the day, so the EPS changes at a
+period's end. The sum stands only when the periods are consecutive by that spacing
+(``consecutive_periods``), each holds its EPS and each is in the reporting currency, a period that
+names none counting as in it, as 4.2 reads a statement; a day with no such sum is no row. A day
+whose trailing EPS is not above zero is a loss: a row with no point, and nothing fills its days, so
+the series keeps the gap. A company in another currency has its close brought into the currency
+at the pair's last close at or before the day, and a day with none is no row. A close or a rate
+that is not a positive number is not read. No split rule and no share-basis rule applies: FMP's
+closes are adjusted for splits and its EPS restated.
 """
 
 import json
+import math
 import sqlite3
 from bisect import bisect_right
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from statistics import fmean, median
@@ -38,11 +41,12 @@ from typing import Any
 
 from fairband.engine.anchor import PERIODS_PER_YEAR, consecutive_periods
 from fairband.refresh.inputs_statements import cadence_of
+from fairband.refresh.passthrough import FMP, series_answers
+from fairband.store.currency import reporting_currency
 from fairband.store.multiples import MultiplesRow, multiples_log_for
 from fairband.store.vendor import latest_response, response_payload
 from fairband.vendors._fmp_parse import dated, number, text
-from fairband.vendors.gurufocus import PE_TTM, PROVIDER
-from fairband.vendors.normalize_gf import pe_ttm_rows
+from fairband.vendors.normalize_fmp import fx_closes, price_closes
 
 SERIES = ("pe", "pe_forward")
 STATS = ("avg_10y", "median_10y", "high_10y", "low_10y")
@@ -69,10 +73,28 @@ class PeriodEps:
     currency: str | None
 
 
-def trailing_series(payload: Any) -> Series | None:
-    """The trailing series of a ``pe-history`` payload; ``None`` when it cannot be read."""
-    rows = pe_ttm_rows(payload)
-    return None if rows is None else _series(rows)
+def trailing_series(parts: Mapping[str, Any], currency: str) -> Series | None:
+    """The trailing series of the P/E history's answers, the payloads by part (``closes``,
+    ``quarters`` and ``rates``), for a company reporting in ``currency`` (``built_series``): the
+    closes and the pair's closes that are positive numbers. ``None`` when the closes or the
+    quarters cannot be read (missing, or not a list), or, in another currency, the rates; an empty
+    list reads, a series with no point."""
+    closes, periods = parts.get("closes"), period_eps(parts.get("quarters"))
+    if not isinstance(closes, list) or periods is None:
+        return None
+    rates = None
+    if currency != _USD:
+        pair = parts.get("rates")
+        if not isinstance(pair, list):
+            return None
+        rates = [(day, rate) for day, rate in fx_closes(pair) if _positive(rate)]
+    days = [(day, close) for day, close in price_closes(closes) if _positive(close)]
+    return built_series(days, periods, currency, rates)
+
+
+def _positive(figure: float) -> bool:
+    """Whether a close or a rate can be read: a finite number above zero."""
+    return math.isfinite(figure) and figure > 0
 
 
 def period_eps(payload: Any) -> list[PeriodEps] | None:
@@ -128,13 +150,13 @@ def built_series(
 def _trailing_eps(periods: Sequence[PeriodEps], currency: str) -> list[float | None]:
     """By period, oldest first: the sum of the EPS over the year of periods it ends, ``None``
     where there are too few, they are not consecutive, or one has no EPS or is in another
-    currency."""
+    currency; a period that names no currency is in ``currency``, as 4.2 reads a statement."""
     cadence = cadence_of([period.end for period in periods]) or "quarterly"
     count = PERIODS_PER_YEAR[cadence]
     sums: list[float | None] = []
     for newest in range(len(periods)):
         year = periods[max(0, newest + 1 - count) : newest + 1]
-        eps = [p.eps for p in year if p.eps is not None and p.currency == currency]
+        eps = [p.eps for p in year if p.eps is not None and p.currency in (None, currency)]
         whole = len(eps) == count and consecutive_periods([p.end for p in year], cadence)
         sums.append(sum(eps) if whole else None)
     return sums
@@ -146,23 +168,36 @@ def forward_series(rows: Sequence[MultiplesRow]) -> Series:
 
 
 def stored_trailing(conn: sqlite3.Connection, symbol: str) -> tuple[int, Series | None] | None:
-    """The newest usable ``pe-history`` response stored for the company, whatever its age: its id
-    and its series (``None`` when it cannot be read); ``None`` when none is stored."""
-    row = latest_response(conn, PROVIDER, PE_TTM, symbol, {"symbol": symbol})
-    text = None if row is None else response_payload(conn, row.id)
-    if row is None or text is None:
+    """The trailing series of the P/E history's answers stored for the company (the store's
+    exchange form), whatever their age: the newest usable closes and quarters, and, for a company
+    in another currency (``reporting_currency``), the newest usable pair's closes. The closes'
+    response id and the series (``None`` when it cannot be read); ``None`` when the closes or the
+    quarters are not stored. GuruFocus's ``pettm`` answers, stored before, are not read."""
+    currency = reporting_currency(conn, symbol)
+    rows = {
+        part: latest_response(conn, FMP, answer.endpoint, answer.symbol, answer.params)
+        for part, answer in series_answers(symbol, currency).items()
+    }
+    stored = {part: response_payload(conn, row.id) for part, row in rows.items() if row is not None}
+    closes = rows["closes"]
+    if closes is None or stored["closes"] is None or stored.get("quarters") is None:
         return None
+    payloads = {part: _parsed(payload) for part, payload in stored.items()}
+    return closes.id, trailing_series(payloads, currency)
+
+
+def _parsed(payload: str | None) -> Any:
+    """A stored payload parsed; ``None``, which no series reads, when it does not parse."""
     try:
-        payload = json.loads(text)
+        return None if payload is None else json.loads(payload)
     except ValueError:
-        return row.id, None
-    return row.id, trailing_series(payload)
+        return None
 
 
 def stored_series(conn: sqlite3.Connection, symbol: str, name: str) -> Series | None:
-    """The company's series ``name`` as stored: the trailing one from the newest stored
-    ``pe-history`` response (``None`` without one, or when it cannot be read), the forward one
-    from the log."""
+    """The company's series ``name`` as stored: the trailing one from the P/E history's stored
+    answers (``None`` without them, or when they cannot be read), the forward one from the
+    log."""
     if name == "pe_forward":
         return forward_series(multiples_log_for(conn, symbol))
     stored = stored_trailing(conn, symbol)

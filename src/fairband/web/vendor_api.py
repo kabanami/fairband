@@ -8,20 +8,21 @@ the keys; a report cites a field of it as ``response:<responseId>/<json pointer>
 out), ``segments``, ``insider-trades`` (``limit``, 1 to 100, answers the first of the stored
 page's trades, every one when left out, with ``tradeCount``, the trades the page holds; a trade
 keeps its place, so a ``response:`` ref names it at any limit), ``transcript-dates`` (the fiscal
-year, the quarter and the date of every call on file) and ``dcf`` from FMP, and ``pe-history``
-from GuruFocus, reused for seven days; ``segments`` and ``dcf`` are two responses each, answered
-as ``{responses: {product: {...}, geographic: {...}}}`` and ``{responses: {dcf: {...}, levered:
-{...}}}``. Each part of ``segments`` adds ``newestYear``, the largest ``fiscalYear`` among its
-payload's rows that hold an integer there (a JSON ``2025.0`` is no integer), null where none does
-or the payload is not a list (spec 2026-11-15 11): FMP's revenue by region can end years before
-its revenue by product.
+year, the quarter and the date of every call on file) and ``dcf``, all from FMP; ``segments`` and
+``dcf`` are two responses each, answered as ``{responses: {product: {...}, geographic: {...}}}``
+and ``{responses: {dcf: {...}, levered: {...}}}``. Each part of ``segments`` adds ``newestYear``,
+the largest ``fiscalYear`` among its payload's rows that hold an integer there (a JSON ``2025.0``
+is no integer), null where none does or the payload is not a list (spec 2026-11-15 11): FMP's
+revenue by region can end years before its revenue by product. The P/E history's answers are no
+kind of this route (spec 2026-11-19 6.3): the multiples history read serves the series built from
+them.
 
 The route may call a vendor, so a request carries ``X-Fairband-Request: 1`` as a write does,
 else 403 before anything else is read (``app``, D11). An unknown kind, a symbol that is not one or
-a missing or bad parameter is a 400 with its sentence; without a pass-through (the server has no FMP key) a 503, "no FMP key"; ``pe-history``
-without a GuruFocus client a 503, "no GuruFocus key: the pe-history pass-through is off"; when no
-slot frees within ten seconds a 503, "the pass-throughs are busy: four calls are in flight, try
-again"; a failed vendor call a 502 with the vendor's sentence, scrubbed.
+a missing or bad parameter is a 400 with its sentence; without a pass-through (the server has no
+FMP key) a 503, "no FMP key"; when no slot frees within ten seconds a 503, "the pass-throughs are
+busy: four calls are in flight, try again"; a failed vendor call a 502 with the vendor's sentence,
+scrubbed.
 
 The route is a sync one: FastAPI runs it on its thread pool, where a vendor call waits at most ten
 seconds for one of the pass-through's four slots, then, an FMP call, for its slot in the limiter
@@ -33,14 +34,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from fairband.policy.settings import exchange_symbol
-from fairband.refresh.passthrough import (
-    KINDS,
-    Fetched,
-    Passthrough,
-    PassthroughBusy,
-    PassthroughNoKey,
-    unknown_kind,
-)
+from fairband.refresh.passthrough import KINDS, Fetched, Passthrough, PassthroughBusy, unknown_kind
 from fairband.vendors.http import VendorError
 
 NO_FMP_KEY = "no FMP key"
@@ -67,7 +61,7 @@ def add_vendor_routes(app: FastAPI, passthrough: Passthrough | None) -> None:
             parts = passthrough.fetch(kind, exchange_symbol(symbol), params)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        except (PassthroughBusy, PassthroughNoKey) as exc:
+        except PassthroughBusy as exc:
             raise HTTPException(503, str(exc)) from None
         except VendorError as exc:
             raise HTTPException(502, str(exc)) from None

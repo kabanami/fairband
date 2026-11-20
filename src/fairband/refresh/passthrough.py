@@ -2,7 +2,7 @@
 does not read, fetched on request with the server's keys and stored, so a report can cite a field
 of one as ``response:<id>/<json pointer>``.
 
-The kinds and the endpoints they are stored under, provider ``fmp`` but the last:
+The kinds and the endpoints they are stored under, every one FMP's (provider ``fmp``):
 
 - ``transcript``: ``transcript``, the earnings call of the fiscal ``year`` and ``quarter`` (1 to 4),
   both required; the refresh stores each company's newest call's transcript under the same key
@@ -26,14 +26,33 @@ The kinds and the endpoints they are stored under, provider ``fmp`` but the last
   spec 2026-11-18 8.1), so a call and the refresh reuse each other's copy;
 - ``dcf``: two calls, ``dcf`` and ``dcf-levered``, FMP's discounted cash flow value and its levered
   one, answered as the parts ``dcf`` and ``levered``: a cross-check a report may cite, never a
-  value Fairband computes;
-- ``pe-history``: ``pettm`` under provider ``gf`` (the refresh's name for GuruFocus), GuruFocus's
-  daily trailing P/E series (13.7), reused inside ``PE_HISTORY_REUSE_HOURS`` (seven days) whatever
-  ``reuse_hours`` is. It needs the GuruFocus client: without one it raises ``PassthroughNoKey``
-  (``NO_GF_KEY``, a 503 on the route) before any call or reuse. GuruFocus answers some failures
-  with HTTP 200 and a JSON body, and its catch-all with every value zero, so a payload with no
-  dated row, or none with a point above zero (``normalize_gf.pe_ttm_rows``), is unusable: stored
-  with the error ``unusable payload: ...``, answered as fetched, never reused.
+  value Fairband computes.
+
+The trailing P/E history, ``SERIES_KIND`` (spec 2026-11-19 6.3; ``method.md`` 16.7), is fetched
+and stored as the kinds are, but it is no kind of the generic route: the multiples history read
+alone asks it, and builds the series from its answers (``reports.multiples.trailing_series``).
+Its calls are built with the connection open, since the pair needs the company's reporting
+currency (``store.currency.reporting_currency``); ``series_answers`` names what each is stored
+under, the key the stored series is read back by:
+
+- ``closes``: ``pe-closes``, the daily closes (``historical-price-eod/full``) from ``PE_YEARS``
+  (ten) years before the clock's day;
+- ``quarters``: ``pe-quarters``, the newest ``PE_QUARTERS_LIMIT`` (44) quarterly income
+  statements;
+- ``rates``, a company in another currency only: ``pe-rates``, the pair's closes
+  (``historical-price-eod/light`` on ``USD<code>``, ``rates.pair_of``) over the same years, under
+  the pair as the symbol, as the rates stage stores ``fx-history``; a code that names no pair has
+  no call.
+
+The endpoint names are the series' own: one stored as ``price-history`` would become the newest
+copy of the five-year closes for every reader, the engine among them; one as ``income-quarter``
+would become facts at the next refresh, since the statement backfill reads every response of
+that endpoint whatever its params; one as ``fx-history`` would replace the three-year rates. No
+fact and no observation is written from them. The closes' and the pair's start dates are left
+out of their keys, ``years`` in their place, as the price history's is, so a key does not change
+at midnight. Each answer is reused for ``reuse_hours``, usable when it is a list, the empty list
+among them: a company listed last month has a series with no point, stored and reused like any
+other.
 
 The filing kinds, ``FILING_KINDS`` (spec 2026-11-11 filings access, 4), from FMP, are fetched and
 stored as the others are, but they are not kinds of the generic route, whose answer is the whole
@@ -52,31 +71,30 @@ payload: ``KINDS`` stays that route's list, and ``unknown_kind`` names it alone.
   filed, and a ``filing:`` ref names its stored copy by the response id, so a second copy would
   only split the cites of one filing over two ids. Nothing is deleted.
 
-A ``news``, a ``segments`` part, a ``transcript-dates``, a ``filings`` or a ``filing-reports``
-payload is usable when it is a list, a ``filing-report`` one when ``filing_report_usable``: FMP
-answers a period it does not hold, an unknown symbol, or some failures with HTTP 200 and
-``{"Error Message": ...}``. An unusable one is stored with the error ``unusable payload: ...``,
-answered as fetched, never reused, as ``pe-history``'s is; so neither the pass-through nor the
+A ``news``, a ``segments`` part, a ``transcript-dates``, a ``filings``, a ``filing-reports`` or a
+P/E history payload is usable when it is a list, a ``filing-report`` one when
+``filing_report_usable``: FMP answers a period it does not hold, an unknown symbol, or some
+failures with HTTP 200 and ``{"Error Message": ...}``. An unusable one is stored with the error
+``unusable payload: ...``, answered as fetched, never reused; so neither the pass-through nor the
 refresh reuses a ``news``, a ``segments``, a ``transcript-dates`` or a ``filings`` error body.
 
 For each call, as ``fetch_company`` does: the newest HTTP 200 response to the same call (provider,
 endpoint, symbol and the call's logical params, ``symbol`` among them) stored without an error is
-reused when it was observed less than its reuse window before the clock (``reuse_hours`` but for
-``pe-history``), or, a ``filing-report``, whatever its age; else the vendor is called, outside any
-transaction, and the response is stored with its body scrubbed of ``secrets`` (a key inside a link
-FMP answers among them). The answer's payload is the stored text parsed, so it carries no key
-either. A body that is not JSON is stored with the error ``unusable payload: ...`` and raises a
-``VendorError``; a ``VendorError`` is stored as a response row with its message and status and no
-payload, then raised, its message scrubbed (the GuruFocus token travels in the URL path, which the
-message names). None of the three is reused.
+reused when it was observed less than ``reuse_hours`` before the clock, or, a ``filing-report``,
+whatever its age; else the vendor is called, outside any transaction, and the response is stored
+with its body scrubbed of ``secrets`` (a key inside a link FMP answers among them). The answer's
+payload is the stored text parsed, so it carries no key either. A body that is not JSON is stored
+with the error ``unusable payload: ...`` and raises a ``VendorError``; a ``VendorError`` is stored
+as a response row with its message and status and no payload, then raised, its message scrubbed.
+None of the three is reused. A kind of several calls makes them in order and raises at the first
+that fails: the answers stored before it stand.
 
-The FMP calls go through the FMP client the server builds on the limiter its refresh runs share,
-so the pass-throughs keep the refresh's pace; the GuruFocus client is not paced, as the refresh's
-is not. They run on the request threads, the pool every sync route of the app shares. What is
-bounded: at most ``PASSTHROUGH_SLOTS`` (four) vendor calls of either vendor are in flight at once;
-a call that finds every slot taken waits for one at most ``PASSTHROUGH_WAIT_S`` (ten seconds),
-holding its request's thread meanwhile, then raises ``PassthroughBusy`` (``BUSY``, a 503 on the
-route), nothing called or stored, and the agent tries again. A reuse takes no slot.
+The calls go through the FMP client the server builds on the limiter its refresh runs share, so
+the pass-throughs keep the refresh's pace. They run on the request threads, the pool every sync
+route of the app shares. What is bounded: at most ``PASSTHROUGH_SLOTS`` (four) vendor calls are in
+flight at once; a call that finds every slot taken waits for one at most ``PASSTHROUGH_WAIT_S``
+(ten seconds), holding its request's thread meanwhile, then raises ``PassthroughBusy`` (``BUSY``,
+a 503 on the route), nothing called or stored, and the agent tries again. A reuse takes no slot.
 """
 
 import json
@@ -90,7 +108,9 @@ from functools import partial
 from typing import Any
 
 from fairband.policy import Policy
-from fairband.refresh.fetch import unusable
+from fairband.refresh.fetch import _years_before, unusable
+from fairband.refresh.rates import pair_of
+from fairband.store.currency import reporting_currency
 from fairband.store.vendor import (
     ResponseRow,
     latest_response,
@@ -98,11 +118,8 @@ from fairband.store.vendor import (
     response_payload,
     response_row,
 )
-from fairband.vendors import gurufocus as gurufocus_api
 from fairband.vendors.fmp import FILINGS_LIMIT, INSIDER_TRADES_LIMIT, Fmp
-from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorError, VendorResponse
-from fairband.vendors.normalize_gf import pe_ttm_rows
 from fairband.vendors.scrub import scrub
 
 KINDS = (
@@ -112,30 +129,30 @@ KINDS = (
     "insider-trades",
     "transcript-dates",
     "dcf",
-    "pe-history",
 )
 FILING_KINDS = ("filings", "filing-reports", "filing-report")  # not the generic route's
+SERIES_KIND = "pe-history"  # the trailing P/E history's answers; not the generic route's
+PE_CLOSES = "pe-closes"  # the endpoints the history's answers are stored under
+PE_QUARTERS = "pe-quarters"
+PE_RATES = "pe-rates"
+PE_YEARS = 10  # the years of closes and of the pair's closes
+PE_QUARTERS_LIMIT = 44  # the quarterly income statements: eleven years
 FILING_PERIODS = ("FY", "Q1", "Q2", "Q3", "Q4")
 BAD_PERIOD = "period is FY or Q1 to Q4"
 NEEDS_PERIOD = "a filing report needs year and period"
 BAD_WINDOW = "from and to are ISO dates, from on or before to"
 NEWS_LIMIT = 20
 NEWS_LIMIT_MAX = 100
-PE_HISTORY_REUSE_HOURS = 168  # a daily series: seven days of reuse, whatever reuse_hours is
 PASSTHROUGH_SLOTS = 4  # vendor calls in flight at once
 PASSTHROUGH_WAIT_S = 10.0  # the longest a call waits for a slot
 BUSY = "the pass-throughs are busy: four calls are in flight, try again"
-NO_GF_KEY = "no GuruFocus key: the pe-history pass-through is off"
 FMP = "fmp"  # FMP's name in the store
+_USD = "USD"
 _KIND_LIST = ", ".join(KINDS[:-1]) + f" or {KINDS[-1]}"
 
 
 class PassthroughBusy(Exception):
     """No slot freed within ``PASSTHROUGH_WAIT_S``: the message is ``BUSY``."""
-
-
-class PassthroughNoKey(Exception):
-    """The kind's vendor has no client, the server no key for it: the message is ``NO_GF_KEY``."""
 
 
 @dataclass(frozen=True)
@@ -148,21 +165,48 @@ class Fetched:
 
 
 @dataclass(frozen=True)
+class SeriesAnswer:
+    """What one of the P/E history's answers is stored under: its endpoint, the symbol (the
+    company's, the pair's for the rates) and its logical params, the reuse key."""
+
+    endpoint: str
+    symbol: str
+    params: dict[str, str]
+
+
+def series_answers(symbol: str, currency: str) -> dict[str, SeriesAnswer]:
+    """The P/E history's answers for ``symbol`` (the store's exchange form) reporting in
+    ``currency``, by part: ``closes`` and ``quarters``, and ``rates`` for a currency other than
+    USD that names a pair (``rates.pair_of``)."""
+    years = str(PE_YEARS)
+    quarters = {"symbol": symbol, "period": "quarter", "limit": str(PE_QUARTERS_LIMIT)}
+    answers = {
+        "closes": SeriesAnswer(PE_CLOSES, symbol, {"symbol": symbol, "years": years}),
+        "quarters": SeriesAnswer(PE_QUARTERS, symbol, quarters),
+    }
+    if currency != _USD:
+        try:
+            pair = pair_of(currency)
+        except ValueError:  # a code that names no pair: no rate to read
+            return answers
+        answers["rates"] = SeriesAnswer(PE_RATES, pair, {"symbol": pair, "years": years})
+    return answers
+
+
+@dataclass(frozen=True)
 class _Call:
     part: str
     endpoint: str
     params: dict[str, str]  # the logical params, the reuse key
     send: Callable[[], VendorResponse]
-    provider: str = FMP
-    reuse: timedelta | None = None  # the reuse window; ``reuse_hours`` when ``None``
     ages: bool = True  # False: no window, a usable copy is reused whatever its age
     usable: Callable[[Any], bool] | None = None  # whether a JSON payload reads; any does if None
+    symbol: str | None = None  # the symbol it is stored under; the company's when None
 
 
 class Passthrough:
-    """Fetches the kinds through ``fmp`` and, for ``pe-history``, ``gurufocus`` (``None`` without
-    a GuruFocus key); ``policy.refresh.reuse_hours`` is the reuse window, ``clock`` judges it, and
-    ``secrets`` are scrubbed from every stored text and every answer."""
+    """Fetches the kinds through ``fmp``; ``policy.refresh.reuse_hours`` is the reuse window,
+    ``clock`` judges it, and ``secrets`` are scrubbed from every stored text and every answer."""
 
     def __init__(
         self,
@@ -171,10 +215,8 @@ class Passthrough:
         policy: Policy,
         clock: Callable[[], datetime],
         secrets: tuple[str, ...],
-        gurufocus: GuruFocus | None = None,
     ) -> None:
         self._fmp = fmp
-        self._gurufocus = gurufocus
         self._conn_factory = conn_factory
         self._window = timedelta(hours=policy.refresh.reuse_hours)
         self._clock = clock
@@ -182,26 +224,26 @@ class Passthrough:
         self._slots = threading.BoundedSemaphore(PASSTHROUGH_SLOTS)
 
     def close(self) -> None:
-        """Close the vendor clients."""
+        """Close the vendor client."""
         self._fmp.close()
-        if self._gurufocus is not None:
-            self._gurufocus.close()
 
     def fetch(self, kind: str, symbol: str, params: Mapping[str, str]) -> dict[str, Fetched]:
         """The stored responses that answer ``kind`` for ``symbol`` (the store's exchange form), by
         part: ``product`` and ``geographic`` for ``segments``, ``dcf`` and ``levered`` for
-        ``dcf``, else the one part named ``kind``. Raises ``ValueError`` on an unknown kind or a
-        missing or bad parameter and ``PassthroughNoKey`` on a kind whose vendor has no client,
-        each before any call, ``PassthroughBusy`` when no slot frees in time, and ``VendorError``
-        when a call fails."""
-        calls = self._calls(kind, symbol, params)
+        ``dcf``, ``closes``, ``quarters`` and, in another currency, ``rates`` for
+        ``SERIES_KIND``, else the one part named ``kind``. Raises ``ValueError`` on an unknown kind
+        or a missing or bad parameter, before any call, ``PassthroughBusy`` when no slot frees in
+        time, and ``VendorError`` when a call fails."""
         with closing(self._conn_factory()) as conn:
+            calls = self._calls(conn, kind, symbol, params)
             return {call.part: self._fetch(conn, call, symbol) for call in calls}
 
-    def _fetch(self, conn: sqlite3.Connection, call: _Call, symbol: str) -> Fetched:
-        latest = latest_response(conn, call.provider, call.endpoint, symbol, call.params)
-        window = self._window if call.reuse is None else call.reuse
-        if latest is not None and (not call.ages or self._clock() - latest.observed_at < window):
+    def _fetch(self, conn: sqlite3.Connection, call: _Call, company: str) -> Fetched:
+        symbol = company if call.symbol is None else call.symbol
+        latest = latest_response(conn, FMP, call.endpoint, symbol, call.params)
+        if latest is not None and (
+            not call.ages or self._clock() - latest.observed_at < self._window
+        ):
             text = response_payload(conn, latest.id)
             if text is not None:
                 return Fetched(latest, json.loads(text), reused=True)
@@ -249,18 +291,12 @@ class Passthrough:
         observed_at: datetime,
     ) -> int:
         return record_response(
-            conn,
-            call.provider,
-            call.endpoint,
-            call.params,
-            symbol,
-            status,
-            payload,
-            error,
-            observed_at,
+            conn, FMP, call.endpoint, call.params, symbol, status, payload, error, observed_at
         )
 
-    def _calls(self, kind: str, symbol: str, params: Mapping[str, str]) -> list[_Call]:
+    def _calls(
+        self, conn: sqlite3.Connection, kind: str, symbol: str, params: Mapping[str, str]
+    ) -> list[_Call]:
         fmp = self._fmp
         match kind:
             case "transcript":
@@ -314,20 +350,8 @@ class Passthrough:
                         partial(fmp.dcf_levered, symbol),
                     ),
                 ]
-            case "pe-history":
-                if self._gurufocus is None:
-                    raise PassthroughNoKey(NO_GF_KEY)
-                return [
-                    _Call(
-                        kind,
-                        gurufocus_api.PE_TTM,
-                        {"symbol": symbol},
-                        partial(self._gurufocus.pe_ttm, symbol),
-                        provider=gurufocus_api.PROVIDER,
-                        reuse=timedelta(hours=PE_HISTORY_REUSE_HOURS),
-                        usable=_reads_as_series,
-                    )
-                ]
+            case "pe-history":  # SERIES_KIND: a bare name in a case would capture, not compare
+                return self._series_calls(symbol, reporting_currency(conn, symbol))
             case "filings":
                 start, end = _window(params)
                 # The page size is in the reuse key, as insider-trades' is.
@@ -362,6 +386,23 @@ class Passthrough:
                 ]
         raise ValueError(unknown_kind(kind))
 
+    def _series_calls(self, symbol: str, currency: str) -> list[_Call]:
+        """The P/E history's calls for ``symbol`` reporting in ``currency``, in order: the closes,
+        the quarters and, in another currency, the pair's closes, each stored under its
+        ``series_answers`` key."""
+        fmp, start = self._fmp, _years_before(self._clock().date(), PE_YEARS)
+        answers = series_answers(symbol, currency)
+        sends = {
+            "closes": partial(fmp.price_history, symbol, start),
+            "quarters": partial(fmp.statement, symbol, "income", "quarter", PE_QUARTERS_LIMIT),
+        }
+        if "rates" in answers:
+            sends["rates"] = partial(fmp.fx_history, answers["rates"].symbol, start)
+        return [
+            _Call(part, a.endpoint, a.params, sends[part], usable=_is_list, symbol=a.symbol)
+            for part, a in answers.items()
+        ]
+
 
 def filing_report_usable(payload: Any) -> bool:
     """Whether a ``filing-report`` payload is a report: an object without the key ``Error
@@ -375,8 +416,8 @@ def filing_report_usable(payload: Any) -> bool:
 
 
 def _is_list(payload: Any) -> bool:
-    """Whether a ``news``, a ``segments`` part, a ``transcript-dates``, a ``filings`` or a
-    ``filing-reports`` payload reads: a list."""
+    """Whether a ``news``, a ``segments`` part, a ``transcript-dates``, a ``filings``, a
+    ``filing-reports`` or a P/E history payload reads: a list."""
     return isinstance(payload, list)
 
 
@@ -392,16 +433,10 @@ def _window(params: Mapping[str, str]) -> tuple[date, date]:
     return start, end
 
 
-def _reads_as_series(payload: Any) -> bool:
-    """Whether a ``pe-history`` payload holds the series' dated rows with a point above zero:
-    GuruFocus answers some failures with HTTP 200 and a JSON body (``{"error": ...}``), and its
-    catch-all with every value zero."""
-    return pe_ttm_rows(payload) is not None
-
-
 def unknown_kind(kind: str) -> str:
     """The sentence that refuses a kind outside ``KINDS``; it names ``KINDS`` alone, the generic
-    route's list, and ``fetch`` raises it for a kind in neither that list nor ``FILING_KINDS``."""
+    route's list, and ``fetch`` raises it for a kind in none of that list, ``FILING_KINDS`` and
+    ``SERIES_KIND``."""
     return f"unknown vendor kind: {kind} ({_KIND_LIST})"
 
 

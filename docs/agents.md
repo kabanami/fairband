@@ -53,17 +53,17 @@ Identity: the agent's first call is `identify`, with the model identifier it run
 `claude-opus-5-5` or `gpt-5`. Fairband records every write under that name, with the host's name
 and version from the MCP handshake. A write before `identify` is refused.
 
-The tools: 55, listed with their arguments in
+The tools: 54, listed with their arguments in
 `playbook/fairband-research/reference/tools.md`. Twenty-six read the store (the screen, a
 company's snapshot, its statements, its stored quarters, tables, consensus, closes, multiples
-history and peers, the research on file, the policy and the Methodology page). Ten are vendor reads
-the server fetches with its own key and stores so a report can cite them: `transcript`, `news`,
-`segments`, `insider_trades`, `transcript_dates` and `dcf` from FMP, the filing reads `filings`,
-`filing_report` and `filing_search` from FMP, and `pe_history` from GuruFocus, which needs the
-`gurufocus` key. A refresh stores some of their answers for each company under the keys the
-tools read: its segments, its news at 60 stories, its list of earnings calls, its filings of
-the 365 days to the refresh's day, and its newest call's transcript where the store holds no
-copy of it with words. So `segments`, `news` at a `limit` of 60, `transcript_dates`, `filings`
+history and peers, the research on file, the policy and the Methodology page). Nine are vendor
+reads the server fetches with its own key and stores so a report can cite them, none from
+GuruFocus: `transcript`, `news`, `segments`, `insider_trades`, `transcript_dates` and `dcf` from
+FMP, and the filing reads `filings`, `filing_report` and `filing_search` from FMP. A refresh
+stores some of their answers for each company under the keys the tools read: its segments, its
+news at 60 stories, its list of earnings calls, its filings of the 365 days to the refresh's day,
+and its newest call's transcript where the store holds no copy of it with words. So `segments`,
+`news` at a `limit` of 60, `transcript_dates`, `filings`
 with its default window on the day of the refresh, and `transcript` of that call may answer
 from the refresh's copy within the reuse window, with `reused` true. FMP's error object in
 place of the list of calls is answered as it came, stored as an error and never reused, so the

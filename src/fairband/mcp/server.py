@@ -102,7 +102,6 @@ TOOL_NAMES: tuple[str, ...] = (
     "insider_trades",
     "transcript_dates",
     "dcf",
-    "pe_history",
     # spec 2026-11-11 filings access, 6, the filing reads
     "filings",
     "filing_report",
@@ -251,9 +250,10 @@ def build_server(client: FairbandClient) -> MCPServer:
         return answer(lambda: client.get(_company(symbol, "price-history"), {"years": years}))
 
     @server.tool(
-        description="The trailing and forward P/E over the ten years on file, the last point of"
-        " each month (every daily point with daily), with their average, median, high and low,"
-        " each with its ref."
+        description="The trailing P/E Fairband builds from FMP's daily closes and quarterly EPS"
+        " and the forward P/E of its own log, over the ten years on file, the last point of each"
+        " month (every daily point with daily), with their average, median, high and low, each"
+        " with its ref."
     )
     def multiples_history(symbol: str, daily: bool = False) -> dict[str, Any]:
         answered = answer(lambda: client.get(_company(symbol, "multiples-history")))
@@ -404,13 +404,6 @@ def build_server(client: FairbandClient) -> MCPServer:
     )
     def dcf(symbol: str) -> dict[str, Any]:
         return answer(lambda: client.get(_vendor("dcf", symbol)))
-
-    @server.tool(
-        description="GuruFocus's daily trailing P/E series, reused for seven days, stored so a"
-        " report can cite it."
-    )
-    def pe_history(symbol: str) -> dict[str, Any]:
-        return answer(lambda: client.get(_vendor("pe-history", symbol)))
 
     # spec 2026-11-11 filings access, 6, the filing reads: FMP's, fetched and stored by the server
 

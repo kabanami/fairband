@@ -20,6 +20,7 @@ from support.engine_companies import (
     with_minority,
 )
 from support.payloads import store_payloads
+from support.pe_history import closes_payload, store_pe_history, unit_quarters
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
@@ -1337,41 +1338,26 @@ def test_multiple_refs_resolve(
     conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
 ) -> None:
     """A point of either P/E series by its date, with the date as its period, and a statistic of
-    the ten years to the newest day by its name, each a multiple; the trailing series is the newest
-    stored ``pettm`` response's, the forward one the log's."""
-    rows = [
-        ["2016-10-29", 30.0, 30.0, 30.0, 30.0],  # a day before the ten years
-        ["2016-10-30", 20.0, 20.0, 20.0, 20.0],
-        ["2021-06-30", "At Loss", 0, 0, 0],
-        ["2026-10-29", 23.0, 23.0, 23.0, 23.0],
-        ["2026-10-30", 24.0, 24.0, 24.0, 24.0],
-    ]
+    the ten years to the newest day by its name, each a multiple; the trailing series is the one of
+    the newest usable stored answers of the P/E history, the forward one the log's. Every quarter
+    holds a diluted EPS of 0.25, so a day's P/E is its close, but the year from 31 March 2021,
+    a loss."""
+    closes = {
+        "2016-10-29": 30.0,  # a day before the ten years
+        "2016-10-30": 20.0,
+        "2021-06-30": 50.0,  # a loss
+        "2026-10-29": 23.0,
+        "2026-10-30": 24.0,
+    }
     at = datetime(2026, 11, 1, tzinfo=UTC)
-    older = [["2026-10-30", 99.0, 99.0, 99.0, 99.0]]
-    for payload, observed in ((older, at.replace(day=1, month=10)), (rows, at)):
-        record_response(
-            conn,
-            "gf",
-            "pettm",
-            {"symbol": "AAPL"},
-            "AAPL",
-            200,
-            json.dumps(payload),
-            None,
-            observed,
-        )
-    unread = '{"error": "Stock not found"}'  # newer, stored unusable: never read
-    record_response(
-        conn,
-        "gf",
-        "pettm",
-        {"symbol": "AAPL"},
-        "AAPL",
-        200,
-        unread,
-        f"unusable payload: {unread}",
-        at.replace(day=2),
+    older = {"closes": closes_payload("AAPL", {"2026-10-30": 99.0})}
+    store_pe_history(conn, "AAPL", older, at.replace(day=1, month=10))
+    quarters = unit_quarters("AAPL", losses=[date(2021, 3, 31)])
+    store_pe_history(
+        conn, "AAPL", {"closes": closes_payload("AAPL", closes), "quarters": quarters}, at
     )
+    unread = {"closes": {"Error Message": "Limit Reach"}}  # newer, stored unusable: never read
+    store_pe_history(conn, "AAPL", unread, at.replace(day=2), error="unusable payload: x")
     for day, pe_forward in (("2026-10-29", 21.5), ("2026-10-30", None), ("2026-10-31", 22.5)):
         log_multiples(
             conn, "AAPL", date.fromisoformat(day), 150.0, None, None, pe_forward, 1, 1, at

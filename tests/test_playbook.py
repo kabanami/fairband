@@ -28,7 +28,7 @@ from fairband.launch.settings import DEFAULTS
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
 from fairband.policy import load_policy
-from fairband.refresh.passthrough import BUSY, NO_GF_KEY
+from fairband.refresh.passthrough import BUSY
 from fairband.refresh.rates import NO_RATE
 from fairband.refresh.reviews import OFF_ROUTE
 from fairband.reports.charts import BAND_TITLE
@@ -159,7 +159,6 @@ REFUSALS = (
     *CANNOT_FIX,
     BASIS_UNCLEAR,
     NO_FMP_KEY,
-    NO_GF_KEY,
     BUSY,
     "the report needs a secondary valuation on snapshot <id>",
     "the route values <symbol>: the secondary valuation is the fallback where it refuses",

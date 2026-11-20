@@ -173,7 +173,7 @@ from fairband.refresh.fetch import (
     page_params,
 )
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT, cadence_of, series_for
-from fairband.refresh.passthrough import Passthrough, PassthroughBusy, PassthroughNoKey
+from fairband.refresh.passthrough import Passthrough, PassthroughBusy
 from fairband.store.currency import reporting_currency
 from fairband.store.ledger import entry_count
 from fairband.store.observations import observations_for
@@ -549,15 +549,15 @@ def _asked(
     """The pass-through's one stored response to ``kind`` for ``symbol``, the store's form: reused
     inside its window, else fetched and stored. Its failures as the pass-through route answers
     them: without a pass-through (the server has no FMP key) a 503, ``NO_FMP_KEY``; a parameter it
-    refuses a 400; every slot taken, or its vendor without a key, a 503; a failed call a 502 with
-    the vendor's sentence, which the pass-through has scrubbed."""
+    refuses a 400; every slot taken a 503; a failed call a 502 with the vendor's sentence, which
+    the pass-through has scrubbed."""
     if passthrough is None:
         raise HTTPException(503, NO_FMP_KEY)
     try:
         fetched = passthrough.fetch(kind, symbol, params)[kind]
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
-    except (PassthroughBusy, PassthroughNoKey) as exc:
+    except PassthroughBusy as exc:
         raise HTTPException(503, str(exc)) from None
     except VendorError as exc:
         raise HTTPException(502, str(exc)) from None

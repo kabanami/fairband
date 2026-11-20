@@ -1,5 +1,4 @@
-"""GuruFocus payloads to observations, the summary's scores and the key ratios' EPS, and the
-trailing P/E series to its rows (``pe_ttm_rows``), which the multiples history reads.
+"""GuruFocus payloads to observations, the summary's scores and the key ratios' EPS.
 
 - ``gf-score`` (``summary_observations``): ``moat_score`` (unit ``score``) and
   ``depositary_receipt_ratio`` (unit ``ratio``) from the legacy summary's ``summary.company_data``
@@ -18,7 +17,7 @@ summary without a ``summary.company_data`` object, or key ratios without a categ
 raises on vendor data.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -82,29 +81,3 @@ def keyratios_observations(
         raw = next((category[key] for category in categories if key in category), None)
         out.append(source.observation("gf-ratio", None, name, num(raw), unit, as_of))
     return out
-
-
-def pe_ttm_rows(payload: Any) -> list[tuple[date, float | None]] | None:
-    """The ``pettm`` series' rows in payload order, each day with its trailing P/E, ``None`` for a
-    loss; ``None`` for a payload that is not a list holding a dated row, or whose dated rows hold
-    no point above zero: GuruFocus answers some failures with HTTP 200 and a JSON body, and its
-    catch-all with every value zero.
-
-    An indicator row is ``[date, open, high, low, close]``, the close the day's value, or
-    ``[date, value]`` (the stocks repository's notes, section 22). A value that is not a positive
-    number is a loss: GuruFocus writes a loss day as ``"At Loss"`` and three zeros, and some series
-    as a negative multiple. A row whose first element is not an ISO date is left out.
-    """
-    if not isinstance(payload, list):
-        return None
-    rows: list[tuple[date, float | None]] = []
-    for row in payload:
-        if not isinstance(row, list) or len(row) < 2 or not isinstance(row[0], str):
-            continue
-        try:
-            day = date.fromisoformat(row[0])
-        except ValueError:
-            continue
-        value = num(row[-1] if len(row) >= 5 else row[1])
-        rows.append((day, float(value) if value is not None and value > 0 else None))
-    return rows if any(value is not None for _, value in rows) else None

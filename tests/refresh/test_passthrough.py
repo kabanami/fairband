@@ -1,7 +1,8 @@
 """The vendor pass-throughs on the fixture router: each kind's call, stored scrubbed and reused
-inside ``reuse_hours`` (seven days for GuruFocus's P/E series, at any age for a filing report),
-the filing kinds' parameters and unusable payloads, the one limiter the worker's client and the
-pass-through's share, and the slots that bound the vendor calls in flight."""
+inside ``reuse_hours`` (at any age for a filing report), the filing kinds' parameters and unusable
+payloads, the P/E history's three FMP answers under names of their own, the one limiter the
+worker's client and the pass-through's share, and the slots that bound the vendor calls in
+flight."""
 
 import json
 import re
@@ -15,10 +16,12 @@ from typing import Any
 import httpx
 import pytest
 from refresh_env import Env
+from support.pe_history import report_in
 from vendor_double import FIXTURES, FMP_KEY, GF_TOKEN
 
 from fairband.config import Keys
 from fairband.refresh import passthrough as passthrough_module
+from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.clients import build_clients, build_fmp
 from fairband.refresh.fetch import fetch_company
 from fairband.refresh.passthrough import (
@@ -26,18 +29,27 @@ from fairband.refresh.passthrough import (
     KINDS,
     PASSTHROUGH_SLOTS,
     PASSTHROUGH_WAIT_S,
-    PE_HISTORY_REUSE_HOURS,
+    PE_CLOSES,
+    PE_QUARTERS,
+    PE_QUARTERS_LIMIT,
+    PE_RATES,
+    PE_YEARS,
+    SERIES_KIND,
     Passthrough,
     PassthroughBusy,
-    PassthroughNoKey,
     filing_report_usable,
 )
+from fairband.refresh.rates import rates_for
+from fairband.reports.multiples import trailing_series, years_before
 from fairband.reports.refs import Resolved, resolve
-from fairband.store.vendor import response_payload, response_row
+from fairband.store.vendor import (
+    latest_response,
+    response_payload,
+    response_row,
+    usable_responses,
+)
 from fairband.vendors import fmp as fmp_api
-from fairband.vendors import gurufocus as gurufocus_api
 from fairband.vendors.fmp import Fmp
-from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorError, VendorHttp
 from fairband.vendors.limiter import PaceTotals, RateLimiter
 
@@ -52,7 +64,7 @@ def _fixture(name: str, vendor: str = "fmp") -> Any:
 
 def _passthrough(env: Env) -> Passthrough:
     clients = env.clients
-    return Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets, clients.gf)
+    return Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets)
 
 
 def _stored(env: Env, response_id: int) -> tuple[str, str | None, dict[str, str], str | None]:
@@ -64,6 +76,8 @@ def _stored(env: Env, response_id: int) -> tuple[str, str | None, dict[str, str]
 
 
 def test_kinds() -> None:
+    """Six kinds, all FMP's; the P/E history is no kind of the generic route (spec 2026-11-19
+    6.3): its three answers serve the multiples history read alone."""
     assert KINDS == (
         "transcript",
         "news",
@@ -71,8 +85,10 @@ def test_kinds() -> None:
         "insider-trades",
         "transcript-dates",
         "dcf",
-        "pe-history",
     )
+    assert SERIES_KIND == "pe-history" and SERIES_KIND not in KINDS + FILING_KINDS
+    assert (PE_CLOSES, PE_QUARTERS, PE_RATES) == ("pe-closes", "pe-quarters", "pe-rates")
+    assert (PE_YEARS, PE_QUARTERS_LIMIT) == (10, 44)
 
 
 def test_the_filing_kinds_are_not_the_generic_route_s() -> None:
@@ -408,55 +424,162 @@ def test_dcf_fetches_two_endpoints(env: Env) -> None:
     assert env.router.calls == {"dcf": 1, "dcf-levered": 1}
 
 
-def test_pe_history_is_reused_for_seven_days(env: Env) -> None:
-    """GuruFocus's daily series is one call, stored under provider ``gurufocus``, reused inside
-    ``PE_HISTORY_REUSE_HOURS`` whatever ``reuse_hours`` is."""
-    assert PE_HISTORY_REUSE_HOURS == 168 and env.policy.refresh.reuse_hours < 168
+QUARTERS = {"symbol": "ACME", "period": "quarter", "limit": "44"}  # the quarters' key and query
+# The refresh's own answers the series' must never stand in for: its five-year closes, its
+# quarterly income statements and its three-year pair history.
+REFRESH_ANSWERS = (("price-history", "ACME"), ("income-quarter", "ACME"), ("fx-history", "USDTWD"))
+
+
+def _serve_twco(env: Env) -> None:
+    """TWCO reports in TWD; the router serves it ACME's closes and quarters."""
+    with closing(env.connect()) as conn:
+        report_in(conn, "TWCO", "TWD")
+    for endpoint, name in (
+        ("price-history", "historical-price-eod-full.ACME.json"),
+        ("income-quarter", "income-statement.quarter.ACME.json"),
+    ):
+        env.router.symbol_bodies[endpoint, "TWCO"] = (FIXTURES / "fmp" / name).read_bytes()
+
+
+def test_pe_history_stores_closes_and_quarters_under_their_own_names(env: Env) -> None:
+    """Spec 2026-11-19 6.3: ACME reports in USD, so two FMP calls, the daily closes of the ten
+    years to the clock's day and the newest 44 quarterly income statements, each stored under
+    the series' own endpoint, the closes with the years in their key in place of the start
+    date."""
+    parts = _passthrough(env).fetch("pe-history", "ACME", {})
+    assert set(parts) == {"closes", "quarters"}
+    closes, quarters = parts["closes"], parts["quarters"]
+    assert (closes.row.provider, closes.row.endpoint) == ("fmp", "pe-closes")
+    assert (quarters.row.provider, quarters.row.endpoint) == ("fmp", "pe-quarters")
+    assert env.router.calls == {"price-history": 1, "income-quarter": 1}
+    start = years_before(env.clock().date(), 10).isoformat()
+    assert env.router.requested["price-history"] == {"symbol": "ACME", "from": start}
+    assert env.router.requested["income-quarter"] == QUARTERS
+    years = {"symbol": "ACME", "years": "10"}
+    assert _stored(env, closes.row.id) == ("pe-closes", "ACME", years, None)
+    assert _stored(env, quarters.row.id) == ("pe-quarters", "ACME", QUARTERS, None)
+    assert closes.payload == _fixture("historical-price-eod-full.ACME.json")
+    assert quarters.payload == _fixture("income-statement.quarter.ACME.json")
+    assert (closes.reused, quarters.reused) == (False, False)
+
+
+def test_pe_history_adds_the_pair_for_a_company_in_another_currency(env: Env) -> None:
+    """TWCO reports in TWD, its newest snapshot's currency: a third call, the pair's closes over
+    the same ten years, stored under the pair as the rates stage stores its history, but under
+    the series' own endpoint."""
+    _serve_twco(env)
+    parts = _passthrough(env).fetch("pe-history", "TWCO", {})
+    assert set(parts) == {"closes", "quarters", "rates"}
+    assert env.router.calls == {"price-history": 1, "income-quarter": 1, "fx-history": 1}
+    start = years_before(env.clock().date(), 10).isoformat()
+    assert env.router.requested["fx-history"] == {"symbol": "USDTWD", "from": start}
+    years = {"symbol": "USDTWD", "years": "10"}
+    rates = parts["rates"]
+    assert _stored(env, rates.row.id) == ("pe-rates", "USDTWD", years, None)
+    assert rates.payload == _fixture("historical-price-eod-light.USDTWD.json")
+    assert _stored(env, parts["closes"].row.id)[:2] == ("pe-closes", "TWCO")
+
+
+def test_pe_history_is_reused_within_reuse_hours(env: Env) -> None:
+    """Each answer is reused while it is younger than ``reuse_hours``, across midnight too (the
+    key holds the years, not the start date), and fetched again after."""
     passthrough = _passthrough(env)
-    first = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert first.reused is False and first.row.provider == "gf"  # the refresh's name
-    assert _stored(env, first.row.id) == ("pettm", "ACME", {"symbol": "ACME"}, None)
-    assert first.payload == _fixture("pettm.ACME.json", "gurufocus")
-    env.clock.now += timedelta(days=6)
-    second = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert second.reused is True and second.row == first.row
-    assert env.router.calls == {"pettm": 1}
-    env.clock.now += timedelta(days=2)  # eight days after the first
-    third = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert third.reused is False and third.row.id > first.row.id
-    assert env.router.calls == {"pettm": 2}
+    first = passthrough.fetch("pe-history", "ACME", {})
+    env.clock.now += timedelta(hours=env.policy.refresh.reuse_hours - 1)  # the next day
+    again = passthrough.fetch("pe-history", "ACME", {})
+    assert all(fetched.reused for fetched in again.values())
+    assert {part: f.row for part, f in again.items()} == {p: f.row for p, f in first.items()}
+    assert env.router.calls == {"price-history": 1, "income-quarter": 1}
+    env.clock.now += timedelta(hours=1)
+    later = passthrough.fetch("pe-history", "ACME", {})
+    assert not any(fetched.reused for fetched in later.values())
+    assert env.router.calls == {"price-history": 2, "income-quarter": 2}
 
 
-def test_pe_history_without_a_gurufocus_client_is_no_key(env: Env) -> None:
-    clients = env.clients
-    passthrough = Passthrough(clients.fmp, env.connect, env.policy, env.clock, clients.secrets)
-    with pytest.raises(PassthroughNoKey) as caught:
-        passthrough.fetch("pe-history", "ACME", {})
-    assert str(caught.value) == "no GuruFocus key: the pe-history pass-through is off"
-    assert env.router.calls == {}
-    # The FMP kinds do not need it.
-    assert passthrough.fetch("dcf", "ACME", {})["dcf"].reused is False
+def test_the_refresh_s_closes_quarters_and_rates_stay_the_newest(env: Env) -> None:
+    """Spec 6.3: a deeper answer stored as ``price-history`` would become the newest copy of the
+    five-year closes for every reader, the engine among them; one stored as ``income-quarter`` or
+    as ``fx-history`` would stand in for the refresh's quarters or its three-year rates. The
+    series' answers add no row under any of the three."""
+    with closing(env.connect()) as conn:
+        clients = env.clients
+        fetch_company(conn, clients.fmp, None, "ACME", env.policy, env.clock(), clients.secrets)
+        before = {key: usable_responses(conn, "fmp", *key) for key in REFRESH_ANSWERS}
+        closes = latest_response(conn, "fmp", "price-history", "ACME", {"symbol": "ACME"})
+    assert closes is not None and before["fx-history", "USDTWD"] == []
+    _serve_twco(env)
+    passthrough = _passthrough(env)
+    passthrough.fetch("pe-history", "ACME", {})
+    passthrough.fetch("pe-history", "TWCO", {})
+    with closing(env.connect()) as conn:
+        assert {key: usable_responses(conn, "fmp", *key) for key in REFRESH_ANSWERS} == before
+        after = latest_response(conn, "fmp", "price-history", "ACME", {"symbol": "ACME"})
+        assert after is not None and after.id == closes.id
+        assert rates_for(conn, "TWD") is None  # no pair history for the rates stage's readers
 
 
-def test_a_gurufocus_error_is_stored_and_raised_without_the_token(env: Env) -> None:
-    """The token travels in the URL path: the message, the stored error and the stored payload
-    carry ``<key>`` in its place."""
-    env.router.fail.add("pettm")
+def test_the_backfill_writes_no_fact_from_the_deep_quarters(env: Env) -> None:
+    """The statement backfill reads every stored response of a statement endpoint whatever its
+    params; the series' quarters are not one, so no fact and no observation comes of them."""
+    _serve_twco(env)
+    passthrough = _passthrough(env)
+    passthrough.fetch("pe-history", "ACME", {})
+    passthrough.fetch("pe-history", "TWCO", {})
+    with closing(env.connect()) as conn:
+        assert backfill_statement_facts(conn, env.clock()) == 0
+        assert conn.execute("SELECT count(*) FROM facts").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM observations").fetchone()[0] == 0
+
+
+def test_an_empty_answer_is_stored_usable_and_reused(env: Env) -> None:
+    """A company listed last month: FMP answers both deep calls with an empty list. Each is
+    stored usable and reused like any other answer, and the series reads with no point (spec
+    6.3, a series with no point; Review Focus 3)."""
+    for endpoint in ("price-history", "income-quarter"):
+        env.router.symbol_bodies[endpoint, "NEWCO"] = b"[]"
+    passthrough = _passthrough(env)
+    parts = passthrough.fetch("pe-history", "NEWCO", {})
+    assert [fetched.row.error for fetched in parts.values()] == [None, None]
+    series = trailing_series({part: f.payload for part, f in parts.items()}, "USD")
+    assert series is not None and (series.points, series.since) == ((), None)
+    assert all(f.reused for f in passthrough.fetch("pe-history", "NEWCO", {}).values())
+    assert env.router.calls == {"price-history": 1, "income-quarter": 1}
+
+
+def test_an_answer_that_is_not_a_list_is_stored_unusable_and_fetched_again(env: Env) -> None:
+    """FMP's error object in place of the quarters: stored with the error ``unusable payload:
+    ...``, answered as fetched and never reused, while the closes beside it are."""
+    env.router.bodies["income-quarter"] = b'{"Error Message": "Limit Reach"}'
+    passthrough = _passthrough(env)
+    first = passthrough.fetch("pe-history", "ACME", {})
+    quarters = first["quarters"]
+    assert quarters.payload == {"Error Message": "Limit Reach"}
+    assert quarters.row.error == 'unusable payload: {"Error Message": "Limit Reach"}'
+    assert first["closes"].row.error is None
+    second = passthrough.fetch("pe-history", "ACME", {})
+    assert (second["closes"].reused, second["quarters"].reused) == (True, False)
+    assert second["quarters"].row.id > quarters.row.id
+    assert env.router.calls == {"price-history": 1, "income-quarter": 2}
+
+
+def test_a_failed_part_is_stored_and_raised_after_the_ones_before_it(env: Env) -> None:
+    """The quarters' call fails: the closes stored before it stand, the failure is stored with its
+    message, scrubbed, and raised; the next fetch reuses the closes and asks the quarters again."""
+    env.router.fail.add("income-quarter")
     env.router.fail_status = 403
     passthrough = _passthrough(env)
     with pytest.raises(VendorError) as caught:
         passthrough.fetch("pe-history", "ACME", {})
-    message = str(caught.value)
-    assert GF_TOKEN not in message and "/public/user/<key>/stock/ACME/pettm" in message
-    env.router.fail.clear()
-    echoed = [["2026-10-30", f"see /public/user/{GF_TOKEN}/stock/ACME/pettm"]]
-    env.router.bodies["pettm"] = json.dumps(echoed).encode()
-    fetched = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert fetched.payload == [["2026-10-30", "see /public/user/<key>/stock/ACME/pettm"]]
+    assert FMP_KEY not in str(caught.value) and caught.value.status == 403
     with closing(env.connect()) as conn:
-        rows = [tuple(r) for r in conn.execute("SELECT payload, error FROM vendor_responses")]
-    assert rows[0] == (None, message)
-    assert all(GF_TOKEN not in str(row) for row in rows)
+        rows = conn.execute("SELECT endpoint, http_status, error FROM vendor_responses")
+        assert [tuple(row) for row in rows] == [
+            ("pe-closes", 200, None),
+            ("pe-quarters", 403, str(caught.value)),
+        ]
+    env.router.fail.clear()
+    again = passthrough.fetch("pe-history", "ACME", {})
+    assert (again["closes"].reused, again["quarters"].reused) == (True, False)
 
 
 def test_a_fetched_response_is_citable(env: Env) -> None:
@@ -499,16 +622,6 @@ def test_a_fetched_response_is_citable(env: Env) -> None:
             {"symbol": "ACME", "page": "0", "limit": "100"},
             "fmp/insider-trading-search.ACME.json",
             id="insider-trades",
-        ),
-        pytest.param(
-            "pe-history",
-            {},
-            "gf",
-            "pettm",
-            {"symbol": "ACME"},
-            {},  # the token travels in the path, the symbol too
-            "gurufocus/pettm.ACME.json",
-            id="pe-history",
         ),
         pytest.param(
             "filings",
@@ -638,11 +751,10 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
 
 
 class Held:
-    """A pass-through over FMP and GuruFocus whose transcript and P/E series calls the vendor holds
-    until ``release``; any other call answers ``[]``. ``called`` names each held call that reached
-    the vendor (``2026-Q1``, ``pettm``); ``hold`` starts four, one per quarter of 2026, or three and
-    a P/E series, on threads of their own, each holding a slot until released, and returns once
-    all four are at the vendor."""
+    """A pass-through over FMP whose transcript calls the vendor holds until ``release``; any other
+    call answers ``[]``. ``called`` names each held call that reached the vendor (``2026-Q1``);
+    ``hold`` starts four, one per quarter of 2026, on threads of their own, each holding a slot
+    until released, and returns once all four are at the vendor."""
 
     def __init__(self, env: Env) -> None:
         self.entered = threading.Semaphore(0)
@@ -653,21 +765,16 @@ class Held:
         transport = httpx.MockTransport(self._answer)
         refresh = env.policy.refresh
         self.http = VendorHttp(fmp_api.BASE_URL, [FMP_KEY], refresh, transport=transport)
-        self.gf_http = VendorHttp(gurufocus_api.BASE_URL, [GF_TOKEN], refresh, transport=transport)
-        fmp, gurufocus = Fmp(self.http, FMP_KEY), GuruFocus(self.gf_http, GF_TOKEN)
-        secrets = (FMP_KEY, GF_TOKEN)
-        self.passthrough = Passthrough(fmp, env.connect, env.policy, env.clock, secrets, gurufocus)
+        fmp = Fmp(self.http, FMP_KEY)
+        self.passthrough = Passthrough(fmp, env.connect, env.policy, env.clock, (FMP_KEY,))
 
     def _answer(self, request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/earning-call-transcript"):
-            self.called.append(f"{request.url.params['year']}-Q{request.url.params['quarter']}")
-        elif request.url.path.endswith("/pettm"):
-            self.called.append("pettm")
-        else:
+        if not request.url.path.endswith("/earning-call-transcript"):
             return httpx.Response(200, json=[])
+        self.called.append(f"{request.url.params['year']}-Q{request.url.params['quarter']}")
         self.entered.release()
         self.release.wait(5)
-        return httpx.Response(200, json=[["2026-10-30", 20.0]])
+        return httpx.Response(200, json=[])
 
     def start(self, kind: str, params: dict[str, str]) -> threading.Thread:
         def fetch() -> None:
@@ -679,11 +786,9 @@ class Held:
         thread.start()
         return thread
 
-    def hold(self, pe_history: bool = False) -> None:
-        for quarter in "123" if pe_history else "1234":
+    def hold(self) -> None:
+        for quarter in "1234":
             self.start("transcript", {"year": "2026", "quarter": quarter})
-        if pe_history:
-            self.start("pe-history", {})
         for _ in range(PASSTHROUGH_SLOTS):
             assert self.entered.acquire(timeout=5)
 
@@ -703,7 +808,6 @@ def held(env: Env) -> Iterator[Held]:
     finally:
         held.finish()
         held.http.close()
-        held.gf_http.close()
 
 
 def test_a_fifth_vendor_call_waits_for_a_slot(held: Held) -> None:
@@ -726,7 +830,8 @@ def test_a_call_that_waits_past_the_bound_is_busy(
     held: Held, env: Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With every slot held past ``PASSTHROUGH_WAIT_S``, the call gives up: ``PassthroughBusy``,
-    nothing called and nothing stored; once a slot frees, the same call goes through."""
+    nothing called and nothing stored; once a slot frees, the same call goes through. The P/E
+    history's calls wait for a slot as any other."""
     monkeypatch.setattr(passthrough_module, "PASSTHROUGH_WAIT_S", 0.2)
     held.hold()
     began = time.monotonic()
@@ -734,68 +839,12 @@ def test_a_call_that_waits_past_the_bound_is_busy(
         held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
     assert time.monotonic() - began >= 0.15  # it waited for a slot first
     assert str(caught.value) == "the pass-throughs are busy: four calls are in flight, try again"
+    with pytest.raises(PassthroughBusy):
+        held.passthrough.fetch("pe-history", "ACME", {})
     assert len(held.called) == 4
     with closing(env.connect()) as conn:
         assert conn.execute("SELECT COUNT(*) FROM vendor_responses").fetchone()[0] == 0
     held.finish()
     fetched = held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
     assert fetched["transcript"].reused is False and "2025-Q4" in held.called
-
-
-def test_a_gurufocus_call_waits_for_a_slot_like_an_fmp_call(
-    held: Held, env: Env, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """With four FMP calls in flight, the P/E series waits for a slot and past the bound is
-    busy, GuruFocus never called; once the slots free, it goes through."""
-    monkeypatch.setattr(passthrough_module, "PASSTHROUGH_WAIT_S", 0.2)
-    held.hold()
-    with pytest.raises(PassthroughBusy):
-        held.passthrough.fetch("pe-history", "ACME", {})
-    assert "pettm" not in held.called
-    held.finish()
-    fetched = held.passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert fetched.reused is False and held.called.count("pettm") == 1
-
-
-def test_a_gurufocus_call_in_flight_holds_a_slot(
-    held: Held, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Three FMP calls and the P/E series in flight take the four slots: a fifth FMP call is
-    busy."""
-    monkeypatch.setattr(passthrough_module, "PASSTHROUGH_WAIT_S", 0.2)
-    held.hold(pe_history=True)
-    assert sorted(held.called) == ["2026-Q1", "2026-Q2", "2026-Q3", "pettm"]
-    with pytest.raises(PassthroughBusy):
-        held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
-    assert "2025-Q4" not in held.called
-
-
-@pytest.mark.parametrize(
-    ("unread", "error"),
-    [
-        ({"error": "Stock not found"}, 'unusable payload: {"error": "Stock not found"}'),
-        (
-            [["2026-10-30", 0, 0, 0, 0], ["2026-10-31", 0, 0, 0, 0]],
-            'unusable payload: [["2026-10-30", 0, 0, 0, 0], ["2026-10-31", 0, 0, 0, 0]]',
-        ),
-    ],
-)
-def test_a_pe_history_payload_without_the_series_is_stored_unusable(
-    env: Env, unread: Any, error: str
-) -> None:
-    """GuruFocus answers some failures with HTTP 200 and a JSON body, and its catch-all with every
-    value zero: the payload is stored with the error ``unusable payload: ...``, answered as
-    fetched, and never reused."""
-    env.router.bodies["pettm"] = json.dumps(unread).encode()
-    passthrough = _passthrough(env)
-    first = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert (first.reused, first.payload) == (False, unread)
-    assert first.row.error == error
-    assert _stored(env, first.row.id) == ("pettm", "ACME", {"symbol": "ACME"}, error)
-    second = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert second.reused is False and second.row.id > first.row.id
-    del env.router.bodies["pettm"]  # the fixture's series: usable, then reused
-    third = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    fourth = passthrough.fetch("pe-history", "ACME", {})["pe-history"]
-    assert (third.row.error, third.reused, fourth.reused) == (None, False, True)
-    assert env.router.calls == {"pettm": 3}
+    assert not any(f.reused for f in held.passthrough.fetch("pe-history", "ACME", {}).values())
