@@ -187,6 +187,10 @@ worth owning at the prices shown. The kill criteria of section 11 test it.
 - **The value.** The value before any change to the inputs (the mechanical value) and after the
   changes that stand (the reviewed value). One sentence in words for each override that moved it,
   citing its bridge line: `review:<id>/bridge/<n>/old`, `/new` and `/delta`.
+- **The one-time items**, on Mature Stable: the items of the trailing periods, after tax and a
+  share, set through `earnings.nri_gap` and cited as its bridge line, `review:<id>/bridge/<n>/new`,
+  with the filing; where the filings show none, say so with the filings cited, and that the value
+  keeps the trailing earnings as reported.
 - **The higher case.** For the growth, the margin and the return on new capital, as the
   company's route reads them: the strongest evidence for a higher figure, and why it stood or
   did not, one sentence each, the figures cited. Where it stood, the override's bridge line above
@@ -288,15 +292,15 @@ The engine or a derivation gives every item. None of them is a target.
 - **The earnings multiples against their history**, where earnings are positive. The trailing P/E on
   two bases, the clean P/E (the price over the trailing earnings a share less the one-time items
   you set through `earnings.nri_gap`; it differs from the reported P/E under your gap alone) and
-  the reported P/E, and the forward P/E: `snapshot:<id>/intermediates/multiples/pe_clean`,
-  `/pe_reported` and `/pe_forward`. Where you set `earnings.nri_gap`, the clean P/E is the
-  review's, `review:<id>/intermediates/multiples/pe_clean`: give the two side by side. Where you
-  set none the two are equal: give the reported P/E, and say that no one-time items were taken out
-  of the earnings. Set each against its own history from `multiples_history`: the trailing
-  series' ten-year average, median, high and low (`multiple:<symbol>/pe/avg_10y`, `/median_10y`,
-  `/high_10y`, `/low_10y`), and the forward series' the same way
-  (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is Fairband's own log: say since
-  when it runs (its `since`), and that it is short while it is.
+  the reported P/E, and the forward P/E. Cite the snapshot's reported P/E and forward P/E:
+  `snapshot:<id>/intermediates/multiples/pe_reported` and `/pe_forward`. Where you set
+  `earnings.nri_gap`, the clean P/E is the review's, `review:<id>/intermediates/multiples/pe_clean`:
+  give the two side by side. Where you set none the two are equal: give the reported P/E, and say
+  that no one-time items were taken out of the earnings. Set each against its own history from
+  `multiples_history`: the trailing series' ten-year average, median, high and low
+  (`multiple:<symbol>/pe/avg_10y`, `/median_10y`, `/high_10y`, `/low_10y`), and the forward
+  series' the same way (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is Fairband's
+  own log: say since when it runs (its `since`), and that it is short while it is.
 - **The phase's multiples**, each from `derive`:
 
 | Phase | Multiples to show |

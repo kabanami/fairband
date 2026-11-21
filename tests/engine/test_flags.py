@@ -292,6 +292,18 @@ def test_the_warning_at_the_threshold(policy: Policy) -> None:
     assert one_time_items_flag(-1.00, -0.70, policy) is not None
 
 
+def test_the_warning_fires_at_an_exact_20_percent_in_floating_point(policy: Policy) -> None:
+    """The final review of plan 2, Minor 1: 1.00 against 1.20 or 0.80 is 20% apart, but binary
+    floating point gives 0.19999999999999996, so the share is compared with the threshold less
+    1e-12 (method 4.1a) and the edge fires; 1.1999, 19.99% apart, stays silent."""
+    assert one_time_share(1.00, 1.20) == one_time_share(1.00, 0.80) < 0.20  # the float's shortfall
+    for street in (1.20, 0.80):
+        flag = one_time_items_flag(1.00, street, policy)
+        assert flag is not None, street
+        assert "apart by 20.0% of GAAP EPS, at or above 20.0%." in flag.sentence
+    assert one_time_items_flag(1.00, 1.1999, policy) is None
+
+
 def test_the_warning_s_sentence(policy: Policy) -> None:
     """The Words table's word and sentence; a negative figure with the minus sign first, and the
     code before each figure on a row in another currency, as the other sentences print it. It is

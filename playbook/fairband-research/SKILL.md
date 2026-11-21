@@ -513,12 +513,16 @@ Twelve flags ask for a decision of yours. Read each sentence whole: it names its
 On Mature Stable, one step on the one-time items, in every report, with no flag needed. The
 mechanical value keeps the one-time items of the trailing earnings, and this step takes them out.
 
-1. Sum the one-time items of the trailing four quarters, or of the two half-years of a company
-   that reports by half-year, from their filings (`filing_report`). Count restructuring,
-   impairments, gains and losses on sales, litigation and debt retirement.
-2. Take them after tax and a diluted share. Write a net charge as a negative figure: taking a
-   charge out raises the earnings, and taking a gain out lowers them.
-3. Set the sum through `earnings.nri_gap`, period-tied, with the filing as evidence.
+1. Sum the one-time items of the trailing periods the engine reads: the four quarters, the two
+   half-years of a company that reports by half-year, or the fiscal year where it falls back to
+   one, from their filings (`filing_report`). Count restructuring, impairments, gains and losses
+   on sales, litigation and debt retirement.
+2. Take them after tax and a share on the diluted count (your `shares.diluted` where you set
+   one), not counting committed shares. Write a net charge as a negative figure: taking a charge
+   out raises the earnings, and taking a gain out lowers them.
+3. Set the sum through `earnings.nri_gap`, period-tied, with the filing as evidence. One override
+   holds the whole gap: where you also strip an asset's gains (see "Nothing counts twice"), add
+   them into this figure, since a second `earnings.nri_gap` replaces the first.
 4. Where the filings show none, say so in section 8, and set nothing.
 
 The warning `one-time-items` and the refusal "no positive trailing earnings" are cues to the

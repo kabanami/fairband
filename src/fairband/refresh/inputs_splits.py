@@ -54,16 +54,16 @@ under the method ``split-scaled`` and carry a note naming the split, keyed by th
 input names: ``shares_diluted``, ``eps_ttm``, ``street_ttm_eps``, and ``ntm_eps`` when a scaled
 quarterly row is in the NTM window the engine reads (``ntm_window`` on the trailing figures'
 cadence: the four quarters, or the two half-years). The notes of the two trailing EPS figures say
-"on 3 of 4 quarters" when not every period scaled; a half-yearly reporter's notes name its periods half-years ("on 1 of 2
-half-years"), and the quarterly consensus rows are named by the NTM window's cadence, else the
-trailing figures'. No DATA input holds the annual consensus EPS (the path steps are rates,
-unmoved when both years scale), so the ``split-pending`` sentence alone names it. A pending
-split puts the note ``split-pending`` on the row, its sentence naming the splits and the newest
-trailing period they follow, the figures read on the new basis and the periods they were scaled
-on, and those read as stored with the reason: the statement side's when it scaled nothing (FMP's
-figures already post-split only when the count and every period tested read post-split), each
-period left and each consensus row left; without one every figure is read as stored and nothing
-is noted.
+"on 3 of 4 quarters" when not every period scaled; a half-yearly reporter's notes name its periods
+half-years ("on 1 of 2 half-years"), and the quarterly consensus rows are named by the NTM window's
+cadence, else the trailing figures'. No DATA input holds the annual consensus EPS (the path steps
+are rates, unmoved when both years scale), so the ``split-pending`` sentence alone names it. A
+pending split puts the note ``split-pending`` on the row, its sentence naming the splits and the
+newest trailing period they follow, the figures read on the new basis and the periods they were
+scaled on, and those read as stored with the reason: the statement side's when it scaled nothing
+(FMP's figures already post-split only when the count and every period tested read post-split),
+each period left and each consensus row left; without one every figure is read as stored and
+nothing is noted.
 
 ``apply_splits`` first reads an ADR's statements on the quote's share basis (spec 2026-11-10
 section 6.1, spec 2026-11-19 6.2) when FMP flags the row as an ADR (``is_adr``), the quote gives

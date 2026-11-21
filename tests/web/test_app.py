@@ -3638,6 +3638,28 @@ def test_the_screen_and_the_watchlists_hand_the_table_the_note() -> None:
     ):
         assert patch in bundle, patch
     assert "warningsHover: warningsHover," in bundle and "WarningMark: WarningMark," in bundle
+
+
+def test_the_drawer_hangs_the_mark_in_the_column_gap() -> None:
+    """The look's defect D1 and the final review of plan 2, Minor 4: in the drawer's list of
+    levels, left-aligned, the mark before the Fair value figure pushed it 18.2px right of the
+    other three (the bullet's 13.2px advance at 22px of the mono face, and the mark's 5px right
+    margin). The drawer's own rule hangs it in the 12px column gap: a negative left margin of the
+    advance plus a 1px right margin, so the figure keeps the levels' left edge and the dot's ink,
+    about 4.9 to 10.4px left of it, stays clear of the label. The mark's own rule, which the
+    right-aligned screen, watchlists and company page read, does not change."""
+    page = _static_file("index.html")
+    rule = ".app-drawer__band .app-pairs .fb-warnmark { margin-left: -14.2px; margin-right: 1px; }"
+    assert rule in page
+    assert "gap: var(--space-1) var(--space-3);" in _rule(page, ".app-pairs {")
+    assert "--space-3: 12px;" in _static_file("design-system/tokens/tokens.css")
+    advance = 0.6 * 22  # IBM Plex Mono's advance, 600 of 1,000 units, at the mark's 22px
+    assert -14.2 + advance + 1 == pytest.approx(0)  # the figure stays on the levels' left edge
+    css = _component_file("bundle.css")
+    assert (
+        ".fb-warnmark { font-family: var(--font-mono); font-size: 22px; line-height: 0;"
+        " margin-right: 5px; vertical-align: -3px; }"
+    ) in css
     dts = _component_file("index.d.ts")
     assert "export declare function warningsHover(words: string[], note: string): string;" in dts
     assert "export declare function WarningMark(props: WarningMarkProps): unknown;" in dts

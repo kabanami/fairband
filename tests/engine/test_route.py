@@ -629,6 +629,13 @@ def test_the_stock_pay_notes_follow_the_anchor_s_flag(
     assert "stock-pay-missing" in codes(decided) and "sbc-basis-uncertain" not in codes(decided)
     without = value_company(replace(one_quarter, stock_pay=None), deciles, policy, TODAY)
     assert "stock-pay-missing" not in codes(without) and without.value == r.value
+    # a street EPS of 4.24, 1.06 apart from 5.30: 20% exactly, 0.19999999999999993 in floating
+    # point, which reason 1 reads at the warning's threshold less 1e-12 (method 4.1a)
+    edge = value_company(replace(one_quarter, street_ttm_eps=4.24), deciles, policy, TODAY)
+    assert "sbc-basis-uncertain" in codes(edge)
+    assert "while GAAP trailing EPS and the analysts' differ by 20.0%" in next(
+        f.sentence for f in edge.flags if f.code == "sbc-basis-uncertain"
+    )
 
 
 def test_the_stock_pay_notes_show_on_the_anchor_s_refusal(

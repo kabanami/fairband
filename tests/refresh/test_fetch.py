@@ -267,7 +267,7 @@ def test_a_fetch_makes_one_gurufocus_call(
     )
     assert [tuple(row) for row in stored] == [("gf", "summary")]
     assert observations_for(conn, "ACME", "gf-ratio") == []
-    assert fetch_module.provider_of("keyratios") == "fmp"  # no longer a GuruFocus endpoint
+    assert fetch_module._GF_ENDPOINTS == frozenset({"summary"})
 
 
 def test_response_and_its_rows_commit_together(
@@ -448,15 +448,15 @@ def test_no_key_in_stored_params_or_payload(
     router.fail.update({"quote", "summary"})
     echo = [{"symbol": "ACME", "isAdr": False, "note": f"apikey={FMP_KEY} user/{GF_TOKEN}"}]
     router.bodies["profile"] = json.dumps(echo).encode()
-    # An unusable answer stores the start of its body as the error.
-    router.bodies["peers"] = json.dumps({"error": f"invalid key {FMP_KEY}"}).encode()
+    # An unusable answer stores the start of its body as the error, scrubbed of both secrets.
+    router.bodies["peers"] = json.dumps({"error": f"invalid key {FMP_KEY} {GF_TOKEN}"}).encode()
     fetch(conn, clients, policy, clock)
 
     rows = conn.execute("SELECT params, payload, error FROM vendor_responses").fetchall()
     assert len(rows) == 33
     texts = [text for row in rows for text in row if text is not None]
     assert any("<key>" in text for text in texts)
-    assert 'unusable payload: {"error": "invalid key <key>"}' in texts
+    assert 'unusable payload: {"error": "invalid key <key> <key>"}' in texts
     forms = {
         form for key in clients.secrets for form in (key, quote(key, safe=""), quote_plus(key))
     }

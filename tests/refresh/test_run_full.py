@@ -334,7 +334,8 @@ def test_a_scoped_refresh_fetches_again_and_a_full_one_reuses(env_fixture_univer
     assert env.router.symbol_calls["ACME"] == 33
     env.clock.now += timedelta(minutes=5)
     env.refresh().run("scoped", ["ACME"])
-    # The 31 FMP calls and the GuruFocus one again; the newest call's transcript, stored with words, not.
+    # The 31 FMP calls and the GuruFocus one again; the newest call's transcript, stored with
+    # words, not.
     assert env.router.symbol_calls["ACME"] == 65
     env.clock.now += timedelta(minutes=5)
     calls = Counter(env.router.symbol_calls)

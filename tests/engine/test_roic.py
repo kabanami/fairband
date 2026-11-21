@@ -118,7 +118,7 @@ def test_not_presented_counts_nil_and_flags() -> None:
     assert r.aggregate == pytest.approx(0.2) and r.years_used == 10
     assert codes(r) == ("line-not-presented:goodwill",)
     flag = r.flags[0]
-    assert flag.word == "Line not presented: goodwill"  # the Flags column names the field
+    assert flag.word == "Line not presented: goodwill"  # the flag's word names the field
     assert "goodwill" in flag.sentence and "not-presented-as-nil-v1" in flag.sentence
 
 

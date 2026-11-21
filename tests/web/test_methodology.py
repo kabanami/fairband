@@ -181,9 +181,19 @@ def test_the_examples_are_dated_to_methods_1_4_and_1_7() -> None:
     assert (
         "Figures as of the data and the price of "
         '<time datetime="2026-11-18">18 Nov 2026</time> for Coca-Cola, valued under method 1.7 on '
-        '<time datetime="2026-11-21">21 Nov 2026</time>. The other five examples\' figures are as '
-        'of the data of <time datetime="2026-11-11">11 Nov 2026</time>'
+        '<time datetime="2026-11-21">21 Nov 2026</time>. The other examples\' figures are as of '
+        'the data of <time datetime="2026-11-11">11 Nov 2026</time>'
     ) in asof
+    assert "five examples" not in asof  # seven worked examples, Microsoft's phase evidence one
+    # the header comment rests the examples on other routes on what 1.7 changes, not on refresh
+    # 68's rows, which hold neither Roku nor a value of Revolution Medicines
+    comment = re.sub(r"\s+", " ", _static_file("methodology.html").split("-->", 1)[0])
+    assert (
+        "Method 1.7 (21 Nov 2026, the engine finds no non-recurring gap) changes the values of the"
+        " Mature Stable route alone, and no example on another route shows a figure it changes, so"
+        " the examples on other routes stand under 1.7."
+    ) in comment
+    assert "the five examples on other routes" not in comment
     assert "14 Nov 2026</time> and are unchanged under methods 1.5, 1.6 and 1.7." in asof
     assert "Their prices are the closes of" in asof
     assert "methods 1.5 and 1.6." not in asof and "methods 1.1, 1.2 and 1.3" not in asof
@@ -638,7 +648,8 @@ def test_a_mechanical_value_keeps_one_time_items() -> None:
 
 def test_the_flags_section_names_the_mark_and_the_hover(client: TestClient) -> None:
     """Spec 2026-11-19 7.5: the screen draws no flag; a dot marks a mechanical value with the
-    policy's count of quality warnings or more and no review, and a hover on the value names them;
+    policy's count of quality warnings or more and no reviewed value, and a hover on the value
+    names them;
     the notes are read by an agent and never count. The page names no Flags column, Warnings
     column or Clean filter, which have gone, and a flag's word is no longer the screen's. The
     count is the served policy's, as the MCP methodology tool reads it."""
@@ -653,7 +664,8 @@ def test_the_flags_section_names_the_mark_and_the_hover(client: TestClient) -> N
         "The screen draws no flag.",
         (
             "A dot before a mechanical value marks one with"
-            ' <span data-policy="warning_mark_min">—</span> quality warnings or more and no review.'
+            ' <span data-policy="warning_mark_min">—</span> quality warnings or more and no'
+            " reviewed value."
         ),
         "A hover on the value names its warnings and says the value is preliminary.",
         "Every other flag is a note: read by an agent, never counted.",
@@ -668,7 +680,8 @@ def test_the_flags_section_names_the_mark_and_the_hover(client: TestClient) -> N
     found = section_text("flags", client.get("/api/policy").json(), None)
     assert found is not None
     marks = (
-        "A dot before a mechanical value marks one with 3 quality warnings or more and no review."
+        "A dot before a mechanical value marks one with 3 quality warnings or more and no reviewed"
+        " value."
     )
     assert marks in found[1]
 

@@ -39,8 +39,11 @@ be left out.
   follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value. Where
   `reviewed` is a review's value, the row's `flags` and `flagCount` are the review's flags too;
   where it is a secondary valuation's, they stay the snapshot's, since a secondary valuation has
-  none. Every money column is in US dollars, on a company in another currency too: its EPV,
-  cross-check value and required revenue are the route's figures in the currency ÷ the rate.
+  none. A row's `warnings` are the plain words of the snapshot's quality warnings, never the
+  review's, and `marked` is whether the page marks the mechanical value: `warning_mark_min`
+  warnings or more and no reviewed value. Every money column is in US dollars, on a company in
+  another currency too: its EPV, cross-check value and required revenue are the route's figures
+  in the currency ÷ the rate.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
@@ -49,18 +52,20 @@ be left out.
   `word` and `sentence`, as the screen's row shows them, so you read what your inputs settled; on a
   refused review `flags` is `null`. The `result`'s flags stay the snapshot's. `priceNeeds`: where
   the price is well above the value, one or two sentences on what the price needs of the business
-  beside what the route holds, read under your review when it has a value; `null` otherwise. An
-  input scaled for a split is an estimate under the method `split-scaled` with a note naming the
-  split, and the row's `split-pending` note names the rest. What the figures are in: `currency`, the
-  reporting currency; `isAdr`, the ADR flag as the valuation reads it, the company profile's, else
-  the universe row's; `adrRatio`, the whole number Fairband found between FMP's stored share
-  count and the quote's, `null` where the counts agree; `fxRate` and `fxDate`, the exchange rate the
-  value was translated at, units of the currency per US dollar, and its close's date, `null` on a
-  company in US dollars and on one refused for its currency, which has no rate ("no exchange rate
-  for <code>", "no inflation projection for <code>" or "<code>: expected inflation <π>% above the
-  10% bound"). An input in the currency names its code as its unit (`TWD`, `TWD a share`); one
-  read on the ADS basis is an estimate under `basis-scaled`, and the input `adr_ratio`, the ratio
-  found, one under `counts-ratio`.
+  beside what the route holds, read under your review when it has a value; `null` otherwise.
+  `warnings`: the plain words of the snapshot's quality warnings, never the review's; `marked`:
+  whether the page marks the mechanical value, `warning_mark_min` warnings or more and no
+  reviewed value. An input scaled for a split is an estimate under the method `split-scaled` with a
+  note naming the split, and the row's `split-pending` note names the rest. What the figures are in:
+  `currency`, the reporting currency; `isAdr`, the ADR flag as the valuation reads it, the company
+  profile's, else the universe row's; `adrRatio`, the whole number Fairband found between FMP's
+  stored share count and the quote's, `null` where the counts agree; `fxRate` and `fxDate`, the
+  exchange rate the value was translated at, units of the currency per US dollar, and its close's
+  date, `null` on a company in US dollars and on one refused for its currency, which has no rate
+  ("no exchange rate for <code>", "no inflation projection for <code>" or "<code>: expected
+  inflation <π>% above the 10% bound"). An input in the currency names its code as its unit (`TWD`,
+  `TWD a share`); one read on the ADS basis is an estimate under `basis-scaled`, and the input
+  `adr_ratio`, the ratio found, one under `counts-ratio`.
 - `financials(symbol)`: the fiscal years, the trailing figures and the balance years from the
   stored statements, each figure with its `fact:` ref.
 - `quarters(symbol)`: the newest eight stored quarters, oldest first, each by its fiscal label

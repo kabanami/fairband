@@ -1606,14 +1606,28 @@ def test_step_8_holds_the_one_time_items_step() -> None:
             "The mechanical value keeps the one-time items of the trailing earnings, and this step"
             " takes them out."
         ),
-        "Sum the one-time items of the trailing four quarters",
+        # the final review of plan 2, Task 8's minors 1 and 2: the periods the engine reads, the
+        # fiscal-year fallback among them, the count the figure is a share of, and one override
+        (
+            "Sum the one-time items of the trailing periods the engine reads: the four quarters,"
+            " the two half-years of a company that reports by half-year, or the fiscal year where"
+            " it falls back to one, from their filings (`filing_report`)."
+        ),
         (
             "Count restructuring, impairments, gains and losses on sales, litigation and debt"
             " retirement."
         ),
-        "Take them after tax and a diluted share.",
+        (
+            "Take them after tax and a share on the diluted count (your `shares.diluted` where you"
+            " set one), not counting committed shares."
+        ),
         "Write a net charge as a negative figure",
         "Set the sum through `earnings.nri_gap`, period-tied, with the filing as evidence.",
+        (
+            "One override holds the whole gap: where you also strip an asset's gains (see \"Nothing"
+            ' counts twice"), add them into this figure, since a second `earnings.nri_gap` replaces'
+            " the first."
+        ),
         "Where the filings show none, say so in section 8, and set nothing.",
         (
             'The warning `one-time-items` and the refusal "no positive trailing earnings" are cues'
@@ -1624,6 +1638,7 @@ def test_step_8_holds_the_one_time_items_step() -> None:
         "the route then values the company",
     ):
         assert words in step, words
+    assert "the trailing four quarters" not in step and "a diluted share" not in step
 
 
 def test_the_cycle_gap_reads_the_trailing_figures_less_the_one_time_items() -> None:
@@ -2184,6 +2199,13 @@ def test_the_template_s_words_state_what_each_figure_is() -> None:
     ):
         assert words in template, words
     assert "the price over the trailing earnings a share without one-time items" not in template
+    # the final review of plan 2, Task 8's minor 4: a snapshot's clean P/E is its reported one
+    # since method 1.7, so the template cites the snapshot's reported and forward P/E alone
+    assert (
+        "Cite the snapshot's reported P/E and forward P/E:"
+        " `snapshot:<id>/intermediates/multiples/pe_reported` and `/pe_forward`."
+    ) in template
+    assert "snapshot:<id>/intermediates/multiples/pe_clean" not in template
     # the example sets no gap, so it gives the reported P/E alone (the ruling's Q2)
     example = _example(_read(TEMPLATE))
     prices = next(s for s in example["sections"] if s["heading"] == "Price and multiples")
@@ -2205,6 +2227,42 @@ def test_the_template_s_words_state_what_each_figure_is() -> None:
         " Shake-out or Decline, from the signs of the last fiscal year's three cash flows)"
     ) in template
     assert "the life-cycle stage, Introduction" not in template
+
+
+def test_the_template_s_section_8_holds_the_one_time_items() -> None:
+    """The final review of plan 2, Task 8's minor 5: step 8's standing step on the one-time items
+    has its bullet in section 8, after the value and before the higher case: the figure set
+    through `earnings.nri_gap` and cited as its bridge line, with the filing, or none, said so."""
+    template = _read(TEMPLATE)
+    valuation = _flat(template[template.index("### Section 8") : template.index("### Section 9")])
+    bullet = (
+        "**The one-time items**, on Mature Stable: the items of the trailing periods, after tax and"
+        " a share, set through `earnings.nri_gap` and cited as its bridge line,"
+        " `review:<id>/bridge/<n>/new`, with the filing; where the filings show none, say so with"
+        " the filings cited, and that the value keeps the trailing earnings as reported."
+    )
+    assert bullet in valuation
+    at = valuation.index(bullet)
+    assert valuation.index("**The value.**") < at < valuation.index("**The higher case.**")
+
+
+def test_the_tools_reference_names_the_warnings_and_the_mark() -> None:
+    """The final review of plan 2, Minor 3: the `screen` and `company` answers carry `warnings`,
+    the snapshot's quality warnings in plain words, never the review's, and `marked`, whether the
+    page marks the mechanical value (method 8); the tools reference names both in each entry."""
+    tools = _read(TOOLS)
+    screen = _flat(tools[tools.index("- `screen(") : tools.index("\n- `company(")])
+    company = _flat(tools[tools.index("- `company(") : tools.index("\n- `financials(")])
+    assert (
+        "A row's `warnings` are the plain words of the snapshot's quality warnings, never the"
+        " review's, and `marked` is whether the page marks the mechanical value:"
+        " `warning_mark_min` warnings or more and no reviewed value."
+    ) in screen
+    assert (
+        "`warnings`: the plain words of the snapshot's quality warnings, never the review's;"
+        " `marked`: whether the page marks the mechanical value, `warning_mark_min` warnings or"
+        " more and no reviewed value."
+    ) in company
 
 
 def test_the_template_example_holds_together() -> None:

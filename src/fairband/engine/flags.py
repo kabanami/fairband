@@ -76,6 +76,9 @@ from fairband.engine.types import Flag
 from fairband.policy import Policy
 
 _MARGIN_WINDOW = 10  # mech/1.2: the median and the high over the last ten fiscal years
+# A share of GAAP EPS exactly ``one_time_items_share`` from the street's is at the threshold,
+# whatever binary floating point does to it: 1.00 against 1.20 gives 0.19999999999999996.
+_ONE_TIME_TOLERANCE = 1e-12
 
 QUALITY_WARNINGS: frozenset[str] = frozenset(
     {
@@ -188,14 +191,15 @@ def one_time_items_flag(
     gaap_eps: float | None, street_eps: float | None, policy: Policy, currency: str = "USD"
 ) -> Flag | None:
     """``one-time-items`` (spec 2026-11-19 7.2) when ``one_time_share`` of the two figures is
-    ``one_time_items_share`` or more, the edge firing: the sentence names both figures after
-    ``$`` or the reporting ``currency``'s code, a negative one with the minus sign first, and the
-    share; ``None`` where the share is ``None`` or below the threshold."""
+    ``one_time_items_share`` or more, the edge firing within 1e-12 (method 4.1a): the sentence
+    names both figures after ``$`` or the reporting ``currency``'s code, a negative one with the
+    minus sign first, and the share; ``None`` where the share is ``None`` or below the
+    threshold. Reason 1 of ``sbc-basis-uncertain`` reads this test (``route_mature_growth``)."""
     share = one_time_share(gaap_eps, street_eps)
     if gaap_eps is None or street_eps is None or share is None:
         return None
     threshold = policy.one_time_items_share
-    if share < threshold:
+    if share < threshold - _ONE_TIME_TOLERANCE:
         return None
     return Flag(
         "one-time-items",

@@ -336,6 +336,17 @@ def test_method_1_7_takes_no_gap() -> None:
     )
     mark = next(x for x in four.splitlines() if "| `warning_mark_min` | no |" in x)
     assert "the founder, 2026-11-19: three warnings or more" in mark
+    # the final review of plan 2, Minor 2: a valued row whose counting review refuses is marked
+    assert (
+        "a mechanical value with 3 quality warnings or more and no reviewed value is marked"
+    ) in mark
+    # its Minor 1: the warning's compare, and reason 1's, allow for binary floating point
+    constants = four[four.index("### 4.1a") : four.index("### 4.2")]
+    assert (
+        "the 1e-12 under `one_time_items_share` within which the warning `one-time-items` and the "
+        "first reason of `sbc-basis-uncertain` read a share as at the threshold, so a gap of "
+        "exactly 20% fires whatever binary floating point makes of it (section 8)."
+    ) in constants
     assert "`nri_flag_share`" not in four
     assert (
         "Policies v1 to v16 stay in the package unchanged, because the snapshots valued under them "
@@ -356,7 +367,8 @@ def test_method_1_7_takes_no_gap() -> None:
         '| `one-time-items` | yes | a Mature Stable row, valued or refused "no positive trailing '
         'earnings", whose GAAP trailing diluted EPS and street trailing EPS (5.12) differ by '
         "`one_time_items_share` (20%) of the GAAP figure's size or more: \\|GAAP − street\\| ÷ "
-        "\\|GAAP\\|; "
+        "\\|GAAP\\| at the threshold less 1e-12 or more (4.1a), so a gap of exactly 20% fires "
+        "whatever binary floating point makes of it; "
         "silent without a street figure, with a GAAP EPS of zero, and under an agent's "
         '`earnings.nri_gap`, which decides the items. Word "One-time items". The sentence names '
         "the two figures and the share: \"GAAP trailing EPS is $4.10 and the analysts' is $5.20, "
@@ -407,6 +419,18 @@ def test_method_1_7_takes_no_gap() -> None:
         assert words in reads, words
     for words in ("no non-recurring gap", "`gf_eps_ttm`", "drops (14.6)", "values move"):
         assert words in rows[-1], words
+    # the final review of plan 2, T9-c: CLS's 36 is the one override of any kind that drops
+    assert "PLTR's 20, lasting, stays, and no other override drops;" in rows[-1]
+
+
+def test_the_overview_marks_a_value_with_no_reviewed_value() -> None:
+    """The final review of plan 2, Minor 2: the mark waits on no reviewed value, not on no
+    review, since a valued row whose counting review refuses is marked (method 8); the overview
+    says so in its line on the flags."""
+    overview = (METHOD.parent / "method-overview.md").read_text(encoding="utf-8")
+    assert (
+        "the screen marks a mechanical value with three or more and no reviewed value."
+    ) in " ".join(overview.split())
 
 
 def test_the_method_reads_no_gurufocus_key_ratios() -> None:

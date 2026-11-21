@@ -439,6 +439,11 @@
   }
   .app-pairs dt { color: var(--ink-muted); }
   .app-pairs dd { margin: 0; overflow-wrap: anywhere; }
+  /* The warnings mark before the drawer's Fair value (spec 2026-11-19 7.5) hangs in the 12px
+     column gap: a negative left margin of its advance, 13.2px at 22px of the mono face, plus a
+     1px right margin, so the four levels keep one left edge and the dot's ink stays clear of the
+     label. The mark's own rule (bundle.css) serves the right-aligned screen and company page. */
+  .app-drawer__band .app-pairs .fb-warnmark { margin-left: -14.2px; margin-right: 1px; }
   .app-group + .app-group { margin-top: var(--space-3); }
   .app-group__head { margin: 0 0 var(--space-1); color: var(--ink-muted); }
   .app-list { list-style: none; margin: 0; padding: 0; }
