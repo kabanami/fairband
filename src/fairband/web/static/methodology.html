@@ -27,8 +27,16 @@
      consensus revenue step unread where fewer than five analysts give it and it is above 50%; no
      example has one, and a revalue under 1.5 of a copy of the live data on 15 Nov 2026 kept every
      figure and flag of the six examples (Roku's valued from its stored inputs, with the rule and
-     without it), so the figures were re-read and stand under 1.5. They change with the next
-     method version that moves one (CLAUDE.md, "Read first"). -->
+     without it), so the figures were re-read and stand under 1.5. Method 1.6 (19 Nov 2026, the
+     ADR ratio from FMP's two share counts) moves no example, since none is an ADR or holds a
+     vendor's ratio, so the figures stand under 1.6. Method 1.7 (21 Nov 2026, the engine finds no
+     non-recurring gap) moves only Mature Stable values; its acceptance on refresh 68's data kept
+     every valued row of the other four phases, so the five examples on other routes stand under
+     1.7. Coca-Cola's figures were re-read under 1.7 on 21 Nov 2026 from its snapshot of refresh 68,
+     the data and the price of 18 Nov 2026 (a quote taken during the session, not a close), valued
+     in memory from a read-only copy of the live data at that refresh: with no gap its normalized
+     earnings are its trailing net income. They change with the next method version that moves one
+     (CLAUDE.md, "Read first"). -->
 <article class="app-prose">
 <p class="caption app-prose__note" data-live-note hidden></p>
 
@@ -106,10 +114,13 @@ its count of companies in the latest run.</desc>
 </nav>
 
 <p class="caption app-prose__asof">Each route section ends with a worked example on a real company.
-Figures as of the data of <time datetime="2026-11-11">11 Nov 2026</time>, with the quarterly
-balance sheets of <time datetime="2026-11-14">14 Nov 2026</time>. They were valued under method 1.4
-on <time datetime="2026-11-14">14 Nov 2026</time> and are unchanged under methods 1.5 and 1.6.
-Prices are the closes of <time datetime="2026-11-13">13 Nov 2026</time>, and Roku's is the close of
+Figures as of the data and the price of <time datetime="2026-11-18">18 Nov 2026</time> for
+Coca-Cola, valued under method 1.7 on <time datetime="2026-11-21">21 Nov 2026</time>. The other
+five examples' figures are as of the data of <time datetime="2026-11-11">11 Nov 2026</time>, with
+the quarterly balance sheets of <time datetime="2026-11-14">14 Nov 2026</time>. They were valued
+under method 1.4 on <time datetime="2026-11-14">14 Nov 2026</time> and are unchanged under
+methods 1.5, 1.6 and 1.7. Their prices are the closes of
+<time datetime="2026-11-13">13 Nov 2026</time>, and Roku's is the close of
 <time datetime="2026-11-06">6 Nov 2026</time>, the newest the vendor has. Each example links to
 today's row, whose figures may differ.</p>
 
@@ -593,30 +604,30 @@ give, as a cross-check. The cross-check never sets the levels or the word.</p>
 <h3 class="heading">Worked example: Coca-Cola</h3>
 <div class="app-prose__wide">
 <table class="fb-table app-example">
-<caption class="caption">Coca-Cola (KO), Mature Stable, as of 14 Nov 2026</caption>
+<caption class="caption">Coca-Cola (KO), Mature Stable, as of 18 Nov 2026</caption>
 <thead><tr><th class="label">Figure</th><th class="label">Tag</th><th class="label fb-num">Value</th></tr></thead>
 <tbody>
-<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$99.25</td></tr>
+<tr><td class="body">Price</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$98.31</td></tr>
 <tr><td class="body">Trailing net income</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$14.6 billion</td></tr>
-<tr><td class="body">Normalized earnings</td><td></td><td class="figure fb-num">$15.2 billion</td></tr>
+<tr><td class="body">Normalized earnings</td><td></td><td class="figure fb-num">$14.6 billion</td></tr>
 <tr><td class="body">Growth in every year</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">3.0%</td></tr>
 <tr><td class="body">Moat, from a score of 10</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
 <tr><td class="body">Runway</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20 years</td></tr>
 <tr><td class="body">Runway return, three-year average</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">30.5%</td></tr>
 <tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
-<tr><td class="body">EPV a share</td><td></td><td class="figure fb-num">$39</td></tr>
+<tr><td class="body">EPV a share</td><td></td><td class="figure fb-num">$38</td></tr>
 <tr><td class="body">Mature Growth cross-check</td><td></td><td class="figure fb-num">$61</td></tr>
-<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$49</td></tr>
-<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">2.03 · Well above</td></tr>
+<tr><td class="body">Value a share</td><td></td><td class="figure fb-num">$47</td></tr>
+<tr><td class="body">Price ÷ value</td><td></td><td class="figure fb-num">2.09 · Well above</td></tr>
 </tbody>
 </table>
 </div>
-<p class="body">Coca-Cola earned $15.2 billion over the last twelve months. The engine grows that
+<p class="body">Coca-Cola earned $14.6 billion over the last twelve months. The engine grows that
 at 3.0% a year. It charges the growth at Coca-Cola's own 30.5%
 return, fading in equal steps to 13.0% by the end of a 20-year runway. Year 1 pays at 29.6%, the
-first step down. The value is $49
-a share against a price of $99.25, so the word is Well above. The Mature Growth route gives $61;
-it would need a belief of 11.7% to reach the price.</p>
+first step down. The value is $47
+a share against a price of $98.31, so the word is Well above. The Mature Growth route gives $61;
+it would need a belief of 11.6% to reach the price.</p>
 <p class="body app-prose__row"><a href="#" data-find="KO">Open today's row</a></p>
 </section>
 

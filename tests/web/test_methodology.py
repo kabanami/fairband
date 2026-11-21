@@ -153,28 +153,68 @@ def test_the_page_says_what_method_0_9_changed() -> None:
     assert "years 1 to 3" in trend[: trend.index("</li>")]
 
 
-def test_the_examples_are_dated_to_method_1_4() -> None:
-    """The examples, re-read under method 1.4 (CLAUDE.md: a change of method version re-reads its
-    examples' figures), are dated to that run: the data of 11 Nov 2026, the quarterly balance
-    sheets of 14 Nov, the closes of 13 Nov and Roku's of 6 Nov. The four that read the balance
-    sheet name its period, and the two with a minority interest show it (spec 2026-11-13 12.2,
-    13). They keep the rules 0.9 brought: Microsoft's Stable margin raises no note, since Stable
-    points to no phase; 3M's run-off names the years the consensus gives and the fade to zero with
-    a flat terminal; the implied decline rate is named where the page sets it beside the trend's;
-    the growth section's notes name the dollar ramp's. Re-read on 15 Nov 2026, they stand unchanged
-    under method 1.5: none has a revenue step the thin rule leaves out. Re-read on 19 Nov 2026, they
-    stand unchanged under method 1.6: none is an ADR or holds a vendor's ratio (spec 2026-11-19
-    6.2)."""
+def test_the_examples_are_dated_to_methods_1_4_and_1_7() -> None:
+    """The examples, re-read at each change of method version (CLAUDE.md: a change of method
+    version re-reads its examples' figures). Five, re-read under method 1.4, are dated to that run:
+    the data of 11 Nov 2026, the quarterly balance sheets of 14 Nov, the closes of 13 Nov and
+    Roku's of 6 Nov. The four that read the balance sheet name its period, and the two with a
+    minority interest show it (spec 2026-11-13 12.2, 13). They keep the rules 0.9 brought:
+    Microsoft's Stable margin raises no note, since Stable points to no phase; 3M's run-off names
+    the years the consensus gives and the fade to zero with a flat terminal; the implied decline
+    rate is named where the page sets it beside the trend's; the growth section's notes name the
+    dollar ramp's. Re-read on 15 Nov 2026, they stand unchanged under method 1.5: none has a
+    revenue step the thin rule leaves out. Re-read on 19 Nov 2026, they stand unchanged under
+    method 1.6: none is an ADR or holds a vendor's ratio (spec 2026-11-19 6.2). They stand
+    unchanged under method 1.7, which moves no value off the Mature Stable route (spec 2026-11-19
+    7.1). Coca-Cola, on that route, was re-read on 21 Nov 2026 under method 1.7 from its snapshot
+    of refresh 68, whose data and price are of 18 Nov 2026: with no gap its normalized earnings
+    are its trailing net income, $14.6 billion, its value $47 and its EPV $38 at a price of
+    $98.31, and the cross-check needs a belief of 11.6% to reach that price."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
-    asof = html[html.index("Figures as of") :]
+    asof = html[html.index('<p class="caption app-prose__asof">') :]
     asof = asof[: asof.index("</p>")]
     assert "method 1.4" in asof
     for day in ("2026-11-11", "2026-11-14", "2026-11-13", "2026-11-06"):
         assert f'datetime="{day}"' in asof, day
     assert "Roku's is the close of" in asof
     assert "method 0.8" not in html and "method 0.9" not in asof and "method 1.0" not in asof
-    assert "14 Nov 2026</time> and are unchanged under methods 1.5 and 1.6." in asof
-    assert "methods 1.1, 1.2 and 1.3" not in asof
+    assert (
+        "Figures as of the data and the price of "
+        '<time datetime="2026-11-18">18 Nov 2026</time> for Coca-Cola, valued under method 1.7 on '
+        '<time datetime="2026-11-21">21 Nov 2026</time>. The other five examples\' figures are as '
+        'of the data of <time datetime="2026-11-11">11 Nov 2026</time>'
+    ) in asof
+    assert "14 Nov 2026</time> and are unchanged under methods 1.5, 1.6 and 1.7." in asof
+    assert "Their prices are the closes of" in asof
+    assert "methods 1.5 and 1.6." not in asof and "methods 1.1, 1.2 and 1.3" not in asof
+    # Coca-Cola's table, caption and sentence, as the acceptance of plan 2 read them under 1.7
+    stable = _section(html, "mature-stable")
+    ko = stable[stable.index("Worked example: Coca-Cola") :]
+    assert (
+        '<caption class="caption">Coca-Cola (KO), Mature Stable, as of 18 Nov 2026</caption>' in ko
+    )
+    for label, figure in (
+        ("Price", "$98.31"),
+        ("Trailing net income", "$14.6 billion"),
+        ("Normalized earnings", "$14.6 billion"),
+        ("Runway return, three-year average", "30.5%"),
+        ("EPV a share", "$38"),
+        ("Mature Growth cross-check", "$61"),
+        ("Value a share", "$47"),
+        ("Price ÷ value", "2.09 · Well above"),
+    ):
+        row = ko[ko.index(f'<td class="body">{label}</td>') :]
+        row = row[: row.index("</tr>")]
+        assert f'<td class="figure fb-num">{figure}</td>' in row, label
+    for sentence in (
+        "Coca-Cola earned $14.6 billion over the last twelve months.",
+        "Year 1 pays at 29.6%, the first step down.",
+        "The value is $47 a share against a price of $98.31, so the word is Well above.",
+        "The Mature Growth route gives $61; it would need a belief of 11.6% to reach the price.",
+    ):
+        assert sentence in ko, sentence
+    for old in ("$99.25", "$15.2 billion", "$39", "$49", "2.03", "11.7%", "14 Nov 2026"):
+        assert old not in ko, old
     # the balance sheet's period under each table that reads it, the minority interest where it is
     # above zero (CrowdStrike, 3M) and none where it is nil (Roku, Revolution Medicines)
     growth = _section(html, "growth")
@@ -230,7 +270,8 @@ def test_the_page_says_what_method_1_0_changed() -> None:
     """Spec 2026-11-09 12: the charge pays for revenue growth, a year can pay out less than nothing
     when growth outruns the return, and the return holds through the growth above the belief, then
     fades to the terminal return; the two mature routes' lists say the same, and their examples
-    show it in the figures of the run the page is dated to, under method 1.4."""
+    show it in the figures of the run each is dated to, Microsoft's under method 1.4 and
+    Coca-Cola's under method 1.7."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     value = _section(html, "value")
     charge = value[value.index(">The reinvestment charge</h3>") : value.index(">The moat and")]
@@ -253,7 +294,7 @@ def test_the_page_says_what_method_1_0_changed() -> None:
     stable = _section(html, "mature-stable")
     assert "fades in equal steps from year 1" in stable
     ko = stable[stable.index("Worked example: Coca-Cola") :]
-    for figure in ("$61", "$49", "2.03 · Well above", "11.7%", "fading in equal steps to 13.0%"):
+    for figure in ("$61", "$47", "2.09 · Well above", "11.6%", "fading in equal steps to 13.0%"):
         assert figure in ko, figure
     assert "$63" not in ko and "10.4%" not in ko and "11.3%" not in ko
     flags = _section(html, "flags")
