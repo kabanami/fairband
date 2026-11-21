@@ -12,7 +12,8 @@ cadence on the stored statements (the newest annual income row names New Taiwan 
 quarters end a quarter apart), and the window from the stored list's params (a refresh's of 2 Nov
 2026, the 365 days to 1 Nov 2026). The detail is written by hand in the shape of ``GET
 /api/companies/{symbol}`` (``web/app.py``, ``company``): LFOX valued on the Mature Growth route at
-$196.50 against a price of $182.40, a wide moat, two notes, no review, no report and no open item.
+$196.50 against a price of $182.40, a wide moat, no quality warning and so no mark, two notes, no
+review, no report and no open item.
 
 The builders give the variants: a refused row, a reviewed row with a published report, the four
 answers of a company with nothing stored but its profile, and the overview of one with nothing
@@ -193,6 +194,8 @@ DETAIL: dict[str, Any] = {
         "settings_hash": EMPTY_SETTINGS_HASH,
         "deciles_refresh_id": 3,
     },
+    "warnings": [],
+    "marked": False,
     "today": TODAY.isoformat(),
     "designationEdges": [0.75, 0.9, 1.1, 1.5],
     "agingFraction": 0.6667,

@@ -2384,7 +2384,10 @@ def test_the_meter_takes_a_reviewed_value() -> None:
         "reviewed == null ? null : h('div', {",
         "className: 'fb-band__reviewed-mark',",
         "title: 'Reviewed value ' + money(reviewed)",
-        "caption ? h('div', { className: 'fb-band__caption caption' }, caption) : null",
+        # the caption's title is spec 2026-11-19 7.5's (tests/web/test_warning_mark.py)
+        "caption ? h('div', {",
+        "className: 'fb-band__caption caption', title: p.captionTitle || null",
+        "}, caption) : null",
     )
     assert ".filter(Boolean).join(' · ');" in meter
     assert "var word = DESIGNATION[p.designation];" in meter  # the caller's word, as before

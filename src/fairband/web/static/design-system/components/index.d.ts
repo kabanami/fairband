@@ -226,6 +226,18 @@ export interface BandMeterProps {
    * (CompanyReport's one hero; spec 2026-11-06 Tier 2, 18.4). Absent, it is `figure-lg`.
    */
   hero?: boolean;
+  /**
+   * fairband: the title of the fair value's marker on the track (`fb-band__fairmark`), the hover
+   * of the mechanical value it stands for, `warningsHover(words, note)` (spec 2026-11-19 7.5).
+   * Absent, the marker has none.
+   */
+  fairTitle?: string;
+  /**
+   * fairband: the title of the caption (`fb-band__caption`), the hover of the mechanical value it
+   * names on a reviewed row, "mechanical $196.50", `warningsHover(words, note)`
+   * (spec 2026-11-19 7.5). Absent, the caption has none.
+   */
+  captionTitle?: string;
 }
 
 export interface ValidityWindowProps {

@@ -5,16 +5,20 @@ IBM Plex Mono enlarged (form A of the look), stands before the figure of a marke
 whose name is the hover's first sentence; the column's head carries the note. A refused row's em
 dash has neither. The hover, the mark and the head's note are ``fairband:`` patches of the vendored
 bundle, ScreenTable's ``mechanicalNote``; without it the cell is drawn as it was. The Flags and
-the Warnings columns have left the catalog, so a saved list that names them loses them.
+the Warnings columns have left the catalog, so a saved list that names them loses them. The
+drawer's and the company page's part: BandMeter takes the hover as the title of its fair value's
+marker (``fairTitle``) or of its caption (``captionTitle``), each a ``fairband:`` patch
+(``tests/web/test_drawer_form.py`` and ``test_company_overview.py`` read what the page hands it).
 
 The bundle and the page's scripts run in node (``support.page``), and the tests read the trees
 ScreenTable draws; a prop written ``{"$page": <name>}`` is the page's own (``tests/web/page.mjs``),
 here the screen's note, which the screen's table and each watchlist's hand ScreenTable."""
 
+import re
 from typing import Any
 
 import pytest
-from support.page import NODE, classed, elements, node
+from support.page import BUNDLE, NODE, classed, elements, node
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
@@ -178,6 +182,46 @@ def test_without_the_prop_the_cell_is_as_before() -> None:
         {"type": "td", "props": {"className": MECH, "children": ["—"]}},
     ]
     assert classed(_table([ROW]), "fb-warnmark") == []
+
+
+def test_the_meter_takes_the_two_titles() -> None:
+    """BandMeter's ``fairTitle`` is the title of the fair value's marker on the track and its
+    ``captionTitle`` the title of the caption: the drawer and the company page hand it the hover
+    of the mechanical value, the one on a row with no review, the other on a reviewed row. Without
+    them neither has a title, and the meter draws no mark of its own."""
+    hover = FIRST + " " + OPEN_NOTE
+    meter = {"low": 110.0, "high": 136.0, "price": 131.2, "fairValue": 123.45, "showScale": False}
+    fair = node("Fairband.BandMeter", [meter | {"fairTitle": hover}])
+    [marker] = classed(fair, "fb-band__fairmark")
+    assert marker["props"]["title"] == hover
+    assert classed(fair, "fb-band__caption") == []  # no caption without one
+    captioned = node(
+        "Fairband.BandMeter",
+        [meter | {"caption": "mechanical $123.45", "captionTitle": hover}],
+    )
+    [caption] = classed(captioned, "fb-band__caption")
+    assert caption == {
+        "type": "div",
+        "props": {
+            "className": "fb-band__caption caption",
+            "title": hover,
+            "children": ["mechanical $123.45"],
+        },
+    }
+    assert classed(captioned, "fb-band__fairmark")[0]["props"].get("title") is None
+    plain = node("Fairband.BandMeter", [meter | {"caption": "mechanical $123.45"}])
+    assert classed(plain, "fb-band__fairmark")[0]["props"].get("title") is None
+    assert classed(plain, "fb-band__caption")[0]["props"].get("title") is None
+    for tree in (fair, captioned, plain):
+        assert classed(tree, "fb-warnmark") == []
+    # the two props are declared beside the meter's others, each a fairband patch of the spec
+    declarations = (BUNDLE.parent / "index.d.ts").read_text(encoding="utf-8")
+    props = re.search(r"export interface BandMeterProps \{\n(.*?)\n\}", declarations, re.DOTALL)
+    assert props is not None
+    for name in ("fairTitle", "captionTitle"):
+        doc = props.group(1)[: props.group(1).index(f"  {name}?: string;")]
+        doc = doc[doc.rindex("/**") :]
+        assert "* fairband: the title of the" in doc and "(spec 2026-11-19 7.5)" in doc, name
 
 
 def test_the_removed_columns_are_no_column_keys() -> None:

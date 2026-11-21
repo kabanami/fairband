@@ -3,9 +3,12 @@ stamp after the phase badge; one caption, the sector and the industry; the compa
 text, cut to six lines by the page's style; the value band, the meter and the four levels in the
 screen's words, or a refused row's sentence where the meter draws no band; then Company page, a
 link to the company page, and Request research. Nothing else: the route's lines, the stance, the
-report's Summary and Details have left it. The page's own script runs in node after the bundle
-(``support.page``), and the tests read the tree ``sections`` returns for ``page_answers``' LFOX
-and variants of it."""
+report's Summary and Details have left it. The mechanical value carries the hover of spec
+2026-11-19 7.5, its warnings and the open company's note: on a row with no review the meter's fair
+value and the Fair value row's figure, which the warnings mark leads where the row is marked; on a
+reviewed row the meter's caption, with no mark; on a refused row nothing. The page's own script
+runs in node after the bundle (``support.page``), and the tests read the tree ``sections`` returns
+for ``page_answers``' LFOX and variants of it."""
 
 import json
 import re
@@ -27,6 +30,16 @@ SECONDARY: dict[str, Any] = {
     "priceToValue": 1.216,
     "designation": "above",
 }
+# The open company's note and the hover's example, as the Words table gives them.
+OPEN_NOTE = (
+    "Preliminary estimate only. To ask an agent for a reviewed valuation, click Request research."
+)
+THREE = ["heavy capital spending", "negative free cash flow", "new shares issued"]
+HOVER = (
+    "3 warnings: heavy capital spending; negative free cash flow; new shares issued. " + OPEN_NOTE
+)
+# The warnings mark the page hands the bundle, undrawn: its props as given.
+MARK: dict[str, Any] = {"props": {"words": THREE, "children": []}}
 
 
 def _drawn(detail: dict[str, Any]) -> Any:
@@ -314,3 +327,113 @@ def test_the_moat_stamp_follows_the_phase_badge() -> None:
     [head, *_] = _drawn(unphased)
     assert [kid for kid in head["props"]["children"] if kid and "phase" in kid["props"]] == []
     assert text(_one(head, "app-moat")) == "WIDE MOAT"
+
+
+def _fair_figure(tree: Any) -> Any:
+    """The figure of the drawer's Fair value row: the one child of its first ``dd``."""
+    [pairs] = classed(tree, "app-pairs")
+    first = next(e for e in elements(pairs) if e.get("type") == "dd")
+    [figure] = first["props"]["children"]
+    return figure
+
+
+def _marks(tree: Any) -> list[dict[str, Any]]:
+    """The warnings marks the page hands the bundle, undrawn: the elements given ``words``."""
+    return [e for e in elements(tree) if "words" in e["props"]]
+
+
+def test_an_unreviewed_value_carries_the_hover_and_the_mark() -> None:
+    """A valued row with no review and three warnings, which the server marks: the meter's fair
+    value has the hover as its title, the warnings' count and words, then the open company's
+    note; the Fair value row's figure is the value in a span with the same title, the warnings
+    mark before it. A review that counts with no value of its own leaves the same: the mechanical
+    value is still the meter's. The mark, drawn, is the screen's bullet, named by the hover's
+    first sentence; the meter, drawn, titles its fair value's marker."""
+    unreviewed = answers.detail(warnings=THREE, marked=True)
+    refusing = unreviewed | {"review": answers.REVIEW | {"value": None, "levels": None}}
+    for detail in (unreviewed, refusing):
+        tree = _drawn(detail)
+        [meter] = _meters(tree)
+        assert meter == node("meter", [detail])
+        assert meter["props"]["fairTitle"] == HOVER
+        assert "captionTitle" not in meter["props"]
+        assert _fair_figure(tree) == {
+            "type": "span",
+            "props": {"title": HOVER, "children": [MARK, "$196.50"]},
+        }
+        assert _marks(tree) == [MARK]
+        assert _levels(tree)[0] == ("Fair value", "$196.50")
+    assert node("Fairband.WarningMark", [MARK["props"]]) == {
+        "type": "span",
+        "props": {
+            "className": "fb-warnmark",
+            "role": "img",
+            "aria-label": "3 warnings: heavy capital spending; negative free cash flow; new shares"
+            " issued.",
+            "children": ["•"],
+        },
+    }
+    [meter] = _meters(_drawn(unreviewed))
+    [fair] = classed(node("Fairband.BandMeter", [meter["props"]]), "fb-band__fairmark")
+    assert fair["props"]["title"] == HOVER
+
+
+def test_a_row_under_the_cut_off_has_the_hover_and_no_mark() -> None:
+    """A valued row the server does not mark keeps the hover and draws no mark: two warnings
+    under the cut-off, one, none (the note alone), and a detail without the two fields, which
+    reads as none."""
+    bare = {k: v for k, v in answers.detail().items() if k not in ("warnings", "marked")}
+    cases = [
+        (
+            answers.detail(warnings=THREE[:2]),
+            "2 warnings: heavy capital spending; negative free cash flow. " + OPEN_NOTE,
+        ),
+        (answers.detail(warnings=["one-time items"]), "1 warning: one-time items. " + OPEN_NOTE),
+        (answers.DETAIL, OPEN_NOTE),
+        (bare, OPEN_NOTE),
+    ]
+    for detail, hover in cases:
+        tree = _drawn(detail)
+        [meter] = _meters(tree)
+        assert meter["props"]["fairTitle"] == hover
+        assert _fair_figure(tree) == {
+            "type": "span",
+            "props": {"title": hover, "children": [None, "$196.50"]},
+        }
+        assert _marks(tree) == []
+
+
+def test_a_reviewed_row_s_caption_carries_the_hover_and_no_mark() -> None:
+    """The review counts: the mechanical value is the meter's caption, "mechanical $196.50",
+    whose title is the hover with the snapshot's warnings; the meter's fair value is the review's
+    and has no title, the Fair value row's figure is the review's text, and no mark stands, even
+    on a detail that came marked."""
+    for marked in (False, True):
+        detail = answers.reviewed_detail() | {"warnings": THREE, "marked": marked}
+        tree = _drawn(detail)
+        [meter] = _meters(tree)
+        assert meter["props"]["caption"] == "mechanical $196.50"
+        assert meter["props"]["captionTitle"] == HOVER
+        assert "fairTitle" not in meter["props"]
+        assert _fair_figure(tree) == "$182.00"
+        assert _marks(tree) == []
+
+
+def test_a_refused_row_carries_no_hover() -> None:
+    """A refused row keeps its warnings' words but has no mechanical value: its sentence has no
+    title, the review's or the secondary valuation's band it draws in its place has none, its Fair
+    value row is that band's text, and no mark stands, even on a detail that came marked."""
+    refused = answers.refused_detail() | {"warnings": THREE, "marked": True}
+    assert _one(_drawn(refused), "app-refusal")["props"].get("title") is None
+    for detail, figure in (
+        (refused, None),
+        (refused | {"review": answers.REVIEW}, "$182.00"),
+        (refused | {"secondary": SECONDARY}, "$150.00"),
+    ):
+        tree = _drawn(detail)
+        assert "Preliminary estimate only" not in json.dumps(tree, ensure_ascii=False)
+        for meter in _meters(tree):
+            assert "fairTitle" not in meter["props"] and "captionTitle" not in meter["props"]
+        assert _marks(tree) == []
+        if figure is not None:
+            assert _fair_figure(tree) == figure

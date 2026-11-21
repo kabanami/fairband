@@ -817,7 +817,11 @@
      latest snapshot, the secondary's band, its word and ratio at today's price over the
      secondary valuation (the ruling of 2026-11-07); else none. The scale is off: the drawer and
      the Overview name the levels under it. `hero` false sets the meter's price in figure, under
-     the company page's one headline figure, the price in its head; the drawer passes none. */
+     the company page's one headline figure, the price in its head; the drawer passes none. The
+     mechanical value carries its hover (mechanicalHover, spec 2026-11-19 7.5): on a valued row
+     with no counting review it is the meter's fair value, whose marker takes the hover as its
+     title (fairTitle); on a reviewed one it is the caption, which takes it (captionTitle). A
+     refused row's meter draws no mechanical value and has neither. */
   function meter(body, hero) {
     var r = body.result;
     var review = body.review;
@@ -829,14 +833,16 @@
           fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,
           designation: review.designation, showScale: false,
           gap: gapText(review.priceToValue, body.designationEdges, 'the reviewed value'),
-          caption: 'mechanical ' + F.formatMoney(r.value), hero: hero
+          caption: 'mechanical ' + F.formatMoney(r.value), hero: hero,
+          captionTitle: mechanicalHover(body)
         });
       }
       return h(F.BandMeter, {
         low: r.levels.fair_low, high: r.levels.fair_high, price: r.price, fairValue: r.value,
         buyLevel: r.levels.buy, trimLevel: r.levels.trim, designation: r.designation,
         showScale: false,
-        gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value'), hero: hero
+        gap: gapText(r.price_to_value, body.designationEdges, 'the mechanical value'), hero: hero,
+        fairTitle: mechanicalHover(body)
       });
     }
     if (isReviewBanded(body)) {
@@ -855,6 +861,13 @@
       gap: gapText(secondary.priceToValue, body.designationEdges, 'the secondary valuation'),
       hero: hero
     });
+  }
+
+  /* The hover of the detail's mechanical value (spec 2026-11-19 7.5): the count and the plain
+     words of its snapshot's quality warnings, then the open company's note, OPEN_NOTE, where
+     Request research is at hand; the note alone with none. */
+  function mechanicalHover(body) {
+    return F.warningsHover(body.warnings || [], OPEN_NOTE);
   }
 
   /* A row the engine valued: a value, its levels and a price to draw them against. */
@@ -897,7 +910,11 @@
      meter draws (meter). The review's where it counts and has a value, on a valued row (spec
      2026-11-06 Tier 2, 18.1 and 18.2, plan 3) or a refused one; else a valued row's own, the
      snapshot's; else a refused row's secondary valuation's; null where the meter draws no band.
-     The engine's own levels stay on the snapshot and in the report's Appendix A. */
+     The engine's own levels stay on the snapshot and in the report's Appendix A. Where the band
+     is a valued row's own, its Fair value is the mechanical value: the figure is a span whose
+     title is the value's hover (mechanicalHover, spec 2026-11-19 7.5), led by the warnings mark
+     where the detail is marked; every other figure, a reviewed or a refused row's included, is
+     its text. */
   function levelRows(body) {
     var r = body.result;
     var v = body.review;
@@ -909,8 +926,13 @@
         fairHigh: r.levels.fair_high, trim: r.levels.trim
       } : isBanded(body) ? Object.assign({ value: s.valuePerShare }, s.levels) : null;
     if (!band) return null;
+    var fair = F.formatMoney(band.value);
+    if (isValued(r) && !isReviewed(body)) {
+      fair = h('span', { title: mechanicalHover(body) },
+        body.marked ? h(F.WarningMark, { words: body.warnings || [] }) : null, fair);
+    }
     return [
-      ['Fair value', F.formatMoney(band.value)],
+      ['Fair value', fair],
       ['Buy level', F.formatMoney(band.buy)],
       ['Fair band', F.formatMoney(band.fairLow) + ' – ' + F.formatMoney(band.fairHigh)],
       ['Trim level', F.formatMoney(band.trim)]

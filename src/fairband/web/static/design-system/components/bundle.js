@@ -508,7 +508,12 @@
           trim == null ? null : h('div', {
             className: 'fb-zone fb-zone--trim', style: { left: at(trim) + '%', right: 0 }
           }),
-          h('div', { className: 'fb-band__fairmark', style: { left: at(fair) + '%' } })
+          // fairband: the fair value's marker takes the caller's fairTitle as its title, the hover
+          // of a mechanical value it stands for (spec 2026-11-19 7.5); without one it has none.
+          h('div', {
+            className: 'fb-band__fairmark', style: { left: at(fair) + '%' },
+            title: p.fairTitle || null
+          })
         ),
         h('div', {
           className: 'fb-band__price-mark',
@@ -534,8 +539,11 @@
       ),
 
       // fairband: the caller's caption, then "reviewed $283.00" when a reviewed value is passed
-      // (spec 2026-11-06 Tier 2, 18.2).
-      caption ? h('div', { className: 'fb-band__caption caption' }, caption) : null
+      // (spec 2026-11-06 Tier 2, 18.2); its title the caller's captionTitle, the hover of the
+      // mechanical value the caption names (spec 2026-11-19 7.5); without one it has none.
+      caption ? h('div', {
+        className: 'fb-band__caption caption', title: p.captionTitle || null
+      }, caption) : null
     );
   }
 

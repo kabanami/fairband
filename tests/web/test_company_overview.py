@@ -248,6 +248,23 @@ def _meters(tree: Any) -> list[dict[str, Any]]:
     return [e for e in elements(tree) if "fairValue" in e["props"]]
 
 
+def _marks(tree: Any) -> list[dict[str, Any]]:
+    """The warnings marks the page hands the bundle, undrawn: the elements given ``words``."""
+    return [e for e in elements(tree) if "words" in e["props"]]
+
+
+# The open company's note and the hover of a value with three warnings, as the Words table gives
+# them, and the warnings mark the page hands the bundle for them, undrawn.
+OPEN_NOTE = (
+    "Preliminary estimate only. To ask an agent for a reviewed valuation, click Request research."
+)
+THREE = ["heavy capital spending", "negative free cash flow", "new shares issued"]
+HOVER = (
+    "3 warnings: heavy capital spending; negative free cash flow; new shares issued. " + OPEN_NOTE
+)
+MARK: dict[str, Any] = {"props": {"words": THREE, "children": []}}
+
+
 def test_the_value_block_valued() -> None:
     """The basis chip, mechanical, in the block's head; the meter as the drawer draws it, its price
     in figure; the four levels in the screen's words, in two columns; no report's line."""
@@ -413,11 +430,45 @@ def test_the_basis_chip_follows_the_band_the_meter_draws() -> None:
     assert "P.bandBasis(d)" in script[start : script.index("\n  }\n", start)]
 
 
+def test_the_value_block_draws_the_same_hover_and_mark() -> None:
+    """The Fairband value block draws the drawer's meter and levels (spec 2026-11-19 7.5): on a
+    marked row with no review the meter's fair value has the hover as its title, and the Fair
+    value row's figure is the value in a span with the same title, the warnings mark before it;
+    on a reviewed row the meter's caption has the hover and no mark stands; on a refused row
+    neither."""
+    marked = answers.detail(warnings=THREE, marked=True)
+    tree = _page("value", marked)
+    [meter] = _meters(tree)
+    assert meter == node("meter", [marked, False])
+    assert meter["props"]["fairTitle"] == HOVER
+    [figure] = _fact(tree, "Fair value")["props"]["children"]
+    assert figure == node("levelRows", [marked])[0][1]
+    assert figure == {"type": "span", "props": {"title": HOVER, "children": [MARK, "$196.50"]}}
+    assert "figure" in _fact(tree, "Fair value")["props"]["className"].split()
+    assert _lists(classed(tree, "app-company__two")[0])[0][0] == ("Fair value", "$196.50")
+    assert _marks(tree) == [MARK]
+
+    reviewed = answers.reviewed_detail() | {"warnings": THREE, "marked": False}
+    tree = _page("value", reviewed)
+    [meter] = _meters(tree)
+    assert meter == node("meter", [reviewed, False])
+    assert meter["props"]["captionTitle"] == HOVER
+    assert "fairTitle" not in meter["props"]
+    assert _fact(tree, "Fair value")["props"]["children"] == ["$182.00"]
+    assert _marks(tree) == []
+
+    refused = answers.refused_detail() | {"warnings": THREE, "marked": True}
+    for detail in (refused, refused | {"review": answers.REVIEW}):
+        tree = _page("value", detail)
+        assert "Preliminary estimate only" not in json.dumps(tree, ensure_ascii=False)
+        assert _marks(tree) == []
+
+
 def test_the_four_levels_follow_the_value_the_meter_draws() -> None:
     """``levelRows``, the drawer's and the page's one builder of the four levels: the review's
-    value and levels where the review counts and has a value, else the snapshot's; on a refused
-    row the review's or the secondary valuation's band the meter draws; none where the meter
-    draws no band."""
+    value and levels where the review counts and has a value, else the snapshot's, its figure the
+    mechanical value with its hover; on a refused row the review's or the secondary valuation's
+    band the meter draws; none where the meter draws no band."""
     banded = answers.detail()
     banded["result"]["levels"] = {
         "buy": 150.0,
@@ -425,8 +476,10 @@ def test_the_four_levels_follow_the_value_the_meter_draws() -> None:
         "fair_high": 228.02,
         "trim": 294.75,
     }
+    # the mechanical value, in a span with its hover, here the note alone (no warning)
+    mechanical = {"type": "span", "props": {"title": OPEN_NOTE, "children": [None, "$196.50"]}}
     assert node("levelRows", [banded]) == [
-        ["Fair value", "$196.50"],
+        ["Fair value", mechanical],
         ["Buy level", "$150.00"],
         ["Fair band", "$168.53 – $228.02"],
         ["Trim level", "$294.75"],
@@ -439,7 +492,7 @@ def test_the_four_levels_follow_the_value_the_meter_draws() -> None:
     ]
     # a review that counts with no value of its own: the snapshot's
     unvalued = answers.detail(review=answers.REVIEW | {"value": None, "levels": None})
-    assert node("levelRows", [unvalued])[0] == ["Fair value", "$196.50"]
+    assert node("levelRows", [unvalued])[0] == ["Fair value", mechanical]
     assert node("levelRows", [answers.refused_detail()]) is None
     secondary = answers.refused_detail() | {"secondary": SECONDARY}
     assert node("levelRows", [secondary])[2] == ["Fair band", "$135.00 – $165.00"]
