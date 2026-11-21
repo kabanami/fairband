@@ -950,6 +950,11 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 .fb-screen__name { color: var(--ink-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .fb-screen__band { color: var(--ink-muted); min-width: var(--figure-column); }
 .fb-screen__mech { color: var(--ink-muted); }
+/* fairband: the warnings mark before a mechanical value (spec 2026-11-19 7.5 and 9): form A of the
+   look, the bullet of IBM Plex Mono enlarged to read as a dot, which sets no line's height and
+   sits on the figure's middle. No colour of its own: it takes the value's ink, here and where the
+   drawer and the company page draw it. */
+.fb-warnmark { font-family: var(--font-mono); font-size: 22px; line-height: 0; margin-right: 5px; vertical-align: -3px; }
 .fb-screen__none { color: var(--ink-faint); }
 .fb-screen__when { color: var(--ink-faint); }
 

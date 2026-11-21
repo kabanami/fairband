@@ -4,8 +4,9 @@
    company field, which matches the screen's rows as FIND does and lists up to eight, then the
    list's companies as a ScreenTable of the screen's rows under the screen's columns. A company's
    mark opens the screen's popup, so a company leaves a list when its box there is unchecked; its
-   ticker, a link, opens its company page (spec 2026-11-16 company page, 12); the rest of a row
-   opens the drawer on the Screen view. Every write goes through FairbandPage.api; after it the
+   ticker, a link, opens its company page (spec 2026-11-16 company page, 12); its mechanical value
+   carries the screen's hover and warnings mark (spec 2026-11-19 7.5); the rest of a row opens the
+   drawer on the Screen view. Every write goes through FairbandPage.api; after it the
    rows and the lists load again, the screen's marks follow, and the view draws again with
    them. */
 (function () {
@@ -339,6 +340,7 @@
         onOpen: function (row) { P.openRow(row.ticker); },
         onWatch: P.watch,
         companyHref: P.companyHref,
+        mechanicalNote: P.SCREEN_NOTE,
         watchlists: P.watchlists() || []
       }));
     }

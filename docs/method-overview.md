@@ -75,7 +75,7 @@ where a rule cannot apply, for example (method 0, 9):
 - "value not positive under the reinvestment charge". (method 5.1, 5a.9, 6.1)
 
 A flag warns and never changes a value, a level or a designation. Twelve flags are quality
-warnings, which the screen counts; the rest are notes. (method 8)
+warnings; the screen marks a mechanical value with three or more. The rest are notes. (method 8)
 
 ## What a research agent can change
 

@@ -36,6 +36,14 @@
   /* A work item's open states: work not yet done, which the header's Inbox count counts and the
      owner may decline (spec 2026-11-06 Tier 2, 8 and 18.5). */
   var OPEN_STATES = ['pending', 'claimed'];
+  /* The note on a mechanical value (spec 2026-11-19 7.5), which the value's hover ends with: the
+     screen's, the Mechanical column's head and its values in the screen's table and in each
+     watchlist's, where the company is not open; and the open company's, in the drawer and on the
+     company page, where Request research is at hand. */
+  var SCREEN_NOTE = 'Preliminary estimate only. To ask an agent for a reviewed valuation, open ' +
+    'the company and click Request research.';
+  var OPEN_NOTE = 'Preliminary estimate only. To ask an agent for a reviewed valuation, click ' +
+    'Request research.';
 
   var mount = document.getElementById('screen');
   var root = ReactDOM.createRoot(mount);
@@ -187,8 +195,10 @@
      where it is handed one (the company page's Watchlists ▾); closePopups, which closes the popup
      and the Notes box as controls.js shows a view; companyHref, the address a ticker links to,
      which a watchlist's table hands ScreenTable as the screen's does (the company page's design,
-     12); researchHref, the address of a report, on the company page's Research tab (the Research
-     tab's design, 7.1); the loaded rows (null until they load), the chosen columns, openRow,
+     12); SCREEN_NOTE, the note on a mechanical value, which a watchlist's table hands ScreenTable
+     as the screen's does, and OPEN_NOTE, the open company's (spec 2026-11-19 7.5); researchHref,
+     the address of a report, on the company page's Research tab (the Research tab's design,
+     7.1); the loaded rows (null until they load), the chosen columns, openRow,
      which opens a row's drawer, reloadDetail, which reads the drawer's company again after
      another view's write about it (the Inbox view's decline and a watchlist's Request research,
      spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the
@@ -231,6 +241,7 @@
     reloadWatchlists: reloadWatchlists,
     watch: watch, closePopups: closePopups,
     companyHref: companyHref, researchHref: researchHref,
+    SCREEN_NOTE: SCREEN_NOTE, OPEN_NOTE: OPEN_NOTE,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
     openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
@@ -379,12 +390,8 @@
      stance, the agent's word (18.1). The row's phase is already the menu's number (the server
      maps the engine's phase name through PHASE_NUMBER), and its cap band is the menu's id once
      lower-cased (Mega is mega); small never matches, the universe's floor being $2 bn. A row on
-     any chosen watchlist matches; Clean keeps the valued rows whose quality warnings count 0: a
-     refusal or a placeholder has no value to be cheap on, so it is never clean (spec 2026-11-04
-     9.4, 9.5). The count is the server's: the review's flags where a review fills the row, else
-     the snapshot's (spec 2026-11-13 8a). Valued is the engine's word, the Mechanical column: a
-     refused row's fair value may be its review's or its secondary valuation's (plan 3), and a row
-     the engine refused is not clean, whatever a review made of it. */
+     any chosen watchlist matches (spec 2026-11-04 9.4). No filter reads the row's flags: the
+     Clean filter has gone with the Flags and the Warnings columns (spec 2026-11-19 7.5). */
   function narrow(rows, query, filters) {
     var needle = (query || '').trim().toLowerCase();
     return rows.filter(function (r) {
@@ -397,8 +404,7 @@
         within(filters.sector, r.sector) &&
         within(filters.watchlist, r.watchlists || []) &&
         (!filters.reviewedOnly || r.reviewed != null) &&
-        (!filters.hideExpired || r.freshness !== 'expired') &&
-        (!filters.cleanOnly || (r.flagCount === 0 && r.mechanical != null));
+        (!filters.hideExpired || r.freshness !== 'expired');
     });
   }
 
@@ -716,6 +722,7 @@
         onOpen: open,
         onWatch: watch,
         companyHref: companyHref,
+        mechanicalNote: SCREEN_NOTE,
         watchlists: state.watchlists || [],
         chooser: true
       });

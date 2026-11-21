@@ -229,8 +229,8 @@ High or Moderate. It is Mature Stable when the word is Low or Close to zero or n
 </ol>
 
 <h3 class="heading">Notes that do not change the phase</h3>
-<p class="body">Some checks add a note and never change the phase. The notes show in the Flags
-column, and a report's Appendix A lists them with the rest of the phase evidence.</p>
+<p class="body">Some checks add a note and never change the phase. An agent reads the notes, and a
+report's Appendix A lists them with the rest of the phase evidence.</p>
 <ul class="body">
 <li>The growth word points to another phase than the margin rule gave a loss-making company.</li>
 <li>The margin direction points elsewhere: Rising to Mature Growth, Declining to Decline.</li>
@@ -904,10 +904,12 @@ far under the price.</p>
 <section id="flags">
 <h2 class="title">The flags</h2>
 <p class="body">A flag warns and never changes a value, a level or the word. Each has a short word
-for the screen and one sentence, which an agent reads when it researches the company. Twelve flags
-are quality warnings (signs that the value may be wrong because the business or its figures are
-unusual). The Warnings column counts them, and the Clean filter keeps the rows with none. Every
-other flag is a note: shown, never counted.</p>
+and one sentence, which an agent reads when it researches the company. Twelve flags are quality
+warnings (signs that the value may be wrong because the business or its figures are unusual). The
+screen draws no flag. A dot before a mechanical value marks one with
+<span data-policy="warning_mark_min">—</span> quality warnings or more and no review. A hover on
+the value names its warnings and says the value is preliminary. Every other flag is a note: read
+by an agent, never counted.</p>
 
 <h3 class="heading">Quality warnings</h3>
 <ul class="body app-flags">
@@ -956,8 +958,7 @@ can be wrong. Or the market cap may leave a class out.</span></li>
 </ul>
 
 <h3 class="heading" id="flags-notes">Notes</h3>
-<p class="body">Notes say how a figure was reached. They show in the Flags column and never
-count.</p>
+<p class="body">Notes say how a figure was reached. They are read by an agent and never count.</p>
 <ul class="body app-flags">
 <li><span class="label">Growth word disagrees</span> <code class="fb-tag figure-sm">growth-word-disagrees</code>
 <span class="body app-flags__what">The growth word points to another phase than the margin rule
@@ -1194,10 +1195,8 @@ each cited number with a footnote; the references follow the last section.</p>
 <h3 class="heading">Where to read them</h3>
 <p class="body">The screen's Reviewed column shows the reviewed value. Where neither the route nor
 the review values the company, it shows the value of a secondary valuation instead. The band, the buy and trim levels and the
-designation follow the reviewed value; the Mechanical column keeps the engine's value. Where a
-review fills the row, the Flags and Warnings columns and the Clean filter read the review's
-flags. A secondary valuation has none, so its row keeps the engine's. The Stance column shows the
-latest report's word. A ◆ after the ticker marks a published report. The drawer's meter draws that
+designation follow the reviewed value; the Mechanical column keeps the engine's value. The Stance
+column shows the latest report's word. A ◆ after the ticker marks a published report. The drawer's meter draws that
 band. The company page, which the ticker opens, draws it too, and under it the latest report's
 stance and a link to the report. The report's Appendix A lists the bridge, the overrides, the
 secondary valuation and the guidance. Its Key judgments section records the agent's decisions on

@@ -502,13 +502,16 @@ export interface ScreenRow {
   change3y?: number | null;
   change5y?: number | null;
   drawdown?: number | null;
-  /** The flags' short words, joined by ` · `. */
-  flags?: string[];
   /**
-   * fairband: the number of the row's quality warnings, drawn in the Warnings column; 0 on a
-   * placeholder (spec 2026-11-04 9.5).
+   * fairband: the plain words of the row's quality warnings, the snapshot's and never a review's,
+   * in the order of its flags; `[]` on a placeholder. Given `mechanicalNote`, the Mechanical cell
+   * of a row with a value names them in its title (`warningsHover`). `marked` puts the warnings
+   * mark before the figure: true where the row has a mechanical value, no reviewed value and the
+   * policy's count of warnings or more (spec 2026-11-19 7.5). The Flags and the Warnings columns
+   * have gone, so no column reads the row's flags or their count.
    */
-  flagCount?: number;
+  warnings?: string[];
+  marked?: boolean;
   /**
    * fairband: the ids of the watchlists the company is on; the Watchlists column names them from
    * the `watchlists` prop. `watched` fills the mark: true when the company is on one or more
@@ -593,11 +596,6 @@ export interface ScreenFilters {
   hideExpired: boolean;
   /** fairband: watchlist ids; a row on any of them matches (spec 2026-11-04 9.4). */
   watchlist: number[];
-  /**
-   * fairband: keep the valued rows with no quality warning, a `flagCount` of 0; a refusal or a
-   * placeholder is never clean (spec 2026-11-04 9.5).
-   */
-  cleanOnly: boolean;
 }
 
 export interface ScreenTableProps {
@@ -648,6 +646,15 @@ export interface ScreenTableProps {
    * watchlist chip and the Watchlists column read. Without it the menu has no such section.
    */
   watchlists?: { id: number; name: string }[];
+  /**
+   * fairband: the note on a mechanical value (spec 2026-11-19 7.5). Given it, the Mechanical
+   * column's head has the note as its title, and a Mechanical cell with a value has
+   * `warningsHover(row.warnings || [], note)` as its title, the `WarningMark` before the figure
+   * where the row is `marked`; a cell with no value, an em dash, has neither. Without it the cell
+   * is the figure alone. A column may carry a title for its head; the Mechanical column alone
+   * does.
+   */
+  mechanicalNote?: string;
   /** Free text, shown in the FIND field. Supplying `onQueryChange` is what
       makes the field appear at all. */
   query?: string;
@@ -663,6 +670,14 @@ export interface ScreenTableProps {
   total?: number;
   /** Free text for the count slot. Ignored when `total` is given. */
   footnote?: string;
+}
+
+/**
+ * fairband: the plain words of the warnings a mark stands for, in the row's order (spec
+ * 2026-11-19 7.5).
+ */
+export interface WarningMarkProps {
+  words: string[];
 }
 
 /* ---------------------------------------------------------------- charts */
@@ -800,6 +815,21 @@ export declare function ValidityWindow(props: ValidityWindowProps): unknown;
 export declare function TaggedInput(props: TaggedInputProps): unknown;
 export declare function OverrideRecord(props: OverrideRecordProps): unknown;
 export declare function ReportReader(props: ReportReaderProps): unknown;
+/**
+ * fairband: the hover of a mechanical value (spec 2026-11-19 7.5): the count of the warnings and
+ * their words joined by `; `, then the note, "3 warnings: heavy capital spending; negative free
+ * cash flow; new shares issued. " and the note; "1 warning: one-time items. " and the note for
+ * one; the note alone for none.
+ */
+export declare function warningsHover(words: string[], note: string): string;
+/**
+ * fairband: the warnings mark (spec 2026-11-19 7.5 and 9), `<span class="fb-warnmark"
+ * role="img">•</span>`: the bullet U+2022 of the mono face, enlarged by `.fb-warnmark` (form A of
+ * the look) in the ink of the value it stands before. Its `aria-label` is the hover's first
+ * sentence, "3 warnings: heavy capital spending; negative free cash flow; new shares issued."; it
+ * has no title of its own, since the value it stands in carries the hover. A mark, not a control.
+ */
+export declare function WarningMark(props: WarningMarkProps): unknown;
 /**
  * fairband: the reader of a section's text in the two steps `ReportReader` takes, for a page that
  * lays a section's blocks out itself (spec 2026-11-17 research tab, 9): `read` gives the parts'

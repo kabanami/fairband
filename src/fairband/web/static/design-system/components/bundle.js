@@ -1129,18 +1129,17 @@
 
   // fairband: the price-vs-value words lead the groups (classifier-designation spec 7.3); the page
   // filters on the row's own word.
-  // fairband: the watchlist group, list ids, follows the sector; the clean flag keeps the valued
-  // rows with no quality warning. Its chip reads Clean, its menu row "No warning flag" (spec
-  // 2026-11-04 9.4, 9.5).
+  // fairband: the watchlist group, list ids, follows the sector (spec 2026-11-04 9.4). The clean
+  // flag has gone with the Flags and the Warnings columns (spec 2026-11-19 7.5).
   // fairband: the agent's stance group follows the designation; the reviewed flag's menu row reads
   // "Has a review" (spec 2026-11-06 Tier 2, 18.1).
   var FILTER_GROUPS = ['designation', 'stance', 'phase', 'cap', 'sector', 'watchlist'];
-  var FILTER_FLAGS = ['reviewedOnly', 'hideExpired', 'cleanOnly'];
-  var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired', cleanOnly: 'Clean' };
-  var FLAG_ROWS = { reviewedOnly: 'Has a review', cleanOnly: 'No warning flag' };
+  var FILTER_FLAGS = ['reviewedOnly', 'hideExpired'];
+  var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired' };
+  var FLAG_ROWS = { reviewedOnly: 'Has a review' };
 
   var EMPTY_FILTERS = { designation: [], stance: [], phase: [], cap: [], sector: [],
-                        watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false };
+                        watchlist: [], reviewedOnly: false, hideExpired: false };
 
   function listOf(f, key) { return (f && f[key]) || []; }
 
@@ -1244,6 +1243,29 @@
       (c.expired ? '; its snapshot window has expired' : '');
   }
 
+  // fairband: the hover of a mechanical value (spec 2026-11-19 7.5): the count of the row's
+  // quality warnings and their plain words, in the row's order, "3 warnings: heavy capital
+  // spending; negative free cash flow; new shares issued.", then the note; "1 warning: …" for one
+  // and the note alone for none. `warned` is its first sentence, the mark's name.
+  function warned(words) {
+    return words.length + (words.length === 1 ? ' warning: ' : ' warnings: ') +
+      words.join('; ') + '.';
+  }
+  function warningsHover(words, note) {
+    return words && words.length ? warned(words) + ' ' + note : note;
+  }
+
+  // fairband: the warnings mark (spec 2026-11-19 7.5 and 9): the bullet of IBM Plex Mono, U+2022,
+  // enlarged to read as a dot (form A of the look), in the value's ink, before a mechanical value
+  // with the policy's count of quality warnings or more and no review. An image named by the
+  // hover's first sentence, as the coverage mark is; no title of its own, since the value it
+  // stands in carries the hover. A mark, not a control.
+  function WarningMark(props) {
+    return h('span', {
+      className: 'fb-warnmark', role: 'img', 'aria-label': warned(props.words || [])
+    }, '•');
+  }
+
   var COLUMNS = [
     // fairband: the watchlist mark (spec 2026-11-04 9.4), at the left of the Ticker cell given
     // onWatch: ▶ in accent when the company is on a list, ▸ in ink-faint when on none. A click,
@@ -1292,9 +1314,20 @@
       cell: function (r) { return h('td', { className: 'fb-num figure-sm' }, money(r.buyLevel)); } },
     { key: 'trimLevel', head: 'Trim level', num: true,
       cell: function (r) { return h('td', { className: 'fb-num figure-sm' }, money(r.trimLevel)); } },
+    // fairband: given mechanicalNote (spec 2026-11-19 7.5), the head's title is the note, and a
+    // cell with a value has the hover as its title, the warnings mark before the figure where the
+    // row is marked; a cell with no value, a refusal's or a placeholder's em dash, has neither.
+    // Without the note the cell is as it was.
     { key: 'mechanical', head: 'Mechanical', num: true, basis: true,
-      cell: function (r) {
-        return h('td', { className: 'fb-num figure fb-screen__mech' }, money(r.mechanical));
+      title: function (p) { return p.mechanicalNote || null; },
+      cell: function (r, p) {
+        if (!p.mechanicalNote || r.mechanical == null) {
+          return h('td', { className: 'fb-num figure fb-screen__mech' }, money(r.mechanical));
+        }
+        return h('td', {
+          className: 'fb-num figure fb-screen__mech',
+          title: warningsHover(r.warnings || [], p.mechanicalNote)
+        }, r.marked ? h(WarningMark, { words: r.warnings || [] }) : null, money(r.mechanical));
       } },
     { key: 'reviewed', head: 'Reviewed', num: true, basis: true,
       cell: function (r) {
@@ -1377,12 +1410,6 @@
       cell: function (r) { return figureCell(percent(r.change5y)); } },
     { key: 'drawdown', head: 'Drawdown', num: true,
       cell: function (r) { return figureCell(percent(r.drawdown)); } },
-    { key: 'flags', head: 'Flags',
-      cell: function (r) { return h('td', { className: 'body' }, (r.flags || []).join(' · ')); } },
-    // fairband: the count of the row's quality warnings, a figure headed Warnings, so it never
-    // shares a name with Flags, the words above (spec 2026-11-04 9.5).
-    { key: 'flagCount', head: 'Warnings', num: true,
-      cell: function (r) { return figureCell(r.flagCount == null ? '—' : r.flagCount); } },
     // fairband: the names of the lists the company is on, in the lists' order, joined by ` · `; an
     // em dash for none (spec 2026-11-04 9.4).
     { key: 'watchlists', head: 'Watchlists',
@@ -1571,11 +1598,11 @@
     function clearAll() {
       if (p.onQueryChange) p.onQueryChange('');
       if (p.onFiltersChange) {
-        // fairband: the designation group leads, as in EMPTY_FILTERS; the watchlist group and the
-        // clean flag clear with the rest (spec 2026-11-04 9.4), the stance group too (spec
-        // 2026-11-06 Tier 2, 18.1).
+        // fairband: the designation group leads, as in EMPTY_FILTERS; the watchlist group clears
+        // with the rest (spec 2026-11-04 9.4), the stance group too (spec 2026-11-06 Tier 2,
+        // 18.1).
         p.onFiltersChange({ designation: [], stance: [], phase: [], cap: [], sector: [],
-                            watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false });
+                            watchlist: [], reviewedOnly: false, hideExpired: false });
       }
     }
 
@@ -1699,8 +1726,8 @@
                 h('div', { className: 'fb-menu__sec' },
                   h('span', { className: 'fb-menu__h label' }, 'VALUE'),
                   FILTER_FLAGS.map(function (k) {
-                    // fairband: a flag's menu row may read otherwise than its chip: the clean
-                    // flag's row is "No warning flag" (spec 2026-11-04 9.4).
+                    // fairband: a flag's menu row may read otherwise than its chip: the reviewed
+                    // flag's row is "Has a review" (spec 2026-11-06 Tier 2, 18.1).
                     return checkRow(k, !!filters[k],
                       function () { setGroup(k, !filters[k]); },
                       h('span', null, FLAG_ROWS[k] || FLAG_WORDS[k]));
@@ -1749,6 +1776,9 @@
             className: cx('label', c.num && 'fb-num', sorted && 'is-sorted',
               over[0] && over[0].key === c.key &&
                 (over[0].after ? 'is-drop-after' : 'is-drop-before')),
+            // fairband: a column may carry a title for its head, the Mechanical column's note
+            // (spec 2026-11-19 7.5).
+            title: c.title ? c.title(p) : null,
             'aria-sort': sorted ? (p.sort.direction === 'desc' ? 'descending' : 'ascending') : null,
             // fairband: the cell names its column; given onSort, a click, Enter or Space asks
             // the consumer to sort by it. The component still sorts nothing itself. The click
@@ -2440,6 +2470,10 @@
     BasisChip: BasisChip,
     OverrideRecord: OverrideRecord,
     ReportReader: ReportReader,
+    // fairband: the hover of a mechanical value and the warnings mark, for the screen's Mechanical
+    // column, the drawer and the company page (spec 2026-11-19 7.5).
+    warningsHover: warningsHover,
+    WarningMark: WarningMark,
     // fairband: the reader of a section's text in the two steps ReportReader takes, the blocks
     // and one block's element, for a page that lays the blocks out itself
     // (spec 2026-11-17 research tab, 9).

@@ -45,8 +45,9 @@ IDIOMS = [
 ]
 PHASES = ["Start-up", "Young Growth", "High Growth", "Mature Growth", "Mature Stable", "Decline"]
 EXAMPLES = ("MSFT", "KO", "CRWD", "ROKU", "MMM", "RVMD")
-# The twelve quality warnings that count in the Flags column (spec 9.5; spec 2026-11-13 8), the
-# warning one-time-items where large-nri stood, first (spec 2026-11-19 7.2).
+# The twelve quality warnings, which count (spec 9.5; spec 2026-11-13 8) and mark a mechanical value
+# from the policy's count (spec 2026-11-19 7.5), the warning one-time-items where large-nri stood,
+# first (spec 2026-11-19 7.2).
 QUALITY_WARNINGS = [
     "one-time-items",
     "value-spread",
@@ -501,11 +502,6 @@ def test_the_agents_section_reads(client: TestClient) -> None:
             "The band, the buy and trim levels and the designation follow the reviewed value; the"
             " Mechanical column keeps the engine's value."
         ),
-        # spec 2026-11-13 8a: the flags follow a review that fills the row, not a secondary
-        (
-            "Where a review fills the row, the Flags and Warnings columns and the Clean filter read"
-            " the review's flags. A secondary valuation has none, so its row keeps the engine's."
-        ),
         # the company page's design, 8.2 and 11: the drawer's meter draws the band; the company
         # page draws it too, with the report's stance and its link under it
         (
@@ -524,6 +520,8 @@ def test_the_agents_section_reads(client: TestClient) -> None:
     assert "values a peak as if it lasted" not in text
     assert "second view" not in text and "Every report carries a secondary" not in text
     assert "draws that band, with the stance" not in text
+    # spec 2026-11-19 7.5: the Flags and the Warnings columns and the Clean filter have gone
+    assert "Flags and Warnings columns" not in text and "Clean filter" not in text
 
 
 def test_diagram_draws_six_bands_two_curves_and_the_counts() -> None:
@@ -595,6 +593,43 @@ def test_a_mechanical_value_keeps_one_time_items() -> None:
     assert first == "<li>Trailing earnings are the starting point."
     assert "one-off" not in stable and "Normalized earnings (" not in stable
     assert "over the last twelve months. The engine grows that" in stable
+
+
+def test_the_flags_section_names_the_mark_and_the_hover(client: TestClient) -> None:
+    """Spec 2026-11-19 7.5: the screen draws no flag; a dot marks a mechanical value with the
+    policy's count of quality warnings or more and no review, and a hover on the value names them;
+    the notes are read by an agent and never count. The page names no Flags column, Warnings
+    column or Clean filter, which have gone, and a flag's word is no longer the screen's. The
+    count is the served policy's, as the MCP methodology tool reads it."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    flags = _section(html, "flags")
+    intro = flags[: flags.index("<h3")]
+    for sentence in (
+        (
+            "Each has a short word and one sentence, which an agent reads when it researches the"
+            " company."
+        ),
+        "The screen draws no flag.",
+        (
+            "A dot before a mechanical value marks one with"
+            ' <span data-policy="warning_mark_min">—</span> quality warnings or more and no review.'
+        ),
+        "A hover on the value names its warnings and says the value is preliminary.",
+        "Every other flag is a note: read by an agent, never counted.",
+    ):
+        assert sentence in intro, sentence
+    notes = flags[flags.index('id="flags-notes"') :]
+    assert "They are read by an agent and never count." in notes[: notes.index("</p>")]
+    classifier = _section(html, "classifier")
+    assert "An agent reads the notes, and a report's Appendix A lists them" in classifier
+    for gone in ("Flags column", "Warnings column", "Clean filter", "a short word for the screen"):
+        assert gone not in html, gone
+    found = section_text("flags", client.get("/api/policy").json(), None)
+    assert found is not None
+    marks = (
+        "A dot before a mechanical value marks one with 3 quality warnings or more and no review."
+    )
+    assert marks in found[1]
 
 
 def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:

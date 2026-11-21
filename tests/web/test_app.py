@@ -1405,12 +1405,13 @@ def test_app_js_narrows_on_the_stance() -> None:
     assert "row.covered = Object.assign({}, r.covered, { at: localIso(r.covered.at) });" in script
 
 
-def test_app_js_narrows_on_watchlist_and_clean() -> None:
+def test_app_js_narrows_on_watchlist() -> None:
     js = _static_file("app.js")
-    # Clean keeps the valued rows with no quality warning: a refusal or a placeholder has no
-    # value to be cheap on, so it is never clean. It reads the engine's value, the Mechanical
-    # column: a refused row's fair value may be its secondary valuation's (18.1, plan 3).
-    assert "(!filters.cleanOnly || (r.flagCount === 0 && r.mechanical != null))" in js
+    # the Clean filter is gone (spec 2026-11-19 7.5): the narrowing ends at Hide expired, and no
+    # line reads a flag count
+    narrowing = js[js.index("function narrow(") : js.index("function sectorsOf(")]
+    assert "(!filters.hideExpired || r.freshness !== 'expired');\n" in narrowing
+    assert "cleanOnly" not in js and "flagCount" not in narrowing and "Clean" not in narrowing
     assert "r.fairValue != null" not in js
     assert "'/api/watchlists/memberships/' + encodeURIComponent(symbol)" in js
 
@@ -3462,7 +3463,6 @@ EXTRA_COLUMN_HEADS = {
     "change3y": "3y",
     "change5y": "5y",
     "drawdown": "Drawdown",
-    "flags": "Flags",
     "refusal": "Refusal",
     "priceDate": "Price date",
     "dataDate": "Data date",
@@ -3547,12 +3547,14 @@ def test_bundle_has_the_watch_mark_and_the_two_filters() -> None:
     assert "// fairband: the watchlist mark (spec 2026-11-04 9.4)" in bundle
     assert "onClick: function (e) { e.stopPropagation(); p.onWatch(r); }" in bundle
     assert "'aria-pressed': r.watched ? 'true' : 'false'" in bundle
-    assert "watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false" in bundle
-    assert "'WATCHLISTS'" in bundle and "'No warning flag'" in bundle
-    assert "{ key: 'flagCount', head: 'Warnings', num: true" in bundle
+    assert "watchlist: [], reviewedOnly: false, hideExpired: false };" in bundle
+    assert "'WATCHLISTS'" in bundle and "'No warning flag'" not in bundle
     assert "{ key: 'watchlists', head: 'Watchlists'" in bundle
     dts = _component_file("index.d.ts")
-    assert "onWatch?: (row: ScreenRow) => void;" in dts and "cleanOnly: boolean;" in dts
+    assert "onWatch?: (row: ScreenRow) => void;" in dts
+    # the Clean filter is gone (spec 2026-11-19 7.5)
+    for name, text in (("bundle.js", bundle), ("index.d.ts", dts)):
+        assert "cleanOnly" not in text, name
 
 
 def test_bundle_draws_the_mark_only_given_onWatch() -> None:
@@ -3572,13 +3574,15 @@ def test_bundle_draws_the_mark_only_given_onWatch() -> None:
     assert f".fb-watch:focus-visible {{ {ring} }}" in css
 
 
-def test_bundle_filters_on_watchlists_and_clean() -> None:
-    """Spec 2026-11-04 9.4 and 9.5: WATCHLISTS follows SECTOR in the menu, one row per list by
-    name; the clean row stands in VALUE as "No warning flag" and its chip reads Clean; a chosen
-    list's chip is its name, more than two their count; Clear all empties both."""
+def test_bundle_filters_on_watchlists() -> None:
+    """Spec 2026-11-04 9.4: WATCHLISTS follows SECTOR in the menu, one row per list by name; a
+    chosen list's chip is its name, more than two their count; Clear all empties it. VALUE holds
+    the two flags left once the Clean filter has gone (spec 2026-11-19 7.5)."""
     bundle = _component_file("bundle.js")
-    assert "var FILTER_FLAGS = ['reviewedOnly', 'hideExpired', 'cleanOnly'];" in bundle
-    assert "cleanOnly: 'Clean'" in bundle
+    assert "var FILTER_FLAGS = ['reviewedOnly', 'hideExpired'];" in bundle
+    assert "var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired' };" in (
+        bundle
+    )
     assert bundle.index("'SECTOR'") < bundle.index("'WATCHLISTS'") < bundle.index("'VALUE'")
     assert "function () { toggleIn('watchlist', w.id); }," in bundle
     assert "h('span', null, FLAG_ROWS[k] || FLAG_WORDS[k])" in bundle
@@ -3586,20 +3590,55 @@ def test_bundle_filters_on_watchlists_and_clean() -> None:
     assert "word: n <= 2 && names.length === n" in bundle
     assert "n + (n === 1 ? ' watchlist' : ' watchlists')" in bundle
     clear = bundle[bundle.index("function clearAll() {") : bundle.index("function checkRow")]
-    assert "watchlist: [], reviewedOnly: false, hideExpired: false, cleanOnly: false });" in clear
+    assert "watchlist: [], reviewedOnly: false, hideExpired: false });" in clear
 
 
-def test_bundle_draws_the_watchlist_and_count_columns() -> None:
-    """Spec 2026-11-04 9.4: the list names joined by ` · `, an em dash for none; the count of
-    the quality warnings after the flags' words, a figure headed Warnings (the controller's
-    ruling), so no two columns share a name."""
+def test_bundle_draws_the_watchlist_column() -> None:
+    """Spec 2026-11-04 9.4: the list names joined by ` · `, an em dash for none. The Flags and
+    the Warnings columns are gone (spec 2026-11-19 7.5): no column draws a row's flags or their
+    count."""
     bundle = _component_file("bundle.js")
     assert "return wordCell(names.length ? names.join(' · ') : null);" in bundle
-    assert bundle.index("{ key: 'flags', head: 'Flags'") < bundle.index("{ key: 'flagCount'")
+    assert "{ key: 'flags'" not in bundle and "{ key: 'flagCount'" not in bundle
+    assert "r.flags" not in bundle and "r.flagCount" not in bundle
     # every column has a head of its own, so the chooser never offers two boxes with one name
     heads = re.findall(r"\{ key: '\w+', head: '([^']+)'", bundle)
     assert len(heads) == len(set(heads))
-    assert "return figureCell(r.flagCount == null ? '—' : r.flagCount);" in bundle
+
+
+def test_the_screen_and_the_watchlists_hand_the_table_the_note() -> None:
+    """Spec 2026-11-19 7.5 and 9: the screen's table and each watchlist's hand ScreenTable the
+    screen's note, which the page holds beside the open company's. The mark's rule stands beside
+    the Mechanical cell's: form A of the look, the bullet of the mono face enlarged, in the
+    value's ink, so it sets no colour; the drawer and the company page load the same file. The
+    hover, the mark and the note's prop are `// fairband:` patches that index.d.ts declares
+    (``tests/web/test_warning_mark.py`` draws them)."""
+    app = _static_file("app.js")
+    assert "mechanicalNote: SCREEN_NOTE," in _function(app, "render")
+    shared = app[app.index("window.FairbandPage = {") :]
+    assert "SCREEN_NOTE: SCREEN_NOTE, OPEN_NOTE: OPEN_NOTE," in shared[: shared.index("};")]
+    assert "mechanicalNote: P.SCREEN_NOTE," in _function(_static_file("watchlists.js"), "section")
+    css = _component_file("bundle.css")
+    rule = (
+        ".fb-warnmark { font-family: var(--font-mono); font-size: 22px; line-height: 0;"
+        " margin-right: 5px; vertical-align: -3px; }"
+    )
+    assert rule in css and "color" not in _rule(css, ".fb-warnmark {")
+    beside = css[css.index(".fb-screen__mech {") : css.index(rule)]
+    assert beside.count("\n.") == 0  # nothing but the patch's comment between the two rules
+    assert "/* fairband: the warnings mark before a mechanical value (spec 2026-11-19 7.5" in beside
+    bundle = _component_file("bundle.js")
+    for patch in (
+        "// fairband: the hover of a mechanical value (spec 2026-11-19 7.5)",
+        "// fairband: the warnings mark (spec 2026-11-19 7.5 and 9)",
+        "// fairband: given mechanicalNote (spec 2026-11-19 7.5)",
+    ):
+        assert patch in bundle, patch
+    assert "warningsHover: warningsHover," in bundle and "WarningMark: WarningMark," in bundle
+    dts = _component_file("index.d.ts")
+    assert "export declare function warningsHover(words: string[], note: string): string;" in dts
+    assert "export declare function WarningMark(props: WarningMarkProps): unknown;" in dts
+    assert "export interface WarningMarkProps {\n  words: string[];\n}" in dts
 
 
 def test_bundle_designation_column_head_and_chip() -> None:
@@ -3732,9 +3771,7 @@ def test_the_bundle_draws_the_stance_column_and_the_mark() -> None:
     assert "function () { toggleIn('stance', k); }," in bundle
     assert "out.push({ key: 'stance', word: 'Stance: ' + AGENT_STANCES" in bundle
     assert ".filter(function (k) { return f.stance.indexOf(k) !== -1; }).join(' + ') });" in bundle
-    assert "var FLAG_ROWS = { reviewedOnly: 'Has a review', cleanOnly: 'No warning flag' };" in (
-        bundle
-    )
+    assert "var FLAG_ROWS = { reviewedOnly: 'Has a review' };" in bundle
     # the mark
     ticker = bundle[
         bundle.index("{ key: 'ticker', head: 'Ticker'") : bundle.index("{ key: 'name', head:")
@@ -4018,9 +4055,9 @@ def test_the_bar_gives_the_find_ring_room() -> None:
 
 
 def test_the_columns_menu_scrolls_inside_the_window() -> None:
-    """Columns ▾ lists all 46 columns, taller than a 900px window: a menu of the screen's bar
-    stops 12rem short of the window's height and scrolls, so the last rows, the Warnings column
-    among them, can be reached (spec 2026-11-04 9.4)."""
+    """Columns ▾ lists all 45 columns, taller than a 900px window: a menu of the screen's bar
+    stops 12rem short of the window's height and scrolls, so the last rows can be reached (spec
+    2026-11-04 9.4)."""
     css = _component_file("bundle.css")
     menu = _rule(css, ".fb-screen__cols > .fb-menu {")
     assert "max-height: calc(100vh - 12rem);" in menu and "overflow-y: auto;" in menu
@@ -4206,16 +4243,22 @@ def test_index_d_ts_declares_the_watchlist_keys() -> None:
     declarations = _component_file("index.d.ts")
     row = re.search(r"export interface ScreenRow \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert row is not None
-    for key in ("watched?: boolean;", "watchlists?: number[];", "flagCount?: number;"):
+    for key in ("watched?: boolean;", "watchlists?: number[];"):
         assert key in row.group(1), key
+    # the warnings' words and the mark (spec 2026-11-19 7.5); no column reads the flags or their
+    # count, which the row still carries for the agents' screen tool
+    for key in ("warnings?: string[];", "marked?: boolean;"):
+        assert key in row.group(1), key
+    assert "flags?:" not in row.group(1) and "flagCount?:" not in row.group(1)
     filters = re.search(r"export interface ScreenFilters \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert filters is not None
     assert "watchlist: number[];" in filters.group(1)
-    assert "cleanOnly: boolean;" in filters.group(1)
+    assert "cleanOnly" not in filters.group(1)
     props = re.search(r"export interface ScreenTableProps \{\n(.*?)\n\}", declarations, re.DOTALL)
     assert props is not None
     assert "onWatch?: (row: ScreenRow) => void;" in props.group(1)
     assert "watchlists?: { id: number; name: string }[];" in props.group(1)
+    assert "mechanicalNote?: string;" in props.group(1)
 
 
 def test_each_request_closes_its_connection(tmp_path: Path, db_path: Path, policy: Policy) -> None:
