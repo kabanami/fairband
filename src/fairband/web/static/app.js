@@ -1754,9 +1754,11 @@
   /* A write of the box, one at a time, with the request header every page write carries (api):
      while it is out the buttons wait; a refusal shows the server's sentence under them
      (refusalDetail), what was picked and typed kept. Taken, the company was valued again: the box
-     closes, where it is still open, and hands focus back to its control, the screen's rows load
-     again, and the box's `after` reads the page's company again, so the stamp, the chip and the
-     value follow. */
+     closes, where it is still open, and hands focus back to its control; the screen's rows load
+     again, and so does the drawer's detail where the drawer, which outlives the turn to the
+     company page, shows the company (reloadDetail), as a run's end reads both (controls.js); and
+     the box's `after` reads the page's company again, so the stamp, the chip and the value
+     follow. */
   function writeMoat(box, write) {
     if (box.posting) return;
     box.posting = true;
@@ -1770,6 +1772,7 @@
           if (box.anchor.isConnected) box.anchor.focus();
         }
         load();
+        reloadDetail(box.symbol);
         if (box.after) box.after();
       })
       .catch(function (err) { box.error = err.message; })

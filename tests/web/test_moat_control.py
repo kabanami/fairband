@@ -410,6 +410,70 @@ def test_the_set_and_the_return() -> None:
     assert "'/api/companies/' + encodeURIComponent(symbol) + '/moat'" in write
 
 
+def test_a_write_reads_the_drawer_s_company_again() -> None:
+    """The drawer outlives the turn to the company page: where it shows the company, a taken set
+    and a taken return read its detail again, so beside the screen's reloaded row it draws the new
+    stamp and chip; a refusal reads nothing, and a drawer that shows another company is left as it
+    is."""
+    detail = f"/api/companies/{SYMBOL}"
+    owner = _detail(OWNER)
+    other = answers.detail()  # LFOX, the file's Wide
+    trace = _drive(
+        [
+            {"do": "drawer", "symbol": SYMBOL},
+            {"do": "read", "url": detail, "body": _detail(FILE)},
+            {"do": "open", "detail": _detail(FILE)},
+            {"do": "pick", "class": "Wide"},
+            {"do": "set"},
+            {"do": "answer", "status": 409, "body": {"detail": "a refresh is running"}},
+            {"do": "set"},
+            {"do": "answer", "status": 200, "body": {"moatClass": OWNER, "snapshot": {}}},
+            {"do": "read", "url": detail, "body": owner},
+            {"do": "open", "detail": owner},
+            {"do": "return"},
+            {"do": "answer", "status": 200, "body": {"moatClass": FILE, "snapshot": {}}},
+            {"do": "drawer", "symbol": answers.SYMBOL},
+            {"do": "read", "url": f"/api/companies/{answers.SYMBOL}", "body": other},
+            {"do": "open", "detail": owner},
+            {"do": "set"},
+            {"do": "answer", "status": 200, "body": {"moatClass": OWNER, "snapshot": {}}},
+        ]
+    )
+    opened, shown = trace[:2]
+    assert [f[:2] for f in opened["fetched"]] == [["GET", detail]]
+    assert shown["drawer"] == {
+        "symbol": SYMBOL,
+        "loading": False,
+        "stamp": "NARROW MOAT",
+        "chip": None,
+    }
+    refused = trace[5]
+    assert refused["box"]["error"] == "a refresh is running"
+    assert (refused["fetched"], refused["afters"]) == ([], 0)
+    taken, landed = trace[7:9]
+    assert [f[:2] for f in taken["fetched"]] == [
+        ["GET", "/api/screen?sort=ticker&dir=asc"],
+        ["GET", detail],
+    ]
+    assert taken["afters"] == 1
+    assert landed["drawer"] == {
+        "symbol": SYMBOL,
+        "loading": False,
+        "stamp": "WIDE MOAT",
+        "chip": "owner",
+    }
+    returned = trace[11]
+    assert [f[:2] for f in returned["fetched"]] == [
+        ["GET", "/api/screen?sort=ticker&dir=asc"],
+        ["GET", detail],
+    ]
+    # the drawer turned to another company: a write on BF.B leaves it
+    elsewhere = trace[16]
+    assert elsewhere["drawer"]["symbol"] == answers.SYMBOL
+    assert [f[:2] for f in elsewhere["fetched"]] == [["GET", "/api/screen?sort=ticker&dir=asc"]]
+    assert elsewhere["afters"] == 3
+
+
 def test_a_refusal_s_sentence_under_the_buttons() -> None:
     """The server's sentence as it arrives, under the buttons, the box open and what was picked
     and typed kept; the status where the server sent no sentence. The company is not read again.

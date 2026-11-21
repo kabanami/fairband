@@ -1,8 +1,8 @@
 // The moat box driven in node (spec 2026-11-19 8.8), for tests/web/test_moat_control.py: the
 // bundle and app.js are loaded as tests/web/page.mjs loads them, with a stub React, a stub ReactDOM
-// whose roots keep what they last drew, and a fetch of the driver's own: a write is answered only
-// when a step answers it, so the steps say exactly when it lands; a read, the screen's and the
-// lists' as app.js loads and the screen's after a write, is never answered.
+// whose roots keep what they last drew, and a fetch of the driver's own, answered only when a step
+// answers it, so the steps say exactly when a write or a read lands; the reads the screen and the
+// lists start as app.js loads are dropped, and a read no step names is never answered.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "open", "detail"}             the company page's control is pressed, drawn on `detail`
@@ -14,12 +14,19 @@
 //   {"do": "return"}                     Use Fairband's class is pressed
 //   {"do": "answer", "status", "body"}   the oldest write in flight answers; a body that is a
 //                                        string is no JSON, as a 500's plain text
+//   {"do": "read", "url", "body"}        the oldest read in flight of `url` answers 200 with
+//                                        `body`; with none in flight, nothing happens
 //   {"do": "notes"}                      a Notes control is pressed (openNotes)
+//   {"do": "drawer", "symbol"}           the screen's row of `symbol` opens its drawer
+//                                        (FairbandPage.openRow); the view switch is controls.js's,
+//                                        which is not loaded, and does nothing here
 // After each step and the work it sets off, the trace on stdout gains what the step fetched (each
 // request's method, path and JSON body), the times `after` has run and the control has taken
-// focus back, whether a Notes box is drawn, and the moat box drawn, null for none: the text of its
+// focus back, whether a Notes box is drawn, the moat box drawn, null for none: the text of its
 // line and of its reason, the classes pressed, the field's text, Set moat class's disabled, the
-// return's words and its disabled (null without one), and the sentence under the buttons.
+// return's words and its disabled (null without one), and the sentence under the buttons; and the
+// drawer, null for none: its company, whether it is loading, its moat stamp's words and its
+// chip's principal (null without one).
 //
 //   node moat.mjs <bundle.js> <app.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -55,14 +62,30 @@ const document = {
   addEventListener() {},
 };
 
-let inFlight = []; // the writes not yet answered, oldest first: { resolve }
+let inFlight = []; // the requests not yet answered, oldest first: { method, url, resolve }
 let fetched = []; // the requests the current step made
 const fetch = (url, init) => new Promise((resolve) => {
   const method = (init && init.method) || 'GET';
   const body = init && init.body !== undefined ? JSON.parse(init.body) : null;
   fetched.push([method, url, body]);
-  if (method !== 'GET') inFlight.push({ resolve });
+  inFlight.push({ method, url, resolve });
 });
+
+// The first request in flight that `test` holds, answered `status` with `body`, and no longer in
+// flight; nothing where none is.
+function settle(test, status, body) {
+  const found = inFlight.find(test);
+  if (!found) return;
+  inFlight.splice(inFlight.indexOf(found), 1);
+  found.resolve({
+    ok: status < 400,
+    status,
+    json() {
+      return typeof body === 'string' ? Promise.reject(new SyntaxError(body))
+        : Promise.resolve(body);
+    },
+  });
+}
 
 const window = { React, ReactDOM, document, fetch, addEventListener() {} };
 new Function('window', 'React', bundle)(window, React);
@@ -70,6 +93,7 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app
   window, React, ReactDOM, window.Fairband, document, fetch);
 const P = window.FairbandPage;
 inFlight = []; fetched = []; // the screen's and the lists' own reads, unanswered
+P.show = () => {};
 
 let afters = 0;
 let focused = 0;
@@ -130,7 +154,22 @@ function seen() {
       error: error ? textOf(error) : null,
     };
   }
-  return { fetched, afters, focused, notes: !!drawnBy('NotesBox'), box: drawn };
+  return { fetched, afters, focused, notes: !!drawnBy('NotesBox'), box: drawn, drawer: drawer() };
+}
+
+// The drawer the screen's root draws beside the table, null while none is open.
+function drawer() {
+  const screen = roots[0].drawn;
+  const [aside] = screen ? classed(screen, 'app-drawer') : [];
+  if (!aside) return null;
+  const [stamp] = classed(aside, 'app-moat');
+  const [chip] = [...elements(aside)].filter((e) => e.props.principal !== undefined);
+  return {
+    symbol: aside.props['aria-label'].replace('Detail for ', ''),
+    loading: classed(aside, 'is-loading').length > 0,
+    stamp: stamp ? textOf(stamp) : null,
+    chip: chip ? chip.props.principal : null,
+  };
 }
 
 const trace = [];
@@ -150,18 +189,13 @@ for (const step of steps) {
   } else if (step.do === 'return') {
     button(tree, (e) => textOf(e).startsWith('Use Fairband')).props.onClick();
   } else if (step.do === 'answer') {
-    const { resolve } = inFlight.shift();
-    const body = step.body;
-    resolve({
-      ok: step.status < 400,
-      status: step.status,
-      json() {
-        return typeof body === 'string' ? Promise.reject(new SyntaxError(body))
-          : Promise.resolve(body);
-      },
-    });
+    settle((f) => f.method !== 'GET', step.status, step.body);
+  } else if (step.do === 'read') {
+    settle((f) => f.method === 'GET' && f.url === step.url, 200, step.body);
   } else if (step.do === 'notes') {
     P.notesControl('BF.B', 0, null).props.onClick({ currentTarget: notesAnchor });
+  } else if (step.do === 'drawer') {
+    P.openRow(step.symbol);
   }
   await new Promise((done) => later(done, 0));
   trace.push(seen());
