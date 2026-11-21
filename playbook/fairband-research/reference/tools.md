@@ -452,10 +452,10 @@ and store nothing:
 
 ## The records inside the arguments
 
-- An evidence item (`override_add`, `secondary_valuation`): `{kind, ref, note}`. The kind is
-  `filing`, `transcript`, `url`, `vendor`, `base-rate`, `finding` or `guidance`. The ref says
-  where: `10-K 2025, Item 7`, a URL, `response:<id>` for a stored vendor response, a finding's id,
-  and for a `guidance` item `guidance:<id>`, the record's id with no path. A `guidance` item of
+- An evidence item (`override_add`, `secondary_valuation`, `moat_set`): `{kind, ref, note}`. The
+  kind is `filing`, `transcript`, `url`, `vendor`, `base-rate`, `finding` or `guidance`. The ref
+  says where: `10-K 2025, Item 7`, a URL, `response:<id>` for a stored vendor response, a finding's
+  id, and for a `guidance` item `guidance:<id>`, the record's id with no path. A `guidance` item of
   any other form is refused, "a guidance item cites its record as guidance:<id>" (400); a record
   that is not the company's, "no guidance record <id> for <symbol>" (404); a record a later call
   replaced, "guidance record <id> is superseded by record <id>" (409). An NTM anchor override

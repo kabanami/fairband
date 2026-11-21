@@ -410,6 +410,13 @@ def test_the_citation_reference_names_the_moat_verdict_check() -> None:
     assert structure.index(moat) < structure.index(secondary)
     assert "the report needs the moat verdict recorded on snapshot <id>: call moat_set" in structure
     assert "`moat_set`" in structure
+    # a revalue that keeps the data date, the versions, the hash and the value passes
+    # (``refs.same_snapshot``), so a revalue may ask for the verdict again, not must (the final
+    # review, M8)
+    assert (
+        "(a revalue or a full or scoped refresh since your verdict, or the owner's class set since,"
+        " may ask for it again; a price refresh does not)"
+    ) in structure
 
 
 def test_the_template_example_passes_the_structural_checks_and_the_token_rule() -> None:
@@ -916,7 +923,14 @@ def test_the_moat_is_a_standing_step_before_the_overrides() -> None:
         ),
         "before any override",
         "a new snapshot",
-        f'refused "{NO_MOAT_CLASS}": your verdict gives it a class',
+        (
+            f'refused "{NO_MOAT_CLASS}": your verdict gives it a class, and the engine values it or'
+            " gives its route's own refusal."
+        ),
+        (
+            "Record it also when you agree with the class in force (a verdict you recorded in step"
+            " 8 stands unless the thesis changes it): the report needs your verdict on its snapshot"
+        ),
         f'"{REFRESH_RUNNING}"',
         f'"{MOAT_SET}"',
     ):
@@ -948,6 +962,11 @@ def test_the_moat_is_a_standing_step_before_the_overrides() -> None:
     ):
         assert words in entry, words
     assert "`moatClass`" in _tool_entry("company")
+    # a moat verdict's evidence is an override's, its guidance items checked the same way
+    assert (
+        "- An evidence item (`override_add`, `secondary_valuation`, `moat_set`): `{kind, ref, note}`."
+        in _flat(_read(TOOLS))
+    )
 
 
 def test_the_valuation_is_read_on_the_class_the_verdict_set() -> None:
@@ -967,6 +986,19 @@ def test_the_valuation_is_read_on_the_class_the_verdict_set() -> None:
     )
     assert entrant in steps[8]
     assert steps[8].index(entrant) < steps[8].index("Read the engine's result in the answer of")
+    # the overrides step 8 names wait for the verdict, and the snapshot to keep is the one the
+    # verdict writes (the final review, M8)
+    written = (
+        "The overrides this step names are written in step 10, after the moat verdict; one written"
+        " earlier stays applied, and its review follows the new snapshot."
+    )
+    assert written in steps[8]
+    assert steps[8].index(written) < steps[8].index("Read the engine's result in the answer of")
+    assert (
+        "Keep `snapshot.id` until step 10's moat verdict writes a new snapshot; the report cites"
+        " that one."
+    ) in steps[3]
+    assert "the report cites this snapshot" not in steps[3]
     again = (
         "Where your class changed the class in force, read the value, the levels, the flags and"
         " `priceNeeds` again, as in steps 8 and 9, before you decide."
@@ -1000,7 +1032,9 @@ def test_the_report_s_structure_names_the_moat_verdict() -> None:
         " sentence: fix it and submit again. The moat verdict's is \"the report needs the moat"
         ' verdict recorded on snapshot <id>: call moat_set", where your verdict is missing or'
         " rests on an older snapshot: record it with `moat_set` (step 10), read `company` again,"
-        " cite the new snapshot, and submit again."
+        " cite the new snapshot and the review on it, run again any sensitivity reading or"
+        " secondary valuation the report cites, make again any derivation that rests on the old"
+        " snapshot, and submit again."
     ) in twelve
 
 

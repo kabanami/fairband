@@ -152,7 +152,8 @@ is stated and cited in its own currency and enters no arithmetic with the compan
 Then read everything the page shows:
 
 - `company(symbol)`, read above: the latest snapshot (the company's frozen inputs and the engine's
-  result on them). Keep `snapshot.id`: the report cites this snapshot.
+  result on them). Keep `snapshot.id` until step 10's moat verdict writes a new snapshot; the
+  report cites that one.
 - `financials(symbol)`, `financial_tables(symbol)`, `estimates(symbol)`, `peers(symbol)` and
   `price_history(symbol)`: the stored figures, each with the ref to cite it by.
 - `quarters(symbol)`: the newest eight stored quarters, oldest first, each by its fiscal label
@@ -356,7 +357,8 @@ says "cyclical". Step 10 sets the inputs at mid-cycle.
 A snapshot refused "no moat class" has no route result to read: no value, no levels, no route
 flags and no `priceNeeds`. Judge the moat now and record your verdict, as the first two paragraphs
 of step 10 say, then read the valuation below on the new snapshot. In step 10, record it again only
-where the thesis changes it.
+where the thesis changes it. The overrides this step names are written in step 10, after the moat
+verdict; one written earlier stays applied, and its review follows the new snapshot.
 
 Read the engine's result in the answer of `company`: the value, the levels (the buy level, the fair
 band and the trim level), the inputs with their tags (DATA, RULE or JUDGMENT), the intermediates,
@@ -636,15 +638,16 @@ judgment.
 
 Record the verdict with `moat_set(symbol, moat_class, reason, evidence)`: your reason in your own
 words, and one evidence item or more, as on an override. Record it also when you agree with the
-class in force: the report needs your verdict on its snapshot, "the report needs the moat verdict
-recorded on snapshot <id>: call moat_set". Where your class differs from the user's, record yours
-all the same, since the newest class is in force, and say in the report that it differs and why.
-Record it before any override, sensitivity reading or secondary valuation: the write values the
-company again at once and gives it a new snapshot. Read `company` again, cite the new snapshot, and
-make again any derivation that cites the old one. Where your class changed the class in force, read
-the value, the levels, the flags and `priceNeeds` again, as in steps 8 and 9, before you decide. A
-company with no class in the moat table, one that entered the universe after Fairband's file was
-cut, is refused "no moat class": your verdict gives it a class, and the company is valued. While a
+class in force (a verdict you recorded in step 8 stands unless the thesis changes it): the report
+needs your verdict on its snapshot, "the report needs the moat verdict recorded on snapshot <id>:
+call moat_set". Where your class differs from the user's, record yours all the same, since the
+newest class is in force, and say in the report that it differs and why. Record it before any
+override, sensitivity reading or secondary valuation: the write values the company again at once and
+gives it a new snapshot. Read `company` again, cite the new snapshot, and make again any derivation
+that cites the old one. Where your class changed the class in force, read the value, the levels, the
+flags and `priceNeeds` again, as in steps 8 and 9, before you decide. A company with no class in the
+moat table, one that entered the universe after Fairband's file was cut, is refused "no moat class":
+your verdict gives it a class, and the engine values it or gives its route's own refusal. While a
 refresh runs the write is refused, "a refresh is running: set the class when it ends": wait until
 `refresh_status()` shows no refresh running, then call it again. No override sets the class:
 `override_add` with `moat.class` is refused, "moat.class is the moat table's: record the verdict
@@ -776,8 +779,9 @@ it only when you need to. A structural refusal (the section count, the stance, a
 heading, no moat verdict on the snapshot, or no secondary valuation on a refused snapshot) is one
 sentence: fix it and submit again. The moat verdict's is "the report needs the moat verdict
 recorded on snapshot <id>: call moat_set", where your verdict is missing or rests on an older
-snapshot: record it with `moat_set` (step 10), read `company` again, cite the new snapshot, and
-submit again.
+snapshot: record it with `moat_set` (step 10), read `company` again, cite the new snapshot and the
+review on it, run again any sensitivity reading or secondary valuation the report cites, make again
+any derivation that rests on the old snapshot, and submit again.
 A valued snapshot needs no secondary valuation: Appendix A says "No secondary valuation: Fairband's
 own valuation gives the company a value". A refused snapshot your review values needs none either:
 Appendix A says "No secondary valuation: the review gives the company a value". A snapshot refused

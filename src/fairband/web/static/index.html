@@ -509,10 +509,12 @@
   .app-notes-box__error { margin: var(--space-2) 0 0; color: var(--caution); }
   /* The moat box (spec 2026-11-19 8.8 and 9), built as the Notes box is: the bundle's menu, fixed
      where app.js places it under or over the company page's control, as wide as the Notes box;
-     in a column, the line that says whose the class is, an agent's chip inline in it, the reason
-     with its line breaks kept, the three classes in the Financials tab's segmented control at its
-     left, and the field as wide as the box; under them Set moat class and the return to the
-     file's class on one line, and a refusal under them. */
+     in a column whose parts do not shrink inside the menu body's own scroll, the line that says
+     whose the class is, an agent's chip inline in it and "Before: Narrow." kept whole, the reason
+     with its line breaks kept, scrolling in an area of its own past six lines, the three classes
+     in the Financials tab's segmented control at its left, and the field as wide as the box;
+     under them Set moat class and the return to the file's class on one line, and a refusal
+     under them. */
   .app-moat-box {
     position: fixed; top: auto; right: auto; box-sizing: border-box; width: 22rem;
     max-width: 100vw;
@@ -520,8 +522,12 @@
   .app-moat-box__body {
     display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3);
   }
+  .app-moat-box__body > * { flex: none; }
   .app-moat-box__whose { margin: 0; }
-  .app-moat-box__reason { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .app-moat-box__before { white-space: nowrap; }
+  .app-moat-box__reason {
+    margin: 0; max-height: 120px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
   .app-moat-box__classes { align-self: flex-start; }
   .app-moat-box__field { width: 100%; resize: vertical; font-family: var(--font-sans); }
   .app-moat-box__buttons {

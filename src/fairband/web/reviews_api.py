@@ -496,7 +496,7 @@ def add_review_routes(
             snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
-            _require_guidance(conn, symbol, body.evidence)
+            require_guidance(conn, symbol, body.evidence)
             _require_anchor_record(conn, body.tag, body.evidence)
             applied = applied_overrides(conn, symbol)
             state, message = _check(body, applied, snapshot, current)
@@ -622,7 +622,7 @@ def add_review_routes(
                     f"the review values {symbol}: the secondary valuation is the fallback where"
                     " neither the route nor the review values the company",
                 )
-            _require_guidance(conn, symbol, body.evidence)
+            require_guidance(conn, symbol, body.evidence)
             if snapshot.refusal is not None and cannot_fix(snapshot.refusal):
                 raise HTTPException(400, snapshot.refusal)
             shares = diluted_shares(snapshot.result)
@@ -956,11 +956,11 @@ def lasting_nil_refusal(tag: str, lifetime: Lifetime, reading: float | str | Non
     return NIL_ON_FILE if reading > 0 else None
 
 
-def _require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[Evidence]) -> None:
+def require_guidance(conn: sqlite3.Connection, symbol: str, evidence: Sequence[Evidence]) -> None:
     """Each ``guidance`` item names a current guidance record of the company as ``guidance:<id>``:
     400 for another form of ref, 404 for a record that is not the company's, 409 for one a later
-    call's record superseded (module docstring). An override's and a secondary valuation's
-    evidence meet it."""
+    call's record superseded (module docstring). An override's, a secondary valuation's and an
+    agent's moat verdict's evidence meet it (``moat_api``)."""
     for item in evidence:
         if item.kind != "guidance":
             continue
@@ -980,7 +980,7 @@ def _require_anchor_record(
 ) -> None:
     """An override of an NTM anchor whose evidence cites guidance cites, among its records, a gaap
     record of one of the anchor's metrics for a fiscal year: 400 ``anchor_misfit`` otherwise
-    (module docstring). Run after ``_require_guidance``, so each ref names a record of the
+    (module docstring). Run after ``require_guidance``, so each ref names a record of the
     company."""
     if tag not in ANCHOR_METRICS:
         return

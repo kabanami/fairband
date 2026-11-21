@@ -11,9 +11,10 @@ value on 2026-10-31.
 ``fx_inputs`` is FXCO, spec 11.2's company in SEK. ``as_live`` dates any of them as assembly
 does.
 
-Each company is valued on its file row of the moat table (``MOAT_FILE``), Mature Growth Co Wide
-and the others None, the classes their GuruFocus Moat Scores gave before method 1.8 (8 and none);
-``judged_moat`` puts any of them on an owner's or an agent's row.
+Each company is valued on its file row of the moat table (``MOAT_FILE``): Mature Growth Co, and
+MSCO, FXCO and ARSX, which are built on it, Wide, and the others None, the classes their GuruFocus
+Moat Scores gave before method 1.8 (8 and none); ``judged_moat`` puts any of them on an owner's or
+an agent's row.
 """
 
 from dataclasses import fields, replace

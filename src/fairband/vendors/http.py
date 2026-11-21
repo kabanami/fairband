@@ -1,4 +1,4 @@
-"""The one HTTP client both vendor adapters use: bounded in time, redirect-refusing, key-scrubbing.
+"""The one HTTP client the FMP adapter uses: bounded in time, redirect-refusing, key-scrubbing.
 
 ``VendorHttp.get`` makes up to ``policy.attempts`` tries, each in a slot of the client's
 ``RateLimiter``, which every thread calling through the client shares (``calls_per_minute``; 0 is

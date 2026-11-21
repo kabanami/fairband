@@ -1647,7 +1647,9 @@
   /* The box, fixed under its control as the Notes box is (place), or over it when the control
      sits low in the window; it follows the control as the page scrolls and closes when the
      control is gone or hidden (its view left). Focus moves to the class pressed, or the first
-     class where none is, as it opens. */
+     class where none is, as it opens, without scrolling the box, so the line that says whose the
+     class is stays in view. A refusal hands focus back to Set moat class, which the write's wait
+     took it from, each time a write ends refused. */
   function MoatBox(props) {
     var box = props.box;
     var ref = React.useRef(null);
@@ -1660,8 +1662,14 @@
     });
     React.useEffect(function () {
       var menu = ref.current;
-      (menu.querySelector('[aria-pressed="true"]') || menu.querySelector('button')).focus();
+      (menu.querySelector('[aria-pressed="true"]') || menu.querySelector('button'))
+        .focus({ preventScroll: true });
     }, [box.anchor]);
+    React.useEffect(function () {
+      if (box.posting || !box.error) return;
+      var set = ref.current.querySelector('.app-moat-box__buttons button');
+      if (set) set.focus({ preventScroll: true });
+    }, [box.posting, box.error]);
     return moatBox(box, ref);
   }
 
@@ -1672,7 +1680,8 @@
      field Reason (optional), holding the draft; then Set moat class, disabled with no class
      picked and while a write is out, and on the owner's or an agent's row of a company the file
      holds the return to the file's class, Use Fairband's class (Narrow); a refusal's sentence
-     under the buttons. `ref` is the box's own (MoatBox). */
+     under the buttons, an alert, so a screen reader says it where the focus does not pass. `ref`
+     is the box's own (MoatBox). */
   function moatBox(box, ref) {
     var row = box.row;
     var back = row && row.source !== 'file' && row.fileClass;
@@ -1707,25 +1716,29 @@
             variant: 'quiet', size: 'sm', disabled: box.posting,
             onClick: function () { returnMoat(box); }
           }, 'Use Fairband\'s class (' + back + ')') : null),
-        box.error ? h('p', { className: 'caption app-moat-box__error' }, box.error) : null));
+        box.error ? h('p', { className: 'caption app-moat-box__error', role: 'alert' }, box.error)
+          : null));
   }
 
   /* The line that says whose the class is, in the Words table's words: the file's, Fairband's
      class, table version 1, judged 19 Nov 2026., the version the number after the -v of the
      file's name (fairband-moat-v1); the owner's, Your class since 19 Nov 2026. Before: Narrow.;
      an agent's, its chip (moatChip), then since 19 Nov 2026. Before: Narrow.; no Before: without a
-     class before it. The day is a date in the page's form (when). */
+     class before it, and with one, Before: Narrow. in a span that does not wrap, so the line
+     breaks before it and not inside it. The day is a date in the page's form (when). */
   function moatLine(row) {
     var day = when(moatDay(row));
-    var before = row.previous ? ' Before: ' + row.previous + '.' : '';
+    var before = row.previous
+      ? [' ', h('span', { className: 'app-moat-box__before' }, 'Before: ' + row.previous + '.')]
+      : [];
     var line;
     if (row.source === 'file') {
       line = ['Fairband\'s class, table version ' + String(row.fileVersion).replace(/^.*-v/, '') +
         ', judged ', day, '.'];
     } else if (row.source === 'owner') {
-      line = ['Your class since ', day, '.' + before];
+      line = ['Your class since ', day, '.'].concat(before);
     } else {
-      line = [moatChip({ moatClass: row }), ' since ', day, '.' + before];
+      line = [moatChip({ moatClass: row }), ' since ', day, '.'].concat(before);
     }
     return h.apply(null, ['p', { className: 'caption app-moat-box__whose' }].concat(line));
   }

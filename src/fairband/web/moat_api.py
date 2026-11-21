@@ -4,13 +4,16 @@
 ``PUT /api/companies/{symbol}/moat`` takes ``{class, reason?, evidence?}``, the class Wide, Narrow
 or None and the evidence items an override's (``reviews_api.Evidence``). The writer is read as on
 every write (``identity``): the owner without the agent's headers, else the agent with its actor.
-In this order, each refusing with nothing stored: an agent's write with a blank reason, 400 "a
-moat verdict needs a reason", then with no evidence item, 400 "a moat verdict needs evidence"; a
-class outside the three, 400 by the body's types; a symbol that is not one, 400; a company with no
-snapshot, 404 "no snapshot for <symbol>"; while a refresh runs, 409 "a refresh is running: set the
-class when it ends". The owner's write needs neither a reason nor evidence: a blank reason is
-stored as none, so neither the ledger nor the snapshot's note carries ": ", and evidence is kept
-for an agent alone (spec 8.3).
+In this order, each refusing with nothing stored: the body's types, a class outside the three
+among them, 400 "class: ..."; an agent's write with a blank reason, 400 "a moat verdict needs a
+reason", then with no evidence item, 400 "a moat verdict needs evidence"; a symbol that is not
+one, 400; a company with no snapshot, 404 "no snapshot for <symbol>"; while a refresh runs, 409 "a
+refresh is running: set the class when it ends"; then an agent's evidence items of kind
+``guidance`` as an override's (``reviews_api.require_guidance``): 400 "a guidance item cites its
+record as guidance:<id>" for a ref of another form, 404 "no guidance record <id> for <symbol>"
+for a record that is not the company's, 409 for one a later call's record superseded. The owner's
+write needs neither a reason nor evidence: a blank reason is stored as none, so neither the ledger
+nor the snapshot's note carries ": ", and evidence is kept for an agent alone (spec 8.3).
 
 Then, in one transaction that takes the write lock at once, so the check that no refresh runs and
 the revalue's own record stand under it: the company's row of the moat table becomes the writer's
@@ -59,7 +62,7 @@ from fairband.store.moat import MoatRow, file_moat, moat_row, set_moat, set_snap
 from fairband.store.refreshes import current_refresh
 from fairband.store.snapshots import SnapshotRow, snapshot_row
 from fairband.web.agents_api import WriterOf, gist
-from fairband.web.reviews_api import Evidence, snapshot_of
+from fairband.web.reviews_api import Evidence, require_guidance, snapshot_of
 from fairband.web.settings_api import effective
 
 NEEDS_A_REASON = "a moat verdict needs a reason"
@@ -144,6 +147,8 @@ def add_moat_routes(
         at = clock()
         with closing(conn_factory()) as conn, transaction(conn, immediate=True):
             latest = _writable(conn, company)
+            if agent:
+                require_guidance(conn, company, body.evidence or [])
             row = set_moat(conn, company, body.moat_class, writer, reason, evidence, at)
             why = None if reason is None else gist(reason)
             summary = _summary(row.previous, row.moat, why)

@@ -199,6 +199,23 @@ def test_the_control_s_words() -> None:
 # -------------------------------------------------------------------------------------- the box
 
 
+def test_a_long_reason_keeps_the_box_whole() -> None:
+    """Look D1: inside the bundle's menu body, which scrolls at 368px, no part of the box's column
+    shrinks, so the classes and the field keep their height under a reason of 900 characters; the
+    reason scrolls in an area of its own, six lines of body text; and the focus on open does not
+    scroll the box, so the line that says whose the class is stays in view."""
+    assert _rule(".app-moat-box__body > * {") == "flex: none;"
+    assert _rule(".app-moat-box__reason {") == (
+        "margin: 0; max-height: 120px; overflow-y: auto; white-space: pre-wrap; "
+        "overflow-wrap: anywhere;"
+    )
+    opened = " ".join(_function(_static_file("app.js"), "MoatBox").split())
+    assert (
+        "(menu.querySelector('[aria-pressed=\"true\"]') || menu.querySelector('button'))"
+        " .focus({ preventScroll: true });"
+    ) in opened
+
+
 def test_the_box_s_four_states() -> None:
     """Built as the Notes box is. The line that says whose the class is: the file's, with the
     table's version and its day; the owner's, since its day, and the class before it; an agent's,
@@ -281,6 +298,13 @@ def test_the_box_s_four_states() -> None:
     # no Before: without a class before it
     first = _drawn(_box(OWNER | {"previous": None}))
     assert text(_one(first, "app-moat-box__whose")) == "Your class since 19 Nov 2026."
+    # "Before: Narrow." stays whole on the line: a span that does not wrap (look D3)
+    for row in (OWNER, AGENT):
+        [before] = classed(_drawn(_box(row)), "app-moat-box__before")
+        assert (before["type"], text(before)) == ("span", "Before: Narrow."), row["source"]
+    for row in (FILE, OWNER | {"previous": None}, AGENT | {"previous": None}):
+        assert classed(_drawn(_box(row)), "app-moat-box__before") == [], row["source"]
+    assert _rule(".app-moat-box__before {") == "white-space: nowrap;"
     # the owner's row of a company the file does not hold: no return
     entrant = _drawn(_box(OWNER | {"previous": None, "fileClass": None}))
     assert [e for e in elements(entrant) if "Use Fairband" in text(e)] == []
@@ -322,6 +346,7 @@ def test_the_box_s_classes_are_its_own() -> None:
         "app-moat-box",
         "app-moat-box__body",
         "app-moat-box__whose",
+        "app-moat-box__before",
         "app-moat-box__reason",
         "app-moat-box__classes",
         "app-moat-box__field",
@@ -342,7 +367,8 @@ def test_the_box_s_classes_are_its_own() -> None:
     }
     app = _static_file("app.js")
     built = "".join(
-        _function(app, name) for name in ("moatStamp", "moatControl", "moatBox", "moatLine")
+        _function(app, name)
+        for name in ("moatStamp", "moatControl", "MoatBox", "moatBox", "moatLine")
     )
     for name in own - {"app-moat"}:
         token = re.compile(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])")
@@ -510,7 +536,19 @@ def test_a_refusal_s_sentence_under_the_buttons() -> None:
     buttons, error = foot["props"]["children"]
     assert buttons["props"]["className"] == "app-moat-box__buttons"
     assert (error["type"], error["props"]["className"]) == ("p", "caption app-moat-box__error")
+    assert error["props"]["role"] == "alert"  # said, since the focus does not pass it
     assert text(error) == refusal
+    # the disabled Set dropped the focus while the write was out: a refusal hands it back to Set,
+    # a second refusal too, without scrolling the box (look D2); the driver runs no effect, so the
+    # effect is read as text
+    _in_order(
+        _function(_static_file("app.js"), "MoatBox"),
+        "React.useEffect(function () {",
+        "if (box.posting || !box.error) return;",
+        "var set = ref.current.querySelector('.app-moat-box__buttons button');",
+        "if (set) set.focus({ preventScroll: true });",
+        "}, [box.posting, box.error]);",
+    )
     assert classed(_drawn(_box(OWNER)), "app-moat-box__error") == []
     assert "color: var(--caution);" in _rule(".app-moat-box__error {")
 

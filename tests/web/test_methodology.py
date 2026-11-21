@@ -221,8 +221,12 @@ def test_the_examples_are_dated_to_methods_1_4_1_7_and_1_8() -> None:
         'were it to enter, 1.8 would refuse it "no moat class" until a class is set',
         "Its example was valued with the class Narrow",
         "so its figures stand under 1.8 with the class the next table would give it",
+        # the revalues wrote into the copy, and 4 of Roku's 26 snapshots hold no class
+        "Plan 3's acceptance revalued a copy of refresh 68's data under 1.7 and then under 1.8",
+        "every stored snapshot of Roku that reads a class reads Narrow",
     ):
         assert words in comment, words
+    assert "revalued a read-only copy" not in comment
     assert "14 Nov 2026</time> and are unchanged under methods 1.5, 1.6, 1.7 and 1.8." in asof
     assert "Their prices are the closes of" in asof
     assert "methods 1.5, 1.6 and 1.7." not in asof and "methods 1.1, 1.2 and 1.3" not in asof
@@ -731,16 +735,17 @@ def test_the_moat_class_is_fairband_s_own() -> None:
     ) in agents
     assert "twenty-five" not in agents
     # the refusals list names the guard (method 4.9, 5.1, section 9), after the missing figures
-    # it comes after and before the routes' own refusals: what lifts it, and that the company is
-    # then valued (the write revalues it at once; the file's next version at the refresh that
-    # reads it)
+    # it comes after and before the routes' own refusals: what lifts it, and that the engine then
+    # values the company or gives its route's own reason (the write revalues it at once; the
+    # file's next version at the refresh that reads it)
     refusals = value[value.index(">Refusals</h3>") :]
     refusals = refusals[: refusals.index("</ul>")]
     items = re.findall(r"<li>(.*?)</li>", refusals)
     moat = (
         "No moat class: the moat table holds no class for the company yet, as for a company new "
         "to the universe. You may set one on its page, an agent may record one in a review, or the "
-        "next version of the table gives one. The company is valued as soon as it has a class."
+        "next version of the table gives one. Once it has a class, the engine values it or gives "
+        "its route's own reason."
     )
     assert moat in items
     labels = [item.split(":")[0] for item in items]

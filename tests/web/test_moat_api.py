@@ -64,6 +64,7 @@ NEEDS_A_REASON = "a moat verdict needs a reason"
 NEEDS_EVIDENCE = "a moat verdict needs evidence"
 RUNNING = "a refresh is running: set the class when it ends"
 OWNERS_RETURN = "returning to Fairband's class is the owner's"
+GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
 SET_FIRST = "set the moat class first: moat_set"
 BASIS = (
     "share basis unclear: the newest period's count 1,680.7 m against the quote's 210.1 m (the ADR"
@@ -254,6 +255,21 @@ def test_an_agent_needs_a_reason_and_evidence(client: TestClient, db_path: Path)
             400,
             {"detail": NEEDS_EVIDENCE},
         )
+    assert _state(db_path) == before
+
+
+def test_an_agent_s_guidance_evidence_is_checked(client: TestClient, db_path: Path) -> None:
+    """An agent's evidence item of kind ``guidance`` names a current guidance record of the company
+    as ``guidance:<id>``, as an override's does (spec 8.6; ``reviews_api.require_guidance``): a
+    record that is not the company's is a 404, a ref of another form a 400; nothing is stored."""
+    before = _state(db_path)
+    for ref, refused in (
+        ("guidance:99999", (404, {"detail": "no guidance record 99999 for AAPL"})),
+        ("guidance:x", (400, {"detail": GUIDANCE_REF})),
+    ):
+        cite = {"kind": "guidance", "ref": ref, "note": None}
+        body = {"class": "Wide", "reason": REASON, "evidence": [FILING, cite]}
+        assert _refused_put(client, body, headers=AGENT) == refused, ref
     assert _state(db_path) == before
 
 

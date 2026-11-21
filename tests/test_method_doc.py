@@ -458,8 +458,9 @@ def test_method_1_8_reads_the_moat_table() -> None:
     """Spec 2026-11-19 8.5, 8.2 and 12, method 1.8: the head names the method; section 2 lists the
     moat table and no GuruFocus row; 4.9 is spec 8.5's text; 4.9a states the rule as it ran, its
     cyclical list the rule's 27 names; 5.1, 6b.1 and section 9 place the guard "no moat class";
-    5.12 has the input's three forms and no route cites the moat score; section 12 names the
-    founder's table as the source; 11 has the 1.8 row under policy v17, before policy v18's."""
+    5.12 has the input's three forms and no route cites the moat score, and 5a.14, 6a.10 and 6b.6
+    cite it after their RULE inputs; section 12 names the founder's table as the source; 11 has
+    the 1.8 row under policy v17, before policy v18's, and neither says a GuruFocus call runs."""
     text = METHOD.read_text(encoding="utf-8")
     assert (
         "| Method version | `fairband-mechanical/1.8` (`fairband.engine.METHOD_VERSION`) |" in text
@@ -561,6 +562,37 @@ def test_method_1_8_reads_the_moat_table() -> None:
     ):
         assert words in rows[-2], words
     assert "plan 3's readout counts them" not in rows[-2]
+    # the 1.8 rows describe what ships, one version under policy v18: no GuruFocus call runs, and
+    # the override of the tag is refused for the agent's verdict (the final review, I2 and M4)
+    assert (
+        "Assembly no longer reads GuruFocus's `summary`, and the call itself leaves with policy "
+        "v18 (section 2)."
+    ) in rows[-2]
+    assert (
+        "An override of `moat.class` is refused: an agent records its verdict with `moat_set`, and "
+        "a report needs that verdict on its snapshot (14.2, 14.3, 16.3)."
+    ) in rows[-2]
+    for row in rows[-2:]:
+        assert "the fetch still asks" not in row and "runs until it goes" not in row
+    # section 2 says nothing unchanged from nothing; 4.9a's margin skips a statement with no
+    # revenue too; the routes' DATA lists hold no RULE or JUDGMENT input (the final review, M5 to
+    # M7)
+    assert "The retry counts and the run's 429 path are unchanged." not in two
+    assert (
+        "a statement without a gross profit or a revenue, or with a revenue of zero, gives no "
+        "margin"
+    ) in rule
+    for start, end in (
+        ("### 5a.14", "### 5a.15"),
+        ("### 6a.10", "### 6a.11"),
+        ("### 6b.6", "### 6b.7"),
+    ):
+        part = text[text.index(start) : text.index(end)]
+        assert "`adr_ratio`, `fx_rate` and `inflation_differential` as 5.12;" in part, start
+        assert "and `moat_class` as 5.12" not in part, start
+        assert part.count(" The input `moat_class` as 5.12 cites it.") == 1, start
+        rules = part.index(" RULE: ")
+        assert part.index(" The input `moat_class` as 5.12 cites it.") > rules, start
 
 
 def test_policy_v18_drops_three_values() -> None:
@@ -604,7 +636,10 @@ def test_policy_v18_drops_three_values() -> None:
         "`moat_wide_min` and `moat_narrow_min`, unread since method 1.8",
         "the setting `refresh.gf_reuse_days` (spec 2026-11-19 8.9; 4.1)",
         "A stored value of the setting is skipped, and deleted at the next save or reset",
-        "keeps a reuse window of 7 days in the code (section 2)",
+        (
+            "GuruFocus's `summary` call leaves with it, with its client and its key: Fairband makes "
+            "no GuruFocus call (spec 2026-11-19 8.10; section 2)."
+        ),
     ):
         assert words in rows[-1], words
     assert rows[-2].startswith("| 1.8, policy v17 |")

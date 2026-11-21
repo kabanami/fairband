@@ -402,9 +402,9 @@ of each; the headings, in order; the moat verdict on the snapshot, valued or ref
 force must be a verdict recorded with `moat_set` on the latest snapshot or on one it reprices, so
 record yours also where the class stands, else "the report needs the moat verdict recorded on
 snapshot <id>: call moat_set" (a revalue or a full or scoped refresh since your verdict, or the
-owner's class set since, asks for it again; a price refresh does not); and a secondary valuation on
-a refused snapshot (none where the route or your review values the company, and none on a snapshot
-refused for a reason you cannot fix: no diluted share count, the reporting currency's or the share
-basis's). The first check that fails is answered with its one sentence (400), such as "the report
-needs a secondary valuation on snapshot <id>", and no number is checked. Fix the one thing the
-sentence names and submit again.
+owner's class set since, may ask for it again; a price refresh does not); and a secondary valuation
+on a refused snapshot (none where the route or your review values the company, and none on a
+snapshot refused for a reason you cannot fix: no diluted share count, the reporting currency's or
+the share basis's). The first check that fails is answered with its one sentence (400), such as "the
+report needs a secondary valuation on snapshot <id>", and no number is checked. Fix the one thing
+the sentence names and submit again.

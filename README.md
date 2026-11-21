@@ -41,8 +41,8 @@ flowchart LR
 - **Pages.** A screen of all companies; a page for each company with its overview, financials,
   estimates, investor relations and research; and pages for groups, watchlists, the method, the
   settings and the agents' inbox.
-- **An MCP server.** 55 tools through which an agent reads the store, asks the vendors for more,
-  and writes notes, findings, the moat class, changes to inputs and reports.
+- **An MCP server.** 55 tools through which an agent reads the store, asks FMP for more, and
+  writes notes, findings, the moat class, changes to inputs and reports.
 
 ## The pages
 
@@ -103,9 +103,8 @@ are untested.
    uv run fairband serve
    ```
 
-4. **Press Refresh all.** The first refresh reads every company of the universe from the
-   vendors, so it takes a while, and the database in `~/.local/share/fairband` grows to several
-   gigabytes.
+4. **Press Refresh all.** The first refresh reads every company of the universe from FMP, so it
+   takes a while, and the database in `~/.local/share/fairband` grows to several gigabytes.
 
 5. **Connect Claude Code.** `<repo>` is the absolute path of this directory.
 
