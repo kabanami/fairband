@@ -283,9 +283,10 @@ the screen's data; the seven days were GuruFocus's).
 > the rate, 7.3), the trailing EPS is the sum of those USD figures, and the day's P/E is the
 > day's close in USD ÷ that sum. A past period's earnings so stand at the rate of their time,
 > and the day's rate is not read. A day whose periods are not all in the reporting currency, or
-> that holds a period with no rate at or before its end, has no point. FMP's closes are
-> adjusted for splits and its EPS restated for them; the series applies no split rule and no
-> share-basis rule.
+> that holds a period with no rate at or before its end, has no point. A period that names no
+> currency is in the reporting currency, as 4.2 reads a statement, and a close or a rate that is
+> not a positive number is not read. FMP's closes are adjusted for splits and its EPS restated
+> for them; the series applies no split rule and no share-basis rule.
 
 The quote's sentence on a company in another currency and its "restated for them" are new
 (changed on 2026-11-21 by the founder's ruling; see the decision log).
@@ -974,3 +975,64 @@ series built from several answers; the order of work inside a plan.
   values, the hover's words, the refusal's place, the drafting script's revenue, the other
   readers of the class, the same class written again, a revalue that names companies, and the
   package holding the newest moat file only.
+- **2026-11-21, plan 1 built.** Seven tasks, each built by a subagent and reviewed, then a
+  review of the whole branch and one wave of fixes (commits 0c26a7c to 74948aa). Tasks 5 and 6
+  ran as one task, since the suite could not pass between them.
+- **2026-11-21, the values on the reference database (section 10).** Every company of refresh
+  68 valued in memory with the branch's code: 1,558 rows, 1,363 valued; no value differs from
+  its stored snapshot, and no route, buy level, designation or settings hash. CX is 7.49 and
+  SIMO 95.71. The ratio found is 10 on CX, 4 on SIMO, 2 on XPEV and 3 on TAL, and none on the
+  other 1,554 rows (137 carry the ADR flag). GDS's refusal reads as section 10 words it.
+  `basis-scaled` is on those four rows, against ten stored: JBS and MAAS carry no ADR flag, and
+  KT, PAC, PKX and VEON are flagged rows whose diluted count agrees with the quote's and whose
+  differing periods fit no whole number. None of the six moves a value; JBS carries
+  `share-count-gap` in its place. The stored refusals of RML and TXR ("data fetch failed") are
+  the fetch stage's, which a valuation in memory cannot make.
+- **2026-11-21, the founder: the rule stands for GRFS.** The rule refuses a second row beside
+  GDS: GRFS, "share basis unclear: the newest period's count 680.6 m against the quote's
+  846.0 m", a flagged ADR whose diluted count is off by a multiple of 1.24, outside the
+  tolerance and no whole number. Under 1.5 GuruFocus's ratio of 1 kept the rule off the row,
+  which was refused "incomplete NTM consensus"; no value moves. The decision document's count
+  of the rows that differ used a wider band than the tolerance and so missed it. Claude ruled
+  that the rule stands, as decision 3.5 and section 6.2 word it, and asked the founder, who
+  answered "Yes proceed on both points" (the live steps and GRFS). A flagged ADR whose counts
+  are 15% to 50% apart for an ordinary reason is filed in the backlog.
+- **2026-11-21, the P/E series against GuruFocus's (6.3).** The built series against
+  GuruFocus's stored series on the 29 companies that hold one in the reference database, over
+  ten years, each day both hold a point; 66 FMP calls. Over the 25 companies that report in
+  USD, 49,547 of 52,259 days are within 5%: 94.81%, under the 96% of section 10, which the
+  decision document measured on ten companies. Of the 2,712 days that differ, 953 are
+  GuruFocus stepping to the new quarter's EPS one to three trading days before FMP's period
+  end (counted as within: 96.63%), and 1,288 are one or two runs on AMD, AVGO, AZN, CRM and
+  ROAD, each from one period that FMP holds otherwise than GuruFocus (an EPS whose sign
+  differs from its net income's, one period on the depositary's basis, a year as first
+  reported, cents on a small split-adjusted EPS). OMC's newest year is 27.5% under
+  GuruFocus's, from a diluted count FMP did not update after a merger, until that quarter
+  leaves the trailing year. Two repaired forms were tested offline (the founder's rule of
+  2026-11-14): the EPS as net income ÷ the diluted count for every period gives 93.54% and
+  harms TTMI, AVGO and OMC; FMP's EPS replaced only where it disagrees with that figure by
+  sign or by more than 30% gives 95.64%, repairs ROAD, AZN and SYM and replaces one correct
+  EPS on AMD. Neither is built; the second is filed in the backlog with its figures.
+- **2026-11-21, the founder: "I am fine with being within 94.8%, the 96% rule was arbitrary.
+  Logically, it just needs to be close enough. And 94.8% is close enough."** The USD
+  comparison is accepted as built. `method.md` 16.7 names the limits it met.
+- **2026-11-21, the founder: a company in another currency reads each period's EPS at its
+  period end's rate.** Under the rule as first built (the day's close brought into the
+  reporting currency at the day's rate) the share of days within 5% of GuruFocus's was 72.7%
+  on ASML, 68.1% on NVO, 90.2% on TSM and 71.6% on RELX: the two series part by the currency's
+  move between the periods' ends and the day, up to 25% in 2022. With each period's EPS
+  brought into USD at its period end's rate, the product's code (8a73098) gives 97.8%, 99.3%,
+  98.2% and 99.3%, each on 2,507 days, and ten-year statistics within about 1% of GuruFocus's
+  (2% for the highs and lows). Claude recommended the first rule, since a row's own P/E and
+  the forward P/E read the price at the day's rate (`method.md` 7.3). The founder asked what
+  the second rule costs, whether the forward P/E can take it (it cannot: its periods have no
+  rate yet), and what other sources do. Seeking Alpha converts at the rate of the time each
+  number was reported, Morningstar at the period's average rate, and the accounting rule for
+  income is the rate of the time; Siblis Research and MSCI's index formula convert at the
+  price date; no stated method was found for Yahoo Finance, Bloomberg, FactSet or S&P Capital
+  IQ. His words were "before you do, can you check what other sites do?"; Claude read them as
+  his choice of the second rule should the check support it, told him it would build it, and
+  built it as one more task, reviewed (8a73098). The method stays 1.6, since no refresh had
+  run under it. The pair's closes are fetched eleven years back, so the first trailing year
+  has its rates. The scripts, the answers and the outputs of the comparison are kept outside
+  the repository, with the other results of 2026-11-19.
