@@ -98,6 +98,39 @@ def test_the_cap_on_the_return_without_goodwill_is_a_setting() -> None:
     assert moved.settings_hash != base.settings_hash
 
 
+def test_the_one_time_items_share_is_a_setting_in_the_place_of_the_non_recurring_flag_s() -> None:
+    """Spec 2026-11-19 7.4: ``one_time_items_share`` stands where ``nri_flag_share`` stood, the
+    flags group's second, with the Settings page's label and sentence of the spec's words, its
+    range 1% to 50%, read at a revalue and hashed; ``nri_flag_share`` is no setting, and
+    ``warning_mark_min`` none either."""
+    s = setting("one_time_items_share")
+    sentence = (
+        "A Mature Stable row whose GAAP and street trailing EPS differ by this share of GAAP EPS "
+        "or more is warned of one-time items."
+    )
+    assert (s.group, s.label, s.description, s.unit, s.effect, s.range_text, s.hashed) == (
+        "flags",
+        "One-time items, share of EPS",
+        sentence,
+        "fraction",
+        "revalue",
+        "1% to 50%",
+        True,
+    )
+    names = [s.name for s in SETTINGS]
+    assert names.index("one_time_items_share") == names.index("analyst_min") + 1
+    for gone in ("nri_flag_share", "warning_mark_min"):
+        with pytest.raises(KeyError):
+            setting(gone)
+    base = load_policy()
+    assert default_of("one_time_items_share", base) == value_of("one_time_items_share", base)
+    moved = apply_overlay(base, {"one_time_items_share": 0.25})
+    assert moved.one_time_items_share == 0.25
+    assert (
+        moved.settings_hash == settings_hash({"one_time_items_share": 0.25}) != base.settings_hash
+    )
+
+
 def test_every_setting_names_a_value_of_the_file() -> None:
     p = load_policy()
     for s in SETTINGS:
@@ -130,7 +163,7 @@ def test_apply_overlay_changes_the_value_and_the_derived_edges() -> None:
     )
     assert p.required_return == 0.1 and p.wide_terminal_roic_cap == pytest.approx(0.14)
     assert p.designation_edges == (0.65, 0.8, 1.2, 1.5) and p.universe.cap_floor_usd == 5e9
-    assert p.version == "fairband-policy-v16" and p.settings_hash == settings_hash(
+    assert p.version == "fairband-policy-v17" and p.settings_hash == settings_hash(
         {"required_return": 0.1, "fair_band": [0.8, 1.2]}
     )
 
@@ -145,6 +178,15 @@ def test_apply_overlay_skips_a_name_that_is_no_setting() -> None:
     p = apply_overlay(load_policy(), {"gone_value": 1, "fade_years": 3})
     assert p.fade_years == 3 and p.settings_hash == settings_hash({"fade_years": 3})
     assert settings_hash({"gone_value": 1}) == EMPTY_SETTINGS_HASH
+
+
+def test_an_overlay_holding_the_removed_setting_reads_as_without_it() -> None:
+    """Policy v17 drops ``nri_flag_share`` (spec 2026-11-19 7.4, Review Focus 2): a stored value
+    of it changes nothing and hashes as the overlay without it."""
+    p = apply_overlay(load_policy(), {"nri_flag_share": 0.05, "fade_years": 3})
+    assert p == apply_overlay(load_policy(), {"fade_years": 3})
+    assert p.settings_hash == settings_hash({"fade_years": 3})
+    assert settings_hash({"nri_flag_share": 0.05}) == EMPTY_SETTINGS_HASH
 
 
 def test_apply_overlay_converts_as_the_loader_does() -> None:
@@ -314,7 +356,8 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
     ({"burn_cover_flag_years": 5.5}, "burn_cover_flag_years: must be from 0.5 to 5"),
     ({"analyst_min": 0}, "analyst_min: must be from 1 to 20"),
     ({"analyst_min": 21}, "analyst_min: must be from 1 to 20"),
-    ({"nri_flag_share": 0.005}, "nri_flag_share: must be from 1% to 50%"),
+    ({"one_time_items_share": 0.005}, "one_time_items_share: must be from 1% to 50%"),
+    ({"one_time_items_share": 0.51}, "one_time_items_share: must be from 1% to 50%"),
     ({"value_spread_flag": 1.01}, "value_spread_flag: must be from 5% to 100%"),
     ({"long_runway_growth_flag": 0.31}, "long_runway_growth_flag: must be from 1% to 30%"),
     ({"margin_flag_ratio": 1.0}, "margin_flag_ratio: must be from 1.1 to 3.0"),
@@ -433,7 +476,7 @@ INSIDE: list[dict[str, Any]] = [
     {"burn_cover_flag_years": 5},
     {
         "analyst_min": 1,
-        "nri_flag_share": 0.01,
+        "one_time_items_share": 0.01,
         "value_spread_flag": 0.05,
         "long_runway_growth_flag": 0.01,
         "margin_flag_ratio": 1.1,
@@ -444,7 +487,7 @@ INSIDE: list[dict[str, Any]] = [
     },
     {
         "analyst_min": 20,
-        "nri_flag_share": 0.50,
+        "one_time_items_share": 0.50,
         "value_spread_flag": 1.0,
         "long_runway_growth_flag": 0.30,
         "margin_flag_ratio": 3.0,
@@ -513,7 +556,7 @@ def test_symbols_are_upper_cased_on_apply() -> None:
 
 
 def test_load_policy_checks_the_file_too(tmp_path: Path) -> None:
-    text = resources.files("fairband.policy").joinpath("fairband-policy-v16.toml").read_text()
+    text = resources.files("fairband.policy").joinpath("fairband-policy-v17.toml").read_text()
     old = "[values.required_return]\nvalue = 0.09\n"
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"

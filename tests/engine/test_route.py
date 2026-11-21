@@ -209,7 +209,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/1.6"
+    assert METHOD_VERSION == "fairband-mechanical/1.7"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -582,8 +582,6 @@ def test_flags_in_order_without_duplicates(
         "roic-on-n-years",  # the ROIC
         "growth-above-return",  # a year that pays out less than nothing
         "margin-flag",
-        "large-nri",
-        "consensus-basis-unknown",  # FMP's consensus names no basis
         "long-runway-high-growth",
         "value-spread",
     ]
@@ -596,10 +594,11 @@ def test_the_stock_pay_notes_follow_the_anchor_s_flag(
     """Spec 2026-11-13 7.1: ``stock-pay-missing`` takes the place right after the one
     ``sbc-basis-unknown`` takes, and ``sbc-basis-uncertain`` follows it, both before the path's
     flags. MGCO's trailing stock pay at zero with fiscal 2025 at $380 m, no street EPS: the basis
-    is unknown and the stock pay missing. Then one quarter at zero, a non-recurring gain of 0.50
-    a share (9.4% of the trailing EPS of 5.30, so ``large-nri``), and the test reading
-    includes-sbc (5.35 less 5.30 is under half of 400 × 0.75 ÷ 1,000 = 0.30) on a material stock
-    pay (0.30 is 5.6% of 5.35): reason 1 holds. Neither note moves the value."""
+    is unknown and the stock pay missing. Then one quarter at zero, a street EPS of 4.20 against
+    the GAAP 5.30 (1.10 apart, 20.8% of 5.30, at or above ``one_time_items_share``), and the test
+    reading includes-sbc (4.20 lies below 5.30) on a material stock pay (0.30 is 7.1% of 4.20):
+    reason 1 holds (spec 2026-11-19 7.3). Neither note moves the value, and the warning
+    ``one-time-items`` stays on Mature Stable alone."""
     assert mg_inputs.trailing is not None
     thin = replace(mg_inputs.annual_estimates[2], analysts_net_income=3)  # few-analysts, the path
     base = replace(mg_inputs, annual_estimates=(*mg_inputs.annual_estimates[:2], thin))
@@ -615,11 +614,19 @@ def test_the_stock_pay_notes_follow_the_anchor_s_flag(
     plain = value_company(replace(zero, stock_pay=None), deciles, policy, TODAY)
     assert codes(plain)[:2] == ["sbc-basis-unknown", "few-analysts"] and plain.value == r.value
 
-    one_quarter = replace(base, stock_pay=StockPayHistory(1, 2025, 500e6), gf_eps_without_nri=4.80)
+    one_quarter = replace(base, stock_pay=StockPayHistory(1, 2025, 500e6), street_ttm_eps=4.20)
     r = value_company(one_quarter, deciles, policy, TODAY)
     assert r.intermediates["sbc_basis"] == "includes-sbc"
     assert codes(r)[:3] == ["stock-pay-missing", "sbc-basis-uncertain", "few-analysts"]
-    assert {"large-nri", "consensus-basis-unknown"} <= set(codes(r))
+    assert r.flags[1].sentence.endswith(
+        "while GAAP trailing EPS and the analysts' differ by 20.8%, so a one-time item may sit in "
+        "GAAP EPS and hide the gap."
+    )
+    assert "one-time-items" not in codes(r)
+    # an agent's gap decides the items: reason 1 is silent under it, as the warning is
+    decided = value_company(one_quarter, deciles, policy, TODAY, judged(("earnings.nri_gap", 0.0)))
+    assert decided.intermediates["sbc_basis"] == "includes-sbc"
+    assert "stock-pay-missing" in codes(decided) and "sbc-basis-uncertain" not in codes(decided)
     without = value_company(replace(one_quarter, stock_pay=None), deciles, policy, TODAY)
     assert "stock-pay-missing" not in codes(without) and without.value == r.value
 
@@ -1260,11 +1267,11 @@ def test_mature_stable_cross_check_present_with_a_path(
             assert gr[key] == im[key], key
 
 
-def test_mature_stable_names_the_charge_s_start_and_the_basis_note(
+def test_mature_stable_names_the_charge_s_start_then_warns(
     ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    # capital spending at two thirds of operating cash flow, and a non-recurring gain of $0.40 a
-    # share, 11.8% of trailing EPS; the growth company's consensus, whose two series disagree
+    # capital spending at two thirds of operating cash flow, and a street EPS of 4.08 against the
+    # GAAP 3.40, 20.0% apart; the growth company's consensus, whose two series disagree
     assert ms_inputs.trailing is not None
     base, second, third = mg_inputs.annual_estimates
     disagree = (
@@ -1275,25 +1282,121 @@ def test_mature_stable_names_the_charge_s_start_and_the_basis_note(
     inputs = replace(
         _with_consensus(ms_inputs, replace(mg_inputs, annual_estimates=disagree)),
         trailing=replace(ms_inputs.trailing, capex=-3_000e6),
-        gf_eps_without_nri=3.00,
+        street_ttm_eps=4.08,
     )
     r = value_company(inputs, deciles, policy, TODAY)
-    assert codes(r) == ["heavy-capex", "large-nri", "consensus-basis-unknown"]
-    heavy, _, basis = r.flags
+    assert codes(r) == ["heavy-capex", "one-time-items"]  # the gates, then the warning
+    heavy, warning = r.flags
     assert heavy.sentence == (
         "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
         "return starts at 18.3%, the three-year aggregate; the newest year's marginal return is "
         "18.3%, on the capital added in fiscal 2025. The stored years end at fiscal 2025, so a "
         "return on a spending surge still under way is the agent's judgment: `return.runway`."
     )
-    assert basis.sentence == (
-        "The non-recurring gap is $0.40 a share, 11.8% of trailing EPS. FMP's consensus names no "
-        "basis, so whether the NTM anchor and the path carry such items is unknown; a report that "
-        "reads the filing decides, through `earnings.nri_gap`, and on Mature Growth "
-        "`earnings.ntm`."
-    )
+    assert warning.sentence.startswith("GAAP trailing EPS is $3.40 and the analysts' is $4.08,")
     # the cross-check reads the two series, and its notes stay off the stable row (method 6.5)
     assert r.intermediates["growth_route"]["refusal"] is None
+
+
+# --- The warning one-time-items (spec 2026-11-19 7.2) ------------------------------------------
+
+
+def test_mature_stable_warns_of_one_time_items(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """MSCO's GAAP trailing EPS of 3.40 against a street EPS of 4.08: 0.68 apart, 20.0% of 3.40,
+    the edge, so the valued row carries ``one-time-items`` and counts it, and its value does not
+    move; 4.07, 19.7% apart, is silent. The route cites ``street_ttm_eps`` (DATA, a share) right
+    after ``net_income_ttm``, ``None`` on a row without one, as MSCO stands."""
+    plain = value_company(ms_inputs, deciles, policy, TODAY)
+    r = value_company(replace(ms_inputs, street_ttm_eps=4.08), deciles, policy, TODAY)
+    assert codes(plain) == [] and codes(r) == ["one-time-items"]
+    assert r.flags[0].word == "One-time items"
+    assert r.flags[0].sentence == (
+        "GAAP trailing EPS is $3.40 and the analysts' is $4.08, apart by 20.0% of GAAP EPS, at or "
+        "above 20.0%. The trailing earnings may hold one-time items, which the mechanical value "
+        "keeps; a review takes them out through `earnings.nri_gap`."
+    )
+    assert flag_count(r.flags) == 1 and flag_count(plain.flags) == 0
+    assert (r.value, r.levels, r.designation) == (plain.value, plain.levels, plain.designation)
+    names = [i.name for i in r.inputs]
+    assert names[names.index("net_income_ttm") + 1] == "street_ttm_eps"
+    [street] = [i for i in r.inputs if i.name == "street_ttm_eps"]
+    assert (street.value, street.unit, street.tag) == (4.08, "USD a share", "DATA")
+    assert street.provenance == ms_inputs.provenance["street_ttm_eps"]
+    assert [i.value for i in plain.inputs if i.name == "street_ttm_eps"] == [None]
+    near = value_company(replace(ms_inputs, street_ttm_eps=4.07), deciles, policy, TODAY)
+    assert codes(near) == []
+    assert result_from_json(result_to_json(r)) == r
+
+
+def test_the_warning_is_silent_under_an_agents_gap(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """An agent's ``earnings.nri_gap`` decides the items, so the warning does not show under it,
+    at any figure, nil included; an override of another input leaves it on the row."""
+    warned = replace(ms_inputs, street_ttm_eps=4.08)
+    for gap in (0.68, 0.0):
+        r = value_company(warned, deciles, policy, TODAY, judged(("earnings.nri_gap", gap)))
+        assert r.value is not None and "one-time-items" not in codes(r), gap
+    moat = value_company(warned, deciles, policy, TODAY, judged(("moat.class", "Narrow")))
+    assert "one-time-items" in codes(moat)
+
+
+def test_the_refusal_carries_the_warning(
+    ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """A one-time charge can take the trailing earnings below zero: MSCO with a net income of
+    −$100 m, a GAAP EPS of −0.10 and a street EPS of 1.00, 1.10 apart, 1,100% of 0.10. The refusal
+    "no positive trailing earnings" carries the warning and cites the two figures its test reads,
+    ``eps_ttm`` and ``street_ttm_eps``, after the inputs every result carries; without a street
+    figure it carries none and cites both still; under an agent's gap the warning is silent."""
+    assert ms_inputs.trailing is not None
+    loss = replace(
+        ms_inputs,
+        trailing=replace(ms_inputs.trailing, net_income=-100e6, eps_diluted=-0.10),
+        street_ttm_eps=1.00,
+    )
+    r = value_company(loss, deciles, policy, TODAY)
+    assert_refused(r, "no positive trailing earnings")
+    assert codes(r) == ["one-time-items"] and flag_count(r.flags) == 1
+    assert r.flags[0].sentence.startswith(
+        "GAAP trailing EPS is −$0.10 and the analysts' is $1.00, apart by 1,100.0% of GAAP EPS, "
+        "at or above 20.0%."
+    )
+    assert [i.name for i in r.inputs] == [*BASE_INPUTS, "eps_ttm", "street_ttm_eps"]
+    eps_ttm, street = r.inputs[-2:]
+    assert (eps_ttm.value, eps_ttm.unit, eps_ttm.tag) == (-0.10, "USD a share", "DATA")
+    assert eps_ttm.provenance == ms_inputs.provenance["statements"]
+    assert (street.value, street.unit) == (1.00, "USD a share")
+    assert street.provenance == ms_inputs.provenance["street_ttm_eps"]
+    silent = value_company(replace(loss, street_ttm_eps=None), deciles, policy, TODAY)
+    assert_refused(silent, "no positive trailing earnings")
+    assert codes(silent) == []
+    assert [i.name for i in silent.inputs] == [*BASE_INPUTS, "eps_ttm", "street_ttm_eps"]
+    decided = value_company(loss, deciles, policy, TODAY, judged(("earnings.nri_gap", 0.0)))
+    assert_refused(decided, "no positive trailing earnings")
+    assert codes(decided) == []
+    # a price refresh keeps the warning with the refusal
+    assert reprice(result_from_json(result_to_json(r)), 45.0, TODAY, policy).flags == r.flags
+
+
+def test_the_warning_is_on_mature_stable_alone(
+    mg_inputs: CompanyInputs,
+    high_growth_inputs: CompanyInputs,
+    decline_inputs: CompanyInputs,
+    deciles: Deciles,
+    policy: Policy,
+) -> None:
+    """Spec 2026-11-19 7.2: MGCO, HGCO and DCCO with a street EPS half their GAAP EPS, 50% apart,
+    carry no ``one-time-items``; nor any row ``large-nri`` or ``consensus-basis-unknown``."""
+    for inputs in (mg_inputs, high_growth_inputs, decline_inputs):
+        assert inputs.trailing is not None and inputs.trailing.eps_diluted is not None
+        street = inputs.trailing.eps_diluted / 2
+        r = value_company(replace(inputs, street_ttm_eps=street), deciles, policy, TODAY)
+        assert r.phase.phase != "Mature Stable", inputs.symbol
+        gone = {"one-time-items", "large-nri", "consensus-basis-unknown"}
+        assert gone.isdisjoint(codes(r)), inputs.symbol
 
 
 def test_mature_stable_cross_check_absent_with_a_refusal(
@@ -1715,14 +1818,14 @@ def test_a_reprice_keeps_the_share_count_gap_and_what_the_valuation_wrote(
     reprice keeps the warning. The trailing period end, the ten-year median margins, the stock
     pay the anchor read and the row's whole tuple of flags, the two stock-pay notes and
     ``thin-ntm`` among them, stay as the valuation wrote them, through the stored round trip a
-    price refresh takes. MGCO with one trailing quarter of stock pay at nil, a non-recurring gain
-    of 0.50 a share (``test_the_stock_pay_notes_follow_the_anchor_s_flag``) and an NTM quarter on
-    4 analysts carries the three notes."""
+    price refresh takes. MGCO with one trailing quarter of stock pay at nil, a street EPS of 4.20
+    against the GAAP 5.30 (``test_the_stock_pay_notes_follow_the_anchor_s_flag``) and an NTM
+    quarter on 4 analysts carries the three notes."""
     q = mg_inputs.quarter_estimates
     notes = replace(
         _gap(mg_inputs),
         stock_pay=StockPayHistory(1, 2025, 500e6),
-        gf_eps_without_nri=4.80,
+        street_ttm_eps=4.20,
         quarter_estimates=(*q[:3], replace(q[3], analysts=4)),
     )
     valued = value_company(notes, deciles, policy, TODAY)
@@ -3141,7 +3244,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.6"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.7"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH

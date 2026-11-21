@@ -76,10 +76,8 @@ CALIBRATION = {
     },
     "flagged": 1,
     "flags": {
-        "consensus-basis-unknown": 4,  # beside large-nri on the four mature rows
         "fcf-sign": 1,
         "growth-word-disagrees": 1,
-        "large-nri": 4,
         "leases-not-on-balance-sheet": 5,
         "line-not-presented:current_lease_liability": 5,
         "line-not-presented:goodwill": 5,
@@ -626,8 +624,6 @@ def test_a_failed_pair_leaves_the_run_done(env_fixture_universe: Env) -> None:
     row = env.last()
     no_rate = "no exchange rate for SEK"
     route_flags = (
-        "consensus-basis-unknown",
-        "large-nri",
         "line-not-presented:current_lease_liability",
         "line-not-presented:goodwill",
         "line-not-presented:lease_rou_asset",

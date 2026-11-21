@@ -586,7 +586,6 @@ def test_the_basis_note_reads_the_gaap_figure_the_test_read(
     gap = [OVERRIDE("earnings.nri_gap", 0.25)]
     review = review_company(inputs, deciles, policy, TODAY, gap, mechanical)
     assert review.result.intermediates["sbc_basis"] == "excludes-sbc"
-    assert "large-nri" not in _codes(review.result)  # 0.25 is 4.7% of 5.30, under 5%
     [uncertain] = [f for f in review.result.flags if f.code == "sbc-basis-uncertain"]
     assert uncertain.sentence == _REASON_3.format(gap="3.10", times="10.3")
 
@@ -658,13 +657,12 @@ def test_the_stock_pay_notes_do_not_show_under_a_guided_anchor(
     """The controller's ruling on the whole-branch review's Minor 2: under an applied
     ``earnings.ntm`` the guided EPS stands in for the consensus less the stock-pay adjustment, so
     both stock-pay inputs are moot (spec 2026-11-13 7.2) and neither note shows, as ``thin-ntm``
-    does not. MGCO with one trailing quarter at nil while fiscal 2025 shows $500 m, and a
-    non-recurring gain of 0.50 a share (9.4% of the trailing EPS of 5.30, so ``large-nri``), on a
-    test that reads includes-sbc (5.35 less 5.30 is under half of 400 × 0.75 ÷ 1,000 = 0.30) on a
-    material stock pay (0.30 is 5.6% of 5.35): the mechanical row carries both notes. A review
-    under another input keeps them."""
+    does not. MGCO with one trailing quarter at nil while fiscal 2025 shows $500 m, and a street
+    EPS of 4.20 against the GAAP 5.30 (20.8% apart, at or above ``one_time_items_share``), on a
+    test that reads includes-sbc (4.20 lies below 5.30) on a material stock pay (0.30 is 7.1% of
+    4.20): the mechanical row carries both notes. A review under another input keeps them."""
     inputs = replace(
-        mature_growth_inputs(), stock_pay=StockPayHistory(1, 2025, 500e6), gf_eps_without_nri=4.80
+        mature_growth_inputs(), stock_pay=StockPayHistory(1, 2025, 500e6), street_ttm_eps=4.20
     )
     mechanical = value_company(inputs, deciles, policy, TODAY)
     notes = {"stock-pay-missing", "sbc-basis-uncertain"}

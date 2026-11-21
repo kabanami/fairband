@@ -12,12 +12,15 @@ year whose next earnings growth is above the belief, then fades in equal steps t
 return in year N. K is read once, from the row's own path at the belief in force, and every
 sensitivity and solve holds it. A year whose growth outruns its return pays out less than nothing;
 the first such year raises "growth above return", which counts the rest, after the ROIC flags and
-before the trailing ones, where the ``heavy-capex`` sentence names the return the charge starts at
-and ``consensus-basis-unknown`` follows ``large-nri``. The two stock-pay notes,
-``stock-pay-missing`` and ``sbc-basis-uncertain``, follow the anchor's flags (spec 2026-11-13
-7.1), on the anchor's refusal "no positive forward anchor" too, which a stock-pay charge can
-itself cause, each silent under the input that decides it and both under an applied
-``earnings.ntm``, whose anchor is the guidance. ``thin-ntm`` (spec 2026-11-13 9), a note on an
+before the trailing ones, where the ``heavy-capex`` sentence names the return the charge starts
+at. The two stock-pay notes, ``stock-pay-missing`` and ``sbc-basis-uncertain``, follow the
+anchor's flags (spec 2026-11-13 7.1), on the anchor's refusal "no positive forward anchor" too,
+which a stock-pay charge can itself cause, each silent under the input that decides it and both
+under an applied ``earnings.ntm``, whose anchor is the guidance; the first reason of
+``sbc-basis-uncertain`` reads the test of the warning ``one-time-items``, GAAP trailing EPS and
+the street's apart by ``one_time_items_share`` or more, and is silent under an applied
+``earnings.nri_gap`` as the warning is (spec 2026-11-19 7.3); the warning itself is Mature
+Stable's alone. ``thin-ntm`` (spec 2026-11-13 9), a note on an
 NTM window with a period of fewer than ``analyst_min`` EPS analysts or no count, takes the place
 right after ``few-analysts``, silent under an applied ``earnings.ntm`` for the same reason.
 ``charge`` in the intermediates records the growth paid for, the return by year, the hold, the
@@ -73,8 +76,8 @@ consensus less the SBC adjustment, the NTM window's periods still required
 count the consensus is on, and which a guided EPS, standing in for the consensus with its items,
 leaves unread; ``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS, the
 consensus's or the guided one, is then taken less, before the positive-anchor refusal
-(``anchor.ntm_anchor``). Nothing else reads the three: the basis test, the clean EPS, EPV and
-``large-nri`` read the non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps``
+(``anchor.ntm_anchor``). Nothing else reads the three: the basis test, the clean EPS and EPV
+read the non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps``
 and ``ntm_net_income`` data entries are the consensus less the stock-pay adjustment in force
 (``Anchor.ntm_eps_found``), which the two stock-pay inputs move, the ``ntm_eps`` entry giving way
 to the JUDGMENT entry under the guided EPS. ``ntm_nri``, the one-time amount the anchor took off,
@@ -133,7 +136,8 @@ from fairband.engine.anchor import (
 )
 from fairband.engine.flags import (
     long_runway_flag,
-    nri_flag,
+    one_time_items_flag,
+    one_time_share,
     sbc_basis_uncertain_flag,
     stock_pay_missing_flag,
     value_spread_flag,
@@ -299,11 +303,11 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     }
     flags = (
         anchor.flags
-        + _stock_pay_notes(c, anchor, gap)
+        + _stock_pay_notes(c, anchor)
         + path.flags
         + roic.flags
         + present(_growth_above_return(growth, charge))
-        + trailing_flags(i, t, gap, policy, roic)
+        + trailing_flags(i, t, policy, roic)
     )
     spread = present(value_spread_flag(list(own_by_roic.values())[:3], policy)) + present(
         value_spread_flag(list(own_by_runway.values()), policy)
@@ -441,7 +445,7 @@ def _anchor_and_path(
     if anchor.refusal is not None:
         notes: tuple[Flag, ...] = ()
         if own and anchor.refusal == NO_POSITIVE_ANCHOR:
-            notes = _stock_pay_notes(c, anchor, chosen(c, "earnings.nri_gap", nri_gap(i)))
+            notes = _stock_pay_notes(c, anchor)
         return Refused(anchor.refusal, anchor.flags + notes)
     base_year = base_fiscal_year(periods)
     path = path_steps(i.annual_estimates, base_year, policy)
@@ -629,18 +633,20 @@ def _roic_charges(
     }
 
 
-def _stock_pay_notes(c: Context, anchor: Anchor, gap: float | None) -> tuple[Flag, ...]:
+def _stock_pay_notes(c: Context, anchor: Anchor) -> tuple[Flag, ...]:
     """``stock-pay-missing`` and ``sbc-basis-uncertain`` (spec 2026-11-13 7.1), in that order, for
     those that fire: the stored trailing stock pay against the stock pay on file, and the anchor's
     basis against the figures the test read, the stock pay in force (an agent's ``earnings.sbc``,
     else the stored figure) and GAAP EPS less an agent's correction to the non-recurring gap,
-    ``large-nri`` read from the row's own non-recurring gap ``gap``, the stock pay a share on the
-    diluted count, as the anchor reads it (spec 2026-11-14 4). A note is silent under the
-    input that decides it, the agent having decided (spec 7.1): ``stock-pay-missing`` under an
-    applied ``earnings.sbc``, ``sbc-basis-uncertain`` under an applied ``earnings.sbc_basis``.
-    Both are silent under an applied ``earnings.ntm``, as ``thin-ntm`` is: the guided EPS stands
-    in for the consensus less the stock-pay adjustment, so neither stock-pay input moves the value
-    (spec 7.2)."""
+    the stock pay a share on the diluted count, as the anchor reads it (spec 2026-11-14 4).
+    Reason 1 reads the warning's test (spec 2026-11-19 7.3): ``one_time_share`` of the reported
+    GAAP trailing EPS and the street trailing EPS at ``one_time_items_share`` or more, silent
+    under an applied ``earnings.nri_gap`` as the warning ``one-time-items`` is. A note is silent
+    under the input that decides it, the agent having decided (spec 7.1): ``stock-pay-missing``
+    under an applied ``earnings.sbc``, ``sbc-basis-uncertain`` under an applied
+    ``earnings.sbc_basis``. Both are silent under an applied ``earnings.ntm``, as ``thin-ntm`` is:
+    the guided EPS stands in for the consensus less the stock-pay adjustment, so neither stock-pay
+    input moves the value (spec 7.2)."""
     if "earnings.ntm" in c.overrides:
         return ()
     i, t, policy = c.inputs, c.trailing, c.policy
@@ -651,18 +657,28 @@ def _stock_pay_notes(c: Context, anchor: Anchor, gap: float | None) -> tuple[Fla
     uncertain = None
     if "earnings.sbc_basis" not in c.overrides:
         read = replace(t, sbc=anchor.sbc_ttm, eps_diluted=anchor.gaap_ttm_eps)
-        large_nri = nri_flag(gap, t.eps_diluted, policy) is not None
         uncertain = sbc_basis_uncertain_flag(
             anchor.basis,
             read,
             i.street_ttm_eps,
             c.consensus_shares,
             i.tax_rate_latest,
-            large_nri,
+            _one_time(c),
             policy,
             currency=i.currency,
         )
     return present(missing) + present(uncertain)
+
+
+def _one_time(c: Context) -> float | None:
+    """The share by which the reported GAAP trailing EPS and the street trailing EPS differ where
+    it is ``one_time_items_share`` or more, the warning's test, which reason 1 of
+    ``sbc-basis-uncertain`` reads; ``None`` below it, without either figure, on a GAAP EPS of 0,
+    or under an applied ``earnings.nri_gap``, which decides the items (spec 2026-11-19 7.3)."""
+    gaap, street = c.trailing.eps_diluted, c.inputs.street_ttm_eps
+    if "earnings.nri_gap" in c.overrides or one_time_items_flag(gaap, street, c.policy) is None:
+        return None
+    return one_time_share(gaap, street)
 
 
 def _growth_above_return(growth: GrowthPath, charge: Charge) -> Flag | None:

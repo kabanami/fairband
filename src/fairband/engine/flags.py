@@ -16,9 +16,12 @@ The gate flags are the three ``mech/1.2`` gate tests on the trailing figures, ke
 cash-flow statement signs capital spending as an outflow, so ``capex`` is negative for spending:
 free cash flow is ``cfo + capex`` and the spending is ``-capex``.
 
-The consensus-basis note follows ``large-nri`` on the mature routes (spec 2026-11-09 7): FMP's
-consensus names no basis, so whether the NTM anchor and the path carry the non-recurring items
-is unknown.
+The warning ``one-time-items`` (spec 2026-11-19 7.2), on Mature Stable alone: GAAP trailing
+diluted EPS and the street trailing EPS differ by ``one_time_items_share`` of the GAAP figure's
+size or more, |GAAP − street| ÷ |GAAP| (``one_time_share``), so the trailing earnings, which the
+mechanical value keeps, may hold one-time items; silent without a street figure or with a GAAP
+EPS of zero. The route passes it to ``route_steps.trailing_flags``, and leaves it out under an
+agent's ``earnings.nri_gap``, which decides the items.
 
 The two stock-pay notes follow the anchor's flags on Mature Growth (spec 2026-11-13 7.1).
 ``stock-pay-missing``: the trailing stock pay is zero, or a trailing period's is, while a fiscal
@@ -26,8 +29,9 @@ year on file holds stock pay above zero, so the stored figure, and the stock-pay
 consensus with it, may be nil or short. ``sbc-basis-uncertain``: the basis test may misread, one
 sentence for each reason that holds. Stock pay is material when its after-tax figure a share is
 ``sbc_material_share`` of a street trailing EPS above zero or more. Reason 1: the test reads
-``includes-sbc`` on a material stock pay with ``large-nri`` on the row, a one-time item that may
-sit in GAAP EPS and hide the gap. Reason 2: the same reading on a material stock pay with a
+``includes-sbc`` on a material stock pay where GAAP trailing EPS and the street's differ by
+``one_time_items_share`` or more, the warning's test (spec 2026-11-19 7.3), so a one-time item
+may sit in GAAP EPS and hide the gap. Reason 2: the same reading on a material stock pay with a
 trailing effective tax rate, income tax over a pre-tax income above zero, at or below
 ``sbc_basis_tax_share`` of the statutory rate, a low tax that may close the gap. Reason 3: the
 test reads ``excludes-sbc`` on a stock pay above zero and the street EPS lies above GAAP, as the
@@ -54,9 +58,11 @@ above zero against none included, so the vendor's line may be wrong; exactly tha
 silent. A balance that only rose or fell raises nothing.
 
 ``QUALITY_WARNINGS`` are the twelve flags that say the value may be wrong because the business or
-its figures are unusual (spec 2026-11-04 9.5, spec 2026-11-13 8); ``flag_count`` counts them on a
-row. Every other flag is a note: the classifier checks, the thin-consensus flags, the unknown
-inputs, the engine's mechanics and the bookkeeping flags. A note is shown and never counted.
+its figures are unusual (spec 2026-11-04 9.5, spec 2026-11-13 8), ``one-time-items`` in the place
+of ``large-nri`` since method 1.7 (spec 2026-11-19 7.2); ``flag_count`` counts them on a row, so a
+row valued before 1.7 counts neither ``large-nri`` nor ``consensus-basis-unknown``. Every other
+flag is a note: the classifier checks, the thin-consensus flags, the unknown inputs, the engine's
+mechanics and the bookkeeping flags. A note is shown and never counted.
 """
 
 import math
@@ -73,7 +79,7 @@ _MARGIN_WINDOW = 10  # mech/1.2: the median and the high over the last ten fisca
 
 QUALITY_WARNINGS: frozenset[str] = frozenset(
     {
-        "large-nri",
+        "one-time-items",
         "value-spread",
         "margin-flag",
         "z-distress",
@@ -169,37 +175,35 @@ def gate_flags(
     return tuple(flags)
 
 
-def nri_flag(nri_gap_per_share: float | None, eps_ttm: float | None, policy: Policy) -> Flag | None:
-    """``large-nri`` when the non-recurring gap is ``nri_flag_share`` of trailing EPS or more, in
-    either direction; ``None`` without both figures or with a zero EPS."""
-    if nri_gap_per_share is None or eps_ttm is None or eps_ttm == 0:
+def one_time_share(gaap_eps: float | None, street_eps: float | None) -> float | None:
+    """|GAAP − street| ÷ |GAAP|, the share of GAAP trailing EPS by which the street trailing EPS
+    differs from it, in sizes, so a GAAP loss against a street profit reads as two losses do;
+    ``None`` without both figures or with a GAAP EPS of 0."""
+    if gaap_eps is None or street_eps is None or gaap_eps == 0:
         return None
-    gap, eps = abs(nri_gap_per_share), abs(eps_ttm)
-    if gap < policy.nri_flag_share * eps:
-        return None
-    return Flag(
-        "large-nri",
-        "Large non-recurring item",
-        f"The non-recurring gap of {nri_gap_per_share:.2f} per share is {gap / eps:.1%} of "
-        f"trailing EPS of {eps_ttm:.2f}, at or above {policy.nri_flag_share:.1%}.",
-    )
+    return abs(gaap_eps - street_eps) / abs(gaap_eps)
 
 
-def basis_unknown_flag(
-    nri: Flag | None, gap: float | None, eps_ttm: float | None, currency: str = "USD"
+def one_time_items_flag(
+    gaap_eps: float | None, street_eps: float | None, policy: Policy, currency: str = "USD"
 ) -> Flag | None:
-    """The ``consensus-basis-unknown`` note beside ``nri``, the row's ``large-nri``: the gap a
-    share with its sign, after ``$`` or the reporting ``currency``'s code, and its share of
-    trailing EPS in size; ``None`` without ``nri``, or without the gap or a non-zero EPS."""
-    if nri is None or gap is None or eps_ttm is None or eps_ttm == 0:
+    """``one-time-items`` (spec 2026-11-19 7.2) when ``one_time_share`` of the two figures is
+    ``one_time_items_share`` or more, the edge firing: the sentence names both figures after
+    ``$`` or the reporting ``currency``'s code, a negative one with the minus sign first, and the
+    share; ``None`` where the share is ``None`` or below the threshold."""
+    share = one_time_share(gaap_eps, street_eps)
+    if gaap_eps is None or street_eps is None or share is None:
+        return None
+    threshold = policy.one_time_items_share
+    if share < threshold:
         return None
     return Flag(
-        "consensus-basis-unknown",
-        "Consensus basis unknown",
-        f"The non-recurring gap is {_money(gap, currency)} a share, "
-        f"{abs(gap) / abs(eps_ttm):.1%} of trailing EPS. FMP's consensus names no basis, so "
-        "whether the NTM anchor and the path carry such items is unknown; a report that reads "
-        "the filing decides, through `earnings.nri_gap`, and on Mature Growth `earnings.ntm`.",
+        "one-time-items",
+        "One-time items",
+        f"GAAP trailing EPS is {_money(gaap_eps, currency)} and the analysts' is "
+        f"{_money(street_eps, currency)}, apart by {share:,.1%} of GAAP EPS, at or above "
+        f"{threshold:.1%}. The trailing earnings may hold one-time items, which the mechanical "
+        "value keeps; a review takes them out through `earnings.nri_gap`.",
     )
 
 
@@ -237,7 +241,7 @@ def sbc_basis_uncertain_flag(
     street_ttm_eps: float | None,
     shares: float,
     tax_rate: float,
-    large_nri: bool,
+    one_time: float | None,
     policy: Policy,
     currency: str = "USD",
 ) -> Flag | None:
@@ -245,9 +249,11 @@ def sbc_basis_uncertain_flag(
     one sentence for each reason that holds, joined by a space: ``t`` holds the trailing figures
     as the test reads them, so the after-tax stock pay a share is ``t.sbc`` × (1 − ``tax_rate``)
     ÷ ``shares``, as the anchor reads it, and the gap of reason 3 is the street EPS less
-    ``t.eps_diluted``; ``large_nri`` says whether ``large-nri`` is on the row. Each figure a share
-    is printed after ``$`` or the reporting ``currency``'s code. ``None`` when no reason holds, or
-    without the stock pay, the street EPS or a positive share count."""
+    ``t.eps_diluted``; ``one_time`` is the share by which GAAP trailing EPS and the street's
+    differ where the warning's test holds, at ``one_time_items_share`` or more, which reason 1
+    reads and its sentence prints, else ``None``. Each figure a share is printed after ``$`` or
+    the reporting ``currency``'s code. ``None`` when no reason holds, or without the stock pay,
+    the street EPS or a positive share count."""
     if t.sbc is None or street_ttm_eps is None or shares <= 0:
         return None
     per_share = t.sbc * (1 - tax_rate) / shares
@@ -259,10 +265,10 @@ def sbc_basis_uncertain_flag(
             f"The basis test reads the consensus as counting stock pay, {stock_pay} a share "
             f"after tax and {per_share / street_ttm_eps:.1%} of street trailing EPS, while"
         )
-        if large_nri:
+        if one_time is not None:
             reasons.append(
-                f"{reads} a large non-recurring item on the row may sit in GAAP EPS and hide the "
-                "gap."
+                f"{reads} GAAP trailing EPS and the analysts' differ by {one_time:,.1%}, so a "
+                "one-time item may sit in GAAP EPS and hide the gap."
             )
         effective = _effective_tax_rate(t)
         if effective is not None and effective <= policy.sbc_basis_tax_share * tax_rate:

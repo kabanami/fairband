@@ -355,7 +355,7 @@ def value_decline(c: Context) -> Valued | Refused:
         + present(_z_distress(z, policy))
         + present(_f_score_low(f, policy))
         + present(_reinvesting(t, v.revenue[-1] < revenue0, i.currency))
-        + trailing_flags(i, t, gap, policy)
+        + trailing_flags(i, t, policy)
     )
     inputs = (
         *(x for x in common_inputs(i, t, roic) if x.name not in _NOT_READ),

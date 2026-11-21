@@ -97,7 +97,7 @@ def test_a_cycle_gap_lowers_the_anchor_earnings(
     assert "cycle_gap" not in plain.intermediates
     plain_result = value_company(ms_context.inputs, deciles, policy, ms_context.today)
     assert current_reading(plain_result, "earnings.cycle_gap") == 0.0
-    # the clean EPS, the P/E and large-nri do not read it
+    # the clean EPS, the P/E and the flags do not read it
     assert lowered.intermediates["eps"] == plain.intermediates["eps"]
     assert lowered.intermediates["multiples"] == plain.intermediates["multiples"]
     assert lowered.flags == plain.flags

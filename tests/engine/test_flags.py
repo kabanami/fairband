@@ -9,7 +9,6 @@ from fairband.engine.balance import SheetFigures
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.flags import (
     QUALITY_WARNINGS,
-    basis_unknown_flag,
     flag_count,
     gate_flags,
     long_runway_flag,
@@ -17,7 +16,8 @@ from fairband.engine.flags import (
     margin_history,
     median_margin,
     millions,
-    nri_flag,
+    one_time_items_flag,
+    one_time_share,
     sbc_basis_uncertain_flag,
     share_count_flag,
     sheet_shift_flag,
@@ -266,40 +266,48 @@ def test_gate_flag_words_and_sentences(policy: Policy) -> None:
     )
 
 
-def test_nri_flag(policy: Policy) -> None:
-    flag = nri_flag(0.6, 10.0, policy)
-    assert flag == Flag(
-        "large-nri",
-        "Large non-recurring item",
-        "The non-recurring gap of 0.60 per share is 6.0% of trailing EPS of 10.00, at or above "
-        "5.0%.",
-    )
-    assert nri_flag(-0.6, 10.0, policy) is not None
-    assert nri_flag(0.6, -10.0, policy) is not None
-    assert nri_flag(0.5, 10.0, policy) is not None  # exactly 5% fires
-    assert nri_flag(0.4, 10.0, policy) is None
-    assert nri_flag(0.6, 0.0, policy) is None
-    assert nri_flag(None, 10.0, policy) is None
-    assert nri_flag(0.6, None, policy) is None
+# The warning's sentence on the Words table's figures (spec 2026-11-19 7.2): GAAP 4.10 against the
+# analysts' 5.20, 1.10 apart, 26.8% of 4.10.
+SENTENCE = (
+    "GAAP trailing EPS is $4.10 and the analysts' is $5.20, apart by 26.8% of GAAP EPS, at or above "
+    "20.0%. The trailing earnings may hold one-time items, which the mechanical value keeps; a "
+    "review takes them out through `earnings.nri_gap`."
+)
 
 
-def test_consensus_basis_unknown_follows_large_nri(policy: Policy) -> None:
-    nri = nri_flag(0.60, 5.00, policy)
-    note = basis_unknown_flag(nri, 0.60, 5.00)
-    assert note is not None and note.code == "consensus-basis-unknown"
-    assert "$0.60 a share, 12.0% of trailing EPS" in note.sentence
-    assert basis_unknown_flag(None, 0.10, 5.00) is None
-    assert note == Flag(
-        "consensus-basis-unknown",
-        "Consensus basis unknown",
-        "The non-recurring gap is $0.60 a share, 12.0% of trailing EPS. FMP's consensus names no "
-        "basis, so whether the NTM anchor and the path carry such items is unknown; a report that "
-        "reads the filing decides, through `earnings.nri_gap`, and on Mature Growth "
-        "`earnings.ntm`.",
+def test_the_warning_at_the_threshold(policy: Policy) -> None:
+    """Spec 2026-11-19 7.2: |GAAP − street| ÷ |GAAP| at ``one_time_items_share`` (20%) or more
+    fires, the edge included; the share reads sizes, so a GAAP loss against a street profit and
+    two losses read alike; silent without a street figure or with a GAAP EPS of zero."""
+    assert policy.one_time_items_share == 0.20
+    assert one_time_items_flag(5.00, 6.00, policy) is not None  # 20.0% fires
+    assert one_time_items_flag(5.00, 5.995, policy) is None  # 19.9% is silent
+    assert one_time_items_flag(5.00, 4.00, policy) is not None  # either side of GAAP
+    assert one_time_items_flag(5.00, None, policy) is None
+    assert one_time_items_flag(None, 5.00, policy) is None
+    assert one_time_items_flag(0.0, 1.00, policy) is None
+    assert one_time_share(-1.00, 0.50) == pytest.approx(1.5)  # sizes, either sign
+    assert one_time_share(-1.00, -0.70) == pytest.approx(0.3)
+    assert one_time_share(0.0, 1.00) is None and one_time_share(5.00, None) is None
+    assert one_time_items_flag(-1.00, -0.70, policy) is not None
+
+
+def test_the_warning_s_sentence(policy: Policy) -> None:
+    """The Words table's word and sentence; a negative figure with the minus sign first, and the
+    code before each figure on a row in another currency, as the other sentences print it. It is
+    a quality warning: it counts."""
+    flag = one_time_items_flag(4.10, 5.20, policy)
+    assert flag is not None
+    assert (flag.code, flag.word, flag.sentence) == ("one-time-items", "One-time items", SENTENCE)
+    loss = one_time_items_flag(-1.00, 0.50, policy)
+    assert loss is not None and "−$1.00" in loss.sentence
+    assert loss.sentence.startswith(
+        "GAAP trailing EPS is −$1.00 and the analysts' is $0.50, apart by 150.0% of GAAP EPS"
     )
-    assert nri is not None and flag_count((nri, note)) == 1  # a note: only large-nri counts
-    negative = basis_unknown_flag(nri_flag(-0.60, 5.00, policy), -0.60, 5.00)
-    assert negative is not None and "is −$0.60 a share, 12.0% of trailing EPS" in negative.sentence
+    sek = one_time_items_flag(4.10, 5.20, policy, "SEK")
+    assert sek is not None and "SEK 4.10" in sek.sentence
+    assert sek.sentence.startswith("GAAP trailing EPS is SEK 4.10 and the analysts' is SEK 5.20,")
+    assert flag_count((flag,)) == 1
 
 
 # Spec 2026-11-13 7.1: 96 million shares, a statutory rate of 25% and a trailing stock pay of $32
@@ -308,9 +316,15 @@ _T = replace(trailing(), sbc=32e6, eps_diluted=12.5, income_tax=100.0, pretax_in
 
 
 def _uncertain(
-    basis: SbcBasis, t: TrailingFigures = _T, street: float = 12.5, nri: bool = False
+    basis: SbcBasis,
+    t: TrailingFigures = _T,
+    street: float = 12.5,
+    one_time: float | None = None,
+    currency: str = "USD",
 ) -> Flag | None:
-    return sbc_basis_uncertain_flag(basis, t, street, 96e6, 0.25, nri, load_policy())
+    return sbc_basis_uncertain_flag(
+        basis, t, street, 96e6, 0.25, one_time, load_policy(), currency=currency
+    )
 
 
 def test_stock_pay_missing_names_the_newest_year_above_zero() -> None:
@@ -346,13 +360,26 @@ def test_stock_pay_missing_words_and_currency() -> None:
     assert "nil in 2 trailing periods while fiscal 2025 shows SEK 1,330.0 million" in two.sentence
 
 
-def test_the_basis_is_uncertain_on_a_one_time_item() -> None:
-    """Reason 1: the test reads includes-sbc, the stock pay is material (0.25 is 2% of a street
-    EPS of 12.5, the edge) and large-nri is on the row."""
+def test_the_basis_is_uncertain_on_one_time_items() -> None:
+    """Reason 1 (spec 2026-11-19 7.3): the test reads includes-sbc, the stock pay is material
+    (0.25 is 2% of a street EPS of 12.5, the edge) and GAAP trailing EPS and the street's differ
+    by ``one_time_items_share`` or more: ``one_time`` is that share where the warning's test
+    holds, ``None`` where it does not. The sentence ends on the share; in SEK each figure a share
+    follows the code."""
     taxed = replace(_T, income_tax=200.0)  # a full tax, so reason 2 is out of the way
-    assert _uncertain("includes-sbc", t=taxed, nri=True) is not None
-    assert _uncertain("includes-sbc", t=taxed, nri=True, street=12.6) is None  # 0.25 is below 2%
-    assert _uncertain("includes-sbc", t=taxed) is None  # no reason holds
+    flag = _uncertain("includes-sbc", t=taxed, one_time=0.268)
+    assert flag is not None and flag.sentence == (
+        "The basis test reads the consensus as counting stock pay, $0.25 a share after tax and "
+        "2.0% of street trailing EPS, while GAAP trailing EPS and the analysts' differ by 26.8%, "
+        "so a one-time item may sit in GAAP EPS and hide the gap."
+    )
+    assert _uncertain("includes-sbc", t=taxed, one_time=0.268, street=12.6) is None  # below 2%
+    assert _uncertain("includes-sbc", t=taxed) is None  # None: no reason 1, and no other holds
+    assert _uncertain("excludes-sbc", t=taxed, one_time=0.268) is None  # reason 1 reads includes
+    sek = _uncertain("includes-sbc", t=taxed, one_time=0.268, currency="SEK")
+    assert sek is not None and sek.sentence.startswith(
+        "The basis test reads the consensus as counting stock pay, SEK 0.25 a share after tax"
+    )
 
 
 def test_the_basis_is_uncertain_on_a_low_tax() -> None:
@@ -378,15 +405,16 @@ def test_the_basis_uncertain_sentences() -> None:
     """One sentence for each reason that holds, joined by a space, each figure a share after
     ``$``, or after the reporting currency's code on a row in another; a stock pay of zero gives
     reason 3 no reading, and neither note is counted."""
-    both = _uncertain("includes-sbc", nri=True)
+    both = _uncertain("includes-sbc", one_time=0.268)
     assert both == Flag(
         "sbc-basis-uncertain",
         "Stock-pay basis uncertain",
         "The basis test reads the consensus as counting stock pay, $0.25 a share after tax and "
-        "2.0% of street trailing EPS, while a large non-recurring item on the row may sit in GAAP "
-        "EPS and hide the gap. The basis test reads the consensus as counting stock pay, $0.25 a "
-        "share after tax and 2.0% of street trailing EPS, while a trailing tax rate of 12.5%, at "
-        "or below 50.0% of the statutory 25.0%, may close the gap.",
+        "2.0% of street trailing EPS, while GAAP trailing EPS and the analysts' differ by 26.8%, "
+        "so a one-time item may sit in GAAP EPS and hide the gap. The basis test reads the "
+        "consensus as counting stock pay, $0.25 a share after tax and 2.0% of street trailing "
+        "EPS, while a trailing tax rate of 12.5%, at or below 50.0% of the statutory 25.0%, may "
+        "close the gap.",
     )
     wide_t = replace(_T, eps_diluted=10.0, income_tax=200.0)
     wide = _uncertain("excludes-sbc", t=wide_t)
@@ -396,7 +424,7 @@ def test_the_basis_uncertain_sentences() -> None:
         "cannot say whether it leaves out stock pay too."
     )
     sek = sbc_basis_uncertain_flag(
-        "excludes-sbc", wide_t, 12.5, 96e6, 0.25, False, load_policy(), currency="SEK"
+        "excludes-sbc", wide_t, 12.5, 96e6, 0.25, None, load_policy(), currency="SEK"
     )
     assert sek is not None and sek.sentence.startswith(
         "The street trailing EPS is SEK 2.50 above the GAAP one, 10.0 times the stock pay of "
@@ -443,7 +471,7 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
     t = replace(mg_inputs.trailing, cfo=6_000e6, capex=-4_000e6)  # 66.7% of operating cash flow
     roic = mature_terms(mg_inputs, policy)
     assert roic.result.by_year[-1].year == 2025  # the newest kept ROIC year
-    heavy = heavy_capex(trailing_flags(mg_inputs, t, None, policy, roic))
+    heavy = heavy_capex(trailing_flags(mg_inputs, t, policy, roic))
     assert "starts at 47.2%, the five-year marginal" in heavy
     assert "newest year's marginal return is 21.4%" in heavy
     assert "`return.runway`" in heavy
@@ -454,11 +482,11 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
         "return on a spending surge still under way is the agent's judgment: `return.runway`."
     )
     three = heavy_capex(
-        trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, "three-year"))
+        trailing_flags(mg_inputs, t, policy, mature_terms(mg_inputs, policy, "three-year"))
     )
     assert "starts at 47.2%, the three-year aggregate; the newest year's" in three
     floor = heavy_capex(
-        trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, "floor"))
+        trailing_flags(mg_inputs, t, policy, mature_terms(mg_inputs, policy, "floor"))
     )
     assert "starts at 9.0%, floored at the required return; the newest year's" in floor
     lifted = mature_terms(mg_inputs, policy, "without-goodwill")
@@ -466,11 +494,11 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
     # cap alone where the business has no capital of its own: none calls the start "the return"
     assert (
         "starts at 20.0%, read on capital without goodwill and intangibles, at most the cap; the "
-        "newest year's" in heavy_capex(trailing_flags(mg_inputs, t, None, policy, lifted))
+        "newest year's" in heavy_capex(trailing_flags(mg_inputs, t, policy, lifted))
     )
     # without a one-year figure the sentence stops at the start
     short = heavy_capex(
-        trailing_flags(mg_inputs, t, None, policy, mature_terms(mg_inputs, policy, one_year=None))
+        trailing_flags(mg_inputs, t, policy, mature_terms(mg_inputs, policy, one_year=None))
     )
     assert short == (
         "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
@@ -480,8 +508,8 @@ def test_heavy_capex_names_the_start_and_the_newest_year_s_marginal(
     built = "Trailing capital spending is 66.7% of operating cash flow, above 50.0%."
     for used in ("off", "unavailable"):
         terms = mature_terms(mg_inputs, policy, used)
-        assert heavy_capex(trailing_flags(mg_inputs, t, None, policy, terms)) == built
-    assert heavy_capex(trailing_flags(mg_inputs, t, None, policy)) == built
+        assert heavy_capex(trailing_flags(mg_inputs, t, policy, terms)) == built
+    assert heavy_capex(trailing_flags(mg_inputs, t, policy)) == built
 
 
 def test_heavy_capex_names_an_override_as_the_start_and_the_measure_beside_it(
@@ -493,7 +521,7 @@ def test_heavy_capex_names_an_override_as_the_start_and_the_measure_beside_it(
     t = replace(mg_inputs.trailing, cfo=6_000e6, capex=-4_000e6)
     roic = mature_terms(mg_inputs, policy, override=0.214)
     assert roic.overridden and roic.runway == 0.214
-    assert heavy_capex(trailing_flags(mg_inputs, t, None, policy, roic)) == (
+    assert heavy_capex(trailing_flags(mg_inputs, t, policy, roic)) == (
         "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The charge's "
         "return starts at 21.4%, the agent's override; the five-year marginal is 47.2%; the "
         "newest year's marginal return is 21.4%, on the capital added in fiscal 2025. The stored "
@@ -502,41 +530,45 @@ def test_heavy_capex_names_an_override_as_the_start_and_the_measure_beside_it(
     )
     three = mature_terms(mg_inputs, policy, "three-year", override=0.214)
     assert "starts at 21.4%, the agent's override; the three-year aggregate is 47.2%; the " in (
-        heavy_capex(trailing_flags(mg_inputs, t, None, policy, three))
+        heavy_capex(trailing_flags(mg_inputs, t, policy, three))
     )
     floor = mature_terms(mg_inputs, policy, "floor", override=0.214)
     assert (
         "starts at 21.4%, the agent's override; the measured return is 6.5%, below the required "
-        "return; the newest" in heavy_capex(trailing_flags(mg_inputs, t, None, policy, floor))
+        "return; the newest" in heavy_capex(trailing_flags(mg_inputs, t, policy, floor))
     )
     lifted = mature_terms(mg_inputs, policy, "without-goodwill", override=0.214)
     assert (
         "starts at 21.4%, the agent's override; the measured return is 6.5%, below the required "
         "return, and the charge would start at 20.0%, on capital without goodwill and "
-        "intangibles; the newest" in heavy_capex(trailing_flags(mg_inputs, t, None, policy, lifted))
+        "intangibles; the newest" in heavy_capex(trailing_flags(mg_inputs, t, policy, lifted))
     )
     # a measured return that is off or unavailable has no measure to name; the start stands
     for used in ("off", "unavailable"):
         terms = mature_terms(mg_inputs, policy, used, one_year=None, override=0.214)
-        assert heavy_capex(trailing_flags(mg_inputs, t, None, policy, terms)) == (
+        assert heavy_capex(trailing_flags(mg_inputs, t, policy, terms)) == (
             "Trailing capital spending is 66.7% of operating cash flow, above 50.0%. The "
             "charge's return starts at 21.4%, the agent's override."
         )
     assert not mature_terms(mg_inputs, policy).overridden
 
 
-def test_consensus_basis_unknown_only_on_the_mature_routes(
-    mg_inputs: CompanyInputs, policy: Policy
-) -> None:
+def test_the_warning_follows_the_gates(mg_inputs: CompanyInputs, policy: Policy) -> None:
+    """The trailing flags are the margin flag, the three gates, then the warning the route passes
+    (``one_time``), last; without one, as before, and the trailing flags raise neither removed
+    code (spec 2026-11-19 7.2)."""
     assert mg_inputs.trailing is not None
-    t = mg_inputs.trailing  # trailing EPS 5.30, so a gap of 0.60 is 11.3% of it
+    t = replace(mg_inputs.trailing, cfo=6_000e6, capex=-4_000e6)  # heavy capex
+    warning = one_time_items_flag(5.30, 4.20, policy)  # 1.10 apart, 20.8% of GAAP 5.30
+    assert warning is not None
     roic = mature_terms(mg_inputs, policy)
-    codes = [f.code for f in trailing_flags(mg_inputs, t, 0.60, policy, roic)]
-    assert codes[-2:] == ["large-nri", "consensus-basis-unknown"]
-    other_routes = trailing_flags(mg_inputs, t, 0.60, policy)  # large-nri, but no returns
-    assert [f.code for f in other_routes][-1] == "large-nri"
-    no_nri = trailing_flags(mg_inputs, t, 0.05, policy, roic)  # under 5% of EPS
-    assert {"large-nri", "consensus-basis-unknown"}.isdisjoint(f.code for f in no_nri)
+    codes = [f.code for f in trailing_flags(mg_inputs, t, policy, roic, warning)]
+    assert codes[-2:] == ["heavy-capex", "one-time-items"]
+    assert trailing_flags(mg_inputs, t, policy, one_time=warning)[-1] == warning
+    without = [f.code for f in trailing_flags(mg_inputs, t, policy, roic)]
+    assert without[-1] == "heavy-capex" and "one-time-items" not in without
+    for flags in (trailing_flags(mg_inputs, t, policy, roic), trailing_flags(mg_inputs, t, policy)):
+        assert {"large-nri", "consensus-basis-unknown"}.isdisjoint(f.code for f in flags)
 
 
 def test_long_runway_flag(policy: Policy) -> None:
@@ -711,10 +743,13 @@ def test_flag_count_counts_the_twelve_quality_warnings_only() -> None:
         Flag("line-not-presented:cash", "", ""),
     )
     assert flag_count(flags) == 0
-    assert flag_count(flags + (Flag("large-nri", "", ""), Flag("value-spread", "", ""))) == 2
+    assert flag_count(flags + (Flag("one-time-items", "", ""), Flag("value-spread", "", ""))) == 2
+    # the two codes plan 2 removes count no more on a row valued before method 1.7
+    old = (Flag("large-nri", "", ""), Flag("consensus-basis-unknown", "", ""))
+    assert flag_count(flags + old) == 0
     assert QUALITY_WARNINGS == frozenset(
         {
-            "large-nri",
+            "one-time-items",
             "value-spread",
             "margin-flag",
             "z-distress",

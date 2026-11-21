@@ -42,7 +42,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any, cast
 
 from fairband.engine.anchor import TrailingFigures
-from fairband.engine.flags import basis_unknown_flag, gate_flags, margin_flag, nri_flag
+from fairband.engine.flags import gate_flags, margin_flag
 from fairband.engine.mature_growth import Charge
 from fairband.engine.multiples import multiples
 from fairband.engine.overrides import (
@@ -153,7 +153,8 @@ class Valued:
 @dataclass(frozen=True)
 class Refused:
     """A route's refusal, with the flags it had raised, the intermediates it had computed and the
-    inputs it cites beyond the ones every result carries (the Start-up route's)."""
+    inputs it cites beyond the ones every result carries: the Start-up route's, Mature Stable's
+    for its trailing earnings (the warning's two figures) and Decline's for its value."""
 
     reason: str
     flags: tuple[Flag, ...] = ()
@@ -459,26 +460,20 @@ def expected(
 def trailing_flags(
     i: CompanyInputs,
     t: TrailingFigures,
-    gap: float | None,
     policy: Policy,
     roic: RoicTerms | None = None,
+    one_time: Flag | None = None,
 ) -> tuple[Flag, ...]:
-    """The margin flag, the three gate flags and the non-recurring flag, in that order. The two
-    mature routes pass their ``roic``: ``consensus-basis-unknown`` then follows ``large-nri``,
-    and the ``heavy-capex`` sentence names the return the charge starts at and the newest year's
-    marginal return (spec 2026-11-09 6.3 and 7). The other routes pass none."""
+    """The margin flag, the three gate flags and ``one_time``, in that order. The two mature
+    routes pass their ``roic``: the ``heavy-capex`` sentence then names the return the charge
+    starts at and the newest year's marginal return (spec 2026-11-09 6.3). The other routes pass
+    none. ``one_time`` is the warning ``one-time-items`` (``flags.one_time_items_flag``), which
+    Mature Stable alone passes, and none under an applied ``earnings.nri_gap`` (spec 2026-11-19
+    7.2)."""
     gates = gate_flags(t, i.market_cap, policy)
-    nri = nri_flag(gap, t.eps_diluted, policy)
-    basis: Flag | None = None
     if roic is not None:
         gates = tuple(_heavy_capex(f, roic) if f.code == "heavy-capex" else f for f in gates)
-        basis = basis_unknown_flag(nri, gap, t.eps_diluted, i.currency)
-    return (
-        present(margin_flag(i.series, ttm_margin(t), policy))
-        + gates
-        + present(nri)
-        + present(basis)
-    )
+    return present(margin_flag(i.series, ttm_margin(t), policy)) + gates + present(one_time)
 
 
 def _heavy_capex(flag: Flag, roic: RoicTerms) -> Flag:

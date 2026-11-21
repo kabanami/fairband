@@ -22,7 +22,7 @@ from support.engine_companies import (
 )
 
 from fairband.engine.classifier import Deciles
-from fairband.engine.flags import basis_unknown_flag, millions, nri_flag
+from fairband.engine.flags import millions, one_time_items_flag
 from fairband.engine.overrides import Override, OverrideTag, check_input, range_text
 from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
@@ -616,9 +616,26 @@ def test_the_sentences_name_the_currency(policy: Policy) -> None:
     other."""
     assert millions(-1_234.5e6) == "−$1,234.5 million"
     assert millions(-1_234.5e6, "SEK") == "−SEK 1,234.5 million"
-    note = basis_unknown_flag(nri_flag(-0.60, 5.00, policy), -0.60, 5.00, "SEK")
-    assert note is not None
-    assert note.sentence.startswith("The non-recurring gap is −SEK 0.60 a share, 12.0% of ")
+    warning = one_time_items_flag(-0.60, 5.00, policy, "SEK")
+    assert warning is not None
+    assert warning.sentence.startswith(
+        "GAAP trailing EPS is −SEK 0.60 and the analysts' is SEK 5.00, apart by 933.3% of GAAP EPS"
+    )
+
+
+def test_the_warning_names_the_currency(policy: Policy, deciles: Deciles) -> None:
+    """MSCO in SEK at 8.0 SEK per USD, its street EPS 4.50 a share: GAAP SEK 27.20 against the
+    analysts' SEK 36.00, 32.4% apart, a ratio the rate does not move. The warning prints each
+    figure after the code, and the route cites ``street_ttm_eps`` in SEK a share."""
+    r = value_company(
+        in_sek(replace(mature_stable_inputs(), street_ttm_eps=4.50)), deciles, policy, TODAY
+    )
+    [warning] = [f.sentence for f in r.flags if f.code == "one-time-items"]
+    assert warning.startswith(
+        "GAAP trailing EPS is SEK 27.20 and the analysts' is SEK 36.00, apart by 32.4% of GAAP EPS"
+    )
+    [street] = [i for i in r.inputs if i.name == "street_ttm_eps"]
+    assert (street.value, street.unit) == (36.0, "SEK a share")
 
 
 # --- the override ranges (spec 7.3) ---

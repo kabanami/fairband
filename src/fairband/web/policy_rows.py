@@ -8,12 +8,13 @@ Mid band's floor, under a changed size floor) is served as the effective policy 
 not read changed: resetting it would change nothing. A derived value is changed when it differs
 from the file's.
 
-Besides the forty-one settings, the page cites fifteen values that are not settings, read from
+Besides the forty-one settings, the page cites sixteen values that are not settings, read from
 the file only, among them the foreign filers' two bounds (the inflation bound and the stale-rate
 bound, spec 2026-11-10 9), the three
 stock-pay thresholds and the share-count band (spec 2026-11-13 7.1 and 8), the sheet-shift
-multiple (spec 2026-11-13 12.5) and the size above which a thin revenue step is not read (spec
-2026-11-14 6.2), and the two the policy derives (the designation edges and the Wide moat's
+multiple (spec 2026-11-13 12.5), the size above which a thin revenue step is not read (spec
+2026-11-14 6.2) and the count of warnings from which a mechanical value is marked (spec
+2026-11-19 7.4), and the two the policy derives (the designation edges and the Wide moat's
 terminal return cap). The policy's tables (the
 base rates, the ratings, the default probabilities, the patterns, the industries) are never
 served, and nothing in the policy is a key.
@@ -46,6 +47,7 @@ READ_ONLY: dict[str, str] = {
     "share_count_gap_band": "times",
     "sheet_shift_multiple": "times",
     "thin_revenue_step_max": "fraction",
+    "warning_mark_min": "count",
 }
 # The derived values, with their unit and the source line the file no longer holds.
 DERIVED: dict[str, tuple[str, str]] = {

@@ -388,7 +388,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         + present(_ramp_in_dollars(margin, v.revenue, path.revenue0, i.currency))
         + present(_return_above_peers(new_capital, peer_roic))
         + ((_FAILURE,) if young else ())
-        + trailing_flags(i, t, gap, policy)
+        + trailing_flags(i, t, policy)
         # the business's own values by margin, before the figure outside it is added
         + present(_value_spread(own_by_margin, target, policy))
     )

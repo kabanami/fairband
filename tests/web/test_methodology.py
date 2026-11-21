@@ -45,9 +45,10 @@ IDIOMS = [
 ]
 PHASES = ["Start-up", "Young Growth", "High Growth", "Mature Growth", "Mature Stable", "Decline"]
 EXAMPLES = ("MSFT", "KO", "CRWD", "ROKU", "MMM", "RVMD")
-# The twelve quality warnings that count in the Flags column (spec 9.5; spec 2026-11-13 8).
+# The twelve quality warnings that count in the Flags column (spec 9.5; spec 2026-11-13 8), the
+# warning one-time-items where large-nri stood, first (spec 2026-11-19 7.2).
 QUALITY_WARNINGS = [
-    "large-nri",
+    "one-time-items",
     "value-spread",
     "margin-flag",
     "z-distress",
@@ -622,6 +623,14 @@ def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     text = re.sub(r"\s+", " ", flags)
     assert "Twelve flags are quality warnings" in text and len(QUALITY_WARNINGS) == 12
     assert set(QUALITY_WARNINGS) == ENGINE_WARNINGS
+    # the warning one-time-items, by its word and threshold, on Mature Stable alone; the two
+    # codes method 1.7 removes are gone (spec 2026-11-19 7.2)
+    one_time = text[text.index('<li><span class="label">One-time items</span>') :]
+    one_time = one_time[: one_time.index("</li>")]
+    assert '<span data-policy="one_time_items_share">—</span>' in one_time
+    assert "Mature Stable" in one_time
+    assert "large-nri" not in chips and "consensus-basis-unknown" not in chips
+    assert "nri_flag_share" not in html
     gap = text[text.index(">share-count-gap</code>") :]
     gap = gap[: gap.index("</li>")]
     for span in ("share_count_gap_band.0", "share_count_gap_band.1"):

@@ -197,10 +197,14 @@ def test_the_runway_returns_rulings_of_2026_11_15() -> None:
         assert words in bullet, words
     assert "the terminal return stays at r" not in bullet
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    rulings = rows[-2]  # the row before method 1.6's
-    assert rulings.startswith(
-        "| 1.5, policy v16 | 2026-11-15 | The runway return's rulings (founder 2026-11-15"
+    rulings = next(
+        x
+        for x in rows
+        if x.startswith(
+            "| 1.5, policy v16 | 2026-11-15 | The runway return's rulings (founder 2026-11-15"
+        )
     )
+    assert rows[rows.index(rulings) + 1].startswith("| 1.6, policy v16 |")
     assert "The method is unchanged at 1.5: no mechanical value moves." in rulings
     assert "the moat's terminal rule reads it in place of the measure on every row" in rulings
     # the marginal return at a constant margin: recorded, shown and never used (4.6)
@@ -293,8 +297,8 @@ def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
         "| share basis unclear: the newest period's count <c> against the quote's <Q> (a snapshot "
         'valued before method 1.6 may carry the ending " (the ADR ratio <ρ>)") | 4.2 |'
     )
-    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-1].startswith(
+    row = next(x for x in _section(11).splitlines() if x.startswith("| 1.6, policy v16 |"))
+    assert row.startswith(
         "| 1.6, policy v16 | 2026-11-19 | The ADR ratio from FMP's two share counts (spec "
         "2026-11-19 6.2"
     )
@@ -303,6 +307,67 @@ def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
         "FMP's ADR flag guards the rule",
         "On refresh 68, valued in memory on 2026-11-19, no value moved",
     ):
+        assert words in row, words
+
+
+def test_method_1_7_takes_no_gap() -> None:
+    """Spec 2026-11-19 7.2 to 7.4, method 1.7: the head names the method and policy v17; 4.1 has
+    the two new values with their sources and not the non-recurring flag's share, and v1 to v16
+    stay while the engine loads v17; 5.11 reads reason 1 by the warning's test; 5.12 and 6.5 cite
+    the street EPS on Mature Stable; 6.1 says the refusal carries the warning; section 8 has the
+    spec's row for the warning, the twelve quality warnings with it in the place of ``large-nri``,
+    and neither removed code; 11 has the 1.7 row last. The engine's last step of the plan, the gap
+    taken out of the mechanical routes, completes the row (Task 3)."""
+    text = METHOD.read_text(encoding="utf-8")
+    assert (
+        "| Method version | `fairband-mechanical/1.7` (`fairband.engine.METHOD_VERSION`) |" in text
+    )
+    assert (
+        "| Policy version | `fairband-policy-v17` (`src/fairband/policy/fairband-policy-v17.toml`) |"
+    ) in text
+    four = _section(4)
+    assert "Every value comes from `fairband-policy-v17.toml`" in four
+    one_time = next(x for x in four.splitlines() if "| `one_time_items_share` | yes |" in x)
+    assert (
+        "the founder, 2026-11-19: of four thresholds tested on 392 Mature Stable rows" in one_time
+    )
+    mark = next(x for x in four.splitlines() if "| `warning_mark_min` | no |" in x)
+    assert "the founder, 2026-11-19: three warnings or more" in mark
+    assert "`nri_flag_share`" not in four
+    assert (
+        "Policies v1 to v16 stay in the package unchanged, because the snapshots valued under them "
+        "cite their hashes. The engine loads v17 only."
+    ) in four
+    five = _section(5)
+    assert (
+        "Reason 1: the test reads `includes-sbc` on a material stock pay where GAAP trailing EPS "
+        "and the street's differ by `one_time_items_share` (20%) or more"
+    ) in five
+    stable = _section(6)
+    assert "street trailing EPS" in stable[stable.index("### 6.5") :]
+    assert "carries the warning `one-time-items` where its test holds" in stable
+    eight = _section(8)
+    row = next(x for x in eight.splitlines() if x.startswith("| `one-time-items` |"))
+    # spec 7.2's row word for word, its formula's bars escaped so the table keeps three cells
+    assert row == (
+        '| `one-time-items` | yes | a Mature Stable row, valued or refused "no positive trailing '
+        'earnings", whose GAAP trailing diluted EPS and street trailing EPS (5.12) differ by '
+        "`one_time_items_share` (20%) of the GAAP figure's size or more: \\|GAAP − street\\| ÷ "
+        "\\|GAAP\\|; "
+        "silent without a street figure, with a GAAP EPS of zero, and under an agent's "
+        '`earnings.nri_gap`, which decides the items. Word "One-time items". The sentence names '
+        "the two figures and the share: \"GAAP trailing EPS is $4.10 and the analysts' is $5.20, "
+        "apart by 26.8% of GAAP EPS, at or above 20.0%. The trailing earnings may hold one-time "
+        "items, which the mechanical value keeps; a review takes them out through "
+        '`earnings.nri_gap`." |'
+    )
+    assert "They are `one-time-items`, `value-spread`," in eight
+    outside_history = text.replace(_section(11), "")
+    for gone in ("large-nri", "consensus-basis-unknown", "nri_flag_share"):
+        assert gone not in outside_history, gone
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-1].startswith("| 1.7, policy v17 |")
+    for words in ("`one-time-items`", "`large-nri`", "`consensus-basis-unknown`", "policy v17"):
         assert words in rows[-1], words
 
 

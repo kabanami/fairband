@@ -18,9 +18,13 @@ still, its runway years uncharged. EPV is shown as the no-growth value. ``epv`` 
 ``charge`` records the growth paid for (g_T in every year), the return by year, the hold and no
 revenue steps, none read or found and each year's source ``none``, and ``charge_off`` beside it
 whether the runway years went uncharged, as on the growth route: false under a
-``return.runway`` override, which charges them. The ROIC flags are the growth route's, and so are
-the trailing flags' readings of the runway return: the ``heavy-capex`` sentence and
-``consensus-basis-unknown`` after ``large-nri``.
+``return.runway`` override, which charges them. The ROIC flags are the growth route's, and so is
+the trailing flags' reading of the runway return, the ``heavy-capex`` sentence. The trailing
+flags end on the warning ``one-time-items`` (spec 2026-11-19 7.2), this route's alone: GAAP
+trailing diluted EPS and the street trailing EPS apart by ``one_time_items_share`` of the GAAP
+figure or more (``flags.one_time_items_flag``), silent under an agent's ``earnings.nri_gap``,
+which decides the items. The route cites ``street_ttm_eps``, the warning's second figure, after
+``net_income_ttm``.
 
 ``growth_route`` is the growth route's value on the same row as a cross-check (calibration spec
 5.7), or that route's refusal; the value, the levels and the designation stay on the stable-growth
@@ -30,14 +34,16 @@ A missing or non-positive E, the normalized E less any cycle gap, refuses "no po
 earnings" (engine-round spec 9); the scaling keeps E's sign, so without a cycle gap this is E
 before the scaling. The refusal keeps ``e_trailing``, ``nri_gap``, ``eps``, ``shares``,
 ``moat``, ``price_facts`` and the cross-check with its implied growth at the price, which
-``route.reprice`` moves as on a valued row; it raises no flag and cites no input beyond the ones
+``route.reprice`` moves as on a valued row. It carries the warning ``one-time-items`` where its
+test holds, since a one-time charge can take the trailing earnings below zero, and no other flag,
+and cites the two figures the test reads, ``eps_ttm`` and ``street_ttm_eps``, beyond the inputs
 every result carries.
 
 Overrides (``method.md`` 14) through ``route_steps.chosen``: ``earnings.nri_gap`` the
 non-recurring gap E is taken less, ``moat.class`` the moat and ``return.runway`` the runway return
 of the charge; the cross-check reads the same moat, returns and gap. ``earnings.cycle_gap``, the
 correction to mid-cycle earnings, comes off the normalized E, and off the cross-check's NTM
-anchor; ``e_trailing``, the clean EPS, the P/E and ``large-nri`` do not read it. ``cycle_gap`` is
+anchor; ``e_trailing``, the clean EPS, the P/E and the warning do not read it. ``cycle_gap`` is
 in the intermediates, a refusal's too, only under that override.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
@@ -62,7 +68,7 @@ override.
 from typing import Any
 
 from fairband.engine.anchor import moat_class
-from fairband.engine.flags import margin_flag, median_margin
+from fairband.engine.flags import margin_flag, median_margin, one_time_items_flag
 from fairband.engine.mature_growth import GrowthPath
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
 from fairband.engine.route_mature_growth import (
@@ -92,12 +98,15 @@ from fairband.engine.route_steps import (
     nri_gap,
     outside_entry,
     outside_value,
+    per_share,
+    present,
     price_facts_for,
     revenue_by_fiscal_year,
     rule,
     trailing_flags,
     ttm_margin,
 )
+from fairband.engine.types import Flag, TaggedInput
 from fairband.policy import Policy
 
 _NOT_POSITIVE = "value not positive under the reinvestment charge"
@@ -131,6 +140,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     )
     outside = outside_value(c)
     business = c.price - outside  # the business's share of the price
+    one_time = _one_time_items(c)
     if e_normalized is None or e_normalized <= 0:
         # engine-round spec 9: the refusal keeps the cross-check, at the price
         refused: dict[str, Any] = {
@@ -145,7 +155,9 @@ def value_mature_stable(c: Context) -> Valued | Refused:
             "growth_route": cross_check_at_price(growth_route, business, c.shares, policy),
             "price_facts": price_facts_for(i.closes, c.price, c.today),
         }
-        return Refused("no positive trailing earnings", (), refused, ())
+        # spec 2026-11-19 7.2: the warning, and the two figures its test reads
+        cited = (data(i, "eps_ttm", t.eps_diluted, per_share(i), "statements"), _street(c))
+        return Refused("no positive trailing earnings", present(one_time), refused, cited)
 
     runway, g_t = policy.runway_years[moat], policy.terminal_growth
     charge = roic.charge(policy, 0)  # no year grows above g_T: the return fades from year 1
@@ -177,7 +189,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         "price_facts": price_facts_for(i.closes, c.price, c.today),
         "growth_route": growth_route,
     }
-    flags = roic.flags + trailing_flags(i, t, gap, policy, roic)
+    flags = roic.flags + trailing_flags(i, t, policy, roic, one_time)
     if value + outside <= 0:
         # the sum decides; the refusal keeps the value side and the cross-check at the price
         at_price = cross_check_at_price(growth_route, business, c.shares, policy)
@@ -186,6 +198,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     inputs = (
         *common_inputs(i, t, roic),
         data(i, "net_income_ttm", t.net_income, money(i), "statements"),
+        _street(c),
         *common_rules(policy, moat, roic.terminal),
         rule(policy, "runway_years", runway, "years", f"{moat} moat"),
         rule(
@@ -197,6 +210,22 @@ def value_mature_stable(c: Context) -> Valued | Refused:
         ),
     )
     return Valued("mature-stable", value + outside, moat, im, inputs, flags)
+
+
+def _one_time_items(c: Context) -> Flag | None:
+    """The warning ``one-time-items`` on the row's GAAP trailing diluted EPS and street trailing
+    EPS (spec 2026-11-19 7.2), in the reporting currency; none under an applied
+    ``earnings.nri_gap``, the agent's figure for the items."""
+    if "earnings.nri_gap" in c.overrides:
+        return None
+    i, t = c.inputs, c.trailing
+    return one_time_items_flag(t.eps_diluted, i.street_ttm_eps, c.policy, i.currency)
+
+
+def _street(c: Context) -> TaggedInput:
+    """The DATA entry ``street_ttm_eps``, the warning's second figure, as Mature Growth cites it."""
+    i = c.inputs
+    return data(i, "street_ttm_eps", i.street_ttm_eps, per_share(i))
 
 
 def stable_at_price(

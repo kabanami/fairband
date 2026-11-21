@@ -178,6 +178,15 @@ All seven re-captured under 1.6 on 2026-11-19 for the ADR ratio found from FMP's
 not run on any, no result carries the input `adr_ratio`, and all seven files are unchanged byte
 for byte.
 
+MSCO re-captured under 1.7 on 2026-11-21 for the warning `one-time-items` (spec 2026-11-19 7.2;
+method 6.5 and section 8): Mature Stable cites the street trailing EPS, the warning's second
+figure, so MSCO's inputs gain `street_ttm_eps` right after `net_income_ttm`, `null`, the fixture
+having no street figure, cited to FMP's earnings. Without a street figure the warning is silent,
+so MSCO's flags stay empty. That is its one change: no value, level, designation, intermediate,
+flag or refusal moves, and the found gap of 0.10 a share still comes off E until the gap leaves
+the engine. `large-nri` and `consensus-basis-unknown` leave the method, and no golden carried
+either, so the six other files are unchanged byte for byte.
+
 Run from the repository root:
 
 ```

@@ -2,8 +2,10 @@
 
 ``SETTINGS`` names the forty policy values of spec 2026-11-04 8.2 in its order and groups, and
 one more since: the cap on the return without goodwill (``method.md`` 4.6 rule 5; the founder's
-ruling of 2026-11-15), after the Wide spread. Each has the label, the plain sentence, the unit,
-the range and the effect the Settings page shows.
+ruling of 2026-11-15), after the Wide spread. Since policy v17 the warning ``one-time-items``'
+threshold, ``one_time_items_share``, stands where the non-recurring flag's share stood (spec
+2026-11-19 7.4). Each has the label, the plain sentence, the unit, the range and the effect the
+Settings page shows.
 A dotted name (``universe.cap_floor_usd``, ``refresh.workers``) addresses a value inside the
 file's ``[values.universe]`` or ``[values.refresh]`` table.
 
@@ -303,11 +305,11 @@ SETTINGS: tuple[Setting, ...] = (
         True,
     ),
     Setting(
-        "nri_flag_share",
+        "one_time_items_share",
         "flags",
-        "Non-recurring gap, share of EPS",
-        "A gap this large between reported and recurring EPS, as a share of trailing EPS, is "
-        "flagged.",
+        "One-time items, share of EPS",
+        "A Mature Stable row whose GAAP and street trailing EPS differ by this share of GAAP EPS "
+        "or more is warned of one-time items.",
         "fraction",
         "revalue",
         "1% to 50%",
@@ -618,10 +620,12 @@ def check(policy: Policy) -> None:
     then stands the sentence beside the one the user changed (B-75). Then the ranges of the two
     values policy v10 adds, the three v11 adds, the four v13 adds and the one v15 adds, which
     are not settings and so are only ever the file's (spec 2026-11-09, section 11; spec
-    2026-11-10, section 9; spec 2026-11-13, sections 7.1, 8 and 12.5). Last the range of the
+    2026-11-10, section 9; spec 2026-11-13, sections 7.1, 8 and 12.5). Then the range of the
     value v16 gains with the thin rule, ``thin_revenue_step_max`` (spec 2026-11-14, section
-    6.2), no setting either. The cap v12 adds, ``return_without_goodwill_cap``, is a setting
-    since 2026-11-15 and is checked after the Wide spread (``method.md`` 4.6 rule 5)."""
+    6.2), no setting either, and last the mark's count v17 adds, ``warning_mark_min``, at least
+    1 (spec 2026-11-19 7.4). The cap v12 adds, ``return_without_goodwill_cap``, is a setting
+    since 2026-11-15 and is checked after the Wide spread (``method.md`` 4.6 rule 5); v17's
+    ``one_time_items_share`` is checked where ``nri_flag_share``, the setting it replaces, was."""
     p, u, f = policy, policy.universe, policy.refresh
     # A. Valuation
     if not 0.04 <= p.required_return <= 0.20:
@@ -697,8 +701,8 @@ def check(policy: Policy) -> None:
     # B. Flags
     if not 1 <= p.analyst_min <= 20:
         raise ValueError("analyst_min: must be from 1 to 20")
-    if not 0.01 <= p.nri_flag_share <= 0.50:
-        raise ValueError("nri_flag_share: must be from 1% to 50%")
+    if not 0.01 <= p.one_time_items_share <= 0.50:
+        raise ValueError("one_time_items_share: must be from 1% to 50%")
     if not 0.05 <= p.value_spread_flag <= 1:
         raise ValueError("value_spread_flag: must be from 5% to 100%")
     if not 0.01 <= p.long_runway_growth_flag <= 0.30:
@@ -775,3 +779,5 @@ def check(policy: Policy) -> None:
         raise ValueError("sheet_shift_multiple: must be above 1")
     if not (isfinite(p.thin_revenue_step_max) and p.thin_revenue_step_max >= 0):
         raise ValueError("thin_revenue_step_max: must be 0% or more")
+    if not p.warning_mark_min >= 1:
+        raise ValueError("warning_mark_min: must be at least 1")

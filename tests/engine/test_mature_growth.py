@@ -330,9 +330,9 @@ def test_the_cycle_gap_lowers_the_anchor_and_leaves_the_gap_its_own(
     mg_context: Context, with_overrides: WithOverrides
 ) -> None:
     """A cycle gap of 1.00 takes the NTM anchor and the value down and stays out of what the
-    non-recurring gap moves: the basis test for stock compensation, the clean EPS, EPV, the P/E
-    and ``large-nri``. Alone it leaves MGCO's basis as found, where a correction of 1.00 to the
-    gap would switch it; beside a gap of 0.50 the basis is the gap's alone."""
+    non-recurring gap moves: the basis test for stock compensation, the clean EPS, EPV and the
+    P/E. Alone it leaves MGCO's basis as found, where a correction of 1.00 to the gap would switch
+    it; beside a gap of 0.50 the basis is the gap's alone."""
     c = mg_context
     plain = _valued(c)
     cycle = _valued(with_overrides(c, {"earnings.cycle_gap": 1.0}))
@@ -347,8 +347,6 @@ def test_the_cycle_gap_lowers_the_anchor_and_leaves_the_gap_its_own(
         assert b["anchor"]["ntm_eps"] == pytest.approx(a["anchor"]["ntm_eps"] - 1.0)
         assert (b["nri_gap"], b["eps"], b["epv"]) == (a["nri_gap"], a["eps"], a["epv"])
         assert b["multiples"] == a["multiples"]
-        large = [f for f in beside.flags if f.code == "large-nri"]
-        assert large == [f for f in alone.flags if f.code == "large-nri"]
         assert beside.value < alone.value
 
 

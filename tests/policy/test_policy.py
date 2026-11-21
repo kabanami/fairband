@@ -71,11 +71,22 @@ V16_RANGES = {
 # The value policy v16 adds, the size above which a thin revenue step is not read (spec 2026-11-14,
 # sections 6.2 and 10, as narrowed on 2026-11-15).
 V16_VALUES = {"thin_revenue_step_max"}
+V16_SHA256 = "9daf851f0bd91f02c19ea47f993be17004b0e0fcac1f68171800f513786230d3"
+# The two values policy v17 adds and the one it drops (spec 2026-11-19 7.4): the warning
+# one-time-items' threshold in the place of the non-recurring flag's, and the mark's count.
+V17_VALUES = {"one_time_items_share", "warning_mark_min"}
+V17_SOURCES = {
+    "one_time_items_share": (
+        "the founder, 2026-11-19: of four thresholds tested on 392 Mature Stable rows, 20% warns "
+        "45% of rows and finds 89% of the large moves"
+    ),
+    "warning_mark_min": "the founder, 2026-11-19: three warnings or more",
+}
 BAND_RULE = "the low must be below 1 and the high above 1"
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v16.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v17.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -99,7 +110,7 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v16" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v17" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
@@ -134,29 +145,40 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v16_is_the_packaged_policy() -> None:
+def test_v17_is_the_packaged_policy() -> None:
+    """Spec 2026-11-19 7.4: the warning's threshold, 20%, and the mark's count, 3; the
+    non-recurring flag's share is gone from the policy."""
     p = load_policy()
-    assert p.version == "fairband-policy-v16"
+    assert p.version == "fairband-policy-v17"
+    assert p.one_time_items_share == 0.20 and p.warning_mark_min == 3
+    assert not hasattr(p, "nri_flag_share")
     assert p.override_ranges["shares.committed"] == (0.0, 1e12)
     assert p.override_ranges["earnings.ntm_nri"] == (-100.0, 100.0)
     assert p.override_ranges["revenue.step_2"] == (-0.80, 3.00)
     assert p.override_ranges["revenue.step_3"] == (-0.80, 3.00)
 
 
+def test_v16_holds_the_non_recurring_flag_s_share() -> None:
+    """The v16 file's own value, read without the loader, which loads v17."""
+    v16 = _file_values("fairband-policy-v16.toml")
+    assert v16["nri_flag_share"]["value"] == 0.05
+    assert not V17_VALUES & v16.keys()
+
+
 def test_v15_holds_the_sheet_shift_multiple() -> None:
-    """The v15 file's own value, read without the loader, which loads v16."""
+    """The v15 file's own value, read without the loader, which loads v17."""
     v15 = _file_values("fairband-policy-v15.toml")
     assert v15["sheet_shift_multiple"]["value"] == 3.0
 
 
 def test_v14_holds_the_minority_range() -> None:
-    """The v14 file's own range, read without the loader, which loads v16."""
+    """The v14 file's own range, read without the loader, which loads v17."""
     v14 = _file_values("fairband-policy-v14.toml")
     assert v14["override_ranges"]["value"]["balance.minority"] == [0.0, 1e15]
 
 
 def test_v13_holds_its_four_values_and_two_ranges() -> None:
-    """The v13 file's own values, read without the loader, which loads v16."""
+    """The v13 file's own values, read without the loader, which loads v17."""
     v13 = _file_values("fairband-policy-v13.toml")
     assert (
         v13["sbc_material_share"]["value"],
@@ -169,7 +191,7 @@ def test_v13_holds_its_four_values_and_two_ranges() -> None:
 
 
 def test_the_packaged_policy_keeps_the_earlier_versions_values() -> None:
-    """The values v8 to v13 added, as v16 carries them; the override ranges as v16 has them,
+    """The values v8 to v13 added, as v17 carries them; the override ranges as v17 has them,
     the minority interest's that v14 adds and the four that v16 adds among them."""
     policy = load_policy()
     assert (
@@ -478,7 +500,7 @@ def test_v16_is_v15_with_the_four_ranges_and_the_one_value() -> None:
     note gaining one sentence naming each new tag and the spec; and the one new key is
     ``thin_revenue_step_max``, 50%, its source naming spec 2026-11-14 6.2, no setting."""
     v15 = _file_values("fairband-policy-v15.toml")
-    v16 = load_policy().raw["values"]
+    v16 = _file_values("fairband-policy-v16.toml")
     assert v16.keys() - v15.keys() == V16_VALUES and v15.keys() <= v16.keys()
     assert v16["thin_revenue_step_max"]["value"] == 0.5
     assert "spec 2026-11-14, section 6.2" in v16["thin_revenue_step_max"]["source"]
@@ -494,6 +516,47 @@ def test_v16_is_v15_with_the_four_ranges_and_the_one_value() -> None:
     for tag in V16_RANGES:
         assert tag in added, tag
     assert "spec 2026-11-14" in added
+
+
+def test_v17_is_v16_with_two_values_in_and_one_out() -> None:
+    """Spec 2026-11-19 7.4: every v16 value loads unchanged from v17 but ``nri_flag_share``,
+    which goes; ``one_time_items_share``, 20%, a setting in its place, and ``warning_mark_min``,
+    3, no setting, come, each with the spec's source line. The file's version and header say
+    v17."""
+    v16 = _file_values("fairband-policy-v16.toml")
+    v17 = load_policy().raw["values"]
+    assert v17.keys() - v16.keys() == {"one_time_items_share", "warning_mark_min"}
+    assert v16.keys() - v17.keys() == {"nri_flag_share"}  # the rest equal; 7.4's sources
+    kept = v16.keys() - {"nri_flag_share"}
+    assert {k: v17[k] for k in kept} == {k: v16[k] for k in kept}
+    assert (v17["one_time_items_share"]["value"], v17["warning_mark_min"]["value"]) == (0.20, 3)
+    assert {name: v17[name]["source"] for name in V17_VALUES} == V17_SOURCES
+    settings = {s.name for s in SETTINGS}
+    assert "one_time_items_share" in settings and "warning_mark_min" not in settings
+    assert "nri_flag_share" not in settings
+    text = _packaged_bytes().decode()
+    assert load_policy().raw["meta"] == {"version": "fairband-policy-v17"}
+    assert text.startswith("# Fairband policy v17: every valuation constant the engine reads,")
+    assert (
+        "# v17: v16 with one_time_items_share in nri_flag_share's place, and warning_mark_min "
+        "(spec 2026-11-19 7.2, 7.4)\n"
+    ) in text
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_a_warning_mark_min_below_one_fails_at_load(tmp_path: Path, value: str) -> None:
+    """The mark's count is no setting, so the file is the only way in: below one warning every
+    mechanical value would be marked, so ``load_policy`` refuses it; 1 loads."""
+    with pytest.raises(ValueError, match=r"^warning_mark_min: must be at least 1$"):
+        load_policy(_packaged_with(tmp_path, "warning_mark_min", value))
+    assert load_policy(_packaged_with(tmp_path, "warning_mark_min", "1")).warning_mark_min == 1
+
+
+@pytest.mark.parametrize("value", ["0.005", "0.51"])
+def test_a_one_time_items_share_outside_its_range_fails_at_load(tmp_path: Path, value: str) -> None:
+    """The file is checked as the setting is, 1% to 50%."""
+    with pytest.raises(ValueError, match=r"^one_time_items_share: must be from 1% to 50%$"):
+        load_policy(_packaged_with(tmp_path, "one_time_items_share", value))
 
 
 @pytest.mark.parametrize(
@@ -802,6 +865,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v16_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v16`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v16.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V16_SHA256
 
 
 def test_v15_is_byte_identical_under_its_hash() -> None:

@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v16.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v17.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v15 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v16 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -40,7 +40,10 @@ section 10): the committed shares', the one-time item's in the NTM consensus and
 steps'.
 Nor is the value v16 gains with the thin rule (spec 2026-11-14, section 6.2, as narrowed on
 2026-11-15), the size above which a revenue step on too few revenue analysts is not read: it
-fails at load below 0, or at a NaN or an infinity.
+fails at load below 0, or at a NaN or an infinity. v17 (spec 2026-11-19 7.4) drops
+``nri_flag_share`` and adds ``one_time_items_share``, the warning ``one-time-items``' threshold,
+a setting in its place, and ``warning_mark_min``, the count of quality warnings from which a
+mechanical value is marked, no setting: it fails at load below 1.
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
@@ -62,7 +65,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v16.toml"
+_POLICY_FILE = "fairband-policy-v17.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -149,7 +152,8 @@ class Policy:
     split_implied_count_tolerance: float
     inflation_max: float
     fx_stale_days: int
-    nri_flag_share: float
+    one_time_items_share: float
+    warning_mark_min: int
     value_spread_flag: float
     long_runway_growth_flag: float
     margin_flag_ratio: float
@@ -222,7 +226,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v16 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v17 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -285,7 +289,8 @@ def load_policy(path: Path | None = None) -> Policy:
         split_implied_count_tolerance=read("split_implied_count_tolerance", _num),
         inflation_max=read("inflation_max", _num),
         fx_stale_days=read("fx_stale_days", _whole),
-        nri_flag_share=read("nri_flag_share", _num),
+        one_time_items_share=read("one_time_items_share", _num),
+        warning_mark_min=read("warning_mark_min", _whole),
         value_spread_flag=read("value_spread_flag", _num),
         long_runway_growth_flag=read("long_runway_growth_flag", _num),
         margin_flag_ratio=read("margin_flag_ratio", _num),

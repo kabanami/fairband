@@ -291,6 +291,21 @@
   },
   {
    "estimate_method": null,
+   "kind": "observed",
+   "name": "street_ttm_eps",
+   "note": null,
+   "provenance": {
+    "as_of": "2026-10-30",
+    "entered_at": null,
+    "observed_at": "2026-10-30T21:00:00+00:00",
+    "source": "FMP earnings"
+   },
+   "tag": "DATA",
+   "unit": "USD a share",
+   "value": null
+  },
+  {
+   "estimate_method": null,
    "kind": "rule",
    "name": "required_return",
    "note": null,

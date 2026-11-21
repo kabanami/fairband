@@ -63,11 +63,11 @@ def test_get_settings_shape(client: TestClient) -> None:
     }
     assert r["description"].startswith("The yearly return you require")
     assert body["current"] == {
-        "policyVersion": "fairband-policy-v16",
+        "policyVersion": "fairband-policy-v17",
         "settingsHash": EMPTY_SETTINGS_HASH,
     }
     assert body["valuedUnder"] == {
-        "policyVersion": "fairband-policy-v16",
+        "policyVersion": "fairband-policy-v17",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "fullRefreshAt": STARTED.isoformat(),
         "universeChanged": False,
@@ -122,6 +122,33 @@ def test_put_refuses_a_name_that_is_not_a_setting(client: TestClient) -> None:
     )
     r = client.put("/api/settings", json={"reason": "none"}, headers=HEADER)
     assert (r.status_code, r.json()) == (400, {"detail": "changes: Field required"})
+
+
+def test_a_put_of_the_removed_setting_is_refused(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-19 7.4 (Review Focus 2): policy v17 drops ``nri_flag_share``, so a save that
+    names it is refused 400, never ignored, and writes nothing, the other change of the save
+    included; the setting in its place saves."""
+    changes = {"nri_flag_share": 0.05, "fade_years": 3}
+    r = client.put("/api/settings", json={"changes": changes}, headers=HEADER)
+    assert (r.status_code, r.json()) == (400, {"detail": "nri_flag_share: not a setting"})
+    with closing(connect(db_path)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0
+    r = client.put(
+        "/api/settings", json={"changes": {"one_time_items_share": 0.25}}, headers=HEADER
+    )
+    assert r.status_code == 200
+    assert r.json()["current"]["settingsHash"] == settings_hash({"one_time_items_share": 0.25})
+    shown = _setting(r.json(), "one_time_items_share")
+    assert (shown["label"], shown["value"], shown["default"], shown["range"]) == (
+        "One-time items, share of EPS",
+        0.25,
+        0.2,
+        "1% to 50%",
+    )
+    assert shown["source"] == (
+        "the founder, 2026-11-19: of four thresholds tested on 392 Mature Stable rows, 20% warns "
+        "45% of rows and finds 89% of the large moves"
+    )
 
 
 def test_reset(client: TestClient) -> None:
@@ -294,7 +321,7 @@ def test_a_stored_row_of_a_removed_setting_is_skipped(client: TestClient, db_pat
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:
     body = client.get("/api/policy").json()
     assert (body["version"], body["settingsHash"], body["changed"]) == (
-        "fairband-policy-v16",
+        "fairband-policy-v17",
         EMPTY_SETTINGS_HASH,
         0,
     )
@@ -333,6 +360,7 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "share_count_gap_band": [0.7, 1.3],
         "sheet_shift_multiple": 3.0,  # the note sheet-shift (spec 2026-11-13 12.5)
         "thin_revenue_step_max": 0.5,  # the thin revenue step (spec 2026-11-14 6.2)
+        "warning_mark_min": 3,  # the mark's count of warnings (spec 2026-11-19 7.4)
     }
     for name, value in read_only.items():
         entry = body["values"][name]
@@ -349,9 +377,13 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
             "share_count_gap_band",
             "sheet_shift_multiple",
             "thin_revenue_step_max",
+            "warning_mark_min",
         )
     )
-    assert units == ("fraction", "fraction", "times", "times", "times", "fraction")
+    assert units == ("fraction", "fraction", "times", "times", "times", "fraction", "count")
+    one_time = body["values"]["one_time_items_share"]
+    assert (one_time["value"], one_time["unit"], one_time["setting"]) == (0.2, "fraction", True)
+    assert "nri_flag_share" not in body["values"]
     assert set(body["values"]) == {s.name for s in SETTINGS} | set(read_only) | {
         "designation_edges",
         "wide_terminal_roic_cap",
