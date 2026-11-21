@@ -306,6 +306,17 @@ NEW_INTERMEDIATES = (
 GUIDED_STOCK_PAY = (
     "Under an applied `earnings.ntm` the note does not show, and neither stock-pay input is needed"
 )
+# The playbook's words of method 1.7, copied from the Words table of the GuruFocus removal's plan
+# 2 (spec 2026-11-19 7.5): step 5 on the one-time items, and the clean P/E's gloss.
+STEP_5_ONE_TIME = (
+    "Name the one-time items: the mechanical value keeps them, and step 8 takes them out."
+)
+CLEAN_PE_GLOSS = (
+    "the clean P/E (the price over the trailing earnings a share less the one-time items you set"
+    " through `earnings.nri_gap`; it differs from the reported P/E under your gap alone)"
+)
+# The two codes method 1.7 removes (spec 2026-11-19 7.2), which the playbook names no more.
+REMOVED_CODES = ("large-nri", "consensus-basis-unknown")
 # Terms the example's Summary writes as their phrase, never by name.
 SUMMARY_FREE = (
     "belief",
@@ -1105,20 +1116,6 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
                 "your `revenue.step_2` or `revenue.step_3` still stands over the rule",
             ),
         ),
-        (
-            "consensus-basis-unknown",
-            (
-                "`large-nri`",
-                "`earnings.nri_gap`",
-                "only while no `earnings.sbc_basis` is applied",
-                # a one-time item the consensus carries (spec 2026-11-14 5)
-                "`earnings.ntm_nri`",
-                "the filing's other-income line",
-                "`earnings.ntm`",
-                "guidance record",
-                "exposure",
-            ),
-        ),
         ("step-series-disagree", ("both series", "`path.step_2`", "`path.step_3`")),
         (
             "thin-ntm",
@@ -1226,6 +1223,8 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
     ), split
     assert "drop and re-make them on the new basis" not in split
     assert "made on a snapshot fetched before the split" not in split
+    # the split rule reads no GuruFocus EPS since method 1.7 (spec 2026-11-19 7.1; plan 2, Task 4)
+    assert "GuruFocus" not in split
     # a mature row with the charge off or the return unavailable still takes the judgment; only
     # the other routes have no runway return to decide (the Task 8 fix round 2, method 14.4)
     for words in (
@@ -1456,7 +1455,8 @@ def test_the_skill_reads_a_foreign_filer() -> None:
             r"^- `([\w-]+)`: (.*?)(?=^- |^$|\Z)", eight, re.MULTILINE | re.DOTALL
         )
     }
-    assert "Thirteen flags ask for a decision of yours." in steps[8]
+    # `consensus-basis-unknown` left the method at 1.7 (spec 2026-11-19 7.2, 7.5)
+    assert "Twelve flags ask for a decision of yours." in steps[8]
     for code, words in (
         ("basis-scaled", ("comes from the two counts", "read as stored", "section 8")),
         ("fx-stale", ("the rate", "price date", '`refresh_start("price")`')),
@@ -1509,7 +1509,9 @@ def test_nothing_counts_twice_route_by_route() -> None:
     `earnings.ntm_nri` to them, a share and after tax, then adds the asset; where it excludes
     them the asset is added alone; `earnings.nri_gap` reaches the basis test alone; under
     `earnings.ntm` the item moves nothing; where the agent cannot tell, the asset is left out and
-    named in section 8. Mature Stable's rule stands. The template's section 8 says the same."""
+    named in section 8. Mature Stable's rule stands, its gap the agent's whole figure since method
+    1.7 (`test_the_asset_rule_reads_the_whole_gap`), and Mature Growth's reads the basis with no
+    flag named (spec 2026-11-19 7.5). The template's section 8 says the same."""
     skill = _flat(_read(SKILL))
     for words in (
         "Mature Stable: strip the gains from the trailing earnings through `earnings.nri_gap`",
@@ -1519,7 +1521,8 @@ def test_nothing_counts_twice_route_by_route() -> None:
         ),
         (
             "Mature Growth: the value rests on the analysts' consensus for the next twelve months."
-            " Read the filing's other-income line against the analysts' basis"
+            " Read the filing's other-income line against the analysts' basis. Where the consensus"
+            " carries the asset's gains"
         ),
         (
             "Where the consensus carries the asset's gains, set `earnings.ntm_nri` to them, a share"
@@ -1573,6 +1576,112 @@ def test_nothing_counts_twice_route_by_route() -> None:
     # the rule before the one-time item, which left a Mature Growth asset out (spec 2026-11-14 5)
     assert "no input strips an asset's gains from it" not in skill
     assert "Add the asset only when the consensus excludes its gains." not in skill
+
+
+def test_step_5_says_the_mechanical_value_keeps_one_time_items() -> None:
+    """Spec 2026-11-19 7.5: since method 1.7 the engine takes no non-recurring gap, so step 5's
+    old reason, that the engine anchors on earnings without the one-time items, is wrong; the
+    mechanical value keeps them, and step 8 takes them out."""
+    five = _flat(_steps(_frontmatter(_read(SKILL))[1])[5])
+    assert STEP_5_ONE_TIME in five
+    assert "the engine anchors on earnings without them" not in _read(SKILL)
+
+
+def test_step_8_holds_the_one_time_items_step() -> None:
+    """Spec 2026-11-19 7.5 and `docs/gurufocus-removal.md` 2.6: on Mature Stable the one-time
+    items are a standing step of every report, with no flag needed, after the flags list: the
+    recipe's parts, the figure set through `earnings.nri_gap`, period-tied, with the filing as
+    evidence, and nothing set where the filings show none, which section 8 says. The warning
+    `one-time-items` and the refusal "no positive trailing earnings" (method 6.1, 6.5) are named
+    as cues, not as a gate."""
+    eight = _steps(_frontmatter(_read(SKILL))[1])[8]
+    start = eight.index("On Mature Stable, one step on the one-time items")
+    # after the flags list, whose last entry is `fx-stale`, and no entry of it
+    assert eight.index("- `fx-stale`:") < start
+    assert "one-time-items" not in re.findall(r"^- `([\w-]+)`: ", eight, re.MULTILINE)
+    step = _flat(eight[start:].split("On Mature Growth the value rests", 1)[0])
+    for words in (
+        "On Mature Stable, one step on the one-time items, in every report, with no flag needed.",
+        (
+            "The mechanical value keeps the one-time items of the trailing earnings, and this step"
+            " takes them out."
+        ),
+        "Sum the one-time items of the trailing four quarters",
+        (
+            "Count restructuring, impairments, gains and losses on sales, litigation and debt"
+            " retirement."
+        ),
+        "Take them after tax and a diluted share.",
+        "Write a net charge as a negative figure",
+        "Set the sum through `earnings.nri_gap`, period-tied, with the filing as evidence.",
+        "Where the filings show none, say so in section 8, and set nothing.",
+        (
+            'The warning `one-time-items` and the refusal "no positive trailing earnings" are cues'
+            " to the step, not a gate: the step stands on a row that shows neither."
+        ),
+        "`one_time_items_share`",
+        "it does not show once your `earnings.nri_gap` applies",
+        "the route then values the company",
+    ):
+        assert words in step, words
+
+
+def test_the_ntm_one_time_item_advice_stays_with_no_flag() -> None:
+    """Spec 2026-11-19 7.5: the entry of `consensus-basis-unknown` goes; its advice for Mature
+    Growth, to read whether the NTM consensus carries a one-time item and take it out through
+    `earnings.ntm_nri` or stand in for the consensus through `earnings.ntm`, stays in step 8 after
+    the one-time items' step, with no flag named."""
+    eight = _steps(_frontmatter(_read(SKILL))[1])[8]
+    start = eight.index("On Mature Growth the value rests on the consensus")
+    advice = _flat(eight[start:].split("\n\n", 1)[0])
+    for words in (
+        (
+            "On Mature Growth the value rests on the consensus, and `earnings.nri_gap` reaches only"
+            " the test of the anchor's stock-compensation basis, and only while no"
+            " `earnings.sbc_basis` is applied."
+        ),
+        "Read whether the analysts' NTM EPS carries a one-time item.",
+        (
+            "Where the filing's other-income line shows an item the analysts' NTM EPS carries and"
+            " that does not recur, set `earnings.ntm_nri` to it, a share and after tax."
+        ),
+        'Or `earnings.ntm`, with a clear EPS or net income guidance record (see "Guidance").',
+        "Without either, section 8 states the exposure: the items a share the consensus may carry.",
+        "Amortization of acquired intangibles that an adjusted EPS leaves out is not such an item",
+        "do not report it as a gap.",
+    ):
+        assert words in advice, words
+    for code in REMOVED_CODES:
+        assert code not in advice, code
+    assert eight.index("On Mature Stable, one step on the one-time items") < start
+
+
+def test_the_asset_rule_reads_the_whole_gap() -> None:
+    """Spec 2026-11-19 7.5 and `docs/gurufocus-removal.md` 2.6: with no gap found, the agent's
+    figure is the whole gap, so the Mature Stable rule for an asset outside the business reads
+    it so; the guard against counting a gain twice stays, since step 8's recipe counts gains on
+    sales (the controller's ruling on Task 8, Q4)."""
+    skill = _flat(_read(SKILL))
+    assert (
+        "Mature Stable: strip the gains from the trailing earnings through `earnings.nri_gap`, a"
+        " figure a share; your figure is the whole gap: the one-time items of step 8, with the"
+        " gains a share they do not already hold. Then add the asset."
+    ) in skill
+    assert "the gap found" not in skill
+
+
+def test_no_flag_entry_names_the_removed_codes() -> None:
+    """Spec 2026-11-19 7.2 and 7.5: `large-nri` and `consensus-basis-unknown` left the method at
+    1.7, so step 8 lists twelve flags that ask for a decision, none of them either code, and no
+    file of the playbook names either."""
+    eight = _steps(_frontmatter(_read(SKILL))[1])[8]
+    codes = re.findall(r"^- `([\w-]+)`: ", eight, re.MULTILINE)
+    assert len(codes) == 12, codes
+    assert "Twelve flags ask for a decision of yours." in eight
+    for code in REMOVED_CODES:
+        assert code not in codes, code
+        for path in (SKILL, TOOLS, CITATIONS, TEMPLATE, REGISTER):
+            assert code not in _read(path), (code, path.name)
 
 
 def test_a_net_income_guidance_backs_the_ntm_eps_over_the_count_the_eps_is_per() -> None:
@@ -2013,7 +2122,8 @@ def test_step_5_reads_a_margin_s_change_in_points_and_the_cells_no_consensus_fil
 def test_the_template_s_words_state_what_each_figure_is() -> None:
     """Spec 2026-11-15 10 (B-138): the forward P/E, the price over the NTM EPS (method 5.9), sits
     beside the belief and does not rest on it; the Driver column names the inputs by terms whose
-    phrases the register gives; the clean P/E is glossed in words a reader follows (5.9); section
+    phrases the register gives; the clean P/E is glossed in words a reader follows (5.9), since
+    method 1.7 the review's under the agent's gap and the reported one without it; section
     9 gives the price's date where step 3's refresh did not refresh the company; the Dickinson
     stage is a second reading of the life cycle, not a stage (3.7)."""
     template = _flat(_read(TEMPLATE))
@@ -2038,9 +2148,33 @@ def test_the_template_s_words_state_what_each_figure_is() -> None:
     for name in named:
         assert name in rows, name
     assert "the method's earnings" not in template
+    # the clean P/E under method 1.7 (spec 2026-11-19 7.1, 7.5): a snapshot's equals the reported
+    # one, so the clean figure is the review's under the agent's gap, and with no gap the report
+    # gives the reported P/E and says so (the controller's ruling on Task 8, Q1)
+    assert CLEAN_PE_GLOSS in template
+    for words in (
+        (
+            "Where you set `earnings.nri_gap`, the clean P/E is the review's,"
+            " `review:<id>/intermediates/multiples/pe_clean`: give the two side by side."
+        ),
+        (
+            "Where you set none the two are equal: give the reported P/E, and say that no one-time"
+            " items were taken out of the earnings."
+        ),
+    ):
+        assert words in template, words
+    assert "the price over the trailing earnings a share without one-time items" not in template
+    # the example sets no gap, so it gives the reported P/E alone (the ruling's Q2)
+    example = _example(_read(TEMPLATE))
+    prices = next(s for s in example["sections"] if s["heading"] == "Price and multiples")
+    refs = [part["ref"] for part in prices["parts"] if not isinstance(part, str)]
+    assert "snapshot:412/intermediates/multiples/pe_reported" in refs
+    assert not any(ref.endswith("/multiples/pe_clean") for ref in refs), refs
     assert (
-        "the clean P/E (the price over the trailing earnings a share without one-time items)"
-    ) in template
+        " on reported earnings. This report takes no one-time items out of the earnings, so the P/E"
+        " on earnings less them is the same."
+    ) in _written(prices["parts"])
+    assert "on earnings without one-time items" not in template
     nine = template.split("### Section 9", 1)[1].split("### The charts", 1)[0]
     assert (
         "Where step 3's refresh did not refresh the company, give the price's date beside it, the"

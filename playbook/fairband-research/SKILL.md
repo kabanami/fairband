@@ -292,7 +292,7 @@ Then build the seven parts:
    against a guided margin, is a `difference` of two margins, cited in points
    (`1.5 percentage points`): a `growth` of one margin over another is a relative change, not a
    margin's change. Then name what drove the quarter: price, volume, mix, currency, one-time
-   items. Name the one-time items: the engine anchors on earnings without them.
+   items. Name the one-time items: the mechanical value keeps them, and step 8 takes them out.
 3. **The story management is telling.** Quote the frame in their words. Then take three to five
    claims. For each: the claim with its figure and its timeline; the evidence for it in the
    numbers; the driver it moves, written as the register's phrase for it (`reference/register.md`,
@@ -359,7 +359,7 @@ the phase evidence and the flags. `methodology` explains each in plain words. Pu
 plain words for yourself first. Note each place where the evidence of steps 4 to 7 disagrees with
 an input. Those are the candidate judgments.
 
-Thirteen flags ask for a decision of yours. Read each sentence whole: it names its figures.
+Twelve flags ask for a decision of yours. Read each sentence whole: it names its figures.
 
 - `heavy-capex`: on Mature Growth and Mature Stable, the sentence gives capital spending's share
   of the operating cash flow, then names the return the charge starts at, its measure, and the
@@ -416,22 +416,6 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   says `thin`, while `charge/revenue_steps_found` keeps the analysts' step; your `revenue.step_2`
   or `revenue.step_3` still stands over the rule.
   A step at or below 50% is read on any count, so a thin step there is yours to judge.
-- `consensus-basis-unknown`: it fires with `large-nri`. Whether the analysts' EPS carries the
-  non-recurring items is unknown. Read the filing's non-recurring items. On Mature Stable, decide
-  the trailing earnings through `earnings.nri_gap`. On Mature Growth the value rests on the
-  consensus, and `earnings.nri_gap` reaches only the test of the anchor's stock-compensation
-  basis, and only while no `earnings.sbc_basis` is applied. The doors are two. Where the
-  filing's other-income line shows an item the analysts' NTM EPS carries and that does not
-  recur, set `earnings.ntm_nri` to it, a share and after tax. Or `earnings.ntm`, with a clear EPS
-  or net income guidance record (see "Guidance"). Without either, section 8 states the exposure:
-  the items a share the consensus may carry. Amortization of acquired intangibles that an adjusted
-  EPS leaves out is not such an item, and no input corrects for it: the invested capital keeps
-  the goodwill and the acquired intangibles, so the cost of the acquisitions is in the return the
-  growth is charged at. On a row whose charge starts at the return without goodwill, the return
-  leaves that cost out too: that is right for a purchase made once, whose cost is spent, and
-  wrong for a company that keeps buying, which is the decision of `return-without-goodwill`
-  above. Section 8 says that the anchor is before this amortization, with its size a share from
-  the filing; do not report it as a gap.
 - `stock-pay-missing`: on Mature Growth, the trailing stock pay is nil, or one of its periods'
   is, while a fiscal year on file shows stock pay above zero. The stored figure may be missing or
   short, and the charge on the analysts' EPS with it. The sentence names that fiscal year and its
@@ -493,13 +477,13 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   stands and needs no input: the note stays, and the report says so in section 8.
 - `split-pending`: a split falls after the oldest period of the trailing figures and on or before
   the quote's date. The sentence names each figure read on the post-split basis (the diluted
-  count, the trailing EPS, the street actuals, the consensus EPS by fiscal year and by quarter,
-  GuruFocus's EPS) or says why a side was read as stored: FMP's figures already on the new basis,
-  no quote count, no diluted count, a count that fits both bases or neither, or a trailing period
-  without a share count or with one that fits both bases or neither, or, for a consensus year or
-  quarter, no net-income mean, an EPS of zero, or a count that fits both bases or neither. A
-  figure read as stored may be on the old basis. Check the consensus steps and any guided figure
-  against the new basis before you read them. A review's overrides in dollars a share
+  count, the trailing EPS, the street actuals, the consensus EPS by fiscal year and by quarter) or
+  says why a side was read as stored: FMP's figures already on the new basis, no quote count, no
+  diluted count, a count that fits both bases or neither, or a trailing period without a share
+  count or with one that fits both bases or neither, or, for a consensus year or quarter, no
+  net-income mean, an EPS of zero, or a count that fits both bases or neither. A figure read as
+  stored may be on the old basis. Check the consensus steps and any guided figure against the new
+  basis before you read them. A review's overrides in dollars a share
   (`earnings.ntm`, `earnings.nri_gap`, `earnings.ntm_nri`, `earnings.cycle_gap`, `value.outside`)
   and in shares (`shares.diluted`, `shares.committed`) made on a snapshot whose figures had not
   seen the split apply on the new basis once a snapshot's figures have: the system divides a
@@ -525,6 +509,38 @@ Thirteen flags ask for a decision of yours. Read each sentence whole: it names i
   rate. The sentence names the pair and both dates. Call `refresh_start("price")`, which quotes
   the pairs, wait until `refresh_status()` shows no refresh running, and read `company` again;
   when the note stays, section 8 says the rate is old.
+
+On Mature Stable, one step on the one-time items, in every report, with no flag needed. The
+mechanical value keeps the one-time items of the trailing earnings, and this step takes them out.
+
+1. Sum the one-time items of the trailing four quarters, or of the two half-years of a company
+   that reports by half-year, from their filings (`filing_report`). Count restructuring,
+   impairments, gains and losses on sales, litigation and debt retirement.
+2. Take them after tax and a diluted share. Write a net charge as a negative figure: taking a
+   charge out raises the earnings, and taking a gain out lowers them.
+3. Set the sum through `earnings.nri_gap`, period-tied, with the filing as evidence.
+4. Where the filings show none, say so in section 8, and set nothing.
+
+The warning `one-time-items` and the refusal "no positive trailing earnings" are cues to the
+step, not a gate: the step stands on a row that shows neither. The warning shows where GAAP
+trailing EPS and the analysts' differ by `one_time_items_share` (`policy()`) of GAAP EPS or more,
+and it does not show once your `earnings.nri_gap` applies. The refusal may be a one-time charge
+that took the trailing earnings below zero: taken out, it may lift them above zero, and the route
+then values the company.
+
+On Mature Growth the value rests on the consensus, and `earnings.nri_gap` reaches only the test
+of the anchor's stock-compensation basis, and only while no `earnings.sbc_basis` is applied. Read
+whether the analysts' NTM EPS carries a one-time item. The doors are two. Where the filing's
+other-income line shows an item the analysts' NTM EPS carries and that does not recur, set
+`earnings.ntm_nri` to it, a share and after tax. Or `earnings.ntm`, with a clear EPS or net income
+guidance record (see "Guidance"). Without either, section 8 states the exposure: the items a share
+the consensus may carry. Amortization of acquired intangibles that an adjusted EPS leaves out is
+not such an item, and no input corrects for it: the invested capital keeps the goodwill and the
+acquired intangibles, so the cost of the acquisitions is in the return the growth is charged at.
+On a row whose charge starts at the return without goodwill, the return leaves that cost out too:
+that is right for a purchase made once, whose cost is spent, and wrong for a company that keeps
+buying, which is the decision of `return-without-goodwill` above. Section 8 says that the anchor
+is before this amortization, with its size a share from the filing; do not report it as a gap.
 
 On Mature Growth and Mature Stable, one reading of the return has no flag. Where the charge
 starts at the five-year marginal return (`intermediates/runway_return/used` is `marginal`), read
@@ -1017,22 +1033,23 @@ Nothing counts twice. Where GAAP earnings carry the asset's gains (mark-ups thro
 the route sets what you do:
 
 - Mature Stable: strip the gains from the trailing earnings through `earnings.nri_gap`, a figure a
-  share: the gap found, raised by the gains a share it does not already hold. Then add the asset.
+  share; your figure is the whole gap: the one-time items of step 8, with the gains a share they
+  do not already hold. Then add the asset.
 - High Growth, Young Growth and Decline: the value reads operating income, which the gains never
   enter. Add the asset with no correction, unless it already sits in cash and short-term
   investments, or, on a Decline row whose value the floor sets (`ncav-floor`), in the current
   assets the floor reads, which the route counts already; then it is not outside the business and
   is not added.
 - Mature Growth: the value rests on the analysts' consensus for the next twelve months. Read the
-  filing's other-income line against the analysts' basis; `consensus-basis-unknown` says when
-  that basis is unknown. Where the consensus carries the asset's gains, set `earnings.ntm_nri` to
-  them, a share and after tax, then add the asset through `value.outside`. Where it excludes them,
-  add the asset alone. `earnings.nri_gap` does not take them out: it reaches only the test of the
-  anchor's stock-compensation basis, and only while no `earnings.sbc_basis` is applied. Under an
-  applied `earnings.ntm` the guidance stands in for the consensus with its items, and
-  `earnings.ntm_nri` moves nothing: add the asset only where the guidance leaves its gains out.
-  Where you cannot tell whether the consensus carries the gains, leave the asset out of
-  `value.outside`: section 8 names the asset and its size a share, and says why it is not added.
+  filing's other-income line against the analysts' basis. Where the consensus carries the asset's
+  gains, set `earnings.ntm_nri` to them, a share and after tax, then add the asset through
+  `value.outside`. Where it excludes them, add the asset alone. `earnings.nri_gap` does not take
+  them out: it reaches only the test of the anchor's stock-compensation basis, and only while no
+  `earnings.sbc_basis` is applied. Under an applied `earnings.ntm` the guidance stands in for the
+  consensus with its items, and `earnings.ntm_nri` moves nothing: add the asset only where the
+  guidance leaves its gains out. Where you cannot tell whether the consensus carries the gains,
+  leave the asset out of `value.outside`: section 8 names the asset and its size a share, and
+  says why it is not added.
 
 The server checks an override by these rules, in this order, and answers the first one it breaks:
 

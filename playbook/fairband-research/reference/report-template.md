@@ -286,13 +286,17 @@ The engine or a derivation gives every item. None of them is a target.
   the `ratio` of the two `derived:` ids the first answered, cited as a percentage: "the price sits
   53.4% of the way from the low to the high".
 - **The earnings multiples against their history**, where earnings are positive. The trailing P/E on
-  two bases side by side, the clean P/E (the price over the trailing earnings a share without
-  one-time items) and the reported P/E, and the forward P/E:
-  `snapshot:<id>/intermediates/multiples/pe_clean`, `/pe_reported` and `/pe_forward`. Set each
-  against its own history from `multiples_history`: the trailing series' ten-year average, median,
-  high and low (`multiple:<symbol>/pe/avg_10y`, `/median_10y`, `/high_10y`, `/low_10y`), and the
-  forward series' the same way (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is
-  Fairband's own log: say since when it runs (its `since`), and that it is short while it is.
+  two bases, the clean P/E (the price over the trailing earnings a share less the one-time items
+  you set through `earnings.nri_gap`; it differs from the reported P/E under your gap alone) and
+  the reported P/E, and the forward P/E: `snapshot:<id>/intermediates/multiples/pe_clean`,
+  `/pe_reported` and `/pe_forward`. Where you set `earnings.nri_gap`, the clean P/E is the
+  review's, `review:<id>/intermediates/multiples/pe_clean`: give the two side by side. Where you
+  set none the two are equal: give the reported P/E, and say that no one-time items were taken out
+  of the earnings. Set each against its own history from `multiples_history`: the trailing
+  series' ten-year average, median, high and low (`multiple:<symbol>/pe/avg_10y`, `/median_10y`,
+  `/high_10y`, `/low_10y`), and the forward series' the same way
+  (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is Fairband's own log: say since
+  when it runs (its `since`), and that it is short while it is.
 - **The phase's multiples**, each from `derive`:
 
 | Phase | Multiples to show |
@@ -609,9 +613,7 @@ figure is a cite.
         {"cite": "−12.5%", "ref": "snapshot:412/intermediates/price_facts/drawdown_from_peak"},
         ".\n\nThe P/E is the price over the earnings a share. The trailing P/E is ",
         {"cite": "36.56x", "ref": "snapshot:412/intermediates/multiples/pe_reported"},
-        " on reported earnings, and ",
-        {"cite": "36.11x", "ref": "snapshot:412/intermediates/multiples/pe_clean"},
-        " on earnings without one-time items. Over the past ten years the trailing P/E averaged ",
+        " on reported earnings. This report takes no one-time items out of the earnings, so the P/E on earnings less them is the same. Over the past ten years the trailing P/E averaged ",
         {"cite": "27.80x", "ref": "multiple:EXMP/pe/avg_10y"},
         ", with a median of ",
         {"cite": "26.90x", "ref": "multiple:EXMP/pe/median_10y"},
