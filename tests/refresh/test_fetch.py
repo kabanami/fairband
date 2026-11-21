@@ -238,6 +238,9 @@ def test_force_fetches_fresh_endpoints(
 def test_gf_reused_for_7_days(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
+    """The window is the fetch's own since policy v18 dropped the setting (spec 2026-11-19 8.9),
+    until GuruFocus's call goes."""
+    assert fetch_module._GF_REUSE == timedelta(days=7)
     start = clock.now
     fetch(conn, clients, policy, clock)
     clock.now = start + timedelta(days=2)

@@ -216,6 +216,12 @@ kind rule, with no value, the unit `class` and the class as its note, cited to t
 `moat table fairband-moat-v1`, as of the entry's date, 2026-11-19, and entered when the refresh's
 stage wrote the row, 2026-11-21T09:00:00+00:00. Every other input keeps its place and its figures.
 
+All seven re-captured under policy v18 on 2026-11-21, the method unchanged at 1.8 (spec 2026-11-19
+8.9; method 4.1): the policy drops the Moat Score's two thresholds, which no route reads since 1.8,
+and GuruFocus's reuse window, which no route ever read. The policy version is masked, and the
+settings hash, masked too, is the empty overlay's under either policy, so all seven files are
+unchanged byte for byte.
+
 Run from the repository root:
 
 ```

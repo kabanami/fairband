@@ -1,10 +1,10 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v17.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v18.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v16 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v17 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
@@ -43,7 +43,12 @@ Nor is the value v16 gains with the thin rule (spec 2026-11-14, section 6.2, as 
 fails at load below 0, or at a NaN or an infinity. v17 (spec 2026-11-19 7.4) drops
 ``nri_flag_share`` and adds ``one_time_items_share``, the warning ``one-time-items``' threshold,
 a setting in its place, and ``warning_mark_min``, the count of quality warnings from which a
-mechanical value is marked, no setting: it fails at load below 1.
+mechanical value is marked, no setting: it fails at load below 1. v18 (spec 2026-11-19 8.9) adds
+nothing and drops three values: the Moat Score's two thresholds, ``moat_wide_min`` and
+``moat_narrow_min``, unread since method 1.8 takes the class from the moat table, and
+GuruFocus's reuse window, the setting ``refresh.gf_reuse_days``, whose stored value the overlay
+skips (``fairband.policy.settings``); the fetch holds that window itself until GuruFocus's last
+call goes.
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
@@ -65,7 +70,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v17.toml"
+_POLICY_FILE = "fairband-policy-v18.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -105,7 +110,6 @@ class UniversePolicy:
 @dataclass(frozen=True)
 class RefreshPolicy:
     reuse_hours: int
-    gf_reuse_days: int
     workers: int
     connect_timeout_s: float
     read_timeout_s: float
@@ -128,8 +132,6 @@ class Policy:
     fair_band: tuple[float, float]
     trim_multiple: float
     wide_terminal_roic_spread: float
-    moat_wide_min: float
-    moat_narrow_min: float
     base_rates: tuple[BaseRateClass, ...]
     inflation_addition: float
     marginal_return_span_years: int
@@ -226,7 +228,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v17 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v18 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 
@@ -265,8 +267,6 @@ def load_policy(path: Path | None = None) -> Policy:
         fair_band=read("fair_band", _pair),
         trim_multiple=read("trim_multiple", _num),
         wide_terminal_roic_spread=read("wide_terminal_roic_spread", _num),
-        moat_wide_min=read("moat_wide_min", _num),
-        moat_narrow_min=read("moat_narrow_min", _num),
         base_rates=read("base_rates", _base_rates),
         inflation_addition=read("inflation_addition", _num),
         marginal_return_span_years=read("marginal_return_span_years", _whole),
@@ -466,7 +466,6 @@ def _universe(t: Any) -> UniversePolicy:
 def _refresh(t: Any) -> RefreshPolicy:
     return RefreshPolicy(
         reuse_hours=_whole(t["reuse_hours"]),
-        gf_reuse_days=_whole(t["gf_reuse_days"]),
         workers=_whole(t["workers"]),
         connect_timeout_s=_num(t["connect_timeout_s"]),
         read_timeout_s=_num(t["read_timeout_s"]),

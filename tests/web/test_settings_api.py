@@ -63,11 +63,11 @@ def test_get_settings_shape(client: TestClient) -> None:
     }
     assert r["description"].startswith("The yearly return you require")
     assert body["current"] == {
-        "policyVersion": "fairband-policy-v17",
+        "policyVersion": "fairband-policy-v18",
         "settingsHash": EMPTY_SETTINGS_HASH,
     }
     assert body["valuedUnder"] == {
-        "policyVersion": "fairband-policy-v17",
+        "policyVersion": "fairband-policy-v18",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "fullRefreshAt": STARTED.isoformat(),
         "universeChanged": False,
@@ -149,6 +149,25 @@ def test_a_put_of_the_removed_setting_is_refused(client: TestClient, db_path: Pa
         "the founder, 2026-11-19: of four thresholds tested on 392 Mature Stable rows, 20% warns "
         "45% of rows and finds 89% of the large moves"
     )
+
+
+def test_gurufocus_s_reuse_window_is_no_setting(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-19 8.9: policy v18 drops ``refresh.gf_reuse_days``, so the Settings form's
+    refresh group ends at the FMP window, and a save that names it is refused 400 and writes
+    nothing, the other change of the save included."""
+    body = client.get("/api/settings").json()
+    refresh = next(g["settings"] for g in body["groups"] if g["name"] == "refresh")
+    assert [s["name"] for s in refresh] == [
+        "refresh.workers",
+        "refresh.fmp_calls_per_minute",
+        "refresh.rate_limit_hold_s",
+        "refresh.reuse_hours",
+    ]
+    changes = {"refresh.gf_reuse_days": 3, "fade_years": 3}
+    r = client.put("/api/settings", json={"changes": changes}, headers=HEADER)
+    assert (r.status_code, r.json()) == (400, {"detail": "refresh.gf_reuse_days: not a setting"})
+    with closing(connect(db_path)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0
 
 
 def test_reset(client: TestClient) -> None:
@@ -321,7 +340,7 @@ def test_a_stored_row_of_a_removed_setting_is_skipped(client: TestClient, db_pat
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:
     body = client.get("/api/policy").json()
     assert (body["version"], body["settingsHash"], body["changed"]) == (
-        "fairband-policy-v17",
+        "fairband-policy-v18",
         EMPTY_SETTINGS_HASH,
         0,
     )
@@ -344,8 +363,6 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         False,
     )
     read_only = {
-        "moat_wide_min": 8,
-        "moat_narrow_min": 4,
         "peer_margin_min_years": 5,
         "z_distress": 1.1,
         "z_safe": 2.6,
@@ -384,6 +401,9 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
     one_time = body["values"]["one_time_items_share"]
     assert (one_time["value"], one_time["unit"], one_time["setting"]) == (0.2, "fraction", True)
     assert "nri_flag_share" not in body["values"]
+    # policy v18 drops the Moat Score's two thresholds and GuruFocus's window (spec 2026-11-19 8.9)
+    for gone in ("moat_wide_min", "moat_narrow_min", "refresh.gf_reuse_days"):
+        assert gone not in body["values"], gone
     assert set(body["values"]) == {s.name for s in SETTINGS} | set(read_only) | {
         "designation_edges",
         "wide_terminal_roic_cap",

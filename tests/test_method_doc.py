@@ -314,22 +314,18 @@ def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
 
 
 def test_method_1_7_takes_no_gap() -> None:
-    """Spec 2026-11-19 7.2 to 7.4, method 1.7: the head names policy v17; 4.1 has
-    the two new values with their sources and not the non-recurring flag's share, and v1 to v16
-    stay while the engine loads v17; 5.11 reads reason 1 by the warning's test; 5.12 and 6.5 cite
-    the street EPS on Mature Stable; 6.1 says the refusal carries the warning; section 8 has the
-    spec's row for the warning, the twelve quality warnings with it in the place of ``large-nri``,
-    and neither removed code; 11 has the 1.7 row before 1.8's. Spec 7.1, the gap taken out of the
-    mechanical routes: 5.9 has the clean figures equal the reported ones but under an agent's
-    gap; 6.1 takes E less an agent's gap alone; no route cites GuruFocus's EPS (5.12, 5a.14,
-    6a.10); 13 has the Words table's entry; 14.2 and 14.4 make the whole gap the agent's and the
-    engine's reading 0.0; and the 1.7 row says so."""
+    """Spec 2026-11-19 7.2 to 7.4, method 1.7: 4.1 has the two new values with their sources and
+    not the non-recurring flag's share; 5.11 reads reason 1 by the warning's test; 5.12 and 6.5
+    cite the street EPS on Mature Stable; 6.1 says the refusal carries the warning; section 8 has
+    the spec's row for the warning, the twelve quality warnings with it in the place of
+    ``large-nri``, and neither removed code; 11 has the 1.7 row before 1.8's. Spec 7.1, the gap
+    taken out of the mechanical routes: 5.9 has the clean figures equal the reported ones but
+    under an agent's gap; 6.1 takes E less an agent's gap alone; no route cites GuruFocus's EPS
+    (5.12, 5a.14, 6a.10); 13 has the Words table's entry; 14.2 and 14.4 make the whole gap the
+    agent's and the engine's reading 0.0; and the 1.7 row says so. The policy the head names, and
+    the versions 4.1 keeps, are policy v18's (``test_policy_v18_drops_three_values``)."""
     text = METHOD.read_text(encoding="utf-8")
-    assert (
-        "| Policy version | `fairband-policy-v17` (`src/fairband/policy/fairband-policy-v17.toml`) |"
-    ) in text
     four = _section(4)
-    assert "Every value comes from `fairband-policy-v17.toml`" in four
     one_time = next(x for x in four.splitlines() if "| `one_time_items_share` | yes |" in x)
     assert (
         "the founder, 2026-11-19: of four thresholds tested on 392 Mature Stable rows" in one_time
@@ -348,10 +344,6 @@ def test_method_1_7_takes_no_gap() -> None:
         "exactly 20% fires whatever binary floating point makes of it (section 8)."
     ) in constants
     assert "`nri_flag_share`" not in four
-    assert (
-        "Policies v1 to v16 stay in the package unchanged, because the snapshots valued under them "
-        "cite their hashes. The engine loads v17 only."
-    ) in four
     five = _section(5)
     assert (
         "Reason 1: the test reads `includes-sbc` on a material stock pay where GAAP trailing EPS "
@@ -381,9 +373,10 @@ def test_method_1_7_takes_no_gap() -> None:
     for gone in ("large-nri", "consensus-basis-unknown", "nri_flag_share"):
         assert gone not in outside_history, gone
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-2].startswith("| 1.7, policy v17 |")
+    row17 = next(x for x in rows if x.startswith("| 1.7, policy v17 |"))
+    assert rows[rows.index(row17) + 1].startswith("| 1.8, policy v17 |")
     for words in ("`one-time-items`", "`large-nri`", "`consensus-basis-unknown`", "policy v17"):
-        assert words in rows[-2], words
+        assert words in row17, words
     # spec 7.1: the mechanical routes take no gap
     clean = five[five.index("### 5.9") : five.index("### 5.10")]
     assert (
@@ -418,9 +411,9 @@ def test_method_1_7_takes_no_gap() -> None:
     ):
         assert words in reads, words
     for words in ("no non-recurring gap", "`gf_eps_ttm`", "drops (14.6)", "values move"):
-        assert words in rows[-2], words
+        assert words in row17, words
     # the final review of plan 2, T9-c: CLS's 36 is the one override of any kind that drops
-    assert "PLTR's 20, lasting, stays, and no other override drops;" in rows[-2]
+    assert "PLTR's 20, lasting, stays, and no other override drops;" in row17
 
 
 def test_the_overview_marks_a_value_with_no_reviewed_value() -> None:
@@ -456,10 +449,9 @@ def test_the_method_reads_no_gurufocus_key_ratios() -> None:
     seven = _section(7)
     assert "Assembly brings the street actuals into the currency" in seven
     assert "the mean of the trailing periods' period-end rates" not in seven
-    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-2].startswith("| 1.7, policy v17 |")
+    row17 = next(x for x in _section(11).splitlines() if x.startswith("| 1.7, policy v17 |"))
     for words in ("`keyratios`", "`gf-ratio`", "unread", "`summary`"):
-        assert words in rows[-2], words
+        assert words in row17, words
 
 
 def test_method_1_8_reads_the_moat_table() -> None:
@@ -467,7 +459,7 @@ def test_method_1_8_reads_the_moat_table() -> None:
     moat table and no GuruFocus row; 4.9 is spec 8.5's text; 4.9a states the rule as it ran, its
     cyclical list the rule's 27 names; 5.1, 6b.1 and section 9 place the guard "no moat class";
     5.12 has the input's three forms and no route cites the moat score; section 12 names the
-    founder's table as the source; 11 has the 1.8 row last, under policy v17."""
+    founder's table as the source; 11 has the 1.8 row under policy v17, before policy v18's."""
     text = METHOD.read_text(encoding="utf-8")
     assert (
         "| Method version | `fairband-mechanical/1.8` (`fairband.engine.METHOD_VERSION`) |" in text
@@ -541,9 +533,59 @@ def test_method_1_8_reads_the_moat_table() -> None:
     assert "the gate tests, the moat table |" not in sources
     assert "`docs/gurufocus-removal.md` 6.4" in sources
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-1].startswith("| 1.8, policy v17 | 2026-11-21 | The moat table (spec 2026-11-19 8")
+    assert rows[-2].startswith("| 1.8, policy v17 | 2026-11-21 | The moat table (spec 2026-11-19 8")
     for words in ('"no moat class"', "`moat_score`", "`moat_classes`", "unread", "74 corrections"):
+        assert words in rows[-2], words
+
+
+def test_policy_v18_drops_three_values() -> None:
+    """Spec 2026-11-19 8.9, policy v18 under method 1.8: the head names policy v18; 4.1 reads every
+    value from the v18 file, keeps v1 to v17 while the engine loads v18, and holds no row for the
+    Moat Score's two thresholds or GuruFocus's reuse window, nor names GuruFocus's observation
+    dates in the rate history's source; section 2 still says GuruFocus's ``summary`` call runs,
+    reused for 7 days, the fetch's own window until the call goes; 11 has the v18 row last, after
+    the 1.8 row under v17, saying no value moves."""
+    text = METHOD.read_text(encoding="utf-8")
+    assert (
+        "| Policy version | `fairband-policy-v18` (`src/fairband/policy/fairband-policy-v18.toml`) |"
+    ) in text
+    assert (
+        "| Method version | `fairband-mechanical/1.8` (`fairband.engine.METHOD_VERSION`) |" in text
+    )
+    four = _section(4)
+    assert "Every value comes from `fairband-policy-v18.toml`" in four
+    assert (
+        "Policies v1 to v17 stay in the package unchanged, because the snapshots valued under them "
+        "cite their hashes. The engine loads v18 only."
+    ) in four
+    outside_history = text.replace(_section(11), "")
+    for gone in ("`moat_wide_min`", "`moat_narrow_min`", "`refresh.gf_reuse_days`"):
+        assert gone not in outside_history, gone
+    assert "Reuse window, GuruFocus" not in four and "Moat: score" not in four
+    depth = next(x for x in four.splitlines() if "| `refresh.fx_history_years` | no |" in x)
+    assert (
+        "spec 2026-11-10 9: the trailing periods' ends lie within 15 months, and three years "
+        "leaves room; no source gives the number |"
+    ) in depth
+    assert "GuruFocus" not in depth
+    assert (
+        "GuruFocus's `summary` call, the moat score's until method 1.8, still runs, reused for 7 "
+        "days"
+    ) in _section(2)
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-1].startswith(
+        "| 1.8, policy v18 | 2026-11-21 | The policy drops the Moat Score's two thresholds and "
+        "GuruFocus's reuse window. "
+    )
+    assert rows[-1].endswith(" The method is unchanged at 1.8: no value moves. |")
+    for words in (
+        "`moat_wide_min` and `moat_narrow_min`, unread since method 1.8",
+        "the setting `refresh.gf_reuse_days` (spec 2026-11-19 8.9; 4.1)",
+        "A stored value of the setting is skipped, and deleted at the next save or reset",
+        "keeps a reuse window of 7 days in the code (section 2)",
+    ):
         assert words in rows[-1], words
+    assert rows[-2].startswith("| 1.8, policy v17 |")
 
 
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:

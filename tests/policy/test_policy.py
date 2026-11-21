@@ -82,11 +82,16 @@ V17_SOURCES = {
     ),
     "warning_mark_min": "the founder, 2026-11-19: three warnings or more",
 }
+V17_SHA256 = "f37b8f63af6732d0068df77b9eef9b8b7973b99091892c1ae152caac65ff7349"
+# The three values policy v18 drops (spec 2026-11-19 8.9): the Moat Score's two thresholds, unread
+# since method 1.8, and GuruFocus's reuse window, a setting, from the refresh table.
+V18_DROPPED = {"moat_wide_min", "moat_narrow_min"}
+V18_DROPPED_REFRESH = "gf_reuse_days"
 BAND_RULE = "the low must be below 1 and the high above 1"
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v17.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v18.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -110,18 +115,17 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v17" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v18" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
     assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
     assert p.fair_band == (0.85, 1.15) and p.trim_multiple == 1.5
     assert p.wide_terminal_roic_cap == 0.13
-    assert p.moat_wide_min == 8 and p.moat_narrow_min == 4
     assert len(p.base_rates) == 11
     assert p.base_rates[0] == BaseRateClass(325, 0.085, "$0-325 Mn", 0.40)
     assert p.base_rates[-1].median == 0.033 and p.inflation_addition == 0.02
     assert p.analyst_min == 5 and p.universe.cap_floor_usd == 2_000_000_000
-    assert p.refresh.reuse_hours == 24 and p.refresh.gf_reuse_days == 7 and p.refresh.workers == 16
+    assert p.refresh.reuse_hours == 24 and p.refresh.workers == 16
 
 
 def test_carries_the_calibration_values() -> None:
@@ -145,11 +149,15 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v17_is_the_packaged_policy() -> None:
-    """Spec 2026-11-19 7.4: the warning's threshold, 20%, and the mark's count, 3; the
-    non-recurring flag's share is gone from the policy."""
+def test_v18_is_the_packaged_policy() -> None:
+    """Spec 2026-11-19 8.9: the Moat Score's two thresholds and GuruFocus's reuse window are gone
+    from the policy; v17's warning threshold, 20%, and the mark's count, 3, stay (7.4), and the
+    non-recurring flag's share stays gone."""
     p = load_policy()
-    assert p.version == "fairband-policy-v17"
+    assert p.version == "fairband-policy-v18"
+    for gone in sorted(V18_DROPPED):
+        assert not hasattr(p, gone), gone
+    assert not hasattr(p.refresh, V18_DROPPED_REFRESH)
     assert p.one_time_items_share == 0.20 and p.warning_mark_min == 3
     assert not hasattr(p, "nri_flag_share")
     assert p.override_ranges["shares.committed"] == (0.0, 1e12)
@@ -158,27 +166,35 @@ def test_v17_is_the_packaged_policy() -> None:
     assert p.override_ranges["revenue.step_3"] == (-0.80, 3.00)
 
 
+def test_v17_holds_the_moat_thresholds() -> None:
+    """The v17 file's own values, read without the loader, which loads v18: the Moat Score's two
+    thresholds, 8 and 4, and GuruFocus's reuse window, 7 days."""
+    v17 = _file_values("fairband-policy-v17.toml")
+    assert (v17["moat_wide_min"]["value"], v17["moat_narrow_min"]["value"]) == (8, 4)
+    assert v17["refresh"]["value"][V18_DROPPED_REFRESH] == 7
+
+
 def test_v16_holds_the_non_recurring_flag_s_share() -> None:
-    """The v16 file's own value, read without the loader, which loads v17."""
+    """The v16 file's own value, read without the loader, which loads v18."""
     v16 = _file_values("fairband-policy-v16.toml")
     assert v16["nri_flag_share"]["value"] == 0.05
     assert not V17_VALUES & v16.keys()
 
 
 def test_v15_holds_the_sheet_shift_multiple() -> None:
-    """The v15 file's own value, read without the loader, which loads v17."""
+    """The v15 file's own value, read without the loader, which loads v18."""
     v15 = _file_values("fairband-policy-v15.toml")
     assert v15["sheet_shift_multiple"]["value"] == 3.0
 
 
 def test_v14_holds_the_minority_range() -> None:
-    """The v14 file's own range, read without the loader, which loads v17."""
+    """The v14 file's own range, read without the loader, which loads v18."""
     v14 = _file_values("fairband-policy-v14.toml")
     assert v14["override_ranges"]["value"]["balance.minority"] == [0.0, 1e15]
 
 
 def test_v13_holds_its_four_values_and_two_ranges() -> None:
-    """The v13 file's own values, read without the loader, which loads v17."""
+    """The v13 file's own values, read without the loader, which loads v18."""
     v13 = _file_values("fairband-policy-v13.toml")
     assert (
         v13["sbc_material_share"]["value"],
@@ -191,7 +207,7 @@ def test_v13_holds_its_four_values_and_two_ranges() -> None:
 
 
 def test_the_packaged_policy_keeps_the_earlier_versions_values() -> None:
-    """The values v8 to v13 added, as v17 carries them; the override ranges as v17 has them,
+    """The values v8 to v13 added, as v18 carries them; the override ranges as v18 has them,
     the minority interest's that v14 adds and the four that v16 adds among them."""
     policy = load_policy()
     assert (
@@ -524,7 +540,7 @@ def test_v17_is_v16_with_two_values_in_and_one_out() -> None:
     3, no setting, come, each with the spec's source line. The file's version and header say
     v17."""
     v16 = _file_values("fairband-policy-v16.toml")
-    v17 = load_policy().raw["values"]
+    v17 = _file_values("fairband-policy-v17.toml")
     assert v17.keys() - v16.keys() == {"one_time_items_share", "warning_mark_min"}
     assert v16.keys() - v17.keys() == {"nri_flag_share"}  # the rest equal; 7.4's sources
     kept = v16.keys() - {"nri_flag_share"}
@@ -534,13 +550,53 @@ def test_v17_is_v16_with_two_values_in_and_one_out() -> None:
     settings = {s.name for s in SETTINGS}
     assert "one_time_items_share" in settings and "warning_mark_min" not in settings
     assert "nri_flag_share" not in settings
-    text = _packaged_bytes().decode()
-    assert load_policy().raw["meta"] == {"version": "fairband-policy-v17"}
+    text = resources.files("fairband.policy").joinpath("fairband-policy-v17.toml").read_text()
+    assert tomllib.loads(text)["meta"] == {"version": "fairband-policy-v17"}
     assert text.startswith("# Fairband policy v17: every valuation constant the engine reads,")
     assert (
         "# v17: v16 with one_time_items_share in nri_flag_share's place, and warning_mark_min "
         "(spec 2026-11-19 7.2, 7.4)\n"
     ) in text
+
+
+def test_v18_is_v17_without_the_three_values() -> None:
+    """Spec 2026-11-19 8.9: every v17 value loads unchanged from v18 but ``moat_wide_min`` and
+    ``moat_narrow_min``, which go, and the refresh table, whose value loses ``gf_reuse_days``
+    (7.4's path for a removed setting); v18 adds none. The refresh table's source line no longer
+    names GuruFocus's observation dates among the reasons for the rate history's depth, and no
+    comment or source line of the file names GuruFocus, whose last call the plan takes out: the
+    workers' comment counts FMP's calls alone and the hold's names no GuruFocus 429. The file's
+    version and header say v18."""
+    v17 = _file_values("fairband-policy-v17.toml")
+    v18 = load_policy().raw["values"]
+    assert v17.keys() - v18.keys() == V18_DROPPED and v18.keys() <= v17.keys()
+    kept = v18.keys() - {"refresh"}
+    assert {k: v18[k] for k in kept} == {k: v17[k] for k in kept}
+    refresh17, refresh18 = v17["refresh"], v18["refresh"]
+    assert refresh18.keys() == refresh17.keys() == {"source", "value"}
+    assert refresh18["value"] == {
+        k: v for k, v in refresh17["value"].items() if k != V18_DROPPED_REFRESH
+    }
+    reworded = refresh17["source"].replace(
+        "the trailing periods' ends and GuruFocus's observation dates lie within 15 months",
+        "the trailing periods' ends lie within 15 months",
+    )
+    assert refresh18["source"] == reworded != refresh17["source"]
+    settings = {s.name for s in SETTINGS}
+    assert "refresh.gf_reuse_days" not in settings and not settings & V18_DROPPED
+    text = _packaged_bytes().decode()
+    assert load_policy().raw["meta"] == {"version": "fairband-policy-v18"}
+    assert text.startswith("# Fairband policy v18: every valuation constant the engine reads,")
+    assert (
+        "# v18: v17 without moat_wide_min, moat_narrow_min and refresh.gf_reuse_days "
+        "(spec 2026-11-19 8.9)\n"
+    ) in text
+    assert "GuruFocus" not in text and "Moat Score" not in text
+    assert (
+        "# 16 companies in flight, 31 FMP calls each, and one more for the newest earnings call's\n"
+        "# transcript where the store holds no copy of it with words. The worker count sets the\n"
+    ) in text
+    assert "# (spec 2026-11-03 section 5.2).\nfmp_calls_per_minute = 2850\n" in text
 
 
 @pytest.mark.parametrize("value", ["0", "-1"])
@@ -865,6 +921,12 @@ def test_base_rates_carry_the_ninetieth_percentile_sales_growth() -> None:
         0.15,
         0.15,
     ]
+
+
+def test_v17_is_byte_identical_under_its_hash() -> None:
+    """The hash the snapshots valued under ``fairband-policy-v17`` cite."""
+    data = resources.files("fairband.policy").joinpath("fairband-policy-v17.toml").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == V17_SHA256
 
 
 def test_v16_is_byte_identical_under_its_hash() -> None:

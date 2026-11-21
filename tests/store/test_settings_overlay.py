@@ -66,6 +66,23 @@ def test_a_stored_row_of_a_removed_setting_is_skipped_then_deleted(
     ]
 
 
+def test_a_stored_gf_reuse_days_is_ignored_and_deleted(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-19 8.9 by 7.4's path: policy v18 drops the setting ``refresh.gf_reuse_days``,
+    so a value a user saved under v17 is skipped at every read, the effective policy the file's,
+    and deleted at the next save, logged after the save's own change."""
+    conn.execute("INSERT INTO settings VALUES ('refresh.gf_reuse_days', '3', ?)", (AT.isoformat(),))
+    conn.commit()
+    policy = effective_policy(conn)
+    assert policy == load_policy() and policy.settings_hash == EMPTY_SETTINGS_HASH
+    assert not hasattr(policy.refresh, "gf_reuse_days")
+    write_settings(conn, {"refresh.workers": 4}, None, LATER)
+    assert read_overlay(conn) == {"refresh.workers": 4}
+    assert changes(conn)[0].changes == [
+        {"name": "refresh.workers", "old": None, "new": 4},
+        {"name": "refresh.gf_reuse_days", "old": 3, "new": None},
+    ]
+
+
 def test_a_save_that_names_no_setting_writes_nothing(conn: sqlite3.Connection) -> None:
     with pytest.raises(ValueError, match="gone_value: not a setting"):
         write_settings(conn, {"gone_value": 1, "fade_years": 3}, None, AT)

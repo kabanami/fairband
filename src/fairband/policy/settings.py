@@ -4,8 +4,9 @@
 one more since: the cap on the return without goodwill (``method.md`` 4.6 rule 5; the founder's
 ruling of 2026-11-15), after the Wide spread. Since policy v17 the warning ``one-time-items``'
 threshold, ``one_time_items_share``, stands where the non-recurring flag's share stood (spec
-2026-11-19 7.4). Each has the label, the plain sentence, the unit, the range and the effect the
-Settings page shows.
+2026-11-19 7.4). Policy v18 drops GuruFocus's reuse window, ``refresh.gf_reuse_days``, the last
+of 8.2's (spec 2026-11-19 8.9), so forty remain. Each has the label, the plain sentence, the unit,
+the range and the effect the Settings page shows.
 A dotted name (``universe.cap_floor_usd``, ``refresh.workers``) addresses a value inside the
 file's ``[values.universe]`` or ``[values.refresh]`` table.
 
@@ -500,17 +501,6 @@ SETTINGS: tuple[Setting, ...] = (
         "0 to 720",
         False,
     ),
-    Setting(
-        "refresh.gf_reuse_days",
-        "refresh",
-        "Reuse window, GuruFocus",
-        "A full refresh reuses GuruFocus data fetched within this many days; a scoped one "
-        "fetches again.",
-        "days",
-        "run",
-        "0 to 90",
-        False,
-    ),
 )
 
 _BY_NAME = {s.name: s for s in SETTINGS}
@@ -753,8 +743,6 @@ def check(policy: Policy) -> None:
         raise ValueError("refresh.rate_limit_hold_s: must be from 1 to 3600")
     if not 0 <= f.reuse_hours <= 720:
         raise ValueError("refresh.reuse_hours: must be from 0 to 720")
-    if not 0 <= f.gf_reuse_days <= 90:
-        raise ValueError("refresh.gf_reuse_days: must be from 0 to 90")
     # Policy values that are not settings
     if not 0 <= p.step_series_gap_max <= 0.5:
         raise ValueError("step_series_gap_max: must be from 0 to 50 points")

@@ -8,7 +8,7 @@ Mid band's floor, under a changed size floor) is served as the effective policy 
 not read changed: resetting it would change nothing. A derived value is changed when it differs
 from the file's.
 
-Besides the forty-one settings, the page cites sixteen values that are not settings, read from
+Besides the forty settings, the page cites fourteen values that are not settings, read from
 the file only, among them the foreign filers' two bounds (the inflation bound and the stale-rate
 bound, spec 2026-11-10 9), the three
 stock-pay thresholds and the share-count band (spec 2026-11-13 7.1 and 8), the sheet-shift
@@ -32,8 +32,6 @@ from fairband.policy.settings import SETTINGS, default_of, value_of
 # The cited values that are not settings, with their unit. A score shows as a plain number, as a
 # count does.
 READ_ONLY: dict[str, str] = {
-    "moat_wide_min": "count",
-    "moat_narrow_min": "count",
     "peer_margin_min_years": "years",
     "z_distress": "count",
     "z_safe": "count",

@@ -11,11 +11,12 @@ fetch stored before stay in the store.
 It takes the endpoints in a fixed order. For each one it:
 
 1. reuses the newest HTTP 200 response without an error to the same call (provider, endpoint,
-   symbol and params) when it was observed less than ``reuse_hours`` (FMP) or ``gf_reuse_days``
-   (GuruFocus) before ``now``, unless ``force``: no call, no write (spec 6.2, D13). A scoped
-   refresh forces every call, whatever the window, so on a split's day it reads the splits FMP
-   lists from that day (spec 2026-11-09 10.3); a full refresh does not, so it continues after a
-   cancel (``run``);
+   symbol and params) when it was observed less than the policy's ``reuse_hours`` (FMP) or
+   ``_GF_REUSE``, seven days (GuruFocus), before ``now``, unless ``force``: no call, no write
+   (spec 6.2, D13). Policy v18 dropped GuruFocus's window from the settings (spec 2026-11-19
+   8.9), so the fetch holds it until GuruFocus's call goes. A scoped refresh forces every call,
+   whatever the window, so on a split's day it reads the splits FMP lists from that day (spec
+   2026-11-09 10.3); a full refresh does not, so it continues after a cancel (``run``);
 2. else calls the vendor, outside any transaction;
 3. then stores the response, its body scrubbed of ``secrets``, together with the facts and
    observations normalized from it in one transaction, so a response never stands without its rows.
@@ -188,6 +189,7 @@ STATEMENT_ENDPOINTS = frozenset(
 )
 NO_GF_KEY = "no GuruFocus key"
 _GF_ENDPOINTS = frozenset({"summary"})
+_GF_REUSE = timedelta(days=7)  # GuruFocus's reuse window, no setting since policy v18
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error
 _PENDING = 0  # the response id normalized rows carry until their response is recorded
 
@@ -243,7 +245,7 @@ def fetch_company(
         raise ValueError("fetch_company must not run inside a transaction")
     windows: dict[Provider, timedelta] = {
         "fmp": timedelta(hours=policy.refresh.reuse_hours),
-        "gf": timedelta(days=policy.refresh.gf_reuse_days),
+        "gf": _GF_REUSE,
     }
     calls = reused = 0
     failed: list[str] = []

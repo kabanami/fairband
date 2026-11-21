@@ -24,21 +24,24 @@ from fairband.policy.settings import (
 )
 
 
-def test_forty_one_settings_in_the_spec_order() -> None:
+def test_forty_settings_in_the_spec_order() -> None:
     # spec 2026-11-04 8.2's forty, and the cap on the return without goodwill (the founder's
-    # ruling of 2026-11-15, B-170), which follows the Wide spread
-    assert len(SETTINGS) == 41
+    # ruling of 2026-11-15, B-170), which follows the Wide spread; less GuruFocus's reuse window,
+    # which policy v18 drops (spec 2026-11-19 8.9), so the FMP window is the last
+    assert len(SETTINGS) == 40
     assert [s.name for s in SETTINGS[:3]] == ["required_return", "terminal_growth", "runway_years"]
-    assert SETTINGS[-1].name == "refresh.gf_reuse_days"
+    assert SETTINGS[-1].name == "refresh.reuse_hours"
     assert {s.group for s in SETTINGS} == {"valuation", "flags", "validity", "universe", "refresh"}
+    with pytest.raises(KeyError):
+        setting("refresh.gf_reuse_days")
 
 
 def test_the_groups_run_in_the_spec_order_and_each_name_once() -> None:
     order = ("valuation", "flags", "validity", "universe", "refresh")
     groups = [s.group for s in SETTINGS]
     assert groups == sorted(groups, key=order.index)
-    assert [groups.count(g) for g in order] == [20, 9, 2, 5, 5]
-    assert len({s.name for s in SETTINGS}) == 41
+    assert [groups.count(g) for g in order] == [20, 9, 2, 5, 4]
+    assert len({s.name for s in SETTINGS}) == 40
 
 
 def test_the_catalogue_rows_read_as_the_spec_tables() -> None:
@@ -163,7 +166,7 @@ def test_apply_overlay_changes_the_value_and_the_derived_edges() -> None:
     )
     assert p.required_return == 0.1 and p.wide_terminal_roic_cap == pytest.approx(0.14)
     assert p.designation_edges == (0.65, 0.8, 1.2, 1.5) and p.universe.cap_floor_usd == 5e9
-    assert p.version == "fairband-policy-v17" and p.settings_hash == settings_hash(
+    assert p.version == "fairband-policy-v18" and p.settings_hash == settings_hash(
         {"required_return": 0.1, "fair_band": [0.8, 1.2]}
     )
 
@@ -180,13 +183,19 @@ def test_apply_overlay_skips_a_name_that_is_no_setting() -> None:
     assert settings_hash({"gone_value": 1}) == EMPTY_SETTINGS_HASH
 
 
-def test_an_overlay_holding_the_removed_setting_reads_as_without_it() -> None:
-    """Policy v17 drops ``nri_flag_share`` (spec 2026-11-19 7.4, Review Focus 2): a stored value
-    of it changes nothing and hashes as the overlay without it."""
-    p = apply_overlay(load_policy(), {"nri_flag_share": 0.05, "fade_years": 3})
+@pytest.mark.parametrize(
+    ("removed", "stored"), [("nri_flag_share", 0.05), ("refresh.gf_reuse_days", 3)]
+)
+def test_an_overlay_holding_a_removed_setting_reads_as_without_it(
+    removed: str, stored: object
+) -> None:
+    """Policy v17 drops ``nri_flag_share`` (spec 2026-11-19 7.4, Review Focus 2) and policy v18
+    ``refresh.gf_reuse_days`` by the same path (8.9): a stored value of either changes nothing
+    and hashes as the overlay without it."""
+    p = apply_overlay(load_policy(), {removed: stored, "fade_years": 3})
     assert p == apply_overlay(load_policy(), {"fade_years": 3})
     assert p.settings_hash == settings_hash({"fade_years": 3})
-    assert settings_hash({"nri_flag_share": 0.05}) == EMPTY_SETTINGS_HASH
+    assert settings_hash({removed: stored}) == EMPTY_SETTINGS_HASH
 
 
 def test_apply_overlay_converts_as_the_loader_does() -> None:
@@ -426,7 +435,6 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
     ),
     ({"refresh.reuse_hours": 721}, "refresh.reuse_hours: must be from 0 to 720"),
     ({"refresh.reuse_hours": -1}, "refresh.reuse_hours: must be from 0 to 720"),
-    ({"refresh.gf_reuse_days": 91}, "refresh.gf_reuse_days: must be from 0 to 90"),
 ]
 
 
@@ -510,14 +518,12 @@ INSIDE: list[dict[str, Any]] = [
         "refresh.fmp_calls_per_minute": 10,
         "refresh.rate_limit_hold_s": 1,
         "refresh.reuse_hours": 0,
-        "refresh.gf_reuse_days": 0,
     },
     {
         "refresh.workers": 64,
         "refresh.fmp_calls_per_minute": 10000,
         "refresh.rate_limit_hold_s": 3600,
         "refresh.reuse_hours": 720,
-        "refresh.gf_reuse_days": 90,
     },
 ]
 
@@ -556,7 +562,7 @@ def test_symbols_are_upper_cased_on_apply() -> None:
 
 
 def test_load_policy_checks_the_file_too(tmp_path: Path) -> None:
-    text = resources.files("fairband.policy").joinpath("fairband-policy-v17.toml").read_text()
+    text = resources.files("fairband.policy").joinpath("fairband-policy-v18.toml").read_text()
     old = "[values.required_return]\nvalue = 0.09\n"
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
@@ -612,7 +618,7 @@ def test_a_thin_revenue_step_max_of_0_percent_or_more_is_accepted() -> None:
         ("universe.manual_exclusions", []),
         ("refresh.workers", 16),
         ("refresh.rate_limit_hold_s", 60),
-        ("refresh.gf_reuse_days", 7),
+        ("refresh.reuse_hours", 24),
     ],
 )
 def test_default_of_is_the_files_value_as_json(name: str, default: Any) -> None:
