@@ -934,8 +934,6 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         "equity_issued_ttm",
         "tax_rate_latest",
         "moat_score",
-        "gf_eps_ttm",
-        "gf_eps_without_nri",
         "ntm_revenue",
         "path_step_2",
         "path_step_3",

@@ -38,8 +38,6 @@ SOURCES = {
     "estimates_annual": "FMP analyst-estimates",
     "street_ttm_eps": "FMP earnings",
     "moat_score": "GuruFocus summary",
-    "gf_eps_ttm": "GuruFocus keyratios",
-    "gf_eps_without_nri": "GuruFocus keyratios",
     "next_earnings": "FMP earnings-calendar",
     "tax_rate_latest": "OECD corporate tax statistics",
     "closes": "FMP historical-price-eod",
@@ -300,8 +298,6 @@ def mature_growth_inputs() -> CompanyInputs:
         ),
         street_ttm_eps=5.35,  # 0.05 above GAAP, under half the after-tax SBC: SBC is a cost
         moat_score=8.0,
-        gf_eps_ttm=5.30,
-        gf_eps_without_nri=5.25,
         next_earnings=date(2027, 1, 28),
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 100.0, 150.0),
         data_date=DATA_DATE,
@@ -315,8 +311,8 @@ def mature_growth_inputs() -> CompanyInputs:
 
 def mature_stable_inputs() -> CompanyInputs:
     """A Mature Stable company: revenue up 2% a year from $20 bn at a flat 20% operating margin,
-    a Wide moat, no consensus, and a price of $40 on 1 bn shares. A non-recurring gain of $0.10
-    a share comes off trailing net income."""
+    a Wide moat, no consensus, and a price of $40 on 1 bn shares. Its E is its trailing net income,
+    $3,400 m: the engine takes no non-recurring gap (spec 2026-11-19 7.1)."""
     series = fiscal_years([20_000e6 * 1.02**k for k in range(11)], [0.20] * 11)
     return replace(
         mature_growth_inputs(),
@@ -344,8 +340,6 @@ def mature_stable_inputs() -> CompanyInputs:
         quarter_estimates=(),
         annual_estimates=(),
         street_ttm_eps=None,
-        gf_eps_ttm=3.40,
-        gf_eps_without_nri=3.30,
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 38.0, 40.0),
     )
 
@@ -400,8 +394,6 @@ def high_growth_inputs() -> CompanyInputs:
         ),
         street_ttm_eps=None,
         moat_score=None,
-        gf_eps_ttm=-8.00,
-        gf_eps_without_nri=-8.00,
         peers=(
             PeerFigures("PEER1", 10e9, 0.10, 10, 2.5, 0.12),
             PeerFigures("PEER2", 50e9, 0.20, 10, 1.5, 0.20),
@@ -498,8 +490,6 @@ def decline_inputs() -> CompanyInputs:
         ),
         street_ttm_eps=None,
         moat_score=None,
-        gf_eps_ttm=0.45,
-        gf_eps_without_nri=0.45,
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 4.0, 3.0),
         debt=200e6,
         cash=100e6,
@@ -585,8 +575,6 @@ def start_up_inputs() -> CompanyInputs:
         annual_estimates=(),
         street_ttm_eps=None,
         moat_score=None,
-        gf_eps_ttm=-0.48,
-        gf_eps_without_nri=-0.48,
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 25.0, 20.0),
         peers=(
             PeerFigures("PEER1", 10e9, 0.20, 10, 1.0, 0.12),
@@ -633,8 +621,6 @@ def _restated(i: CompanyInputs, total: float, per_share: float) -> CompanyInputs
         quarter_estimates=tuple(_scaled(q, total, per_share) for q in i.quarter_estimates),
         annual_estimates=tuple(_scaled(a, total, per_share) for a in i.annual_estimates),
         street_ttm_eps=_times(i.street_ttm_eps, per_share),
-        gf_eps_ttm=_times(i.gf_eps_ttm, per_share),
-        gf_eps_without_nri=_times(i.gf_eps_without_nri, per_share),
         debt=_times(i.debt, total),
         cash=_times(i.cash, total),
         sheet=None if i.sheet is None else _scaled(i.sheet, total, per_share),
@@ -647,7 +633,7 @@ def in_sek(
 ) -> CompanyInputs:
     """``i`` reporting in SEK, as assembly hands such a company to the engine: every money figure
     of its statements, consensus and balance sheets × ``rate`` (SEK per USD on the price date,
-    2026-10-31), the street actuals and GuruFocus's EPS among them; the quote's price and market
+    2026-10-31), the street actuals among them; the quote's price and market
     cap in USD, the peers' market caps too; the rate and the inflation differential
     ``differential`` cited, the differential with its note."""
     restated = _restated(i, rate, rate)

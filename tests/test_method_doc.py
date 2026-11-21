@@ -316,8 +316,11 @@ def test_method_1_7_takes_no_gap() -> None:
     stay while the engine loads v17; 5.11 reads reason 1 by the warning's test; 5.12 and 6.5 cite
     the street EPS on Mature Stable; 6.1 says the refusal carries the warning; section 8 has the
     spec's row for the warning, the twelve quality warnings with it in the place of ``large-nri``,
-    and neither removed code; 11 has the 1.7 row last. The engine's last step of the plan, the gap
-    taken out of the mechanical routes, completes the row (Task 3)."""
+    and neither removed code; 11 has the 1.7 row last. Spec 7.1, the gap taken out of the
+    mechanical routes: 5.9 has the clean figures equal the reported ones but under an agent's
+    gap; 6.1 takes E less an agent's gap alone; no route cites GuruFocus's EPS (5.12, 5a.14,
+    6a.10); 13 has the Words table's entry; 14.2 and 14.4 make the whole gap the agent's and the
+    engine's reading 0.0; and the 1.7 row says so."""
     text = METHOD.read_text(encoding="utf-8")
     assert (
         "| Method version | `fairband-mechanical/1.7` (`fairband.engine.METHOD_VERSION`) |" in text
@@ -368,6 +371,41 @@ def test_method_1_7_takes_no_gap() -> None:
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
     assert rows[-1].startswith("| 1.7, policy v17 |")
     for words in ("`one-time-items`", "`large-nri`", "`consensus-basis-unknown`", "policy v17"):
+        assert words in rows[-1], words
+    # spec 7.1: the mechanical routes take no gap
+    clean = five[five.index("### 5.9") : five.index("### 5.10")]
+    assert (
+        "Clean trailing EPS = GAAP trailing diluted EPS − an agent's non-recurring gap "
+        "(`earnings.nri_gap`, 14.4), nil without one."
+    ) in clean
+    assert (
+        "on a mechanical row the clean figures, the clean EPS and the clean P/E, equal the "
+        "reported ones, and EPV rests on the reported EPS; they differ under an agent's gap alone"
+    ) in clean
+    assert (
+        "E = trailing net income − an agent's non-recurring gap × diluted shares; the mechanical "
+        "route takes no gap (spec 2026-11-19 7.1)."
+    ) in stable
+    assert "GuruFocus EPS" not in outside_history and "the gap found" not in outside_history
+    assert (
+        "| Non-recurring gap | The one-time items in the trailing earnings a share, after tax, "
+        "which an agent sets in a review; a net charge is negative |"
+    ) in _section(13)
+    fourteen = _section(14)
+    gap_row = next(x for x in fourteen.splitlines() if x.startswith("| `earnings.nri_gap` |"))
+    assert "the whole gap is the agent's, since the engine finds none" in gap_row
+    reads = fourteen[fourteen.index("### 14.4") : fourteen.index("### 14.5")]
+    for words in (
+        "`earnings.nri_gap` is the non-recurring gap, the agent's whole figure",
+        "which reads trailing GAAP EPS less the agent's figure, so an override of 0.0",
+        (
+            "nil on a Mature Growth or Mature Stable result without one (on a refusal, the route "
+            "its phase takes) and none on any other route: the engine finds none, so a bridge's "
+            "old value is 0.00"
+        ),
+    ):
+        assert words in reads, words
+    for words in ("no non-recurring gap", "`gf_eps_ttm`", "drops (14.6)", "values move"):
         assert words in rows[-1], words
 
 

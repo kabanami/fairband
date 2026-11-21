@@ -283,36 +283,6 @@
   {
    "estimate_method": null,
    "kind": "observed",
-   "name": "gf_eps_ttm",
-   "note": null,
-   "provenance": {
-    "as_of": "2026-10-30",
-    "entered_at": null,
-    "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "GuruFocus keyratios"
-   },
-   "tag": "DATA",
-   "unit": "SEK a share",
-   "value": 42.4
-  },
-  {
-   "estimate_method": null,
-   "kind": "observed",
-   "name": "gf_eps_without_nri",
-   "note": null,
-   "provenance": {
-    "as_of": "2026-10-30",
-    "entered_at": null,
-    "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "GuruFocus keyratios"
-   },
-   "tag": "DATA",
-   "unit": "SEK a share",
-   "value": 42.0
-  },
-  {
-   "estimate_method": null,
-   "kind": "observed",
    "name": "sbc_ttm",
    "note": null,
    "provenance": {
@@ -583,11 +553,11 @@
   "currency": "SEK",
   "dividend_yield": 0.02,
   "eps": {
-   "clean": 42.0,
+   "clean": 42.4,
    "forward": 47.2,
    "reported": 42.4
   },
-  "epv": 375.67084078711946,
+  "epv": 379.2486583184253,
   "expected_return": {
    "growth": 0.10544500275066371,
    "income": 0.057999999999999996,
@@ -618,7 +588,7 @@
    0.0824,
    0.0824
   ],
-  "growth_share": 0.06082289803220131,
+  "growth_share": 0.051878354203936716,
   "implied_by_roic": {
    "0.09": -0.0371158218383789,
    "0.15": -0.16908878326416013,
@@ -641,12 +611,12 @@
   },
   "moat": "Wide",
   "multiples": {
-   "pe_clean": 9.523809523809524,
+   "pe_clean": 9.433962264150944,
    "pe_forward": 8.47457627118644,
    "pe_reported": 9.433962264150944
   },
   "net_buyback_yield": 0.038,
-  "nri_gap": 0.3999999999999986,
+  "nri_gap": null,
   "ntm_net_income": 4720000000.0,
   "path": {
    "analysts": [

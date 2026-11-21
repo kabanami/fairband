@@ -336,13 +336,14 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
     at_five = value_at_belief(replace(growth, belief=five["5"], runway=5), charge) / 1_000e6
     assert at_five == pytest.approx(170.0, rel=1e-6)
 
-    assert im["nri_gap"] == pytest.approx(0.05)
-    assert im["eps"] == {"reported": 5.30, "clean": pytest.approx(5.25), "forward": 5.90}
-    assert im["epv"] == pytest.approx(5.25 / 0.09)
-    assert im["growth_share"] == pytest.approx(1 - 5.25 / 0.09 / 150)
+    # the engine finds no non-recurring gap: the clean EPS is the reported (spec 2026-11-19 7.1)
+    assert im["nri_gap"] is None
+    assert im["eps"] == {"reported": 5.30, "clean": 5.30, "forward": 5.90}
+    assert im["epv"] == pytest.approx(5.30 / 0.09)
+    assert im["growth_share"] == pytest.approx(1 - 5.30 / 0.09 / 150)
     assert im["multiples"] == {
         "pe_reported": pytest.approx(150 / 5.30),
-        "pe_clean": pytest.approx(150 / 5.25),
+        "pe_clean": pytest.approx(150 / 5.30),
         "pe_forward": pytest.approx(150 / 5.90),
     }
     assert im["income_basis"] == "flows over market cap"
@@ -566,7 +567,6 @@ def test_flags_in_order_without_duplicates(
             operating_income=9_120e6,  # a 40% margin against a 30% high
             equity_issued=5_000e6,  # an equity raise, which assembly already flagged
         ),
-        gf_eps_without_nri=4.80,  # a non-recurring gain of 0.50 a share
         price=700.0,  # an implied growth above 10% on a 20-year runway
     )
     r = value_company(inputs, deciles, policy, TODAY)
@@ -1086,26 +1086,26 @@ def test_mature_stable_end_to_end(
     assert set(im) == MATURE_STABLE_KEYS
     assert r.value == im["value_per_share"] == im["stable_growth"]
     assert im["stable_growth"] == pytest.approx(im["stable_growth_total"] / 1_000e6)
-    assert im["e_trailing"] == pytest.approx(3_400e6 - 0.10 * 1_000e6)
+    assert im["e_trailing"] == 3_400e6 and im["nri_gap"] is None  # no gap (spec 2026-11-19 7.1)
     assert im["e_normalized"] == im["e_trailing"] and im["margin_scaled"] is False
     assert im["moat"] == "Wide" and im["terminal_roic"] == 0.13 and im["runway"] == 20
     assert im["runway_return"]["used"] == "three-year"
     assert im["runway_return"]["value"] == pytest.approx(0.1825, abs=1e-4)
-    assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
-    assert im["epv"] == pytest.approx(3.30 / 0.09)  # a share, as the screen's EPV column
+    assert im["epv_total"] == pytest.approx(3_400e6 / 0.09)
+    assert im["epv"] == pytest.approx(3.40 / 0.09)  # a share, as the screen's EPV column
     # 3% growth paid for at a return that fades from 18.25% from year 1, a hold of 0, to 13% in
-    # year 20 and the terminal ($44.71 with 18.25% held for 19 years); the one-stage value at 13%
-    # was $42.31
+    # year 20 and the terminal ($46.07 with 18.25% held for 19 years); the one-stage value at 13%
+    # is $43.59
     runway_return = im["runway_return"]["value"]
-    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, runway_return, 0.13, 20))
-    assert im["stable_growth"] == pytest.approx(43.849, abs=1e-3)
+    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_400e6, runway_return, 0.13, 20))
+    assert im["stable_growth"] == pytest.approx(45.178, abs=1e-3)
     ch = im["charge"]
     assert ch["hold_years"] == 0 and ch["revenue_steps"] == [None, None]
     assert ch["growth_by_year"] == [policy.terminal_growth] * 20
     assert ch["return_by_year"][0] == pytest.approx(runway_return + (0.13 - runway_return) / 20)
     assert ch["return_by_year"][-1] == 0.13 and len(ch["return_by_year"]) == 20
     assert im["median_margin"] == pytest.approx(0.20) and im["ttm_margin"] == pytest.approx(0.20)
-    assert im["eps"] == {"reported": 3.40, "clean": pytest.approx(3.30), "forward": None}
+    assert im["eps"] == {"reported": 3.40, "clean": 3.40, "forward": None}
     assert im["multiples"]["pe_forward"] is None
     er = im["expected_return"]
     assert er["growth"] == pytest.approx(0.03)
@@ -1159,9 +1159,9 @@ def test_mature_stable_zeroes_the_charge_like_the_growth_route(
     )
     assert im["moat"] == "None" and im["runway"] == 5
     assert im["terminal_roic"] == policy.required_return
-    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, 0.09, 0.09, 5, off=True))
-    assert r.value == pytest.approx(40.382, abs=1e-3) and r.value > im["epv"]
-    assert im["epv_total"] == pytest.approx(3_300e6 / 0.09)
+    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_400e6, 0.09, 0.09, 5, off=True))
+    assert r.value == pytest.approx(41.606, abs=1e-3) and r.value > im["epv"]
+    assert im["epv_total"] == pytest.approx(3_400e6 / 0.09)
 
 
 def test_mature_stable_raises_the_return_floored_flag(
@@ -1206,22 +1206,74 @@ def test_mature_stable_starts_at_the_return_without_goodwill(
     assert r.value is not None and r.value > im["epv"]
 
 
-def test_mature_stable_without_the_nri_gap(
+# --- The engine takes no gap (spec 2026-11-19 7.1) ---------------------------------------------
+
+
+def test_every_mechanical_route_takes_no_gap(deciles: Deciles, policy: Policy) -> None:
+    """Spec 2026-11-19 7.1: the engine finds no non-recurring gap. On every fixture of the goldens
+    the intermediates' ``nri_gap`` is none, kept as ``null`` on the two mature routes and absent
+    on the others; the clean trailing EPS equals the reported one wherever a route records the
+    EPS (Start-up records none); and no result cites GuruFocus's two EPS figures."""
+    builders = (
+        engine_companies.mature_growth_inputs,
+        engine_companies.mature_stable_inputs,
+        engine_companies.high_growth_inputs,
+        engine_companies.young_growth_inputs,
+        engine_companies.decline_inputs,
+        engine_companies.start_up_inputs,
+        engine_companies.fx_inputs,
+    )
+    for build in builders:
+        r = value_company(build(), deciles, policy, TODAY)
+        im = r.intermediates
+        assert im.get("nri_gap") is None, r.symbol
+        assert ("nri_gap" in im) == (r.route in ("mature-growth", "mature-stable")), r.symbol
+        e = im.get("eps")
+        assert e is not None or r.phase.phase == "Start-up", r.symbol
+        assert e is None or e["clean"] == e["reported"], r.symbol
+        names = {i.name for i in r.inputs}
+        assert names.isdisjoint({"gf_eps_ttm", "gf_eps_without_nri"}), r.symbol
+
+
+def test_mature_stable_starts_from_trailing_net_income(
     ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    r = value_company(replace(ms_inputs, gf_eps_without_nri=None), deciles, policy, TODAY)
+    """MSCO's E is its trailing net income, $3,400 m, with no gap taken off it, and its clean EPS
+    the reported 3.40; EPV rests on that E."""
+    r = value_company(ms_inputs, deciles, policy, TODAY)
+    assert r.intermediates["e_trailing"] == 3_400e6 and r.intermediates["eps"]["clean"] == 3.40
     assert r.intermediates["nri_gap"] is None
-    assert r.intermediates["e_trailing"] == 3_400e6
-    assert r.intermediates["eps"]["clean"] == 3.40
+    assert r.intermediates["epv_total"] == pytest.approx(3_400e6 / 0.09)
+
+
+def test_the_agents_gap_still_applies_on_both_mature_routes(
+    ms_inputs: CompanyInputs, mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """An agent's ``earnings.nri_gap`` is the whole gap (spec 2026-11-19 7.1). MSCO under 0.10:
+    E is $3,300 m and the clean EPS 3.30, so the value is lower than the mechanical one, at the
+    figure the engine gave when it found that gap itself. MGCO under 0.20: the clean EPS is 5.10
+    and EPV 5.10 ÷ r. The intermediates keep the agent's figure."""
+    plain = value_company(ms_inputs, deciles, policy, TODAY)
+    r = value_company(ms_inputs, deciles, policy, TODAY, judged(("earnings.nri_gap", 0.10)))
+    im = r.intermediates
+    assert im["e_trailing"] == pytest.approx(3_300e6) and im["nri_gap"] == 0.10
+    assert im["eps"]["clean"] == pytest.approx(3.30)
+    assert r.value is not None and plain.value is not None and r.value < plain.value
+    assert r.value == pytest.approx(43.849, abs=1e-3)
+    mg = value_company(mg_inputs, deciles, policy, TODAY, judged(("earnings.nri_gap", 0.20)))
+    assert mg.intermediates["nri_gap"] == 0.20
+    assert mg.intermediates["eps"]["clean"] == pytest.approx(5.10)
+    assert mg.intermediates["epv"] == pytest.approx(5.10 / 0.09)
 
 
 def test_mature_stable_refusals(ms_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
     assert ms_inputs.trailing is not None
     r = value_company(replace(ms_inputs, trailing=None), deciles, policy, TODAY)
     assert_refused(r, "no trailing figures")
-    loss = replace(ms_inputs, trailing=replace(ms_inputs.trailing, net_income=50e6))
-    r = value_company(loss, deciles, policy, TODAY)  # 50m less a 100m gain is a loss
-    assert_refused(r, "no positive trailing earnings")
+    small = replace(ms_inputs, trailing=replace(ms_inputs.trailing, net_income=50e6))
+    assert value_company(small, deciles, policy, TODAY).value is not None  # the engine finds no gap
+    r = value_company(small, deciles, policy, TODAY, judged(("earnings.nri_gap", 0.10)))
+    assert_refused(r, "no positive trailing earnings")  # 50m less an agent's 100m gain is a loss
     assert r.phase.phase == "Mature Stable"
     none = replace(ms_inputs, trailing=replace(ms_inputs.trailing, net_income=None))
     r = value_company(none, deciles, policy, TODAY)
@@ -1453,9 +1505,8 @@ def test_no_positive_trailing_earnings_keeps_the_cross_check(
     assert r.phase.phase == "Mature Stable"
     im = r.intermediates
     assert set(im) == REFUSED_STABLE_KEYS
-    assert im["e_trailing"] == pytest.approx(-500e6 - 0.10 * 1_000e6)
-    assert im["nri_gap"] == pytest.approx(0.10)
-    assert im["eps"] == {"reported": -0.50, "clean": pytest.approx(-0.60), "forward": None}
+    assert im["e_trailing"] == -500e6 and im["nri_gap"] is None  # no gap (spec 2026-11-19 7.1)
+    assert im["eps"] == {"reported": -0.50, "clean": -0.50, "forward": None}
     assert (im["shares"], im["moat"]) == (1_000e6, "Wide")
     gr = im["growth_route"]
     assert set(gr) == CROSS_CHECK_KEYS and gr["refusal"] is None
@@ -1526,8 +1577,8 @@ def test_mature_stable_reads_the_shared_terminal(
     assert im["runway_return"]["marginal"] == pytest.approx(0.28)
     assert im["roic"]["aggregate"] == pytest.approx(0.10)
     assert r.intermediates["terminal_roic"] == 0.13 and im["runway"] == 20
-    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, 0.28, 0.13, 20))
-    assert im["stable_growth"] == pytest.approx(45.478, abs=1e-3)  # 46.788 held to year 19
+    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_400e6, 0.28, 0.13, 20))
+    assert im["stable_growth"] == pytest.approx(46.856, abs=1e-3)  # 48.206 held to year 19
 
 
 def test_mature_stable_narrow_moat_charges_its_own_return_for_ten_years(
@@ -1543,9 +1594,9 @@ def test_mature_stable_narrow_moat_charges_its_own_return_for_ten_years(
     assert im["terminal_roic"] == policy.required_return
     runway_return = im["runway_return"]["value"]
     assert runway_return == pytest.approx(0.1825, abs=1e-4)
-    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, runway_return, 0.09, 10))
-    assert im["stable_growth"] == pytest.approx(39.123, abs=1e-3)  # 40.377 held to year 9
-    assert im["epv"] == pytest.approx(36.667, abs=1e-3)
+    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_400e6, runway_return, 0.09, 10))
+    assert im["stable_growth"] == pytest.approx(40.309, abs=1e-3)  # 41.600 held to year 9
+    assert im["epv"] == pytest.approx(37.778, abs=1e-3)
     years = next(i for i in r.inputs if i.name == "runway_years")
     assert (years.tag, years.value, years.note) == ("RULE", 10, "Narrow moat")
     assert r.levels == levels_for(r.value, "Narrow", policy)
@@ -1564,8 +1615,8 @@ def test_mature_stable_wide_charge_off_pays_out_in_full_through_the_runway(
     im = r.intermediates
     assert "charge-zeroed" in codes(r) and im["moat"] == "Wide" and im["runway"] == 20
     assert im["runway_return"]["used"] == "off" and im["terminal_roic"] == 0.13
-    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_300e6, 0.13, 0.13, 20, off=True))
-    assert im["stable_growth"] == pytest.approx(50.671, abs=1e-3)
+    assert im["stable_growth_total"] == pytest.approx(stable_dcf(3_400e6, 0.13, 0.13, 20, off=True))
+    assert im["stable_growth"] == pytest.approx(52.207, abs=1e-3)
     assert r.value / im["epv"] == pytest.approx(1.382, abs=1e-3)
 
 
@@ -2572,17 +2623,17 @@ def test_committed_shares_leave_the_stock_pay_a_share_on_the_consensus_count(
 def test_committed_shares_dilute_a_mature_stable_value_and_its_cross_check(
     policy: Policy, deciles: Deciles
 ) -> None:
-    """MSCO, 1,000 m shares, a non-recurring gap of $0.10 a share and here a cycle gap of $0.20:
-    E is 3,400 m − ($0.10 + $0.20) × 1,000 m = 3,100 m, a total on the count the gaps are on, so
-    100 m committed shares leave it and lower the value a share by 100 ÷ 1,100, the fixture's ×
-    1,000 ÷ 1,100. With the growth company's consensus, the cross-check's value falls by the same
+    """MSCO, 1,000 m shares, and here an agent's non-recurring gap of $0.10 a share and cycle gap
+    of $0.20: E is 3,400 m − ($0.10 + $0.20) × 1,000 m = 3,100 m, a total on the count the gaps are
+    on, so 100 m committed shares leave it and lower the value a share by 100 ÷ 1,100, the fixture's
+    × 1,000 ÷ 1,100. With the growth company's consensus, the cross-check's value falls by the same
     share, its NTM net income on the consensus's count."""
     inputs = _with_consensus(
         engine_companies.mature_stable_inputs(), engine_companies.mature_growth_inputs()
     )
-    gap = ("earnings.cycle_gap", 0.20)
-    plain = value_company(inputs, deciles, policy, TODAY, judged(gap))
-    more = value_company(inputs, deciles, policy, TODAY, judged(gap, ("shares.committed", 100e6)))
+    gaps = (("earnings.nri_gap", 0.10), ("earnings.cycle_gap", 0.20))
+    plain = value_company(inputs, deciles, policy, TODAY, judged(*gaps))
+    more = value_company(inputs, deciles, policy, TODAY, judged(*gaps, ("shares.committed", 100e6)))
     assert plain.value is not None and more.value is not None
     assert more.value == pytest.approx(plain.value * 1_000 / 1_100)
     im = more.intermediates

@@ -188,15 +188,15 @@ class Anchor:
     """Year 1 per share and in total: the consensus less the SBC adjustment and less an agent's
     one-time amount, or an agent's guided NTM EPS in place of both, then less an agent's cycle gap
     when one applies; under the refusal "incomplete NTM consensus" the numbers are 0. ``one_time``
-    is the one-time amount a share taken off, nil without one and under a guided EPS, which
-    stands in for the consensus with its items (spec 2026-11-14 5). ``sbc_ttm`` is the trailing
-    stock pay the anchor read, an agent's in place of the stored figure, and ``gaap_ttm_eps`` the
-    GAAP trailing EPS the basis test reads, less an agent's correction to the non-recurring gap;
-    both ``None`` where the trailing figures hold none. ``source`` says what the consensus figure
-    ``ntm_eps_raw`` read (spec 2026-11-13 9a): ``periods``, the sum of the window's EPS means, or
-    ``annual``, that sum corrected by the annual consensus of the last fiscal year the window
-    reaches, the correction in ``annual``; ``periods_sum`` is the sum of the window's EPS means on
-    either source, 0 under the refusal."""
+    is the one-time amount a share taken off, nil without one and under a guided EPS, which stands
+    in for the consensus with its items (spec 2026-11-14 5). ``sbc_ttm`` is the trailing stock pay
+    the anchor read, an agent's in place of the stored figure, and ``gaap_ttm_eps`` the GAAP
+    trailing EPS the basis test reads, less an agent's non-recurring gap; both ``None`` where the
+    trailing figures hold none. ``source`` says what the consensus figure ``ntm_eps_raw`` read (spec
+    2026-11-13 9a): ``periods``, the sum of the window's EPS means, or ``annual``, that sum
+    corrected by the annual consensus of the last fiscal year the window reaches, the correction in
+    ``annual``; ``periods_sum`` is the sum of the window's EPS means on either source, 0 under the
+    refusal."""
 
     ntm_eps_raw: float
     sbc_adjustment_per_share: float
@@ -362,8 +362,8 @@ def ntm_anchor(
     """The NTM EPS with stock compensation as a cost and the NTM net income on ``shares``, on the
     window's ``periods``: ``PERIODS_PER_YEAR[cadence]`` of them, the window's cadence, each with
     an EPS mean. The basis test reads trailing GAAP EPS as reported; with ``nri_correction``, an
-    agent's non-recurring gap less the gap found (``method.md`` 14), GAAP EPS less that
-    correction, so a gap overridden at the figure found leaves the test as it was. With
+    agent's non-recurring gap, the whole of it, since the engine finds none (``method.md`` 14),
+    GAAP EPS less that figure, so a gap overridden at nil leaves the test as it was. With
     ``sbc_override``, an agent's trailing stock pay, that figure stands in for the stored one in
     the test and in the adjustment; with ``basis_override``, an agent's basis, the basis is
     ``includes-sbc`` or ``excludes-sbc`` as it says and the test is not run, so no figure it

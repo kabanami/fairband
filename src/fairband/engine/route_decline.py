@@ -161,7 +161,6 @@ from fairband.engine.route_steps import (
     money,
     multiples_at,
     nil,
-    nri_gap,
     outside_entry,
     outside_value,
     present,
@@ -314,8 +313,7 @@ def value_decline(c: Context) -> Valued | Refused:
     e = _equity(rebuild, v.firm_value)
     z = None if newest is None else altman_z(newest, policy)
     f = piotroski_f(years[-1], years[-2]) if len(years) >= 2 else None
-    gap = nri_gap(i)
-    e_ps = eps(t, gap, None)
+    e_ps = eps(t, None, None)  # no gap on this route
     im: dict[str, Any] = {
         **rebuild,
         "moat": moat,

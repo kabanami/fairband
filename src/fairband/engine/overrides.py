@@ -40,9 +40,13 @@ cites, ``None`` when no line is on file (the bridge then counts it as nil) or th
 none; the minority interest reads its line as the newest sheet presents it, its DATA entry
 ``minority_interest``, so a figure at or below zero reads as it stands, though the route counts
 it as nil (spec 2026-11-13 13). The runway return reads ``None`` with the charge off. The engine
-finds no cycle gap: a mature route writes ``cycle_gap`` into its intermediates only under an
-override, so a Mature Growth or Mature Stable result without one reads 0.0 (a refusal, the route
-its phase takes). Nor does it find a one-time item in the NTM consensus: the Mature Growth route
+finds no non-recurring gap (spec 2026-11-19 7.1): a mature route's ``nri_gap`` is an agent's
+figure, ``None`` without one, so a Mature Growth or Mature Stable result without one reads 0.0 (a
+refusal, the route its phase takes), a bridge's old value 0.00, and every other route none; a
+result stored before method 1.7 reads the gap the engine found then. It finds no cycle gap
+either: a mature route writes ``cycle_gap`` into its intermediates only under an override, so a
+Mature Growth or Mature Stable result without one reads 0.0 (a refusal, the route its phase
+takes). Nor does it find a one-time item in the NTM consensus: the Mature Growth route
 writes ``ntm_nri``, the amount it took off year 1, only under an override, so a Mature Growth
 result without one reads 0.0 (a refusal, the route its phase takes) and every other route none
 (spec 2026-11-14 5). The stock pay reads the trailing figure the Mature Growth anchor read
@@ -296,8 +300,8 @@ LABELS: dict[OverrideTag, str] = {
 }
 
 # The route's own entry in a result's inputs that each tag stands for. The two gaps, the
-# one-time item and the two revenue steps stand for none: a route cites the gap found and the NTM
-# consensus as found as data, and no revenue step. An NTM anchor stands for its consensus
+# one-time item and the two revenue steps stand for none: the engine finds no gap, a route cites
+# the NTM consensus as found as data, and no revenue step. An NTM anchor stands for its consensus
 # figure's entry; Mature Growth's NTM net income entry keeps the consensus, on the reported count
 # under a ``shares.diluted`` too. The stock pay stands for the stored trailing figure's entry; the
 # stock-pay basis for none, since a route cites the basis as no input. The count stands for the
@@ -624,7 +628,12 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
                 return None
             return _at(im, "runway_return", "value")
         case "earnings.nri_gap":
-            return im.get("nri_gap")
+            # the figure a result stored: an agent's gap, or the gap found before method 1.7; the
+            # engine finds none, so nil on a mature route without one (spec 2026-11-19 7.1)
+            found = im.get("nri_gap")
+            if found is not None:
+                return found
+            return 0.0 if _route(result) in TAGS[tag].routes else None
         case "earnings.sbc":
             # the trailing stock pay the Mature Growth anchor read
             return im.get("sbc_ttm")

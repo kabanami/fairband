@@ -193,7 +193,6 @@ from fairband.engine.route_steps import (
     money,
     multiples_at,
     nil,
-    nri_gap,
     outside_entry,
     outside_value,
     present,
@@ -334,8 +333,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         annual=i.annual_estimates,
         estimates=i.quarter_estimates,
     )
-    gap = nri_gap(i)
-    e = eps(t, gap, anchor.ntm_eps if anchor.refusal is None else None)
+    e = eps(t, None, anchor.ntm_eps if anchor.refusal is None else None)  # no gap on this route
     (g2, g3), held = resolved_steps(path)
     im: dict[str, Any] = {
         "ntm_revenue": ntm,

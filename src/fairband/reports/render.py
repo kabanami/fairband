@@ -154,7 +154,10 @@ GLOSSARY: dict[str, str] = {
         "Where the price stands against the value at belief: one of five bands on price ÷ value "
         "(4.10); a fact about the price, never an action"
     ),
-    "Non-recurring gap": "GuruFocus EPS trailing less EPS without non-recurring items",
+    "Non-recurring gap": (
+        "The one-time items in the trailing earnings a share, after tax, which an agent sets in a "
+        "review; a net charge is negative"
+    ),
     "Growth word, margin direction": (
         "The classifier's reading of the deciles for revenue growth and for the margin trend"
     ),

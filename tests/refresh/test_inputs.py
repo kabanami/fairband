@@ -888,8 +888,9 @@ def test_a_company_in_another_currency_reads_its_rate_and_its_street_figures(
     store: Store, clients: Clients, clock: Clock, policy: Policy
 ) -> None:
     """Spec 2026-11-10 7.2: the rate is the close at the price date, the street actuals come in at
-    their period ends' rates and GuruFocus's EPS at their mean; the differential is the inflation
-    table's, cited with its note; the price and the market cap stay the quote's, in USD."""
+    their period ends' rates; the differential is the inflation table's, cited with its note; the
+    price and the market cap stay the quote's, in USD. The engine reads no GuruFocus EPS (spec
+    2026-11-19 7.1), so the inputs carry none."""
     consensus = {"estimates-quarter": estimates_quarter()}  # four NTM quarters, as KRON's
     inputs = build(_sek_store(store, clients, clock, policy, **consensus))
     table = load_inflation_table()
@@ -899,8 +900,6 @@ def test_a_company_in_another_currency_reads_its_rate_and_its_street_figures(
     assert inputs.street_ttm_eps == pytest.approx(
         0.51 * 7.8 + 0.52 * 7.9 + 0.53 * 8.1 + 0.54 * 8.2  # 16.807
     )
-    assert inputs.gf_eps_ttm == pytest.approx(6.11 * 8.0)
-    assert inputs.gf_eps_without_nri == pytest.approx(5.87 * 8.0)
     assert inputs.inflation_differential == pytest.approx(table.differential("SEK"))
     assert inputs.provenance["fx_rate"] == Provenance(
         "FMP historical-price-eod/light USDSEK", date(2026, 10, 30), NOW, None
@@ -951,18 +950,14 @@ def test_a_rate_older_than_the_bound_is_stale(
 def test_a_period_end_with_no_rate_leaves_the_street_figures_unknown(
     store: Store, clients: Clients, clock: Clock, router: Router, policy: Policy
 ) -> None:
-    """A history that starts after the oldest trailing quarter's end: the street actuals and
-    GuruFocus's EPS have no rate there, so they are unknown, never a refusal."""
+    """A history that starts after the oldest trailing quarter's end: the street actuals have no
+    rate there, so they are unknown, never a refusal."""
     fixture = FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json"
     rows = [r for r in json.loads(fixture.read_text()) if r["date"] >= "2026-01-01"]
     router.symbol_bodies[("fx-history", "USDSEK")] = json.dumps(rows).encode()
     inputs = build(_sek_store(store, clients, clock, policy))
     assert inputs.refusal is None and inputs.fx_rate == 10.52
-    assert (inputs.street_ttm_eps, inputs.gf_eps_ttm, inputs.gf_eps_without_nri) == (
-        None,
-        None,
-        None,
-    )
+    assert inputs.street_ttm_eps is None
     assert "street_ttm_eps" not in inputs.provenance
 
 
@@ -1057,7 +1052,7 @@ def test_consensus_and_market_values(conn_with_company: sqlite3.Connection) -> N
         5_000 * M,
     )
     assert inputs.is_adr is False
-    assert (inputs.moat_score, inputs.gf_eps_ttm, inputs.gf_eps_without_nri) == (7.0, 6.11, 5.87)
+    assert inputs.moat_score == 7.0
     assert inputs.next_earnings == date(2027, 2, 4)
     assert inputs.closes == (
         (date(2026, 10, 28), 49.0),

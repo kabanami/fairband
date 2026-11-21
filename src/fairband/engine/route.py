@@ -75,8 +75,8 @@ USD value with the rate of a row that carries one (``types.rated``).
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
 ``balance_sheet`` (the newest balance sheet, as of its period end), ``estimates_quarter``,
-``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``gf_eps_ttm``, ``gf_eps_without_nri``,
-``next_earnings``, ``tax_rate_latest``, ``closes``, and on a row in another currency ``fx_rate``;
+``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``next_earnings``, ``tax_rate_latest``,
+``closes``, and on a row in another currency ``fx_rate``;
 the RULE input ``inflation_differential`` cites its key too, the inflation table, with its note.
 A missing key cites the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods``
 is an estimate under that method (a tax rate carried forward, say), and so are ``aggregate_roic``
@@ -111,7 +111,8 @@ business's own values, before any value outside the business is added.
   read, an agent's included, revenue_steps_found, the consensus's as found, and
   revenue_step_source, each year's ``consensus``, ``agent``, ``thin`` or ``none``), ``shares`` (the
   count in force, and ``shares_committed`` beside it only under that override, as on every route),
-  ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap``,
+  ``value_total``, ``value_per_share``, ``value_by_runway``, ``value_by_roic``, ``nri_gap`` (an
+  agent's non-recurring gap a share, ``None`` without one: the engine finds none),
   ``ntm_nri`` (the one-time amount a share taken off year 1, only under an override of it, nil
   under a guided EPS), ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported,
   clean, forward: the NTM EPS before any one-time amount or cycle gap), ``epv`` (a share),
@@ -264,7 +265,7 @@ class CompanyInputs:
 
     A company in another currency (spec 2026-11-10 section 7): ``currency`` is the reporting
     currency, every money figure but ``price`` and ``market_cap`` (the quote's, in USD) and the
-    peers' market caps is in it, the street actuals and GuruFocus's EPS translated by assembly.
+    peers' market caps is in it, the street actuals translated by assembly.
     ``fx_rate`` is the currency's units per USD at the price date, read from the close of
     ``fx_date``, ``fx_stale`` when that close is older than the policy's stale bound, and
     ``inflation_differential`` the currency's d against USD. A USD row keeps the defaults: the
@@ -292,8 +293,6 @@ class CompanyInputs:
     annual_estimates: tuple[AnnualEstimate, ...]
     street_ttm_eps: float | None
     moat_score: float | None
-    gf_eps_ttm: float | None
-    gf_eps_without_nri: float | None
     next_earnings: date | None
     closes: tuple[tuple[date, float], ...]
     data_date: date

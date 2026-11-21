@@ -488,8 +488,8 @@ def test_build_inputs_reads_a_pending_split(store: Store) -> None:
     """ACME split 2-for-1 on 2026-10-15, after its newest quarter (30 Sep 2026) and before its
     quote (30 Oct 2026); the quote shows 208 m shares against 104 m stored, so the statements
     are pre-split and scale; the fixture's consensus rows imply 100 m, within 15% of 104 m,
-    and scale; the GuruFocus figures, observed at the fetch (1 Nov 2026), stand. The fixture's
-    three consensus quarters make no NTM window, so the NTM EPS is unmarked."""
+    and scale. The fixture's three consensus quarters make no NTM window, so the NTM EPS is
+    unmarked."""
     inputs = build(_acme_split(store))
     assert inputs.shares_diluted == pytest.approx(208 * M)
     assert inputs.trailing is not None
@@ -500,7 +500,6 @@ def test_build_inputs_reads_a_pending_split(store: Store) -> None:
     # each implies 100 m, within 15% of 104 m
     assert [a.eps for a in inputs.annual_estimates] == pytest.approx([1.0, 1.1, 1.2])
     assert [q.eps for q in inputs.quarter_estimates] == pytest.approx([0.26, 0.27, 0.28])
-    assert inputs.gf_eps_ttm == 6.11
     assert inputs.input_flags[-1].code == "split-pending"  # after the statements' flags
     marked = {name for name, method in inputs.estimate_methods.items() if method == "split-scaled"}
     assert marked == STATEMENT_KEYS
@@ -531,7 +530,7 @@ def test_the_flag_reaches_the_snapshot(store: Store) -> None:
     """The DATA inputs that hold a scaled figure read as estimates under ``split-scaled`` with the
     split note: the count, the trailing EPS, the street EPS and, since the NTM quarters scaled,
     the NTM EPS. Four consensus quarters (each implying 100 m) give a full NTM window, so the row
-    is valued. The GuruFocus figures, observed after the split, read as observed."""
+    is valued."""
     conn = _acme_split(store, **{"estimates-quarter": estimates_quarter()})
     result = value_company(build(conn), DECILES, load_policy(), TODAY)
     assert result.refusal is None
@@ -550,8 +549,6 @@ def test_the_flag_reaches_the_snapshot(store: Store) -> None:
             "split-scaled",
             note,
         ), name
-    for name in ("gf_eps_ttm", "gf_eps_without_nri"):
-        assert (tagged[name].kind, tagged[name].estimate_method) == ("observed", None), name
     assert tagged["statements"].estimate_method is None  # the count of fiscal years, unscaled
 
 
@@ -998,10 +995,10 @@ def _split_inputs(inputs: CompanyInputs) -> CompanyInputs:
         trailing=t,
         periods=tuple(TrailingPeriod(end, t.eps_diluted / 4, count) for end in ENDS),
         street_actuals=() if street is None else tuple((end, street / 4) for end in ENDS),
-        gf_eps_ttm=inputs.gf_eps_ttm,
-        gf_eps_ttm_as_of=date(2026, 10, 10),
-        gf_eps_without_nri=inputs.gf_eps_without_nri,
-        gf_eps_without_nri_as_of=date(2026, 10, 10),
+        gf_eps_ttm=None,  # the engine reads no GuruFocus EPS (spec 2026-11-19 7.1)
+        gf_eps_ttm_as_of=None,
+        gf_eps_without_nri=None,
+        gf_eps_without_nri_as_of=None,
         quarter_estimates=inputs.quarter_estimates,
         annual_estimates=inputs.annual_estimates,
     )
@@ -1023,8 +1020,6 @@ def _split_inputs(inputs: CompanyInputs) -> CompanyInputs:
         shares_diluted=f.shares_diluted,
         trailing=f.trailing,
         street_ttm_eps=f.street_ttm_eps,
-        gf_eps_ttm=f.gf_eps_ttm,
-        gf_eps_without_nri=f.gf_eps_without_nri,
         quarter_estimates=f.quarter_estimates,
         annual_estimates=f.annual_estimates,
         closes=tuple((day, close / 2) for day, close in inputs.closes),

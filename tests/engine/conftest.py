@@ -70,13 +70,14 @@ def _context(i: CompanyInputs, policy: Policy) -> Context:
 @pytest.fixture
 def mg_context(mg_inputs: CompanyInputs, policy: Policy) -> Context:
     """MGCO past the guards: $150 on 1 bn shares, an NTM consensus of 5.90 a share that includes
-    stock compensation, a non-recurring gap of 0.05."""
+    stock compensation; the engine finds no non-recurring gap."""
     return _context(mg_inputs, policy)
 
 
 @pytest.fixture
 def ms_context(ms_inputs: CompanyInputs, policy: Policy) -> Context:
-    """MSCO past the guards: $40 on 1 bn shares, a non-recurring gap of 0.10, a flat 20% margin."""
+    """MSCO past the guards: $40 on 1 bn shares, E its trailing net income of $3,400 m, a flat 20%
+    margin."""
     return _context(ms_inputs, policy)
 
 

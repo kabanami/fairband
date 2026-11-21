@@ -578,6 +578,25 @@ def test_sources_have_links() -> None:
     assert "OECD" in sources and "docs/method.md" in sources
 
 
+def test_a_mechanical_value_keeps_one_time_items() -> None:
+    """Spec 2026-11-19 7.1 and 7.5: the engine takes no non-recurring gap, so the value section
+    says a mechanical value is preliminary and keeps one-time items, which a review takes out, in
+    the Words table's sentences; Mature Stable's first step starts from trailing earnings, and
+    neither that step nor Coca-Cola's example takes one-off items out."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    value = _section(html, "value")
+    assert (
+        "A mechanical value is preliminary: fixed rules made it, and no one checked it. It "
+        "includes one-time items. A review takes them out."
+    ) in value
+    stable = _section(html, "mature-stable")
+    steps = stable[stable.index("<ol") : stable.index("</ol>")]
+    first = steps[steps.index("<li>") : steps.index("</li>")]
+    assert first == "<li>Trailing earnings are the starting point."
+    assert "one-off" not in stable and "Normalized earnings (" not in stable
+    assert "over the last twelve months. The engine grows that" in stable
+
+
 def test_flags_section_lists_the_quality_warnings_then_the_notes() -> None:
     """Spec 7.2 item 10: the twelve warnings that count, then the notes; each code once, in a
     code chip, and nowhere else in the page's prose. The count in words is the engine's, and the

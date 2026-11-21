@@ -672,6 +672,15 @@ def test_the_glossary_takes_the_minority_interest_off() -> None:
     )
 
 
+def test_the_glossary_s_gap_is_the_agent_s() -> None:
+    """Spec 2026-11-19 7.1: the engine finds no non-recurring gap, so the glossary names the
+    figure an agent sets, in the Words table's words; the test above holds method 13 to them."""
+    assert GLOSSARY["Non-recurring gap"] == (
+        "The one-time items in the trailing earnings a share, after tax, which an agent sets in a "
+        "review; a net charge is negative"
+    )
+
+
 def test_the_glossary_counts_the_engine_s_quality_warnings() -> None:
     """Spec 2026-11-13 8: ``share-count-gap`` is the twelfth quality warning, and the glossary's
     count is the engine's."""

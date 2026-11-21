@@ -187,6 +187,23 @@ flag or refusal moves, and the found gap of 0.10 a share still comes off E until
 the engine. `large-nri` and `consensus-basis-unknown` leave the method, and no golden carried
 either, so the six other files are unchanged byte for byte.
 
+All seven re-captured under 1.7 on 2026-11-21 for the gap taken out of the engine (spec 2026-11-19
+7.1; method 5.9, 6.1 and 14.4): the engine reads no GuruFocus EPS and finds no non-recurring gap,
+so the six goldens whose routes cite the common inputs lose `gf_eps_ttm` and `gf_eps_without_nri`,
+and the intermediates' `nri_gap` of the two mature routes is `null`; SUCO, whose route cites
+neither, is unchanged byte for byte. MSCO's value rested on the found gap of 0.10 a share: its E
+(`e_trailing` and `e_normalized`) goes from 3,300 m to 3,400 m, its trailing net income, and its
+value from 43.85 to 45.18 a share (43.8489 to 45.1776), with what reads E or the value: EPV 36.67
+to 37.78 a share, the clean EPS 3.30 to 3.40 and the clean P/E 12.12 to 11.76, the levels (buy
+32.89 to 33.88, fair band 37.27 to 50.43 becoming 38.40 to 51.95, trim 65.77 to 67.77), price ÷
+value 0.912 to 0.885, its designation still near, and the expected return's repricing term 3.06%
+to 4.06%, its total 11.06% to 12.06%. MGCO and FXCO lose a clean EPS that differed, 5.25 to 5.30
+on MGCO (a gap of 0.05) and 42.00 to 42.40 SEK on FXCO (0.40 SEK), and with it EPV (58.33 to 58.89;
+375.67 to 379.25 SEK), the growth share (61.1% to 60.7%; 6.1% to 5.2%) and the clean P/E (28.57 to
+28.30; 9.52 to 9.43); their values, levels and designations are unchanged, the clean EPS reaching
+no value on Mature Growth. HGCO, YGCO and DCCO found a gap of nil, so they lose the two inputs
+alone. No flag, refusal or other figure of any golden moves.
+
 Run from the repository root:
 
 ```

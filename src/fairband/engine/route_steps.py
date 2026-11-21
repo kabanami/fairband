@@ -27,10 +27,10 @@ reaches a route as two counts (spec 2026-11-14 4): ``Context.consensus_shares``,
 count, an agent's ``shares.diluted`` in place of the reported one, the count the consensus EPS
 and the vendor's figures a share are on; and ``Context.shares``, the count in force, that count
 plus an agent's ``shares.committed``, which divides every value among the owners. Where a figure a
-share from the vendor or the consensus meets a total (Mature Growth's NTM net income and stock pay
-a share, Mature Stable's two gaps), the route reads the first; every value a share divides by the
-second. ``committed_entry`` writes the committed shares beside ``shares`` in a route's
-intermediates, under the override only.
+share from the vendor, the consensus or an agent meets a total (Mature Growth's NTM net income and
+stock pay a share, the agent's two gaps on Mature Stable), the route reads the first; every value
+a share divides by the second. ``committed_entry`` writes the committed shares beside ``shares`` in
+a route's intermediates, under the override only.
 """
 
 from __future__ import annotations
@@ -342,13 +342,6 @@ def judged_inputs(
     return kept + judgment_inputs(overrides, currency)
 
 
-def nri_gap(i: CompanyInputs) -> float | None:
-    """GuruFocus EPS less EPS without non-recurring items, a share; ``None`` without both."""
-    if i.gf_eps_ttm is None or i.gf_eps_without_nri is None:
-        return None
-    return i.gf_eps_ttm - i.gf_eps_without_nri
-
-
 def cycle_gap(c: Context) -> float | None:
     """An agent's cycle gap, the correction to mid-cycle earnings a share, ``None`` without one:
     the engine finds none (``overrides.current_reading`` reads its absence as nil)."""
@@ -401,7 +394,9 @@ def business_price(im: dict[str, Any], price: float) -> float:
 
 
 def eps(t: TrailingFigures, gap: float | None, forward: float | None) -> dict[str, float | None]:
-    """Reported and clean (less the non-recurring gap) trailing EPS, and the forward EPS."""
+    """Reported and clean trailing EPS, and the forward EPS. The clean EPS is the reported less
+    ``gap``, an agent's non-recurring gap a share on a mature route, nil without one: the engine
+    finds no gap, so a mechanical row's clean EPS is the reported (spec 2026-11-19 7.1)."""
     clean = None if t.eps_diluted is None else t.eps_diluted - nil(gap)
     return {"reported": t.eps_diluted, "clean": clean, "forward": forward}
 
@@ -523,8 +518,6 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         from_capital(i, "runway_return", roic.runway, runway_note(roic.runway_return)),
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),  # the newest ROIC year's rate
         data(i, "moat_score", i.moat_score, "score"),
-        data(i, "gf_eps_ttm", i.gf_eps_ttm, per_share(i)),
-        data(i, "gf_eps_without_nri", i.gf_eps_without_nri, per_share(i)),
     )
 
 

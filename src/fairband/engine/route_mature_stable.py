@@ -1,7 +1,8 @@
 """The Mature Stable route (spec 6.6, calibration spec 5.10): the stable-growth value on
 normalized trailing earnings, charged as the growth route charges.
 
-E is trailing net income less the non-recurring gap on the diluted shares; when the margin flag
+E is trailing net income less an agent's non-recurring gap on the diluted shares; the engine finds
+no gap, so the mechanical E is trailing net income (spec 2026-11-19 7.1). When the margin flag
 fires, E is scaled to the ten-year median operating margin; an agent's cycle gap a share then
 comes off the E so normalized on the diluted shares, so the engine's scaling and the agent's
 correction add (``e_normalized`` is the E the value rests on). The value at belief is the
@@ -31,20 +32,20 @@ which decides the items. The route cites ``street_ttm_eps``, the warning's secon
 value. Its implied growth moves with the price, as the growth route's does.
 
 A missing or non-positive E, the normalized E less any cycle gap, refuses "no positive trailing
-earnings" (engine-round spec 9); the scaling keeps E's sign, so without a cycle gap this is E
-before the scaling. The refusal keeps ``e_trailing``, ``nri_gap``, ``eps``, ``shares``,
-``moat``, ``price_facts`` and the cross-check with its implied growth at the price, which
-``route.reprice`` moves as on a valued row. It carries the warning ``one-time-items`` where its
-test holds, since a one-time charge can take the trailing earnings below zero, and no other flag,
-and cites the two figures the test reads, ``eps_ttm`` and ``street_ttm_eps``, beyond the inputs
-every result carries.
+earnings" (engine-round spec 9); the scaling keeps E's sign, so without a cycle gap this is E before
+the scaling. The refusal keeps ``e_trailing``, ``nri_gap`` (the agent's gap, ``None`` without one,
+as on a valued row), ``eps``, ``shares``, ``moat``, ``price_facts`` and the cross-check with its
+implied growth at the price, which ``route.reprice`` moves as on a valued row. It carries the
+warning ``one-time-items`` where its test holds, since a one-time charge can take the trailing
+earnings below zero, and no other flag, and cites the two figures the test reads, ``eps_ttm`` and
+``street_ttm_eps``, beyond the inputs every result carries.
 
-Overrides (``method.md`` 14) through ``route_steps.chosen``: ``earnings.nri_gap`` the
-non-recurring gap E is taken less, ``moat.class`` the moat and ``return.runway`` the runway return
-of the charge; the cross-check reads the same moat, returns and gap. ``earnings.cycle_gap``, the
-correction to mid-cycle earnings, comes off the normalized E, and off the cross-check's NTM
-anchor; ``e_trailing``, the clean EPS, the P/E and the warning do not read it. ``cycle_gap`` is
-in the intermediates, a refusal's too, only under that override.
+Overrides (``method.md`` 14) through ``route_steps.chosen``: ``earnings.nri_gap`` the non-recurring
+gap E is taken less, the whole of it, nil without one, ``moat.class`` the moat and ``return.runway``
+the runway return of the charge; the cross-check reads the same moat, returns and gap.
+``earnings.cycle_gap``, the correction to mid-cycle earnings, comes off the normalized E, and off
+the cross-check's NTM anchor; ``e_trailing``, the clean EPS, the P/E and the warning do not read it.
+``cycle_gap`` is in the intermediates, a refusal's too, only under that override.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the stable-growth value: the result's value is that value a share plus the figure, which
@@ -56,8 +57,8 @@ positive E, its returns at r or above, is always positive. ``stable_at_price`` r
 and the sum: the multiples and the expected return read them as they are, and the cross-check's
 implied growth, a refusal's too, solves to the price less the figure, the business's share of
 the price. The diluted share count is ``Context.consensus_shares``, an agent's ``shares.diluted``
-in place of the reported count: the non-recurring and cycle gaps, figures a share, come off E
-as totals on it. Every value a share divides by
+in place of the reported count: an agent's non-recurring and cycle gaps, figures a share, come
+off E as totals on it. Every value a share divides by
 ``Context.shares``, the count in force, which adds an agent's ``shares.committed``; E, a total,
 does not move with the committed shares, so x of them on a count of n lower the value a share by
 x ÷ (n + x), and the cross-check's by the same share (spec 2026-11-14 4). The intermediates keep
@@ -95,7 +96,6 @@ from fairband.engine.route_steps import (
     money,
     multiples_at,
     nil,
-    nri_gap,
     outside_entry,
     outside_value,
     per_share,
@@ -114,7 +114,7 @@ _NOT_POSITIVE = "value not positive under the reinvestment charge"
 
 def value_mature_stable(c: Context) -> Valued | Refused:
     i, t, policy = c.inputs, c.trailing, c.policy
-    gap = chosen(c, "earnings.nri_gap", nri_gap(i))
+    gap: float | None = chosen(c, "earnings.nri_gap", None)  # the engine finds none
     cycle = cycle_gap(c)
     # the two gaps a share are on the diluted count, without committed shares (spec 2026-11-14 4)
     e = None if t.net_income is None else t.net_income - nil(gap) * c.consensus_shares

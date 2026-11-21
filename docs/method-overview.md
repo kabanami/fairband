@@ -38,7 +38,7 @@ company's revenue growth falls in. (method 0, 3.3, 3.5)
 | Young Growth | Negative operating margin, not rising | The High Growth route, with no charge for the chance of failure. (method 3.5, 5a.12) |
 | High Growth | Negative operating margin, rising | Consensus revenue for three years; that growth holds, then fades to terminal growth by year 10. The margin moves to the median of the mature peers. (method 3.5, 5a) |
 | Mature Growth | Margin of zero or more; growth word Moderate or higher | Consensus net income for three years, a fade to the belief (the long-run growth rate), the belief to the runway's end (5 to 20 years), then a terminal value. (method 3.5, 5) |
-| Mature Stable | Margin of zero or more; growth word Low or lower | Trailing earnings, less non-recurring items, grow at terminal growth. (method 3.5, 6) |
+| Mature Stable | Margin of zero or more; growth word Low or lower | Trailing earnings grow at terminal growth. (method 3.5, 6) |
 | Decline | Lowest growth word, a falling revenue trend, and revenue down in three of the last four years | A ten-year run-off that frees capital as revenue falls, with a liquidation floor and a distress-sale value. (method 3.5, 6a) |
 
 A company with an operating profit in three of its last five fiscal years, or in five of all the

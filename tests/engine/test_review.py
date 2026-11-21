@@ -147,7 +147,8 @@ def test_two_overrides_sum_to_the_difference(policy: Policy, deciles: Deciles) -
 
 def test_the_cycle_gap_line_follows_the_non_recurring_gap(policy: Policy, deciles: Deciles) -> None:
     """Given the cycle gap first, the bridge reads the non-recurring gap first, the method's order;
-    the cycle line's old value is the engine's nil, and the two deltas sum to the difference."""
+    each line's old value is the engine's nil, since the engine finds neither gap (spec 2026-11-19
+    7.1), and the two deltas sum to the difference."""
     inputs = mature_growth_inputs()
     mechanical = value_company(inputs, deciles, policy, TODAY)
     overrides = [OVERRIDE("earnings.cycle_gap", 1.0, 2), OVERRIDE("earnings.nri_gap", 0.5, 1)]
@@ -156,7 +157,8 @@ def test_the_cycle_gap_line_follows_the_non_recurring_gap(policy: Policy, decile
     assert tags == ["earnings.nri_gap", "earnings.cycle_gap"]
     assert tags == sorted(tags, key=BRIDGE_ORDER.index)
     nri, cycle = review.bridge
-    assert nri.old == mechanical.intermediates["nri_gap"] and nri.new == 0.5
+    assert mechanical.intermediates["nri_gap"] is None
+    assert nri.old == 0.0 and nri.new == 0.5
     assert cycle.old == 0.0 and cycle.new == 1.0 and cycle.override_id == 2
     assert review.result.value is not None and mechanical.value is not None
     assert nri.delta is not None and cycle.delta is not None and cycle.delta < 0
@@ -574,16 +576,16 @@ def test_the_basis_note_reads_the_gaap_figure_the_test_read(
     policy: Policy, deciles: Deciles
 ) -> None:
     """Under an applied ``earnings.nri_gap`` the basis test reads GAAP EPS less the agent's
-    correction, and so does reason 3 of ``sbc-basis-uncertain``. MGCO at a street EPS of 8.20:
-    2.90 above the reported 5.30 is under 10 × 0.30 = 3.0, so no note. An agent's gap of 0.25
-    against the 0.05 found corrects GAAP EPS by 0.20 to 5.10, and 8.20 lies 3.10 above it, 10.3
-    times 0.30: reason 3 holds, on the gap the test judged."""
+    figure, the whole gap (spec 2026-11-19 7.1), and so does reason 3 of ``sbc-basis-uncertain``.
+    MGCO at a street EPS of 8.20: 2.90 above the reported 5.30 is under 10 × 0.30 = 3.0, so no
+    note. An agent's gap of 0.20 takes GAAP EPS to 5.10, and 8.20 lies 3.10 above it, 10.3 times
+    0.30: reason 3 holds, on the gap the test judged."""
     inputs = _excluding(8.20)
     mechanical = value_company(inputs, deciles, policy, TODAY)
     assert mechanical.intermediates["sbc_basis"] == "excludes-sbc"
-    assert mechanical.intermediates["nri_gap"] == pytest.approx(0.05)
+    assert mechanical.intermediates["nri_gap"] is None
     assert "sbc-basis-uncertain" not in _codes(mechanical)
-    gap = [OVERRIDE("earnings.nri_gap", 0.25)]
+    gap = [OVERRIDE("earnings.nri_gap", 0.20)]
     review = review_company(inputs, deciles, policy, TODAY, gap, mechanical)
     assert review.result.intermediates["sbc_basis"] == "excludes-sbc"
     [uncertain] = [f for f in review.result.flags if f.code == "sbc-basis-uncertain"]

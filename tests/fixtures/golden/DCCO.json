@@ -217,36 +217,6 @@
   {
    "estimate_method": null,
    "kind": "observed",
-   "name": "gf_eps_ttm",
-   "note": null,
-   "provenance": {
-    "as_of": "2026-10-30",
-    "entered_at": null,
-    "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "GuruFocus keyratios"
-   },
-   "tag": "DATA",
-   "unit": "USD a share",
-   "value": 0.45
-  },
-  {
-   "estimate_method": null,
-   "kind": "observed",
-   "name": "gf_eps_without_nri",
-   "note": null,
-   "provenance": {
-    "as_of": "2026-10-30",
-    "entered_at": null,
-    "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "GuruFocus keyratios"
-   },
-   "tag": "DATA",
-   "unit": "USD a share",
-   "value": 0.45
-  },
-  {
-   "estimate_method": null,
-   "kind": "observed",
    "name": "ntm_revenue",
    "note": null,
    "provenance": {

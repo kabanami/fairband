@@ -794,7 +794,7 @@ def test_current_reading_on_each_golden(policy: Policy, deciles: Deciles) -> Non
     assert current_reading(mg, "growth.belief") == mg.intermediates["belief"]["rate"]
     assert current_reading(mg, "path.step_2") == mg.intermediates["path_steps"][0]
     assert current_reading(mg, "return.runway") == mg.intermediates["runway_return"]["value"]
-    assert current_reading(mg, "earnings.nri_gap") == mg.intermediates["nri_gap"]
+    assert current_reading(mg, "earnings.nri_gap") == 0.0
     assert current_reading(mg, "earnings.cycle_gap") == 0.0
     assert current_reading(mg, "moat.class") == "Wide"
     assert current_reading(mg, "decline.rate") is None
@@ -856,7 +856,7 @@ def test_the_cycle_gap_reads_nil_until_an_override_sets_it(
     the gap into its intermediates only under an override."""
     ms = mature_stable_inputs()
     assert ms.trailing is not None
-    trough = replace(ms, trailing=replace(ms.trailing, net_income=50e6))
+    trough = replace(ms, trailing=replace(ms.trailing, net_income=-50e6))
     refused = value_company(trough, deciles, policy, TODAY)
     assert refused.refusal == "no positive trailing earnings" and refused.route is None
     assert "cycle_gap" not in refused.intermediates
@@ -1119,22 +1119,43 @@ def test_an_overriding_runway_return_charges_the_runway(policy: Policy, deciles:
     assert r.value is not None and mechanical.value is not None and r.value < mechanical.value
 
 
-def test_the_basis_test_takes_only_the_agents_correction_to_the_gap(
-    policy: Policy, deciles: Deciles
-) -> None:
-    """MGCO with a non-recurring gap of 0.12: street EPS 5.35 is 0.05 above GAAP EPS 5.30, under
-    half the 0.30 of after-tax stock compensation a share, so the consensus includes it. GAAP less
-    the whole gap, 5.18, would read 0.17 and switch the basis; the test takes only the agent's
-    correction, so the gap overridden at 0.12 moves nothing and at 0.32 switches the basis."""
-    inputs = replace(mature_growth_inputs(), gf_eps_without_nri=5.18)
+def test_the_basis_test_takes_the_agents_whole_figure(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-19 7.1: the engine finds no gap, so the anchor's basis test corrects GAAP EPS
+    by the agent's whole figure. MGCO: street EPS 5.35 is 0.05 above GAAP EPS 5.30, under half
+    the 0.30 of after-tax stock compensation a share, so the consensus includes it. The gap reads
+    0.0, and an override of 0.0 moves nothing; one of 0.12 takes GAAP EPS to 5.18, 5.35 lies 0.17
+    above it, at or above half of 0.30, so the basis reads excludes-sbc and the value moves."""
+    inputs = mature_growth_inputs()
     mechanical = value_company(inputs, deciles, policy, TODAY)
-    found = current_reading(mechanical, "earnings.nri_gap")
-    assert found == pytest.approx(0.12) and mechanical.intermediates["sbc_basis"] == "includes-sbc"
-    assert isinstance(found, float)
-    same = value_company(
-        inputs, deciles, policy, TODAY, {"earnings.nri_gap": override("earnings.nri_gap", found)}
-    )
+    assert current_reading(mechanical, "earnings.nri_gap") == 0.0
+    assert mechanical.intermediates["sbc_basis"] == "includes-sbc"
+    nil = {"earnings.nri_gap": override("earnings.nri_gap", 0.0)}
+    same = value_company(inputs, deciles, policy, TODAY, nil)
     assert same.value == mechanical.value and same.intermediates["sbc_basis"] == "includes-sbc"
-    shifted = {"earnings.nri_gap": override("earnings.nri_gap", 0.32)}
-    moved = value_company(inputs, deciles, policy, TODAY, shifted)
+    whole = {"earnings.nri_gap": override("earnings.nri_gap", 0.12)}
+    moved = value_company(inputs, deciles, policy, TODAY, whole)
     assert moved.intermediates["sbc_basis"] == "excludes-sbc" and moved.value != mechanical.value
+
+
+def test_the_engine_reads_a_nil_gap_on_the_mature_routes(policy: Policy, deciles: Deciles) -> None:
+    """Spec 2026-11-19 7.1: the engine finds no non-recurring gap, so its reading is nil on a
+    Mature Growth or Mature Stable result, a refusal's too (the route its phase takes), as the
+    cycle gap's is, and a bridge's old value is 0.00; none on another route. A result stored
+    before method 1.7 holds the gap the engine found then, and reads it."""
+    mg = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    ms = value_company(mature_stable_inputs(), deciles, policy, TODAY)
+    hg = value_company(high_growth_inputs(), deciles, policy, TODAY)
+    assert (mg.intermediates["nri_gap"], ms.intermediates["nri_gap"]) == (None, None)
+    assert current_reading(mg, "earnings.nri_gap") == 0.0
+    assert current_reading(ms, "earnings.nri_gap") == 0.0
+    dc = value_company(decline_inputs(), deciles, policy, TODAY)
+    assert current_reading(hg, "earnings.nri_gap") is None
+    assert current_reading(dc, "earnings.nri_gap") is None
+    stable = mature_stable_inputs()
+    assert stable.trailing is not None
+    loss = replace(stable, trailing=replace(stable.trailing, net_income=-500e6, eps_diluted=-0.50))
+    refused = value_company(loss, deciles, policy, TODAY)
+    assert refused.refusal == "no positive trailing earnings"
+    assert current_reading(refused, "earnings.nri_gap") == 0.0
+    before = replace(ms, intermediates={**ms.intermediates, "nri_gap": -0.423})
+    assert current_reading(before, "earnings.nri_gap") == -0.423

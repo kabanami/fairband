@@ -247,36 +247,6 @@
   {
    "estimate_method": null,
    "kind": "observed",
-   "name": "gf_eps_ttm",
-   "note": null,
-   "provenance": {
-    "as_of": "2026-10-30",
-    "entered_at": null,
-    "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "GuruFocus keyratios"
-   },
-   "tag": "DATA",
-   "unit": "USD a share",
-   "value": 3.4
-  },
-  {
-   "estimate_method": null,
-   "kind": "observed",
-   "name": "gf_eps_without_nri",
-   "note": null,
-   "provenance": {
-    "as_of": "2026-10-30",
-    "entered_at": null,
-    "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "GuruFocus keyratios"
-   },
-   "tag": "DATA",
-   "unit": "USD a share",
-   "value": 3.3
-  },
-  {
-   "estimate_method": null,
-   "kind": "observed",
    "name": "net_income_ttm",
    "note": null,
    "provenance": {
@@ -472,20 +442,20 @@
   },
   "charge_off": false,
   "dividend_yield": 0.0375,
-  "e_normalized": 3300000000.0,
-  "e_trailing": 3300000000.0,
+  "e_normalized": 3400000000.0,
+  "e_trailing": 3400000000.0,
   "eps": {
-   "clean": 3.3,
+   "clean": 3.4,
    "forward": null,
    "reported": 3.4
   },
-  "epv": 36.66666666666667,
-  "epv_total": 36666666666.66667,
+  "epv": 37.77777777777778,
+  "epv_total": 37777777777.77778,
   "expected_return": {
    "growth": 0.030000000000000027,
    "income": 0.05,
-   "repricing": 0.030623223417413813,
-   "total": 0.11062322341741385
+   "repricing": 0.0405742111339742,
+   "total": 0.12057421113397424
   },
   "growth_route": {
    "refusal": "incomplete NTM consensus"
@@ -501,12 +471,12 @@
   "median_margin": 0.2,
   "moat": "Wide",
   "multiples": {
-   "pe_clean": 12.121212121212121,
+   "pe_clean": 11.764705882352942,
    "pe_forward": null,
    "pe_reported": 11.764705882352942
   },
   "net_buyback_yield": 0.0125,
-  "nri_gap": 0.10000000000000009,
+  "nri_gap": null,
   "price_facts": {
    "change_1y": 0.025590551181102317,
    "change_3y": null,
@@ -611,18 +581,18 @@
    }
   },
   "shares": 1000000000.0,
-  "stable_growth": 43.84887769764159,
-  "stable_growth_total": 43848877697.641594,
+  "stable_growth": 45.17763156726709,
+  "stable_growth_total": 45177631567.26709,
   "terminal_roic": 0.13,
   "trailing_end": "2026-09-30",
   "ttm_margin": 0.2,
-  "value_per_share": 43.84887769764159
+  "value_per_share": 45.17763156726709
  },
  "levels": {
-  "buy": 32.88665827323119,
-  "fair_high": 50.42620935228783,
-  "fair_low": 37.271546042995354,
-  "trim": 65.77331654646238
+  "buy": 33.88322367545032,
+  "fair_high": 51.95427630235715,
+  "fair_low": 38.400986832177026,
+  "trim": 67.76644735090063
  },
  "phase": {
   "checks": [],
@@ -643,10 +613,10 @@
  },
  "price": 40.0,
  "price_date": "2026-10-30",
- "price_to_value": 0.9122240317259339,
+ "price_to_value": 0.8853939131457594,
  "refusal": null,
  "route": "mature-stable",
  "symbol": "MSCO",
  "valid_until": "2027-01-28",
- "value": 43.84887769764159
+ "value": 45.17763156726709
 }

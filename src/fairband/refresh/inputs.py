@@ -47,10 +47,9 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   ``inflation_max``; the listed-share basis's ("share basis unclear: ..."). The three that name
   a code are marked ``currency_refused``, so the engine names the code on the result with no
   rate; the statements', the tax rate's and an unknown currency's are not;
-- the GuruFocus moat score and EPS, the next earnings date (``None`` when before ``today``) and the
-  closes of the latest price-history payload (none when it is absent or does not parse).
-  GuruFocus states its EPS in USD: for a company in another currency both come into it at the
-  mean of the trailing periods' period-end rates, unknown when one has none;
+- the GuruFocus moat score, the next earnings date (``None`` when before ``today``) and the
+  closes of the latest price-history payload (none when it is absent or does not parse). The
+  engine reads no GuruFocus EPS (spec 2026-11-19 7.1), so none is given;
 - the newest balance sheet (``newest_sheet``, spec 2026-11-13 12.2), a fiscal year's or a
   quarter's, the fiscal year's on a tie: ``sheet``, with its period, its label, whether it is a
   quarter's, the liquidation floor's two lines and the minority interest as presented, cited as
@@ -252,8 +251,6 @@ def build_inputs(
         annual_estimates=figures.annual_estimates,
         street_ttm_eps=figures.street_ttm_eps,
         moat_score=moat,
-        gf_eps_ttm=figures.gf_eps_ttm,
-        gf_eps_without_nri=figures.gf_eps_without_nri,
         next_earnings=cite("next_earnings", _next_earnings(read("earnings-date"), today)),
         closes=cite("closes", _closes(conn, symbol)),
         data_date=stated.data_date,

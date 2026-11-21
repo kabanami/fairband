@@ -58,32 +58,31 @@ any price by the same solve, from the intermediates alone.
 Overrides (``method.md`` 14) through ``route_steps.chosen``: ``moat.class`` the moat, so the runway,
 the terminal return and the margin of safety with it; ``return.runway`` the runway return of the
 charge, the start of its fade (``RoicTerms.of``); ``earnings.nri_gap`` the non-recurring gap, the
-anchor's basis test then taking the correction, the override less the gap found, off trailing GAAP
-EPS (``anchor.ntm_anchor``), so an override at the gap found moves nothing, while no basis override
-is applied; ``earnings.sbc`` the trailing stock pay, in the basis test and the adjustment, and
-``earnings.sbc_basis`` the basis, in place of the test (spec 2026-11-13 7.2); ``path.step_2`` and
-``path.step_3`` the consensus steps, before the check that the path stays above −100%, a replaced
-step not counted thin nor named in ``step-series-disagree``, moving the growth the charge pays for
-only in a year with no revenue step read, missing or thin, where the earnings step stands in;
-``revenue.step_2`` and ``revenue.step_3`` the revenue steps the charge pays for, in place of the
-consensus's, a thin one's too, since an agent's step is never thin, the steps found kept beside
-them (spec 2026-11-14 6.1); ``growth.belief`` the belief's rate, and the hold
-read on it; ``earnings.ntm``, the NTM EPS from a clear guidance, which stands in for the
-consensus less the SBC adjustment, the NTM window's periods still required
-(``anchor.ntm_window``: four quarters, or two half-years);
-``earnings.ntm_nri`` a one-time amount a share that the consensus carries and that does not recur
-(spec 2026-11-14 5), which the consensus less the SBC adjustment is taken less, a share on the
-count the consensus is on, and which a guided EPS, standing in for the consensus with its items,
+whole of it, since the engine finds none (spec 2026-11-19 7.1), the anchor's basis test then taking
+it off trailing GAAP EPS (``anchor.ntm_anchor``), so an override of nil moves nothing, while no
+basis override is applied; ``earnings.sbc`` the trailing stock pay, in the basis test and the
+adjustment, and ``earnings.sbc_basis`` the basis, in place of the test (spec 2026-11-13 7.2);
+``path.step_2`` and ``path.step_3`` the consensus steps, before the check that the path stays above
+−100%, a replaced step not counted thin nor named in ``step-series-disagree``, moving the growth the
+charge pays for only in a year with no revenue step read, missing or thin, where the earnings step
+stands in; ``revenue.step_2`` and ``revenue.step_3`` the revenue steps the charge pays for, in place
+of the consensus's, a thin one's too, since an agent's step is never thin, the steps found kept
+beside them (spec 2026-11-14 6.1); ``growth.belief`` the belief's rate, and the hold read on it;
+``earnings.ntm``, the NTM EPS from a clear guidance, which stands in for the consensus less the SBC
+adjustment, the NTM window's periods still required (``anchor.ntm_window``: four quarters, or two
+half-years); ``earnings.ntm_nri`` a one-time amount a share that the consensus carries and that does
+not recur (spec 2026-11-14 5), which the consensus less the SBC adjustment is taken less, a share on
+the count the consensus is on, and which a guided EPS, standing in for the consensus with its items,
 leaves unread; ``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS, the
 consensus's or the guided one, is then taken less, before the positive-anchor refusal
-(``anchor.ntm_anchor``). Nothing else reads the three: the basis test, the clean EPS and EPV
-read the non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps``
-and ``ntm_net_income`` data entries are the consensus less the stock-pay adjustment in force
-(``Anchor.ntm_eps_found``), which the two stock-pay inputs move, the ``ntm_eps`` entry giving way
-to the JUDGMENT entry under the guided EPS. ``ntm_nri``, the one-time amount the anchor took off,
-nil under the guided EPS, and ``cycle_gap`` are in the intermediates only under their overrides.
-The cross-check reads the row's moat, returns and two gaps, and the consensus and belief as
-found: no guided EPS, no one-time amount and no agent's revenue step.
+(``anchor.ntm_anchor``). Nothing else reads the three: the basis test, the clean EPS and EPV read
+the agent's non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps`` and
+``ntm_net_income`` data entries are the consensus less the stock-pay adjustment in force
+(``Anchor.ntm_eps_found``), which the two stock-pay inputs move, the ``ntm_eps`` entry giving way to
+the JUDGMENT entry under the guided EPS. ``ntm_nri``, the one-time amount the anchor took off, nil
+under the guided EPS, and ``cycle_gap`` are in the intermediates only under their overrides. The
+cross-check reads the row's moat, returns and two gaps, and the consensus and belief as found: no
+guided EPS, no one-time amount and no agent's revenue step.
 
 ``value.outside``, the value outside the business a share (``route_steps.outside_value``), comes
 after the route's value: the result's value is the route's value a share plus the figure, which
@@ -176,8 +175,6 @@ from fairband.engine.route_steps import (
     income,
     money,
     multiples_at,
-    nil,
-    nri_gap,
     ntm_nri_entry,
     outside_entry,
     outside_value,
@@ -260,7 +257,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     }
     by_runway = {key: v + outside for key, v in own_by_runway.items()}
     by_roic = {key: None if v is None else v + outside for key, v in own_by_roic.items()}
-    gap = chosen(c, "earnings.nri_gap", nri_gap(i))
+    gap: float | None = chosen(c, "earnings.nri_gap", None)  # the engine finds none
     e = eps(t, gap, anchor.ntm_eps_found)
     im: dict[str, Any] = {
         "anchor": {
@@ -405,10 +402,10 @@ def _anchor_and_path(
     steps the charge reads; or the route's refusal, with the flags raised before it, and on the
     route's own refusal "no positive forward anchor" the two stock-pay notes after the anchor's
     flags, since a stock-pay charge can itself cause it (method 5.11), but not on the path's. The
-    anchor's basis test reads an overriding non-recurring gap as its correction to the gap found,
-    and its NTM EPS is taken less an overriding cycle gap; with ``own``, the route's own anchor,
-    path, belief and revenue steps read the NTM EPS, one-time item, stock pay, stock-pay basis,
-    step, belief and revenue step overrides, which a cross-check leaves as found."""
+    anchor's basis test takes an overriding non-recurring gap, the whole of it, off trailing GAAP
+    EPS, and its NTM EPS is taken less an overriding cycle gap; with ``own``, the route's own
+    anchor, path, belief and revenue steps read the NTM EPS, one-time item, stock pay, stock-pay
+    basis, step, belief and revenue step overrides, which a cross-check leaves as found."""
     i, t, policy = c.inputs, c.trailing, c.policy
     if t.revenue is None:
         return Refused("no trailing revenue")
@@ -416,8 +413,8 @@ def _anchor_and_path(
         return Refused("no statutory tax rate")
     window = ntm_window(i.quarter_estimates, t.period_end, t.cadence)
     periods, cadence = ((), t.cadence) if window is None else window
-    gap: float | None = chosen(c, "earnings.nri_gap", None)
-    correction = None if gap is None else gap - nil(nri_gap(i))
+    # the agent's gap is the whole correction: the engine finds none (spec 2026-11-19 7.1)
+    correction: float | None = chosen(c, "earnings.nri_gap", None)
     one_time: float | None = chosen(c, "earnings.ntm_nri", None) if own else None
     guided: float | None = chosen(c, "earnings.ntm", None) if own else None
     sbc: float | None = chosen(c, "earnings.sbc", None) if own else None
@@ -637,8 +634,8 @@ def _stock_pay_notes(c: Context, anchor: Anchor) -> tuple[Flag, ...]:
     """``stock-pay-missing`` and ``sbc-basis-uncertain`` (spec 2026-11-13 7.1), in that order, for
     those that fire: the stored trailing stock pay against the stock pay on file, and the anchor's
     basis against the figures the test read, the stock pay in force (an agent's ``earnings.sbc``,
-    else the stored figure) and GAAP EPS less an agent's correction to the non-recurring gap,
-    the stock pay a share on the diluted count, as the anchor reads it (spec 2026-11-14 4).
+    else the stored figure) and GAAP EPS less an agent's non-recurring gap, the stock pay a share
+    on the diluted count, as the anchor reads it (spec 2026-11-14 4).
     Reason 1 reads the warning's test (spec 2026-11-19 7.3): ``one_time_share`` of the reported
     GAAP trailing EPS and the street trailing EPS at ``one_time_items_share`` or more, silent
     under an applied ``earnings.nri_gap`` as the warning ``one-time-items`` is. A note is silent
