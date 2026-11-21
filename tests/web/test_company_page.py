@@ -88,8 +88,9 @@ def _rule(selector: str) -> str:
 
 def test_the_head_s_parts() -> None:
     """Left: the logo on the drawer's tile at 40px, the name, the ticker, the phase badge, the
-    moat stamp, and one caption, the exchange, the sector and the industry. Right: the latest
-    snapshot's price in figure-lg and the day of its close."""
+    moat stamp, the moat's control (the file's class has no chip), and one caption, the exchange,
+    the sector and the industry. Right: the latest snapshot's price in figure-lg and the day of its
+    close."""
     tree = _head(answers.DETAIL)
     [logo] = classed(tree, "app-company__logo")
     assert logo["type"] == "img"
@@ -102,7 +103,10 @@ def test_the_head_s_parts() -> None:
     [badge] = _badges(tree)
     assert (badge["props"]["phase"], badge["props"]["size"]) == (4, "sm")
     [stamp] = classed(tree, "app-moat")
-    _drawn_in_order(tree, logo, name, ticker, badge, stamp)
+    [control] = [e for e in elements(tree) if e["props"].get("className") == "app-moat-open"]
+    assert control["props"]["children"] == ["Change ▾"]
+    assert node("moatChip", [answers.DETAIL]) is None
+    _drawn_in_order(tree, logo, name, ticker, badge, stamp, control)
     [line] = classed(tree, "app-company__sub")
     assert text(line) == "NYSE · Technology · Semiconductors"
     [price] = classed(tree, "figure-lg")
@@ -130,22 +134,29 @@ def test_the_head_of_a_company_with_less_on_file() -> None:
 
 
 def test_the_moat_stamp_s_three_words_and_none() -> None:
-    """An outlined label, in the words of the Words table; none without a moat."""
+    """An outlined label, in the words of the Words table; ``MOAT NOT SET`` without a row in the
+    moat table (tests/web/test_moat_control.py)."""
     for moat, words in (("Wide", "WIDE MOAT"), ("Narrow", "NARROW MOAT"), ("None", "NO MOAT")):
         stamp = node("moatStamp", [{"moat": moat}])
         assert stamp["type"] == "span"
         assert stamp["props"]["className"] == "label app-moat"
         assert text(stamp) == words
-    assert node("moatStamp", [{"moat": None}]) is None
-    assert node("moatStamp", [{}]) is None
+    for unset in ({"moat": None}, {}):
+        stamp = node("moatStamp", [unset])
+        assert stamp["props"]["className"] == "label app-moat app-moat--unset"
+        assert text(stamp) == "MOAT NOT SET"
 
 
-def test_the_head_stamps_the_moat_in_force_and_none_on_a_refused_row() -> None:
-    """The detail's moat is the review's where a review counts (the server's rule); a refused row
-    has none, and no stamp."""
+def test_the_head_stamps_the_moat_in_force_on_a_refused_row_too() -> None:
+    """The detail's moat is the class of the company's row of the moat table (the server's
+    rule): the agent's on the reviewed row, and a refused row's too; a company with no row is
+    stamped as not set."""
     [stamp] = classed(_head(answers.reviewed_detail()), "app-moat")
     assert text(stamp) == "NARROW MOAT"
-    assert classed(_head(answers.refused_detail()), "app-moat") == []
+    [stamp] = classed(_head(answers.refused_detail()), "app-moat")
+    assert text(stamp) == "WIDE MOAT"
+    [stamp] = classed(_head(answers.unset_detail()), "app-moat")
+    assert text(stamp) == "MOAT NOT SET"
 
 
 def test_the_moat_stamp_is_outlined_in_ink_muted_with_no_fill() -> None:

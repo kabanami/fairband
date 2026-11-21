@@ -12,9 +12,12 @@
    is set up, a request also opens the window where Claude Code starts, and the line under the
    button follows its launch (spec 2026-11-16 agent launch, 10). At the bar's left, Notes opens a
    box of the company's notes, from /api/companies/{symbol}/notes, which takes a new one (the
-   company page's design, 11.1); the company page's head draws it too. The header, the status
-   line and the group view are controls.js, loaded after this script; it reaches the screen
-   through window.FairbandPage. */
+   company page's design, 11.1); the company page's head draws it too. The drawer's head and the
+   company page's stamp the company's moat class, with the chip of the owner's or an agent's
+   class; the company page's head draws the control that opens the moat box, where the owner sets
+   a class or returns to Fairband's (spec 2026-11-19 8.8). The header, the status line and the
+   group view are controls.js, loaded after this script; it reaches the screen through
+   window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -63,7 +66,9 @@
     pastFirstScreen: false, /* the table is scrolled more than one screen down: Top shows */
     request: null, /* Request research of one company: { symbol, open, mode, note, error, … } */
     notes: null, /* { symbol, anchor, after, notes, loading, error } while a Notes box is open */
-    noteDraft: null /* Add a note's draft, of one company: { symbol, text, error, posting } */
+    noteDraft: null, /* Add a note's draft, of one company: { symbol, text, error, posting } */
+    moat: null /* { symbol, row, anchor, after, pick, draft, error, posting } while the moat box
+                  is open */
   };
   var latest = 0;
   var latestDetail = 0;
@@ -192,13 +197,13 @@
      a launch is followed (following), the phase numbers and a work item's open states; and the
      later views, find, the lists (null until they load), their reload, which settles once they are
      in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
-     where it is handed one (the company page's Watchlists ▾); closePopups, which closes the popup
-     and the Notes box as controls.js shows a view; companyHref, the address a ticker links to,
-     which a watchlist's table hands ScreenTable as the screen's does (the company page's design,
-     12); SCREEN_NOTE, the note on a mechanical value, which a watchlist's table hands ScreenTable
-     as the screen's does, and OPEN_NOTE, the open company's (spec 2026-11-19 7.5); researchHref,
-     the address of a report, on the company page's Research tab (the Research tab's design,
-     7.1); the loaded rows (null until they load), the chosen columns, openRow,
+     where it is handed one (the company page's Watchlists ▾); closePopups, which closes the popup,
+     the Notes box and the moat box as controls.js shows a view; companyHref, the address a ticker
+     links to, which a watchlist's table hands ScreenTable as the screen's does (the company page's
+     design, 12); SCREEN_NOTE, the note on a mechanical value, which a watchlist's table hands
+     ScreenTable as the screen's does, and OPEN_NOTE, the open company's (spec 2026-11-19 7.5);
+     researchHref, the address of a report, on the company page's Research tab (the Research tab's
+     design, 7.1); the loaded rows (null until they load), the chosen columns, openRow,
      which opens a row's drawer, reloadDetail, which reads the drawer's company again after
      another view's write about it (the Inbox view's decline and a watchlist's Request research,
      spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the
@@ -213,10 +218,11 @@
      count; the line that says what the figures are in (currencyLine) is the drawer's and the
      Research tab's, the same line in both. The company page
      (company.js; the company page's design, 7) draws its head with the logo, the phase
-     numbers, the moat stamp (moatStamp), the Notes control as the drawer's bar draws it
-     (notesControl, 11.1) and Request research with a request of its own (asking), whose
-     following of a launch the page stops as it starts to read another company (stopLaunch) and
-     starts as its read lands (followItem), opens the watchlists popup under its head's button
+     numbers, the moat stamp (moatStamp), the chip of whose class it is (moatChip) and the control
+     that opens the moat box (moatControl, spec 2026-11-19 8.8), the Notes control as the drawer's
+     bar draws it (notesControl, 11.1) and Request research with a request of its own (asking),
+     whose following of a launch the page stops as it starts to read another company (stopLaunch)
+     and starts as its read lands (followItem), opens the watchlists popup under its head's button
      (watch) on the company's row or, the lists loaded, on the company alone (rows, watchlists),
      and says when it turns to another company (notesShown), so a note drafted on another goes;
      its Fairband value block (company_overview.js, 8.2) draws the meter, the four levels under it
@@ -229,9 +235,9 @@
      item too, posts its launch (openLaunch) and draws the line's words (launchWords) from the
      item the line is drawn from (lineItem). The header's finder (finder.js) finds the rows the
      Screen's field finds (finds). The drawer with its bar (drawer), its parts (sections), the
-     Notes box (notesBox), the open item's line (launchLine), an input's value (inputValue), a
-     figure a share in a currency (money) and a logo's ground (logoGround) are here for the
-     tests, which read them in node (tests/web/page.mjs). */
+     Notes box (notesBox), the moat box (moatBox), the open item's line (launchLine), an input's
+     value (inputValue), a figure a share in a currency (money) and a logo's ground (logoGround)
+     are here for the tests, which read them in node (tests/web/page.mjs and tests/web/moat.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
@@ -256,6 +262,7 @@
     launchLine: launchLine, launchWords: launchWords, lineItem: lineItem,
     openLaunch: openLaunch, stopLaunch: stopLaunch, followItem: followItem,
     currencyLine: currencyLine, logo: logo, logoGround: logoGround, moatStamp: moatStamp,
+    moatChip: moatChip, moatControl: moatControl, moatBox: moatBox,
     notesControl: notesControl, notesBox: notesBox, notesShown: notesShown,
     drawer: drawer, sections: sections
   };
@@ -467,9 +474,9 @@
     }).map(function (w) { return w.id; });
   }
 
-  /* onWatch: a mark opens its popup, closing a Notes box, or closes it when the popup is its own.
-     The popup opens under `mark` where one is given, the company page's Watchlists ▾ (the company
-     page's design, 7.2), else under the mark the click landed on. */
+  /* onWatch: a mark opens its popup, closing a Notes box and the moat box, or closes it when the
+     popup is its own. The popup opens under `mark` where one is given, the company page's
+     Watchlists ▾ (the company page's design, 7.2), else under the mark the click landed on. */
   function watch(row, mark) {
     var anchor = mark || pressedMark;
     if (!anchor || (state.watch && state.watch.anchor === anchor)) {
@@ -477,6 +484,7 @@
       return;
     }
     closeNotes();
+    closeMoat();
     state.watch = {
       symbol: row.ticker, anchor: anchor, ids: membersOf(row.ticker, row), name: '', error: null
     };
@@ -488,11 +496,13 @@
     renderWatch();
   }
 
-  /* A view is shown (controls.js, show): the watchlist popup and the Notes box close, so neither
-     stays drawn over a view the browser's Back or Forward, or a link, opened with no press. */
+  /* A view is shown (controls.js, show): the watchlist popup, the Notes box and the moat box
+     close, so none stays drawn over a view the browser's Back or Forward, or a link, opened with
+     no press. */
   function closePopups() {
     if (state.watch) closeWatch();
     if (state.notes) closeNotes();
+    if (state.moat) closeMoat();
   }
 
   function renderWatch() {
@@ -737,6 +747,7 @@
       d ? drawer(d) : null));
     renderWatch();
     renderNotes();
+    renderMoat();
     var page = window.FairbandPage;
     if (page.onRender) page.onRender();
   }
@@ -764,7 +775,8 @@
   }
 
   /* The drawer under its bar, form A (the company page's design, 11), in this order and nothing
-     else: the head, the logo, the ticker, the phase badge, the moat stamp (moatStamp), the name
+     else: the head, the logo, the ticker, the phase badge, the moat stamp (moatStamp) and the chip
+     of the owner's or an agent's class (moatChip), with no control (spec 2026-11-19 8.8), the name
      and, for a company in another currency or an ADR, the line that says what its figures are in
      (currencyLine, spec 2026-11-10 7.4); one caption, the sector and the industry (sectorLine);
      the company brief whole, which the page's style cuts at six lines; the value band, the meter
@@ -784,6 +796,7 @@
         h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
         phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,
         moatStamp(body),
+        moatChip(body),
         body.company && body.company.name
           ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null,
         currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },
@@ -1356,14 +1369,15 @@
   }
 
   /* A Notes control's click: the box opens under the control, `anchor`, with the company's draft
-     (drafted), and reads the company's notes; the watchlist popup closes, so one box stands at a
-     time. A click on the control whose box is open closes it. */
+     (drafted), and reads the company's notes; the watchlist popup and the moat box close, so one
+     box stands at a time. A click on the control whose box is open closes it. */
   function openNotes(symbol, anchor, after) {
     if (state.notes && state.notes.anchor === anchor) {
       closeNotes();
       return;
     }
     closeWatch();
+    closeMoat();
     drafted(symbol);
     state.notes = {
       symbol: symbol, anchor: anchor, after: after, notes: null, loading: true, error: null
@@ -1506,10 +1520,12 @@
 
   /* A view turns to a company, `symbol`: the drawer as it opens another (open), the company page
      as it is asked for another (company.js). A note drafted on another company goes, and so does
-     a box open on another. */
+     a box open on another, the Notes box or the moat box, whose control the page's head keeps
+     from one company to the next. */
   function notesShown(symbol) {
     if (state.noteDraft && state.noteDraft.symbol !== symbol) state.noteDraft = null;
     if (state.notes && state.notes.symbol !== symbol) closeNotes();
+    if (state.moat && state.moat.symbol !== symbol) closeMoat();
   }
 
   /* Add a note, from the open box: the note, as the owner, with the request header every page
@@ -1539,6 +1555,249 @@
         renderNotes();
       });
   }
+
+  /* ---------------------------------------------------------------- the moat class */
+
+  /* The moat class (spec 2026-11-19 8.8 and 9): the stamp after the phase badge in the drawer's
+     head and the company page's, the chip after it where the class is the owner's or an agent's,
+     and on the company page alone the control that opens the moat box, where the owner sets a
+     class or returns to Fairband's. The box has a root of its own at the end of the page, as the
+     Notes box has, so it opens over the company page's head. */
+  var moatMount = document.body.appendChild(document.createElement('div'));
+  var moatRoot = ReactDOM.createRoot(moatMount);
+  /* The stamp's words of the three classes, and the classes in the box's order. */
+  var MOAT_WORDS = { Wide: 'WIDE MOAT', Narrow: 'NARROW MOAT', None: 'NO MOAT' };
+  var MOAT_CLASSES = ['None', 'Narrow', 'Wide'];
+
+  /* The moat stamp of a company's detail, `body` (the company page's design, 7.2): its `moat`,
+     the class of the company's row of the moat table, a refused row's too, in the stamp's words;
+     an outlined label in ink-muted with no fill, since the phase colours mean the phase alone. A
+     company with no row, an entrant, is stamped MOAT NOT SET, its outline dashed. */
+  function moatStamp(body) {
+    if (body.moat == null) {
+      return h('span', { className: 'label app-moat app-moat--unset' }, 'MOAT NOT SET');
+    }
+    return h('span', { className: 'label app-moat' }, MOAT_WORDS[body.moat]);
+  }
+
+  /* The chip after the stamp where the class in force, the detail's `moatClass`, is the owner's
+     or an agent's: a compact principal chip, the agent's with its model, its hover the day of the
+     write and the reason (moatHover), which the bundle writes after its principal's note. The
+     file's class has none, nor has a company with no row: quiet is the signal that nothing was
+     changed. */
+  function moatChip(body) {
+    var row = body.moatClass;
+    if (!row || row.source === 'file') return null;
+    return h(F.PrincipalChip, {
+      principal: row.source, actor: row.actor, compact: true, reason: moatHover(row)
+    });
+  }
+
+  /* The chip's hover after the bundle's note: 19 Nov 2026: <the reason>, or the day alone. */
+  function moatHover(row) {
+    var day = F.formatDate(moatDay(row));
+    return row.reason ? day + ': ' + row.reason : day;
+  }
+
+  /* The day of a row's class, ISO: the file's own for the file's row; for the owner's or an
+     agent's, the day of the write in the reader's offset (localIso), as a note's chip reads it. */
+  function moatDay(row) {
+    return row.source === 'file' ? row.judgedOn : localIso(row.at).slice(0, 10);
+  }
+
+  /* The company page's control, in the quiet button's look after the stamp and the chip: Change ▾
+     on a company with a row, Set ▾ on one with none. A click opens the moat box under it
+     (openMoat); `after` reads the page's company again once a write is taken. The drawer draws
+     none. */
+  function moatControl(body, after) {
+    return h(F.Button, {
+      variant: 'quiet', size: 'sm', className: 'app-moat-open',
+      onClick: function (event) { openMoat(body, event.currentTarget, after); }
+    }, body.moatClass ? 'Change ▾' : 'Set ▾');
+  }
+
+  /* A click on the control: the box opens under it, `anchor`, on the company of `body`, its
+     symbol as the detail gives it, with its row, the class in force pressed and nothing typed;
+     the watchlist popup and a Notes box close, so one box stands at a time. A click on the
+     control whose box is open closes it. */
+  function openMoat(body, anchor, after) {
+    if (state.moat && state.moat.anchor === anchor) {
+      closeMoat();
+      return;
+    }
+    closeWatch();
+    closeNotes();
+    var row = body.moatClass || null;
+    state.moat = {
+      symbol: body.result.symbol, row: row, anchor: anchor, after: after,
+      pick: row ? row.class : null, draft: '', error: null, posting: false
+    };
+    renderMoat();
+  }
+
+  function closeMoat() {
+    state.moat = null;
+    renderMoat();
+  }
+
+  function renderMoat() {
+    moatRoot.render(state.moat ? h(MoatBox, { box: state.moat }) : null);
+  }
+
+  /* The box, fixed under its control as the Notes box is (place), or over it when the control
+     sits low in the window; it follows the control as the page scrolls and closes when the
+     control is gone or hidden (its view left). Focus moves to the class pressed, or the first
+     class where none is, as it opens. */
+  function MoatBox(props) {
+    var box = props.box;
+    var ref = React.useRef(null);
+    React.useLayoutEffect(function () {
+      if (!box.anchor.getClientRects().length) { /* gone, or its view hidden */
+        closeMoat();
+        return;
+      }
+      place(ref.current, box.anchor);
+    });
+    React.useEffect(function () {
+      var menu = ref.current;
+      (menu.querySelector('[aria-pressed="true"]') || menu.querySelector('button')).focus();
+    }, [box.anchor]);
+    return moatBox(box, ref);
+  }
+
+  /* The moat box of `box`, { symbol, row, pick, draft, error, posting }, in the bundle's menu
+     style as the Notes box draws it: the line that says whose the class is (moatLine), with the
+     reason under it where one is on file, and none on a company with no row; the three classes
+     as a segmented control, the one picked pressed, the class in force as the box opens; the
+     field Reason (optional), holding the draft; then Set moat class, disabled with no class
+     picked and while a write is out, and on the owner's or an agent's row of a company the file
+     holds the return to the file's class, Use Fairband's class (Narrow); a refusal's sentence
+     under the buttons. `ref` is the box's own (MoatBox). */
+  function moatBox(box, ref) {
+    var row = box.row;
+    var back = row && row.source !== 'file' && row.fileClass;
+    return h('div', {
+      ref: ref, className: 'fb-menu fb-menu--filters app-moat-box', role: 'group',
+      'aria-label': 'Moat class'
+    },
+      h('div', { className: 'fb-menu__body app-moat-box__body' },
+        row ? moatLine(row) : null,
+        row && row.reason ? h('p', { className: 'body app-moat-box__reason' }, row.reason) : null,
+        h('div', {
+          className: 'app-fin__seg app-moat-box__classes', role: 'group', 'aria-label': 'Moat class'
+        }, MOAT_CLASSES.map(function (moat) {
+          return h('button', {
+            key: moat, type: 'button', className: 'control',
+            'aria-pressed': moat === box.pick ? 'true' : 'false',
+            onClick: function () { box.pick = moat; renderMoat(); }
+          }, moat);
+        })),
+        h('textarea', {
+          className: 'control app-field app-moat-box__field', rows: 2, value: box.draft,
+          placeholder: 'Reason (optional)', 'aria-label': 'Reason',
+          onChange: function (event) { box.draft = event.target.value; renderMoat(); }
+        })),
+      h('div', { className: 'fb-menu__foot' },
+        h('div', { className: 'app-moat-box__buttons' },
+          h(F.Button, {
+            size: 'sm', disabled: box.posting || !box.pick,
+            onClick: function () { setMoat(box); }
+          }, 'Set moat class'),
+          back ? h(F.Button, {
+            variant: 'quiet', size: 'sm', disabled: box.posting,
+            onClick: function () { returnMoat(box); }
+          }, 'Use Fairband\'s class (' + back + ')') : null),
+        box.error ? h('p', { className: 'caption app-moat-box__error' }, box.error) : null));
+  }
+
+  /* The line that says whose the class is, in the Words table's words: the file's, Fairband's
+     class, table version 1, judged 19 Nov 2026., the version the number after the -v of the
+     file's name (fairband-moat-v1); the owner's, Your class since 19 Nov 2026. Before: Narrow.;
+     an agent's, its chip (moatChip), then since 19 Nov 2026. Before: Narrow.; no Before: without a
+     class before it. The day is a date in the page's form (when). */
+  function moatLine(row) {
+    var day = when(moatDay(row));
+    var before = row.previous ? ' Before: ' + row.previous + '.' : '';
+    var line;
+    if (row.source === 'file') {
+      line = ['Fairband\'s class, table version ' + String(row.fileVersion).replace(/^.*-v/, '') +
+        ', judged ', day, '.'];
+    } else if (row.source === 'owner') {
+      line = ['Your class since ', day, '.' + before];
+    } else {
+      line = [moatChip({ moatClass: row }), ' since ', day, '.' + before];
+    }
+    return h.apply(null, ['p', { className: 'caption app-moat-box__whose' }].concat(line));
+  }
+
+  /* The company's address of its class, its symbol as the detail gives it, written as the page's
+     other addresses of a company are, so a dot stays (BF.B). */
+  function moatPath(symbol) {
+    return '/api/companies/' + encodeURIComponent(symbol) + '/moat';
+  }
+
+  /* Set moat class: the class picked, as the owner, with the reason typed, trimmed, and none
+     where it is blank, since the owner's class needs none (CLAUDE.md, the brand-book line). */
+  function setMoat(box) {
+    if (!box.pick) return;
+    var body = { class: box.pick };
+    var reason = box.draft.trim();
+    if (reason) body.reason = reason;
+    writeMoat(box, function () { return api.put(moatPath(box.symbol), body); });
+  }
+
+  /* The return to the file's class, the owner's alone. */
+  function returnMoat(box) {
+    writeMoat(box, function () { return api.del(moatPath(box.symbol)); });
+  }
+
+  /* A write of the box, one at a time, with the request header every page write carries (api):
+     while it is out the buttons wait; a refusal shows the server's sentence under them
+     (refusalDetail), what was picked and typed kept. Taken, the company was valued again: the box
+     closes, where it is still open, and hands focus back to its control, the screen's rows load
+     again, and the box's `after` reads the page's company again, so the stamp, the chip and the
+     value follow. */
+  function writeMoat(box, write) {
+    if (box.posting) return;
+    box.posting = true;
+    box.error = null;
+    renderMoat();
+    write()
+      .then(function (r) {
+        if (!r.ok) throw new Error(refusalDetail(r));
+        if (state.moat === box) {
+          closeMoat();
+          if (box.anchor.isConnected) box.anchor.focus();
+        }
+        load();
+        if (box.after) box.after();
+      })
+      .catch(function (err) { box.error = err.message; })
+      .then(function () {
+        box.posting = false;
+        renderMoat();
+      });
+  }
+
+  /* The box closes on a press or focus outside it and its control, and on Escape, which hands
+     focus back to the control, as the Notes box does. It follows its control when anything
+     scrolls and when the window resizes. */
+  function closeMoatOutside(event) {
+    var box = state.moat;
+    if (!box || !(event.target instanceof Node)) return;
+    if (moatMount.contains(event.target) || box.anchor.contains(event.target)) return;
+    closeMoat();
+  }
+  document.addEventListener('pointerdown', closeMoatOutside);
+  document.addEventListener('focusin', closeMoatOutside);
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !state.moat) return;
+    var anchor = state.moat.anchor;
+    closeMoat();
+    if (anchor.isConnected) anchor.focus();
+  });
+  document.addEventListener('scroll', function () { if (state.moat) renderMoat(); }, true);
+  window.addEventListener('resize', function () { if (state.moat) renderMoat(); });
 
   /* ------------------------------ the parts Appendix A and the Research tab's cards draw */
 
@@ -1777,17 +2036,6 @@
     }
     if (marks === 0 || (edge === 0 && light === marks)) return 'blank';
     return lightEdge > edge / 2 ? 'dark' : 'white';
-  }
-
-  /* The moat stamp after the phase badge (the company page's design, 7.2): the detail's `moat`,
-     the moat class in force, the review's where a review counts, else the snapshot's, in the
-     stamp's words. An outlined label in ink-muted with no fill, since the phase colours mean the
-     phase alone. A row with no value has no moat, and no stamp. */
-  var MOAT_WORDS = { Wide: 'WIDE MOAT', Narrow: 'NARROW MOAT', None: 'NO MOAT' };
-
-  function moatStamp(body) {
-    var words = MOAT_WORDS[body.moat];
-    return words ? h('span', { className: 'label app-moat' }, words) : null;
   }
 
   /* The drawer's caption under its head (the company page's design, 11): the universe row's

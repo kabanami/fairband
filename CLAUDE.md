@@ -27,7 +27,8 @@ Package in `src/fairband/`; tests in `tests/`, mirroring the package.
   writes: the value, the levels, an input, an override, a record. A cite on every number is
   the rule of an agent's report alone (`docs/method.md` 16). Vendor reference data on a page
   (a company's statistics, prices, estimates, news) is shown plain: no cite, no chip and no
-  vendor's name on a figure or a block, and one data date for the page or the block.
+  vendor's name on a figure or a block, and one data date for the page or the block. An owner's
+  moat class is saved without a reason (the founder, 2026-11-19).
 
 ## Keys and data
 
@@ -53,7 +54,7 @@ A commit of documents alone (Markdown files and files under `docs/`; nothing und
 that read a document (the founder, 2026-11-18):
 
 ```
-uv run ruff check . && uv run ruff format --check . && uv run pytest -q tests/test_method_doc.py tests/test_playbook.py tests/reports/test_render.py tests/web/test_design_tokens.py
+uv run ruff check . && uv run ruff format --check . && uv run pytest -q tests/test_method_doc.py tests/test_playbook.py tests/reports/test_render.py tests/web/test_design_tokens.py tests/policy/test_moat.py
 ```
 
 ## Commits

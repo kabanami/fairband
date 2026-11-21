@@ -12,12 +12,12 @@ cadence on the stored statements (the newest annual income row names New Taiwan 
 quarters end a quarter apart), and the window from the stored list's params (a refresh's of 2 Nov
 2026, the 365 days to 1 Nov 2026). The detail is written by hand in the shape of ``GET
 /api/companies/{symbol}`` (``web/app.py``, ``company``): LFOX valued on the Mature Growth route at
-$196.50 against a price of $182.40, a wide moat, no quality warning and so no mark, two notes, no
-review, no report and no open item.
+$196.50 against a price of $182.40, a wide moat, the moat table's file row, no quality warning and
+so no mark, two notes, no review, no report and no open item.
 
-The builders give the variants: a refused row, a reviewed row with a published report, the four
-answers of a company with nothing stored but its profile, and the overview of one with nothing
-stored at all. Each returns a new copy."""
+The builders give the variants: a refused row, a reviewed row with a published report, a company
+with no row in the moat table, the four answers of a company with nothing stored but its profile,
+and the overview of one with nothing stored at all. Each returns a new copy."""
 
 import copy
 from datetime import date
@@ -122,6 +122,20 @@ INVESTOR: dict[str, Any] = {
     },
 }
 
+# The company's row of the moat table as the detail serves it (``moat_api.moat_json``): the
+# file's class, judged on 19 Nov 2026 in the table's version 1.
+MOAT_FILE: dict[str, Any] = {
+    "class": "Wide",
+    "source": "file",
+    "fileVersion": "fairband-moat-v1",
+    "judgedOn": "2026-11-19",
+    "previous": None,
+    "reason": None,
+    "actor": None,
+    "at": "2026-11-19T12:00:00+00:00",
+    "fileClass": "Wide",
+}
+
 DETAIL: dict[str, Any] = {
     "company": {
         "symbol": SYMBOL,
@@ -202,6 +216,7 @@ DETAIL: dict[str, Any] = {
     "review": None,
     "priceNeeds": None,
     "moat": "Wide",
+    "moatClass": MOAT_FILE,
     "secondary": None,
     "report": None,
     "item": None,
@@ -209,8 +224,9 @@ DETAIL: dict[str, Any] = {
     "launchReady": False,
 }
 
-# A review that counts on the latest snapshot: its moat override narrows the moat and lowers the
-# value, so the moat in force is the review's.
+# A review that counts on the latest snapshot: its moat override, applied before the moat table,
+# narrowed the moat and lowered the value. The table's migration made it the agent's row of the
+# table (MOAT_AGENT), so the moat in force is the agent's class.
 REVIEW: dict[str, Any] = {
     "id": 7,
     "value": 182.0,
@@ -238,6 +254,18 @@ REVIEW: dict[str, Any] = {
     "flags": [],
 }
 
+# The agent's row the migration made of the review's applied moat override.
+MOAT_AGENT: dict[str, Any] = MOAT_FILE | {
+    "class": "Narrow",
+    "source": "agent",
+    "fileVersion": None,
+    "judgedOn": "2026-11-11",
+    "previous": "Wide",
+    "reason": REVIEW["bridge"][0]["reason"],
+    "actor": "claude-opus-5-5",
+    "at": "2026-11-11T12:00:00+00:00",
+}
+
 # The company's latest published report, within its window.
 REPORT: dict[str, Any] = {
     "id": 31,
@@ -259,8 +287,9 @@ def detail(**changes: Any) -> dict[str, Any]:
 
 
 def refused_detail() -> dict[str, Any]:
-    """LFOX refused: no route, value, levels or designation, the refusal's sentence, no moat."""
-    found = detail(moat=None)
+    """LFOX refused: no route, value, levels or designation, the refusal's sentence; the moat its
+    row's in the moat table, which a refused row keeps, though its snapshot carries none."""
+    found = detail()
     found["result"] |= {
         "route": None,
         "value": None,
@@ -274,8 +303,14 @@ def refused_detail() -> dict[str, Any]:
 
 
 def reviewed_detail() -> dict[str, Any]:
-    """LFOX with ``REVIEW`` counting, its moat in force, and ``REPORT`` published."""
-    return detail(review=REVIEW, moat="Narrow", report=REPORT)
+    """LFOX with ``REVIEW`` counting, the agent's row its moat override became in force, and
+    ``REPORT`` published."""
+    return detail(review=REVIEW, moat="Narrow", moatClass=MOAT_AGENT, report=REPORT)
+
+
+def unset_detail() -> dict[str, Any]:
+    """LFOX with no row in the moat table, an entrant: no moat and no row."""
+    return detail(moat=None, moatClass=None)
 
 
 def profile_only_overview() -> dict[str, Any]:

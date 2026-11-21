@@ -1294,6 +1294,9 @@ def test_controls_js_run_bar() -> None:
         # (spec 2026-11-10 7.1)
         ("rates", "fetching exchange rates"),
         ("fx", "quoting exchange rates"),
+        # the moat table read into the database, and a moat write's revalue (spec 2026-11-19 8.4,
+        # 8.6)
+        ("moat", "reading the moat table"),
     ):
         assert f"{stage}: '{word}'" in script, stage
     assert "progressLine" not in script
@@ -2558,9 +2561,12 @@ def test_the_appendixes_are_drawn_from_the_records() -> None:
         assert text in records, text
     for gone in ("Drop", "onClick", "Button"):
         assert gone not in records, gone
-    # the page's code sends no override and no drop, the Research tab's nor the screen's
+    # the page's code sends no override and no drop, the Research tab's nor the screen's; the
+    # screen's one DELETE is the moat box's return to the file's class (spec 2026-11-19 8.8)
     for name in ("company_research.js", "company_research_records.js", "report_parts.js", "app.js"):
         page = _static_file(name)
+        if name == "app.js":
+            page = page.replace("api.del(moatPath(box.symbol))", "", 1)
         assert "/overrides" not in page and "api.del" not in page and ".del(" not in page, name
     secondary = _function(script, "secondary")
     _in_order(

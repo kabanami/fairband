@@ -281,7 +281,8 @@ def test_the_page_s_head_holds_it_before_the_watchlists_control() -> None:
 
 def test_the_box_opens_under_its_control_and_closes_as_the_popup_does() -> None:
     """A click on the control opens the box under it and reads the company's notes, or closes the
-    box when it is the control's own; one box at a time, and never beside the watchlists popup.
+    box when it is the control's own; one box at a time, and never beside the watchlists popup or
+    the moat box.
     Escape, which hands focus back to the control, and a press or focus outside the box and its
     control close it; it follows its control as the page scrolls and closes when the control is
     gone."""
@@ -296,6 +297,7 @@ def test_the_box_opens_under_its_control_and_closes_as_the_popup_does() -> None:
         "if (state.notes && state.notes.anchor === anchor) {",
         "closeNotes();",
         "closeWatch();",
+        "closeMoat();",
         "drafted(symbol);",
         "readNotes();",
     )

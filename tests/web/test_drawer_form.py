@@ -1,5 +1,6 @@
 """The drawer's form A (the company page's design, 11): under its bar the head as before, the moat
-stamp after the phase badge; one caption, the sector and the industry; the company's brief in body
+stamp after the phase badge, and the chip of the owner's or an agent's class after it (spec
+2026-11-19 8.8); one caption, the sector and the industry; the company's brief in body
 text, cut to six lines by the page's style; the value band, the meter and the four levels in the
 screen's words, or a refused row's sentence where the meter draws no band; then Company page, a
 link to the company page, and Request research. Nothing else: the route's lines, the stance, the
@@ -256,7 +257,8 @@ def test_what_left_the_drawer_is_not_drawn() -> None:
 
 
 def test_a_refused_row_draws_its_refusal() -> None:
-    """In the band's place the refusal's sentence; no meter, no levels and no moat stamp."""
+    """In the band's place the refusal's sentence; no meter and no levels. The moat stamp stays:
+    the class is the moat table's, a refused row's too."""
     tree = _drawn(answers.refused_detail())
     band = _one(tree, "app-drawer__band")
     refusal = _one(band, "app-refusal")
@@ -264,7 +266,7 @@ def test_a_refused_row_draws_its_refusal() -> None:
     assert text(refusal) == answers.REFUSAL
     assert _meters(tree) == []
     assert classed(tree, "app-pairs") == []
-    assert classed(tree, "app-moat") == []
+    assert text(_one(tree, "app-moat")) == "WIDE MOAT"
     assert [part["props"]["className"].split()[-1] for part in tree if part is not None][-2:] == [
         "app-drawer__band",
         "app-drawer__actions",
@@ -295,8 +297,8 @@ def test_a_refused_row_with_a_band_draws_the_band_and_no_sentence(
 
 
 def test_a_reviewed_row_draws_the_review_s_band() -> None:
-    """The review counts: the meter and the levels are the review's, and the stamp the moat its
-    override sets."""
+    """The review counts: the meter and the levels are the review's, and the stamp the class of
+    the agent's row its moat override became."""
     detail = answers.reviewed_detail()
     tree = _drawn(detail)
     [meter] = _meters(tree)
@@ -312,16 +314,16 @@ def test_a_reviewed_row_draws_the_review_s_band() -> None:
 
 
 def test_the_moat_stamp_follows_the_phase_badge() -> None:
-    """Right after the phase badge, in the stamp's words; a company with no moat in force has no
-    stamp, and a row with no phase no badge."""
+    """Right after the phase badge, in the stamp's words; a company with no row in the moat table
+    is stamped ``MOAT NOT SET``, and a row with no phase has no badge."""
     for moat, words in (("Wide", "WIDE MOAT"), ("Narrow", "NARROW MOAT"), ("None", "NO MOAT")):
         [head, *_] = _drawn(answers.detail(moat=moat))
         kids = head["props"]["children"]
         badge = next(i for i, kid in enumerate(kids) if kid and "phase" in kid["props"])
         assert kids[badge + 1] == node("moatStamp", [{"moat": moat}])
         assert text(kids[badge + 1]) == words
-    [head, *_] = _drawn(answers.detail(moat=None))
-    assert classed(head, "app-moat") == []
+    [head, *_] = _drawn(answers.unset_detail())
+    assert text(_one(head, "app-moat")) == "MOAT NOT SET"
     unphased = answers.detail()
     unphased["result"]["phase"]["phase"] = None
     [head, *_] = _drawn(unphased)

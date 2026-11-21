@@ -40,7 +40,7 @@
     universe: 'reading the universe', deciles: 'ranking', fetch: 'fetching',
     rates: 'fetching exchange rates', backfill: 'reading stored statements', value: 'valuing',
     quotes: 'fetching prices', fx: 'quoting exchange rates', reprice: 'repricing',
-    done: 'finishing'
+    moat: 'reading the moat table', done: 'finishing'
   };
 
   /* The views in the header's order, each with its panel, a section of the page; then the company

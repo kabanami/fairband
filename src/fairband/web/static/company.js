@@ -7,11 +7,12 @@
    #company/<symbol>/research/<id> on the report with that id (the Research tab's design, 7.1).
    No link leads back to the screen: the header's Screen view does (the decision log of
    2026-11-17). The head stands on every tab: at its left the logo, the name, the ticker, the
-   phase badge, the moat stamp and one caption line, the exchange, the sector and the industry;
-   at its right the latest snapshot's price, the day's change where the stored quote is that
-   price's, the day of the close, then Notes, the watchlists control and Request research. Under
-   it the tabs' row: Overview, Financials, Estimates, Investor relations and Research, the data
-   date of the open tab at the row's right end.
+   phase badge, the moat stamp, the chip of the owner's or an agent's class and the control of
+   the class (spec 2026-11-19 8.8), and one caption line, the exchange, the sector and the
+   industry; at its right the latest snapshot's price, the day's change where the stored quote is
+   that price's, the day of the close, then Notes, the watchlists control and Request research.
+   Under it the tabs' row: Overview, Financials, Estimates, Investor relations and Research, the
+   data date of the open tab at the row's right end.
    Under the row the open tab's blocks, which the later scripts hang on companyPage.draw by tab;
    nothing is drawn there while a tab's function is missing. The head reads the company's
    detail, as the drawer does; each tab its own read of the store, which carries the head's
@@ -304,9 +305,12 @@
   /* The head on every tab (7.2), from the company's detail `d`, and `quote`, the open tab's
      stored quote, null before its answer is in. Left: the logo on the drawer's tile at 40px
      (FairbandPage.logo), the name, the ticker, the phase badge, the moat stamp
-     (FairbandPage.moatStamp), and one caption line, the exchange, the sector and the industry of
-     the universe row, the parts it has. Right: the latest snapshot's price in figure-lg, in US
-     dollars, the day's change, and the day of its close; then Notes with the count of the
+     (FairbandPage.moatStamp), the chip where the class is the owner's or an agent's
+     (FairbandPage.moatChip) and the control that opens the moat box under it, which, once a write
+     is taken, reads the page again (FairbandPage.moatControl, load; spec 2026-11-19 8.8); and one
+     caption line, the exchange, the sector and the industry of the universe row, the parts it
+     has. Right: the latest snapshot's price in figure-lg, in US dollars, the day's change, and
+     the day of its close; then Notes with the count of the
      company's notes (FairbandPage.notesControl, 11.1), whose box opens under it and, once a note
      is taken, reads the page again (load); the watchlists control, which opens the screen's
      popup for this company under itself, on the row watchRow gives, disabled without one; and
@@ -329,7 +333,7 @@
             c.name ? h('h1', { className: 'title app-company__name' }, c.name) : null,
             h('span', { className: 'ticker' }, r.symbol),
             phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,
-            P.moatStamp(d)),
+            P.moatStamp(d), P.moatChip(d), P.moatControl(d, load)),
           line ? h('p', { className: 'caption app-company__sub' }, line) : null)),
       h('div', { className: 'app-company__side' },
         h('div', { className: 'app-company__quote' },
