@@ -85,7 +85,10 @@
         if (state.notice && state.notice.fromPoll) state.notice = null; /* it answers again */
         state.running = body.refresh;
         if (body.refresh !== null) state.detailsOpen = false; /* the run bar replaces the line */
-        if (body.refresh === null) state.last = body.last;
+        /* `shown` is the run the line, Details and the header's stamp describe: the last one,
+           but for a moat write's revalue of one company, which the server passes over, so they
+           stay about the last run of the whole screen (the founder, 2026-11-22). */
+        if (body.refresh === null) state.last = body.shown;
         if (ended) { /* the notice (already running, cancel asked) no longer holds */
           started = false;
           state.notice = null;

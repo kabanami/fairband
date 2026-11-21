@@ -129,6 +129,7 @@ from fairband.store.refreshes import (
     RefreshRunning,
     latest_deciles,
     latest_refresh,
+    latest_shown_refresh,
     mark_interrupted,
 )
 from fairband.store.reports import latest_reports
@@ -482,17 +483,21 @@ def create_app(
 
     @app.get("/api/refresh/current")
     def refresh_current() -> dict[str, Any]:
-        """The running refresh's progress and kind; with none running, the last refresh's record
-        and the error its run raised, if any."""
+        """The running refresh's progress and kind; with none running, the last refresh's record,
+        the record the page's status line describes (``shown``: the last one, passing over a
+        finished revalue of named companies, which a moat write records) and the error the last
+        run raised, if any."""
         progress = None if worker is None else worker.status()
         with closing(conn_factory()) as conn:
             last = latest_refresh(conn)
+            shown = latest_shown_refresh(conn)
         if progress is not None:
             kind = last.kind if last is not None and last.id == progress.refresh_id else None
             return {"refresh": progress_json(progress, kind)}
         return {
             "refresh": None,
             "last": None if last is None else refresh_json(last),
+            "shown": None if shown is None else refresh_json(shown),
             "error": None if worker is None else worker.last_error,
         }
 

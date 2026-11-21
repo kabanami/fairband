@@ -41,6 +41,7 @@ LAST: dict[str, Any] = {
     },
     "error": None,
 }
+LAST["shown"] = LAST["last"]  # the run the line describes: the last one, but after a moat write
 RUNNING: dict[str, Any] = {
     "refresh": {
         "id": 67,
@@ -143,7 +144,7 @@ def test_a_notice_still_draws_on_the_company_page_and_before_any_refresh_the_lin
 def _ended(status: str, message: str) -> dict[str, Any]:
     """The refresh's state after a run that did not end done: its message and no calibration."""
     last = LAST["last"] | {"status": status, "message": message, "calibration": None}
-    body = {"refresh": None, "last": last, "error": None}
+    body = {"refresh": None, "last": last, "shown": last, "error": None}
     return {"do": "answer", "url": CURRENT, "status": 200, "body": body}
 
 
@@ -189,3 +190,23 @@ def test_no_page_draws_a_link_back_to_the_screen() -> None:
         assert "Back to the screen" not in script.read_text(), script.name
     page = _static_file("index.html")
     assert "__back" not in page
+
+
+def test_after_a_moat_write_the_line_details_and_the_stamp_stay_the_run_before() -> None:
+    """A moat write values one company again, and the refresh route answers that revalue as
+    ``last`` and the run before it as ``shown``. The line, Details and the header's stamp describe
+    ``shown``: the last run of the whole screen (the founder, 2026-11-22)."""
+    write = LAST["last"] | {
+        "id": 67,
+        "kind": "revalue",
+        "startedAt": "2026-11-17T09:00:00+00:00",
+        "finishedAt": "2026-11-17T09:00:01+00:00",
+        "calibration": None,
+    }
+    body = {"refresh": None, "last": write, "shown": LAST["last"], "error": None}
+    [plain] = _trace([LANDED])
+    [written] = _trace([{"do": "answer", "url": CURRENT, "status": 200, "body": body}])
+    assert written["status"] == plain["status"]
+    assert written["status"].startswith("full done ") and written["status"].endswith(LINE_END)
+    assert written["details"] is True
+    assert written["ran"] is not None and written["ran"] == plain["ran"]

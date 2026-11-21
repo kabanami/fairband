@@ -167,6 +167,20 @@ def latest_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
     return None if row is None else _refresh(row)
 
 
+def latest_shown_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
+    """The refresh the page's status line describes: the one with the greatest id, passing over
+    a revalue that names its companies and finished ``done``. A moat write records such a revalue
+    of one company (spec 2026-11-19 8.6), and the line stays about the last run of the whole
+    screen (the founder, 2026-11-22). A named revalue that did not end ``done`` is not passed
+    over, since the line says how a run ended."""
+    row = conn.execute(
+        "SELECT * FROM refreshes"
+        " WHERE NOT (kind = 'revalue' AND symbols IS NOT NULL AND status = 'done')"
+        " ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return None if row is None else _refresh(row)
+
+
 def latest_full_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
     """The full refresh with the greatest id among those that finished ``done``."""
     row = conn.execute(

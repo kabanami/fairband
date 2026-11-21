@@ -240,6 +240,21 @@ def test_the_owner_sets_a_class(client: TestClient, db_path: Path, policy: Polic
     assert _latest(db_path, "HGCO").refresh_id == 1
 
 
+def test_the_status_line_s_run_stays_the_one_before_a_write(
+    client: TestClient, db_path: Path
+) -> None:
+    """A write values one company. The refresh route answers its revalue as ``last`` and the run
+    before it as ``shown``, the run the page's status line and stamp describe (the founder,
+    2026-11-22: the line is about the last run of the whole screen)."""
+    before = client.get("/api/refresh/current").json()
+    assert before["shown"] == before["last"] and before["last"]["kind"] == "full"
+    _put(client, {"class": "Wide"})
+    after = client.get("/api/refresh/current").json()
+    assert (after["last"]["kind"], after["last"]["status"]) == ("revalue", "done")
+    assert after["last"]["id"] > before["last"]["id"]
+    assert after["shown"] == before["last"]
+
+
 def test_an_agent_needs_a_reason_and_evidence(client: TestClient, db_path: Path) -> None:
     """An agent's verdict needs a reason, then one evidence item or more, as an override does:
     each a 400, and nothing is stored."""

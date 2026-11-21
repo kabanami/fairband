@@ -6,6 +6,7 @@ import pytest
 from fairband.engine.classifier import Deciles
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.refreshes import (
+    Finished,
     ItemRow,
     RefreshRow,
     RefreshRunning,
@@ -16,6 +17,7 @@ from fairband.store.refreshes import (
     latest_deciles,
     latest_full_refresh,
     latest_refresh,
+    latest_shown_refresh,
     mark_interrupted,
     save_deciles,
     set_stage,
@@ -163,3 +165,46 @@ def test_latest_full_refresh_is_the_newest_done(conn: sqlite3.Connection) -> Non
     _start(conn)  # running
     found = latest_full_refresh(conn)
     assert found is not None and (found.id, found.kind, found.status) == (done, "full", "done")
+
+
+def test_the_shown_refresh_passes_over_a_done_revalue_that_names_companies(
+    conn: sqlite3.Connection,
+) -> None:
+    """A moat write values one company again and records a revalue that names it. The page's
+    status line keeps describing the run before it (the founder, 2026-11-22)."""
+    assert latest_shown_refresh(conn) is None
+    full = _start(conn)
+    finish_refresh(conn, full, "done", T1)
+    for symbol in ("KO", "CRM"):
+        finish_refresh(conn, _start(conn, "revalue", [symbol]), "done", T1)
+    newest, shown = latest_refresh(conn), latest_shown_refresh(conn)
+    assert newest is not None and (newest.kind, newest.symbols) == ("revalue", ("CRM",))
+    assert shown is not None and shown.id == full
+
+
+@pytest.mark.parametrize("status", ["failed", "cancelled", "interrupted"])
+def test_the_shown_refresh_keeps_a_named_revalue_that_did_not_end_done(
+    conn: sqlite3.Connection, status: Finished
+) -> None:
+    """The line says how a run ended, so a revalue of named companies that did not end done is
+    not passed over."""
+    finish_refresh(conn, _start(conn), "done", T1)
+    named = _start(conn, "revalue", ["KO"])
+    finish_refresh(conn, named, status, T1, "stopped")
+    shown = latest_shown_refresh(conn)
+    assert shown is not None and (shown.id, shown.status) == (named, status)
+
+
+@pytest.mark.parametrize(
+    ("kind", "symbols"), [("scoped", ["KO"]), ("revalue", None), ("price", None), ("full", None)]
+)
+def test_the_shown_refresh_keeps_every_other_run(
+    conn: sqlite3.Connection, kind: str, symbols: list[str] | None
+) -> None:
+    """A scoped refresh names companies too and keeps its line; so does a revalue of every
+    company."""
+    finish_refresh(conn, _start(conn), "done", T1)
+    later = _start(conn, kind, symbols)
+    finish_refresh(conn, later, "done", T1)
+    shown = latest_shown_refresh(conn)
+    assert shown is not None and shown.id == later

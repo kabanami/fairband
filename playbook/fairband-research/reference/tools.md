@@ -153,7 +153,10 @@ be left out.
   source.
 - `methodology(section?)`: one section of the Methodology page in plain words, with the live
   values; without a section, the list of sections.
-- `refresh_status()`: the running refresh's progress, or the last refresh's record when none runs.
+- `refresh_status()`: the running refresh's progress in `refresh`. With none running, `refresh` is
+  `null` and it answers `last`, the newest refresh's record, and `shown`, the record the page's
+  status line describes: the same one, but passing over a finished revalue that names its
+  companies, which a write of the moat class records.
 
 ## The vendor pass-throughs
 

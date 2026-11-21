@@ -585,6 +585,17 @@ def test_the_note_has_one_form() -> None:
     assert "asked in chat on 2026-11-08 (the second run)" in skill  # the counter-example
 
 
+def test_refresh_status_names_the_two_records_it_answers() -> None:
+    """With no refresh running the route answers ``last``, the newest record, and ``shown``, the
+    run the page's status line describes, which passes over a finished revalue of named
+    companies, a moat write's (the founder, 2026-11-22; web/app.py ``refresh_current``)."""
+    entry = _tool_entry("refresh_status")
+    assert "the running refresh's progress in `refresh`" in entry
+    assert "`last`, the newest refresh's record" in entry
+    assert "`shown`, the record the page's status line describes" in entry
+    assert "passing over a finished revalue that names its companies" in entry
+
+
 def test_every_item_is_refreshed_before_it_is_read(tmp_path: Path) -> None:
     """Spec 14 step 3 (plan 5, B-126): a scoped refresh of the company opens step 3 on every
     item, so the report reads the latest price; before plan 5 only an expired company was

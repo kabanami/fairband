@@ -133,6 +133,7 @@ for (const step of steps) {
   trace.push({
     do: step.do,
     view: header.props.view,
+    ran: header.props.engineRanAt,
     finder: [...elements(header.props.children)].some((e) => e.type === P.finder.view),
     actions: [...elements(header.props.children)]
       .filter((e) => e.type === window.Fairband.Button)

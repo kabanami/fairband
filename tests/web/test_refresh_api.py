@@ -199,18 +199,20 @@ def test_api_start_status_cancel(client_with_worker: TestClient, gate: Gate, db_
     assert (response.status_code, response.json()) == (200, {"cancelled": True})
     gate.release.set()
     join_runs()  # the fetches in flight finish; the run ends cancelled with no value stage
+    cancelled = {
+        "id": 1,
+        "kind": "scoped",
+        "status": "cancelled",
+        "stage": "fetch",
+        "startedAt": "2026-11-01T09:30:00+00:00",
+        "finishedAt": "2026-11-01T09:30:00+00:00",
+        "message": None,
+        "calibration": None,
+    }
     assert current(client) == {
         "refresh": None,
-        "last": {
-            "id": 1,
-            "kind": "scoped",
-            "status": "cancelled",
-            "stage": "fetch",
-            "startedAt": "2026-11-01T09:30:00+00:00",
-            "finishedAt": "2026-11-01T09:30:00+00:00",
-            "message": None,
-            "calibration": None,
-        },
+        "last": cancelled,
+        "shown": cancelled,
         "error": None,
     }
     # A cancel with no run alive changes nothing.
@@ -363,7 +365,7 @@ def test_api_without_worker_503(client_without_worker: TestClient) -> None:
     response = start(client, kind="full")
     assert response.status_code == 503
     assert response.json() == {"detail": "no refresh worker"}
-    assert current(client) == {"refresh": None, "last": None, "error": None}
+    assert current(client) == {"refresh": None, "last": None, "shown": None, "error": None}
     assert client.post("/api/refresh/cancel", headers=POST).json() == {"cancelled": True}
 
 
@@ -484,7 +486,7 @@ def test_start_under_a_stored_setting_outside_its_range_is_400(
         assert detail == (
             "settings: required_return: must be from 4% to 20%; reset it on the Settings page"
         )
-        assert current(client) == {"refresh": None, "last": None, "error": None}
+        assert current(client) == {"refresh": None, "last": None, "shown": None, "error": None}
 
 
 def test_start_closes_the_previous_runs_clients(db_path: Path, policy: Policy) -> None:
@@ -616,7 +618,7 @@ def test_serve_without_an_fmp_key_runs_a_revalue_only(
     ]
     response, body = served
     assert (response.status_code, response.json()) == (400, {"detail": str(MissingKey("fmp"))})
-    assert body == {"refresh": None, "last": None, "error": None}
+    assert body == {"refresh": None, "last": None, "shown": None, "error": None}
     assert "fakegfhalf" not in caplog.text
 
 
