@@ -353,6 +353,11 @@ says "cyclical". Step 10 sets the inputs at mid-cycle.
 
 ### 8. The valuation
 
+A snapshot refused "no moat class" has no route result to read: no value, no levels, no route
+flags and no `priceNeeds`. Judge the moat now and record your verdict, as the first two paragraphs
+of step 10 say, then read the valuation below on the new snapshot. In step 10, record it again only
+where the thesis changes it.
+
 Read the engine's result in the answer of `company`: the value, the levels (the buy level, the fair
 band and the trim level), the inputs with their tags (DATA, RULE or JUDGMENT), the intermediates,
 the phase evidence and the flags. `methodology` explains each in plain words. Put the result in
@@ -635,13 +640,15 @@ class in force: the report needs your verdict on its snapshot, "the report needs
 recorded on snapshot <id>: call moat_set". Where your class differs from the user's, record yours
 all the same, since the newest class is in force, and say in the report that it differs and why.
 Record it before any override, sensitivity reading or secondary valuation: the write values the
-company again at once and gives it a new snapshot. Read `company` again, cite the new snapshot,
-and make again any derivation that cites the old one. A company with no class in the moat table,
-one that entered the universe after Fairband's file was cut, is refused "no moat class": your
-verdict gives it a class, and the company is valued. While a refresh runs the write is refused, "a
-refresh is running: set the class when it ends": wait until `refresh_status()` shows no refresh
-running, then call it again. No override sets the class: `override_add` with `moat.class` is
-refused, "moat.class is the moat table's: record the verdict with moat_set".
+company again at once and gives it a new snapshot. Read `company` again, cite the new snapshot, and
+make again any derivation that cites the old one. Where your class changed the class in force, read
+the value, the levels, the flags and `priceNeeds` again, as in steps 8 and 9, before you decide. A
+company with no class in the moat table, one that entered the universe after Fairband's file was
+cut, is refused "no moat class": your verdict gives it a class, and the company is valued. While a
+refresh runs the write is refused, "a refresh is running: set the class when it ends": wait until
+`refresh_status()` shows no refresh running, then call it again. No override sets the class:
+`override_add` with `moat.class` is refused, "moat.class is the moat table's: record the verdict
+with moat_set".
 
 Decide each judgment from the thesis (see "The judgments" below). Move an input for a claim of the
 call only when the thesis accepts it and step 5 judged it probable. Where a decision changes an

@@ -950,6 +950,32 @@ def test_the_moat_is_a_standing_step_before_the_overrides() -> None:
     assert "`moatClass`" in _tool_entry("company")
 
 
+def test_the_valuation_is_read_on_the_class_the_verdict_set() -> None:
+    """Fix round 1 of Task 10: the moat write values the company again, so what steps 8 and 9 read
+    must be read on the class the verdict set. A snapshot refused "no moat class" is refused before
+    its route (``route.value_company``): no value, no levels, no route flags, no `priceNeeds`; so
+    step 8 opens by sending the agent to step 10's verdict first, before it reads the result. And
+    where the verdict changed the class in force, step 10 has the agent read the value, the levels,
+    the flags and `priceNeeds` again, as in steps 8 and 9, after it reads `company` again and
+    before it decides the judgments."""
+    steps = {n: _flat(text) for n, text in _steps(_frontmatter(_read(SKILL))[1]).items()}
+    entrant = (
+        f'A snapshot refused "{NO_MOAT_CLASS}" has no route result to read: no value, no levels, no'
+        " route flags and no `priceNeeds`. Judge the moat now and record your verdict, as the first"
+        " two paragraphs of step 10 say, then read the valuation below on the new snapshot. In step"
+        " 10, record it again only where the thesis changes it."
+    )
+    assert entrant in steps[8]
+    assert steps[8].index(entrant) < steps[8].index("Read the engine's result in the answer of")
+    again = (
+        "Where your class changed the class in force, read the value, the levels, the flags and"
+        " `priceNeeds` again, as in steps 8 and 9, before you decide."
+    )
+    assert again in steps[10]
+    assert steps[10].index("Read `company` again, cite the new snapshot") < steps[10].index(again)
+    assert steps[10].index(again) < steps[10].index("Decide each judgment from the thesis")
+
+
 def test_the_report_s_structure_names_the_moat_verdict() -> None:
     """Spec 2026-11-19 8.7 (Task 9): the report's structural checks are six, the moat verdict on
     the snapshot after the headings and before the secondary valuation's; the template names them
