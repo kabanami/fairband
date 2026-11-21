@@ -65,7 +65,7 @@ def store(
         router.bodies.update(
             {endpoint: json.dumps(body).encode() for endpoint, body in payloads.items()}
         )
-        fetch_company(conn, clients.fmp, clients.gf, "ACME", policy, clock(), clients.secrets)
+        fetch_company(conn, clients.fmp, "ACME", policy, clock(), clients.secrets)
         if company:
             add_company(conn)
         return conn

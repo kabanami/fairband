@@ -673,8 +673,8 @@ def test_the_reads_find_what_the_fetch_stores(
         ) as http,
         closing(connect(db_path)) as conn,
     ):
-        outcome = fetch_company(conn, Fmp(http, FMP_KEY), None, "ACME", policy, NOW, [FMP_KEY])
-    assert outcome.failed == ("summary",)  # no GuruFocus client
+        outcome = fetch_company(conn, Fmp(http, FMP_KEY), "ACME", policy, NOW, [FMP_KEY])
+    assert outcome.failed == ()
     overview = _get(client, "/api/companies/ACME/page/overview")
     estimates = _get(client, "/api/companies/ACME/page/estimates")
     statistics = overview["statistics"]

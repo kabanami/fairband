@@ -6,7 +6,7 @@ names. The filings access spec (2026-11-11, 6) adds ``quarters``, the stored qua
 ``financials`` among the reads, and the filing reads, ``filings``, ``filing_report`` and
 ``filing_search``, after the pass-throughs: each is one call to its route (``quarters`` to
 ``fairband.web.reports_api``'s, the filing reads to ``fairband.web.filings_api``'s) and answers
-the route's JSON. The GuruFocus removal (spec 2026-11-19 8.6) adds ``moat_set`` among the writes,
+the route's JSON. The moat table's spec (2026-11-19, 8.6) adds ``moat_set`` among the writes,
 before ``override_add``: one ``PUT`` to the moat class's route (``fairband.web.moat_api``), the
 class sent as ``class``, so the agent records its verdict and the company is valued again.
 

@@ -391,7 +391,9 @@ _STAT_WORDS = {
     "high_10y": "the ten-year high",
     "low_10y": "the ten-year low",
 }
-_PROVIDER_WORDS = {"fmp": "FMP", "gf": "GuruFocus"}
+# A provider's name in words; another, such as the ``gf`` of answers stored before spec
+# 2026-11-19 8.10, reads as stored.
+_PROVIDER_WORDS = {"fmp": "FMP"}
 # An engine name's words: an abbreviation in capitals, a statement line's short name spelled out.
 # A whole name is read before its words, so a score or a ratio reads as the spec writes it.
 _NAME_WORDS = {

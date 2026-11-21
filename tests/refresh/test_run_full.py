@@ -29,7 +29,9 @@ from fairband.config import DEFAULT_PORT, Settings
 from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
 from fairband.engine.route import CompanyInputs
+from fairband.policy import RefreshPolicy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
+from fairband.refresh import clients as clients_module
 from fairband.refresh import fetch as fetch_module
 from fairband.refresh import run as run_module
 from fairband.refresh.deciles import deciles_for_universe
@@ -46,7 +48,7 @@ from fairband.store.refreshes import (
     current_refresh,
     latest_deciles,
 )
-from fairband.vendors.http import VendorError
+from fairband.vendors.http import VendorError, VendorHttp
 from fairband.web.app import create_app
 
 RATE_LIMITED = "data fetch incomplete: rate limited"
@@ -257,9 +259,7 @@ def test_a_reused_response_from_before_the_six_lines_is_backfilled_before_valuin
     monkeypatch.setattr(fetch_module, "statement_facts", before_the_change)
     with closing(env.connect()) as conn:
         clients = env.clients
-        fetch_company(
-            conn, clients.fmp, clients.gf, "ACME", env.policy, env.clock(), clients.secrets
-        )
+        fetch_company(conn, clients.fmp, "ACME", env.policy, env.clock(), clients.secrets)
         stored = facts_for(conn, "ACME", "income-quarter")
     assert stored and not {f.field for f in stored} & set(SIX_LINES)
     monkeypatch.setattr(fetch_module, "statement_facts", normalize)
@@ -303,8 +303,8 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
         ("NEWT", "pending", None),
     ]
     assert deciles(env) is None and env.snapshots() == []
-    # ACME's newest call's transcript beside each company's 32; AXLE's list of calls is empty.
-    assert env.router.symbol_calls == Counter({"": 1, "ACME": 33, "AXLE": 32})
+    # ACME's newest call's transcript beside each company's 31; AXLE's list of calls is empty.
+    assert env.router.symbol_calls == Counter({"": 1, "ACME": 32, "AXLE": 31})
     assert "rates" not in {p.stage for p in env.progress}  # a cancelled fetch runs no rates
 
     env.router.symbol_calls.clear()
@@ -314,7 +314,7 @@ def test_rerun_after_cancel_continues(env_fixture_universe: Env) -> None:
     row = env.last()
     assert (row.id, row.status) == (second, "done") and second == first + 1
     # No screener call; KRON's pair is fetched, now that KRON is.
-    assert env.router.symbol_calls == Counter({"MILD": 32, "NEWT": 32, "KRON": 32, "USDSEK": 1})
+    assert env.router.symbol_calls == Counter({"MILD": 31, "NEWT": 31, "KRON": 31, "USDSEK": 1})
     assert Progress(second, "fetch", 5, 0, 0, None) in env.progress
     assert env.items(second) == [(symbol, "valued", None) for symbol in ADMITTED]
     assert {refresh for refresh, _ in universe(env).values()} == {second}
@@ -332,12 +332,11 @@ def test_a_scoped_refresh_fetches_again_and_a_full_one_reuses(env_fixture_univer
     (method 10). A full refresh within the window reuses, so it continues after a cancel."""
     env = env_fixture_universe
     env.refresh().run("full")
-    assert env.router.symbol_calls["ACME"] == 33
+    assert env.router.symbol_calls["ACME"] == 32
     env.clock.now += timedelta(minutes=5)
     env.refresh().run("scoped", ["ACME"])
-    # The 31 FMP calls and the GuruFocus one again; the newest call's transcript, stored with
-    # words, not.
-    assert env.router.symbol_calls["ACME"] == 65
+    # The 31 FMP calls again; the newest call's transcript, stored with words, not.
+    assert env.router.symbol_calls["ACME"] == 63
     env.clock.now += timedelta(minutes=5)
     calls = Counter(env.router.symbol_calls)
     assert env.refresh().run("full") > 0 and env.last().status == "done"
@@ -438,7 +437,7 @@ def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: li
     # transcript among them.
     assert env.router.calls["quote"] == len(ADMITTED) + 1
     assert env.router.symbol_calls == Counter(
-        {"": 1, "ACME": 34, "AXLE": 32, "KRON": 32, "MILD": 32, "NEWT": 32, "USDSEK": 1}
+        {"": 1, "ACME": 33, "AXLE": 31, "KRON": 31, "MILD": 31, "NEWT": 31, "USDSEK": 1}
     )
     assert sleeps == [env.policy.refresh.rate_limit_hold_s]  # the one hold, and no other sleep
 
@@ -462,8 +461,7 @@ def test_a_single_429_holds_every_worker_on_a_paced_run(
     assert env.items(refresh_id) == [(symbol, "valued", None) for symbol in ADMITTED]
     hold = int(env.policy.refresh.rate_limit_hold_s)
     assert hold == env.policy.refresh.rate_limit_hold_s == 60
-    gf_calls = env.router.calls["summary"]
-    fmp_calls = sum(env.router.symbol_calls.values()) - gf_calls
+    fmp_calls = sum(env.router.symbol_calls.values())
     # The screener, 31 a company, ACME's retry and its newest call's transcript, then the rates
     # stage's one call, KRON's USDSEK.
     assert fmp_calls == 1 + 31 * len(ADMITTED) + 1 + 1 + 1
@@ -812,6 +810,53 @@ def test_cli_full_refresh_prints_calibration(
         f"1 refused: {NO_TARGET}",
     ]
     assert env.last().calibration == CALIBRATION
+
+
+@pytest.mark.parametrize("gurufocus_key", [None, "fakegfhalf:fakegfhalf2"], ids=["without", "with"])
+def test_a_full_refresh_makes_no_gurufocus_call(
+    env_fixture_universe: Env,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    gurufocus_key: str | None,
+) -> None:
+    """Spec 2026-11-19 8.10 and 10: GuruFocus is out. The command's full refresh, its clients
+    built from the keys as it reads them (``build_clients``, here over the fixture router), asks
+    FMP alone, whether ``FAIRBAND_GURUFOCUS_KEY`` is set or not: no request goes to GuruFocus's
+    host, and no line it logs names GuruFocus. The fake token is not a real one."""
+    env = env_fixture_universe
+    monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("FAIRBAND_FMP_KEY", FMP_KEY)
+    if gurufocus_key is None:
+        monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
+    else:
+        monkeypatch.setenv("FAIRBAND_GURUFOCUS_KEY", gurufocus_key)
+    vendor_http = clients_module.VendorHttp
+
+    def on_the_router(
+        base_url: str, secrets: list[str], policy: RefreshPolicy, **_: Any
+    ) -> VendorHttp:
+        return vendor_http(
+            base_url,
+            secrets,
+            policy,
+            transport=env.router.transport,
+            sleep=lambda _: None,
+            clock=env.clock,
+        )
+
+    monkeypatch.setattr(clients_module, "VendorHttp", on_the_router)
+    monkeypatch.setattr(cli, "utcnow", env.clock)
+    monkeypatch.setattr(cli, "load_moat_table", lambda: env.moat)
+    with caplog.at_level(logging.INFO):
+        assert cli.main(["refresh"]) == 0
+    assert env.last().status == "done"
+    assert env.router.hosts == Counter(
+        {"financialmodelingprep.com": sum(env.router.symbol_calls.values())}
+    )
+    assert "summary" not in env.router.calls
+    assert "GuruFocus" not in caplog.text
 
 
 def test_migrate_marks_an_interrupted_refresh(

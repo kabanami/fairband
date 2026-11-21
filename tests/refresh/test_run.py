@@ -24,7 +24,7 @@ from typing import Any
 import pytest
 from refresh_env import Env, use_cli
 from synthetic import bodies, estimates_quarter
-from vendor_double import FMP_KEY, GF_TOKEN
+from vendor_double import FMP_KEY
 
 from fairband import __main__ as cli
 from fairband.config import MissingKey
@@ -42,6 +42,7 @@ GROWTH_EDGES = (-0.1, -0.05, 0.0, 0.03, 0.06, 0.09, 0.12, 0.18, 0.3)
 BOLT_FAILED = "data fetch failed: income-annual, balance-annual, cashflow-annual, quote"
 QUOTE_DATE = date(2026, 10, 30)  # both fixture quotes'
 RATE_LIMITED = "data fetch incomplete: rate limited"
+GURUFOCUS_TOKEN = "fakegfhalf:fakegfhalf2"  # not a real token: a keys file's line from before
 
 
 @pytest.fixture
@@ -88,8 +89,8 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
         QUOTE_DATE,
         None,
     )
-    # ACME's newest call's transcript beside each company's 32; BOLT's list of calls is empty.
-    assert env.router.symbol_calls == Counter({"ACME": 33, "BOLT": 32})
+    # ACME's newest call's transcript beside each company's 31; BOLT's list of calls is empty.
+    assert env.router.symbol_calls == Counter({"ACME": 32, "BOLT": 31})
     with closing(env.connect()) as conn:
         versions = [r[0] for r in conn.execute("SELECT version FROM policy_versions")]
     assert versions == [env.policy.version]
@@ -187,13 +188,13 @@ def test_stop_after_first_then_continue(env: Env) -> None:
     assert (row.id, row.status, row.stage, row.message) == (first, "cancelled", "fetch", None)
     assert env.items(first) == [("ACME", "fetched", None), ("BOLT", "pending", None)]
     assert env.snapshots() == []
-    assert env.router.symbol_calls == Counter({"ACME": 33})
+    assert env.router.symbol_calls == Counter({"ACME": 32})
 
     env.router.symbol_calls.clear()
     env.clock.now += timedelta(hours=1)
     second = env.run(["ACME", "BOLT"])
     assert (env.last().id, env.last().status) == (second, "done")
-    assert env.router.symbol_calls == Counter({"ACME": 32, "BOLT": 32})
+    assert env.router.symbol_calls == Counter({"ACME": 31, "BOLT": 31})
     assert env.items(second) == [("ACME", "valued", None), ("BOLT", "valued", None)]
     # both fetched at once: the snapshots follow the order the fetches finished
     assert sorted((symbol, refresh) for symbol, refresh, _ in env.snapshots()) == [
@@ -203,16 +204,14 @@ def test_stop_after_first_then_continue(env: Env) -> None:
 
 
 def test_a_scoped_refresh_fetches_every_call_again(env: Env) -> None:
-    """Within the reuse window too, GuruFocus's call among them (method 10); a full
-    refresh's reuse is ``test_run_full``'s. The newest call's transcript, stored with words by the
-    first run, is not asked again."""
+    """Within the reuse window too (method 10); a full refresh's reuse is ``test_run_full``'s.
+    The newest call's transcript, stored with words by the first run, is not asked again."""
     first = env.run(["ACME"])
     env.router.calls.clear()
     env.clock.now += timedelta(hours=23)
     second = env.run(["ACME"])
-    assert sum(env.router.calls.values()) == 32  # 31 FMP and 1 GuruFocus call
+    assert sum(env.router.calls.values()) == 31  # every call FMP's
     assert env.router.calls["transcript"] == 0
-    assert env.router.calls["summary"] == 1 and env.router.calls["keyratios"] == 0
     assert env.last().status == "done"
     assert env.items(second) == [("ACME", "valued", None)]
     assert [refresh for _, refresh, _ in env.snapshots()] == [first, second]
@@ -330,7 +329,7 @@ def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> Non
         ("BOLT", refresh_id, RATE_LIMITED),
         ("ACME", refresh_id, "no universe deciles yet"),
     ]
-    assert env.router.symbol_calls == Counter({"ACME": 33, "BOLT": 3})  # three tries, then stop
+    assert env.router.symbol_calls == Counter({"ACME": 32, "BOLT": 3})  # three tries, then stop
 
 
 def test_the_fetch_stage_logs_the_fmp_pace(env: Env, caplog: pytest.LogCaptureFixture) -> None:
@@ -349,12 +348,12 @@ def test_the_fetch_stage_logs_the_fmp_pace(env: Env, caplog: pytest.LogCaptureFi
 
 
 def test_rate_limit_names_the_provider(env: Env) -> None:
-    """ACME's GuruFocus call hits the 429 after its quote is stored: its refusal row has the
-    price."""
+    """ACME's splits call hits the 429 after its quote is stored: its refusal row has the price,
+    and the run names FMP, whose every call it makes."""
     env.router.fail_status = 429
-    env.router.fail.add("summary")
+    env.router.fail.add("splits")
     refresh_id = env.run(["ACME", "BOLT"], workers=1)
-    assert env.last().message == "rate limited by GuruFocus: stopped after 1 company"
+    assert env.last().message == "rate limited by FMP: stopped after 1 company"
     assert env.items(refresh_id) == [("ACME", "failed", RATE_LIMITED), ("BOLT", "pending", None)]
     assert env.snapshots() == [("ACME", refresh_id, RATE_LIMITED)]
     assert env.snapshot("ACME").price == 50.0
@@ -372,14 +371,13 @@ def test_second_refresh_refused_while_running(env: Env) -> None:
     first = env.run(["ACME"], then=start_another)
     assert refused == [first]
     assert env.last().id == first and env.last().status == "done"
-    assert env.router.symbol_calls == Counter({"ACME": 33})
+    assert env.router.symbol_calls == Counter({"ACME": 32})
 
 
 def test_run_refuses_before_any_work(env: Env) -> None:
     no_fmp = Refresh(
         env.connect,
         None,
-        env.clients.gf,
         env.policy,
         env.tax,
         env.clock,
@@ -406,7 +404,6 @@ def test_refresh_without_fmp_refuses_every_kind_but_revalue(env: Env) -> None:
     refresh = Refresh(
         env.connect,
         None,
-        None,
         env.policy,
         env.tax,
         env.clock,
@@ -428,7 +425,7 @@ def test_refresh_without_fmp_refuses_every_kind_but_revalue(env: Env) -> None:
 def test_a_refresh_given_no_moat_table_reads_the_packaged_file(env: Env) -> None:
     """The packaged file is the default (spec 2026-11-19 8.4); every other test hands a refresh
     the fixtures' classes, so none loads the file's real tickers."""
-    refresh = Refresh(env.connect, None, None, env.policy, env.tax, env.clock, threading.Event())
+    refresh = Refresh(env.connect, None, env.policy, env.tax, env.clock, threading.Event())
     assert refresh._moat == load_moat_table()
 
 
@@ -657,7 +654,7 @@ def test_cli_second_ctrl_c_while_the_fetches_keep_writing(
         def writing_fetch(
             conn: sqlite3.Connection, *args: Any, release: threading.Event = release
         ) -> Any:
-            symbol, now = args[2], args[4]
+            symbol, now = args[1], args[3]
             if symbol == "ACME":
                 ctrl_c_twice()
             while not release.is_set():
@@ -721,19 +718,20 @@ def test_cli_warns_on_a_keys_file_others_can_read(
     caplog: pytest.LogCaptureFixture,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The file holds no FMP key, so the command stops after the warning."""
+    """The file holds no FMP key, so the command stops after the warning. Its ``gurufocus`` line,
+    from before spec 2026-11-19 8.10, is not read: no error, no other warning. The token is
+    fake."""
     keys_file = tmp_path / "config" / "fairband" / "keys.toml"
     keys_file.parent.mkdir(parents=True)
-    keys_file.write_text(f'[keys]\ngurufocus = "{GF_TOKEN}"\n')
+    keys_file.write_text(f'[keys]\ngurufocus = "{GURUFOCUS_TOKEN}"\n')
     keys_file.chmod(mode)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
-    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
     with caplog.at_level(logging.WARNING):
         assert cli.main(["refresh", "ACME"]) == 2
     warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     expected = [f"{keys_file} has mode {mode:04o}: other users can read it; chmod 600 it"]
     assert warnings == (expected if warned else [])
     assert "no fmp key" in capsys.readouterr().err
-    assert GF_TOKEN not in caplog.text
+    assert GURUFOCUS_TOKEN not in caplog.text

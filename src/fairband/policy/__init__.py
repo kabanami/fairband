@@ -45,10 +45,10 @@ fails at load below 0, or at a NaN or an infinity. v17 (spec 2026-11-19 7.4) dro
 a setting in its place, and ``warning_mark_min``, the count of quality warnings from which a
 mechanical value is marked, no setting: it fails at load below 1. v18 (spec 2026-11-19 8.9) adds
 nothing and drops three values: the Moat Score's two thresholds, ``moat_wide_min`` and
-``moat_narrow_min``, unread since method 1.8 takes the class from the moat table, and
-GuruFocus's reuse window, the setting ``refresh.gf_reuse_days``, whose stored value the overlay
-skips (``fairband.policy.settings``); the fetch holds that window itself until GuruFocus's last
-call goes.
+``moat_narrow_min``, unread since method 1.8 takes the class from the moat table, and the
+setting ``refresh.gf_reuse_days``, the reuse window of the provider ``gf``, whose stored value the
+overlay skips (``fairband.policy.settings``); the fetch calls that provider no more (spec
+2026-11-19 8.10).
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap

@@ -1,7 +1,7 @@
-"""The vendor double the web tests share: FMP and GuruFocus on a mock transport that serves the
-fixtures, the fake keys, a ``Passthrough`` over FMP on it, and a client of an app with that
-pass-through. ``tests/web/conftest.py`` imports the fixtures; a test module imports the names from
-here. The keys are fake."""
+"""The vendor double the web tests share: FMP on a mock transport that serves the fixtures, the
+fake key, a ``Passthrough`` over FMP on it, and a client of an app with that pass-through.
+``tests/web/conftest.py`` imports the fixtures; a test module imports the names from here. The key
+is fake."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -21,17 +21,13 @@ from fairband.web.app import create_app
 from support.web import HEADER, HOST, NOW, _settings
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "fmp"
-GF_FIXTURES = FIXTURES.parent / "gurufocus"
 KEY = "fake-fmp-key-0003"  # not a real key
-GF_TOKEN = "fakegfhalf3:fakegfhalf4"  # not a real token
 
 
 class Vendor:
-    """FMP and GuruFocus on a mock transport: an FMP request reads ``fmp/<route>.<symbol>.json``
-    (a slash in the route becomes a dash; news names its symbol in ``symbols``), a GuruFocus one
-    ``gurufocus/<route>.<symbol>.json``, 404 without one; ``answer``, when set, makes each
-    response instead. ``paths`` keeps each request's path, a GuruFocus token in it replaced by
-    ``<token>``."""
+    """FMP on a mock transport: a request reads ``fmp/<route>.<symbol>.json`` (a slash in the
+    route becomes a dash; news names its symbol in ``symbols``), 404 without one; ``answer``,
+    when set, makes each response instead. ``paths`` keeps each request's path."""
 
     def __init__(self) -> None:
         self.paths: list[str] = []
@@ -39,17 +35,13 @@ class Vendor:
         self.transport = httpx.MockTransport(self._handle)
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
-        self.paths.append(request.url.path.replace(GF_TOKEN, "<token>"))
+        self.paths.append(request.url.path)
         if self.answer is not None:
             response: httpx.Response = self.answer(request)
             return response
-        if request.url.host == "api.gurufocus.com":
-            *_, symbol, route = request.url.path.split("/")
-            fixture = GF_FIXTURES / f"{route}.{symbol}.json"
-        else:
-            route = request.url.path.removeprefix("/stable/").replace("/", "-")
-            params = request.url.params
-            fixture = FIXTURES / f"{route}.{params.get('symbol') or params.get('symbols')}.json"
+        route = request.url.path.removeprefix("/stable/").replace("/", "-")
+        params = request.url.params
+        fixture = FIXTURES / f"{route}.{params.get('symbol') or params.get('symbols')}.json"
         if not fixture.is_file():
             return httpx.Response(404, json={"Error Message": "no fixture"})
         return httpx.Response(
@@ -98,6 +90,6 @@ def passthrough_client(
 def with_passthrough(
     tmp_path: Path, db_path: Path, policy: Policy, passthrough: Passthrough
 ) -> Iterator[TestClient]:
-    """A pass-through over FMP alone: no GuruFocus key."""
+    """A pass-through over FMP."""
     with passthrough_client(tmp_path, db_path, policy, passthrough) as client:
         yield client

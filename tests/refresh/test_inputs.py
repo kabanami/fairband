@@ -1,7 +1,7 @@
 """``build_inputs`` and ``series_for`` over a temporary database that ``fetch_company`` fills.
 
 The router answers each endpoint a test sets with a synthetic payload from ``synthetic``, and every
-other endpoint with its ACME fixture (consensus, quote, profile, closes, GuruFocus).
+other endpoint with its ACME fixture (consensus, quote, profile, closes).
 """
 
 import json
@@ -31,6 +31,7 @@ from synthetic import (
     income_quarter,
     statement,
     store_gf_ratios,
+    store_gf_summary,
 )
 from vendor_double import FIXTURES, Clients, Clock, Router
 
@@ -110,7 +111,7 @@ def store(
         router.bodies.update(
             {endpoint: json.dumps(body).encode() for endpoint, body in payloads.items()}
         )
-        fetch_company(conn, clients.fmp, clients.gf, "ACME", policy, clock(), clients.secrets)
+        fetch_company(conn, clients.fmp, "ACME", policy, clock(), clients.secrets)
         if company:
             add_company(conn)
         return conn
@@ -1035,12 +1036,14 @@ def test_assembly_reads_no_gurufocus_eps(
     """Spec 2026-11-19 7.1: a ``gf-ratio`` answer the store kept from before is not read, in US
     dollars or in another currency, where its EPS came in at the mean of the trailing periods'
     rates: no input cites it and no note names it. Nor does assembly read GuruFocus's moat score
-    since method 1.8 (spec 2026-11-19 8.5): no input cites GuruFocus at all."""
+    since method 1.8 (spec 2026-11-19 8.5), from a summary the store kept: no input cites GuruFocus
+    at all."""
     if currency == "USD":
         conn = store(**bodies())
     else:
         conn = _sek_store(store, clients, clock, policy)
     store_gf_ratios(conn, TODAY)
+    store_gf_summary(conn, TODAY, "1")
     inputs = build(conn)
     assert inputs.currency == currency and inputs.refusal is None
     named = [*inputs.provenance, *inputs.notes, *inputs.estimate_methods]
@@ -1519,7 +1522,7 @@ def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
     """Debt and cash from ACME's newest balance sheet, the quarter's of 2026-09-30. BOLT, fetched
     and listed, is ACME's mature peer once there are deciles."""
     conn = store(company=False, **bodies())
-    fetch_company(conn, clients.fmp, clients.gf, "BOLT", policy, clock(), clients.secrets)
+    fetch_company(conn, clients.fmp, "BOLT", policy, clock(), clients.secrets)
     add_company(conn, symbols=("ACME", "BOLT"))  # one universe
     tax = load_tax_table()
     i = build_inputs(conn, "ACME", policy, tax, TODAY, DECILES)
@@ -1752,13 +1755,6 @@ def test_the_quarterly_sheet_moves_no_fiscal_year_figure(
     assert with_sheet.provenance["statements"] == without.provenance["statements"]
 
 
-def _summary(ratio: str | None) -> dict[str, Any]:
-    """The ACME GuruFocus summary with its depositary receipt ratio set to ``ratio``."""
-    body: dict[str, Any] = json.loads((FIXTURES / "gurufocus" / "summary.ACME.json").read_text())
-    body["summary"]["company_data"]["depositary_receipt_ratio"] = ratio
-    return body
-
-
 def _quote(count: float) -> list[dict[str, Any]]:
     """The ACME quote at its price of $50 with a market cap of $50 × ``count``."""
     (row,) = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
@@ -1775,7 +1771,8 @@ def test_assembly_finds_the_ratio_of_a_flagged_adr(store: Store) -> None:
     """Spec 2026-11-19 6.2: ACME flagged as an ADR, its statements at 104 m shares and a quote whose
     count is 1,040 m, and a stored GuruFocus ratio of 5, which is not read: the counts give 10, an
     estimate under ``counts-ratio`` cited to the quote, and the count reads × 10."""
-    conn = store(**bodies(), profile=_profile(True), summary=_summary("5"), quote=_quote(1040 * M))
+    conn = store(**bodies(), profile=_profile(True), quote=_quote(1040 * M))
+    store_gf_summary(conn, TODAY, "5")
     inputs = build(conn)
     assert inputs.adr_ratio == 10.0
     assert inputs.estimate_methods["adr_ratio"] == "counts-ratio"
@@ -1812,7 +1809,8 @@ def test_an_adr_reads_its_counts_on_the_quotes_share_basis(store: Store) -> None
 def test_assembly_reads_no_ratio_where_the_counts_agree(store: Store) -> None:
     """A flagged ADR whose counts agree with the quote's (104 m against 100 m), with a GuruFocus
     ratio of 5 on file: no ratio, and the counts read as stored."""
-    conn = store(**bodies(), profile=_profile(True), summary=_summary("5"))
+    conn = store(**bodies(), profile=_profile(True))
+    store_gf_summary(conn, TODAY, "5")
     inputs = build(conn)
     assert inputs.is_adr is True
     assert inputs.adr_ratio is None and "adr_ratio" not in inputs.provenance
@@ -1824,8 +1822,9 @@ def test_assembly_reads_no_ratio_where_the_counts_agree(store: Store) -> None:
 @pytest.mark.parametrize("ratio", ["10", "0", None], ids=["ratio", "zero", "absent"])
 def test_a_row_without_the_adr_flag_reads_no_ratio(store: Store, ratio: str | None) -> None:
     """ACME as FMP profiles it, no ADR, with a quote at a tenth of its count: whatever ratio
-    GuruFocus holds, the rule does not run, and the counts read as stored."""
-    conn = store(**bodies(), summary=_summary(ratio), quote=_quote(10.4 * M))
+    GuruFocus stored, the rule does not run, and the counts read as stored."""
+    conn = store(**bodies(), quote=_quote(10.4 * M))
+    store_gf_summary(conn, TODAY, ratio)
     inputs = build(conn)
     assert inputs.adr_ratio is None and "adr_ratio" not in inputs.provenance
     assert inputs.shares_diluted == 104 * M and inputs.refusal is None

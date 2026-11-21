@@ -1,26 +1,24 @@
 """Refresh fixtures: a migrated temporary database, the policy, the vendor clients over the
 fixture router of ``vendor_double`` with a settable clock and a sleep that records the seconds in
-``sleeps`` and does not sleep, and the ``refresh_env.Env`` over them. The GuruFocus client is not
-paced, nor the FMP client unless a test parametrizes ``fmp_calls_per_minute``."""
+``sleeps`` and does not sleep, and the ``refresh_env.Env`` over them. The FMP client is not paced
+unless a test parametrizes ``fmp_calls_per_minute``."""
 
 import sqlite3
 from collections.abc import Iterator
 from contextlib import closing
-from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from refresh_env import Env
 from synthetic import add_company
-from vendor_double import FMP_KEY, GF_TOKEN, Clients, Clock, Router
+from vendor_double import FMP_KEY, Clients, Clock, Router
 
 from fairband.policy import Policy, load_policy
 from fairband.policy.tax import load_tax_table
 from fairband.store.db import connect, migrate
-from fairband.vendors import fmp, gurufocus
+from fairband.vendors import fmp
 from fairband.vendors.fmp import Fmp
-from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorHttp
 
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
@@ -74,22 +72,14 @@ def clients(
             calls_per_minute=pace,
         )
 
-    with (
-        http(fmp.BASE_URL, FMP_KEY, fmp_calls_per_minute) as fmp_http,
-        http(gurufocus.BASE_URL, GF_TOKEN) as gf_http,
-    ):
-        yield Clients(Fmp(fmp_http, FMP_KEY), GuruFocus(gf_http, GF_TOKEN), (FMP_KEY, GF_TOKEN))
+    with http(fmp.BASE_URL, FMP_KEY, fmp_calls_per_minute) as fmp_http:
+        yield Clients(Fmp(fmp_http, FMP_KEY), (FMP_KEY,))
 
 
 @pytest.fixture
 def clients_with_500_on_quote(clients: Clients, router: Router) -> Clients:
     router.fail.add("quote")
     return clients
-
-
-@pytest.fixture
-def clients_no_gf(clients: Clients) -> Clients:
-    return replace(clients, gf=None, secrets=(FMP_KEY,))
 
 
 @pytest.fixture

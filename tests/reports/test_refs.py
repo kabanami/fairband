@@ -1572,6 +1572,7 @@ def described(
     grid = SensitivityGrid((0.05, 0.08), (0.10, 0.20), ((120.5, 130.0), (140.0, 150.0)), None)
     revenue, rate = "fact:AAPL/revenue/2025", "policy:required_return"
     payload = json.dumps([{"symbol": "AAPL", "revenue": 391.0}])
+    gf_payload = json.dumps({"summary": {"company_data": {"moat_score": 7}}})
     observed = datetime(2026, 11, 1, 14, 0, tzinfo=UTC)
     return {
         "snapshot": sid,
@@ -1611,6 +1612,10 @@ def described(
         ),
         "response": record_response(
             conn, "fmp", "segments", {"symbol": "AAPL"}, "AAPL", 200, payload, None, observed
+        ),
+        # an answer of the provider gf, stored before spec 2026-11-19 8.10 and read by no rule
+        "gf_response": record_response(
+            conn, "gf", "summary", {"symbol": "AAPL"}, "AAPL", 200, gf_payload, None, observed
         ),
         "version": policy.version,
         # another company's records, which name nothing for AAPL
@@ -1809,6 +1814,11 @@ def described(
             "derivation {complement}: the difference of 1 and policy:required_return",
         ),
         ("response:{response}/0/revenue", "FMP segments, observed 1 Nov 2026"),
+        # a provider with no words reads as stored: the cite still names its answer and day
+        (
+            "response:{gf_response}/summary/company_data/moat_score",
+            "gf summary, observed 1 Nov 2026",
+        ),
         ("policy:required_return", "policy required_return, {version}"),
         (" snapshot:{snapshot}/price ", "snapshot {snapshot}, the price, priced 30 Oct 2026"),
         # a ref that names nothing is its own description

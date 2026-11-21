@@ -283,8 +283,8 @@ def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
     for gone in ("the ADR ratio 10", "whatever FMP's ADR flag", "ADSs to one share"):
         assert gone not in four, gone
     two = _section(2)
-    # section 2 names GuruFocus's summary, unread since method 1.8, and no depositary ratio
-    assert "GuruFocus's `summary` call" in two and "depositary" not in two
+    # section 2 names no GuruFocus call that runs (spec 2026-11-19 8.10) and no depositary ratio
+    assert "No call goes to GuruFocus" in two and "depositary" not in two
     five = _section(5)
     assert "`adr_ratio` (unit `ratio`, an estimate under the method `counts-ratio`" in five
     assert "absent on every other row, an ADR whose counts agree among them included" in five
@@ -428,10 +428,10 @@ def test_the_overview_marks_a_value_with_no_reviewed_value() -> None:
 
 def test_the_method_reads_no_gurufocus_key_ratios() -> None:
     """Spec 2026-11-19 7.1: the ``keyratios`` call goes, and with it the rules written for its two
-    figures. Section 2 names GuruFocus's ``summary`` alone, unread since method 1.8; the split
-    rule and the listed-share basis (4.2), 7.1 and the currency's table (7.4) name no GuruFocus
-    EPS, 7.4 bringing the street actuals alone into the currency; 1.7's row names the call and its
-    stored answers, unread."""
+    figures. Section 2 says no call goes to GuruFocus since spec 2026-11-19 8.10, its stored
+    answers unread; the split rule and the listed-share basis (4.2), 7.1 and the currency's table
+    (7.4) name no GuruFocus EPS, 7.4 bringing the street actuals alone into the currency; 1.7's row
+    names the call and its stored answers, unread."""
     text = METHOD.read_text(encoding="utf-8")
     outside_history = text.replace(_section(11), "")
     for gone in (
@@ -443,9 +443,9 @@ def test_the_method_reads_no_gurufocus_key_ratios() -> None:
         "GuruFocus states its EPS",
     ):
         assert gone not in outside_history, gone
-    assert "GuruFocus's `summary` call, the moat score's until method 1.8, still runs" in _section(
-        2
-    )
+    two = _section(2)
+    assert "No call goes to GuruFocus (spec 2026-11-19 8.10)" in two
+    assert "still runs" not in two and "`summary`" not in two
     seven = _section(7)
     assert "Assembly brings the street actuals into the currency" in seven
     assert "the mean of the trailing periods' period-end rates" not in seven
@@ -467,7 +467,7 @@ def test_method_1_8_reads_the_moat_table() -> None:
     two = _section(2)
     assert "GuruFocus `summary` |" not in two
     assert "| Moat class | the packaged moat table `moat-classes-v1.toml`" in two
-    assert "the method reads none of them (4.9)" in two
+    assert "stay in the database, and the method reads none of them." in two
     four = _section(4)
     nine = four[four.index("### 4.9 ") : four.index("### 4.9a")]
     assert (
@@ -542,9 +542,9 @@ def test_policy_v18_drops_three_values() -> None:
     """Spec 2026-11-19 8.9, policy v18 under method 1.8: the head names policy v18; 4.1 reads every
     value from the v18 file, keeps v1 to v17 while the engine loads v18, and holds no row for the
     Moat Score's two thresholds or GuruFocus's reuse window, nor names GuruFocus's observation
-    dates in the rate history's source; section 2 still says GuruFocus's ``summary`` call runs,
-    reused for 7 days, the fetch's own window until the call goes; 11 has the v18 row last, after
-    the 1.8 row under v17, saying no value moves."""
+    dates in the rate history's source; section 2 names no GuruFocus call and no reuse window of
+    7 days, since the call went (spec 2026-11-19 8.10); 11 has the v18 row last, after the 1.8 row
+    under v17, saying no value moves."""
     text = METHOD.read_text(encoding="utf-8")
     assert (
         "| Policy version | `fairband-policy-v18` (`src/fairband/policy/fairband-policy-v18.toml`) |"
@@ -568,10 +568,7 @@ def test_policy_v18_drops_three_values() -> None:
         "leaves room; no source gives the number |"
     ) in depth
     assert "GuruFocus" not in depth
-    assert (
-        "GuruFocus's `summary` call, the moat score's until method 1.8, still runs, reused for 7 "
-        "days"
-    ) in _section(2)
+    assert "No call goes to GuruFocus" in _section(2) and "7 days" not in _section(2)
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
     assert rows[-1].startswith(
         "| 1.8, policy v18 | 2026-11-21 | The policy drops the Moat Score's two thresholds and "

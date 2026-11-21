@@ -1,14 +1,15 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
 
 import pytest
 
+from fairband import __main__ as cli
 from fairband.config import Keys, MissingKey, load_keys, load_settings, require, utcnow
 
 
-def _write_keys(home: Path, text: str) -> None:
-    (home / ".config/fairband").mkdir(parents=True)
+def _write_keys(home: Path, text: str, again: bool = False) -> None:
+    (home / ".config/fairband").mkdir(parents=True, exist_ok=again)
     (home / ".config/fairband/keys.toml").write_text(text)
 
 
@@ -56,34 +57,35 @@ def test_defaults_read_process_environment_and_home(
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
-    monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
+    monkeypatch.setenv("FAIRBAND_FMP_KEY", "env-fmp")
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "x"))
-    monkeypatch.setenv("FAIRBAND_GURUFOCUS_KEY", "env-gf")
     s = load_settings()
     assert s.data_dir == tmp_path / "x"
     assert s.config_dir == tmp_path / ".config/fairband"
-    assert load_keys(s) == Keys(fmp=None, gurufocus="env-gf")
+    assert load_keys(s) == Keys(fmp="env-fmp")
 
 
 def test_keys_file_then_env(tmp_path: Path) -> None:
     (tmp_path / ".config/fairband").mkdir(parents=True)
     (tmp_path / ".config/fairband/keys.toml").write_text('[keys]\nfmp = "file-fmp"\n')
     s = load_settings(env={}, home=tmp_path)
-    assert load_keys(s, env={}) == Keys(fmp="file-fmp", gurufocus=None)
+    assert load_keys(s, env={}) == Keys(fmp="file-fmp")
     assert load_keys(s, env={"FAIRBAND_FMP_KEY": "env-fmp"}).fmp == "env-fmp"
 
 
 def test_env_key_without_keys_file(tmp_path: Path) -> None:
     s = load_settings(env={}, home=tmp_path)
-    keys = load_keys(s, env={"FAIRBAND_GURUFOCUS_KEY": "env-gf"})
-    assert keys == Keys(fmp=None, gurufocus="env-gf")
+    keys = load_keys(s, env={"FAIRBAND_FMP_KEY": "env-fmp"})
+    assert keys == Keys(fmp="env-fmp")
+    assert load_keys(s, env={}) == Keys(fmp=None)
 
 
 def test_empty_key_is_none_and_empty_env_does_not_override(tmp_path: Path) -> None:
-    _write_keys(tmp_path, '[keys]\nfmp = " "\ngurufocus = "file-gf"\n')
+    _write_keys(tmp_path, '[keys]\nfmp = " "\n')
     s = load_settings(env={}, home=tmp_path)
-    keys = load_keys(s, env={"FAIRBAND_FMP_KEY": "", "FAIRBAND_GURUFOCUS_KEY": ""})
-    assert keys == Keys(fmp=None, gurufocus="file-gf")
+    assert load_keys(s, env={"FAIRBAND_FMP_KEY": ""}) == Keys(fmp=None)
+    _write_keys(tmp_path, '[keys]\nfmp = "file-fmp"\n', again=True)
+    assert load_keys(s, env={"FAIRBAND_FMP_KEY": ""}) == Keys(fmp="file-fmp")
     assert load_keys(s, env={"FAIRBAND_FMP_KEY": " env-fmp\n"}).fmp == "env-fmp"
 
 
@@ -107,38 +109,61 @@ def test_bad_keys_file_error_names_path_never_value(
     assert "file-fmp" not in str(e.value) and "4242" not in str(e.value)
 
 
+@pytest.mark.parametrize(
+    "line",
+    ['gurufocus = "file-gf"', "gurufocus = 4242", 'gurufocus = " "'],
+    ids=["a-key", "not-a-string", "blank"],
+)
+@pytest.mark.parametrize("gurufocus_env", [None, "env-gf"], ids=["no-env", "env"])
+def test_a_keys_file_with_a_gurufocus_line_loads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    line: str,
+    gurufocus_env: str | None,
+) -> None:
+    """Spec 2026-11-19 8.10: Fairband reads the FMP key alone. A keys file kept from before, its
+    ``gurufocus`` line of any kind, loads as the command reads it, without an error and without a
+    log record, and ``FAIRBAND_GURUFOCUS_KEY``, set or not, changes nothing."""
+    _write_keys(tmp_path, f'[keys]\nfmp = "file-fmp"\n{line}\n')
+    (tmp_path / ".config/fairband/keys.toml").chmod(0o600)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
+    if gurufocus_env is None:
+        monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
+    else:
+        monkeypatch.setenv("FAIRBAND_GURUFOCUS_KEY", gurufocus_env)
+    with caplog.at_level(logging.DEBUG):
+        keys = cli._keys(load_settings())
+    assert keys == Keys(fmp="file-fmp")
+    assert keys.fmp == "file-fmp"
+    assert caplog.records == []
+
+
 def test_keys_repr_hides_values() -> None:
-    keys = Keys(fmp="k-fmp", gurufocus="k-gf")
-    assert "k-fmp" not in repr(keys) and "k-gf" not in repr(keys)
-    assert repr(keys) != repr(Keys(fmp=None, gurufocus=None))
+    keys = Keys(fmp="k-fmp")
+    assert "k-fmp" not in repr(keys)
+    assert repr(keys) == "Keys(fmp=<set>)" and repr(Keys(fmp=None)) == "Keys(fmp=None)"
 
 
 def test_require_returns_the_key() -> None:
-    keys = Keys(fmp="k-fmp", gurufocus="k-gf")
-    assert require(keys, "fmp") == "k-fmp"
-    assert require(keys, "gurufocus") == "k-gf"
+    assert require(Keys(fmp="k-fmp"), "fmp") == "k-fmp"
 
 
 def test_require_raises() -> None:
     with pytest.raises(MissingKey) as e:
-        require(Keys(fmp=None, gurufocus=None), "gurufocus")
-    assert e.value.vendor == "gurufocus"
+        require(Keys(fmp=None), "fmp")
+    assert e.value.vendor == "fmp"
 
 
-@pytest.mark.parametrize(
-    ("vendor", "keys", "env_var"),
-    [
-        ("fmp", Keys(fmp=None, gurufocus="k-other"), "FAIRBAND_FMP_KEY"),
-        ("gurufocus", Keys(fmp="k-other", gurufocus=None), "FAIRBAND_GURUFOCUS_KEY"),
-    ],
-)
-def test_missing_key_message_names_file_and_env_var_never_a_value(
-    vendor: Literal["fmp", "gurufocus"], keys: Keys, env_var: str
-) -> None:
+def test_missing_key_message_names_file_and_env_var_never_a_value(tmp_path: Path) -> None:
+    _write_keys(tmp_path, '[keys]\ngurufocus = "k-other"\n')
+    keys = load_keys(load_settings(env={}, home=tmp_path), env={"FAIRBAND_GURUFOCUS_KEY": "k-env"})
     with pytest.raises(MissingKey) as e:
-        require(keys, vendor)
-    assert "keys.toml" in str(e.value) and env_var in str(e.value)
-    assert "k-other" not in str(e.value)
+        require(keys, "fmp")
+    assert "keys.toml" in str(e.value) and "FAIRBAND_FMP_KEY" in str(e.value)
+    assert "k-other" not in str(e.value) and "k-env" not in str(e.value)
 
 
 def test_utcnow_is_timezone_aware_utc() -> None:

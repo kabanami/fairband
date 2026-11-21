@@ -14,7 +14,7 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 from support.pe_history import closes_payload, unit_quarters
-from support.vendor import FIXTURES, GF_TOKEN, KEY, Vendor
+from support.vendor import FIXTURES, KEY, Vendor
 from support.web import HEADER, HOST, NOW
 
 from fairband import __main__ as cli
@@ -339,7 +339,6 @@ def test_serve_paces_the_runs_and_the_pass_through_on_one_limiter(
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("FAIRBAND_FMP_KEY", KEY)
-    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
     limiters: dict[str, RateLimiter | None] = {}
     build_clients, build_fmp = cli.build_clients, cli.build_fmp
 
@@ -385,14 +384,12 @@ def test_serve_paces_the_runs_and_the_pass_through_on_one_limiter(
 def test_serve_builds_the_pass_through_on_fmp_alone_and_closes_it(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vendor: Vendor
 ) -> None:
-    """With a GuruFocus key too, ``serve`` builds the pass-through over FMP alone (spec 2026-11-19
-    6.3): the multiples read builds the trailing series from FMP's closes and quarters, with no key
-    in its answer and no GuruFocus call, and the pass-through's FMP client closes when the server
-    stops."""
+    """``serve`` builds the pass-through over FMP (spec 2026-11-19 6.3): the multiples read
+    builds the trailing series from FMP's closes and quarters, with no key in its answer, and the
+    pass-through's FMP client closes when the server stops."""
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("FAIRBAND_FMP_KEY", KEY)
-    monkeypatch.setenv("FAIRBAND_GURUFOCUS_KEY", GF_TOKEN)
     closed: list[str] = []
     build_fmp = cli.build_fmp
 
@@ -422,5 +419,5 @@ def test_serve_builds_the_pass_through_on_fmp_alone_and_closes_it(
     points = [(point["day"], point["value"]) for point in answer.json()["pe"]["points"]]
     assert points == [("2026-10-30", 40.0)]
     assert vendor.paths == ["/stable/historical-price-eod/full", "/stable/income-statement"]
-    assert KEY not in answer.text and GF_TOKEN not in answer.text
+    assert KEY not in answer.text
     assert closed == ["fmp"]

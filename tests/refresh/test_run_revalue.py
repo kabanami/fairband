@@ -216,7 +216,6 @@ def test_revalue_without_an_fmp_client(env_valued: Env) -> None:
     refresh = Refresh(
         env.connect,
         None,
-        None,
         env.policy,
         env.tax,
         env.clock,
@@ -242,7 +241,6 @@ def test_revalue_runs_under_the_overlay(env_valued: Env) -> None:
     assert policy.settings_hash != EMPTY_SETTINGS_HASH == before["ACME"].settings_hash
     refresh = Refresh(
         env.connect,
-        None,
         None,
         policy,
         env.tax,
@@ -421,7 +419,6 @@ def test_cli_revalue_prints_calibration(
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
-    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
 
     def no_clients(*args: Any) -> Any:
         raise AssertionError("a revalue builds no vendor client")
@@ -467,7 +464,6 @@ def test_cli_revalue_with_symbols(
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
-    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
 
     def no_clients(*args: Any) -> Any:
         raise AssertionError("a revalue builds no vendor client")

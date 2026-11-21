@@ -1,7 +1,8 @@
-"""The vendor double the refresh tests share: one ``httpx.MockTransport`` that serves the fixtures.
+"""The vendor double the refresh tests share: one ``httpx.MockTransport`` that serves FMP's
+fixtures, the one vendor Fairband calls.
 
 The tests in this directory import it as ``vendor_double`` (pytest puts the directory on the path);
-``conftest.py`` builds the clients over it. The keys are fake and exist only here.
+``conftest.py`` builds the client over it. The key is fake and exists only here.
 """
 
 import threading
@@ -13,11 +14,9 @@ from pathlib import Path
 import httpx
 
 from fairband.vendors.fmp import Fmp
-from fairband.vendors.gurufocus import GuruFocus
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 FMP_KEY = "fake-fmp-key-0001"  # not a real key
-GF_TOKEN = "fakegfhalf:fakegfhalf2"  # not a real token; a real one has two halves and a colon
 
 # The FMP route to the name ``fairband.refresh.fetch`` (or ``fairband.refresh.passthrough``)
 # stores its endpoint under; a request's ``period``, when it sends one, is appended
@@ -62,10 +61,10 @@ class Router:
     dash; a forex pair is the symbol, ``historical-price-eod-light.USDSEK.json``; a filing
     report's fiscal period is left out, ``financial-reports-json.ACME.json``), or, where the
     symbol has none, the same name without the symbol (``ratios-ttm.json``), a fixture that
-    serves every company; GuruFocus requests ``gurufocus/<route>.<symbol>.json``. ``calls``
-    counts the requests per endpoint, named as the fetch stores them (``income-annual``,
-    ``quote``, ``summary``), and ``symbol_calls`` per symbol; a retry counts again, and
-    ``requested`` keeps each endpoint's last query parameters, the key left out. An endpoint in
+    serves every company. ``calls`` counts the requests per endpoint, named as the fetch stores
+    them (``income-annual``, ``quote``), ``symbol_calls`` per symbol and ``hosts`` per host, so a
+    test sees a request to any other vendor; a retry counts again, and ``requested`` keeps each
+    endpoint's last query parameters, the key left out. An endpoint in
     ``fail``, or any request for a symbol in ``fail_symbols``, answers ``fail_status`` (HTTP 500
     unless set); an endpoint and symbol in ``fail_once`` answer it as many times as their count,
     then as they would. An endpoint and symbol in ``symbol_bodies`` answer 200 with that body
@@ -77,6 +76,7 @@ class Router:
     def __init__(self) -> None:
         self.calls: Counter[str] = Counter()
         self.symbol_calls: Counter[str] = Counter()
+        self.hosts: Counter[str] = Counter()
         self.fail: set[str] = set()
         self.fail_symbols: set[str] = set()
         self.fail_status = 500
@@ -92,6 +92,7 @@ class Router:
         with self._lock:
             self.calls[endpoint] += 1
             self.symbol_calls[symbol] += 1
+            self.hosts[request.url.host] += 1
             self.requested[endpoint] = {
                 name: value for name, value in request.url.params.items() if name != "apikey"
             }
@@ -110,9 +111,6 @@ class Router:
 
 def _resolve(request: httpx.Request) -> tuple[str, str, Path]:
     """The endpoint name, the symbol (``""`` for none) and the fixture path for ``request``."""
-    if request.url.host == "api.gurufocus.com":
-        *_, symbol, route = request.url.path.split("/")  # /public/user/<token>/stock/<s>/<route>
-        return route, symbol, FIXTURES / "gurufocus" / f"{route}.{symbol}.json"
     route = request.url.path.removeprefix("/stable/")
     period = None if route in _FISCAL_PERIOD_ROUTES else request.url.params.get("period")
     symbol = request.url.params.get(_SYMBOL_PARAMS.get(route, "symbol"), "")
@@ -138,8 +136,7 @@ class Clock:
 
 @dataclass(frozen=True)
 class Clients:
-    """The two adapters over the router, and the secrets the fetch scrubs from what it stores."""
+    """The FMP adapter over the router, and the secrets the fetch scrubs from what it stores."""
 
     fmp: Fmp
-    gf: GuruFocus | None
     secrets: tuple[str, ...]

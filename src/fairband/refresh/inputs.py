@@ -48,9 +48,9 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   a code are marked ``currency_refused``, so the engine names the code on the result with no
   rate; the statements', the tax rate's and an unknown currency's are not;
 - the next earnings date (``None`` when before ``today``) and the closes of the latest
-  price-history payload (none when it is absent or does not parse). Assembly reads nothing of
-  GuruFocus: no EPS (spec 2026-11-19 7.1), and no moat score since method 1.8; the key ratios and
-  the summaries a fetch stored stay in the store, unread;
+  price-history payload (none when it is absent or does not parse). Assembly reads no row of the
+  provider ``gf``: no EPS (spec 2026-11-19 7.1), and no moat score since method 1.8; the key
+  ratios and the summaries a fetch stored before stay in the store, unread;
 - the moat class (spec 2026-11-19 8.5): the company's row of the moat table, which the refresh's
   stage ``moat`` loaded from the packaged file (``with_table_moat``, the last step), its class
   and whether it is the owner's or an agent's (``moat_judged``), cited as ``moat_class``: the

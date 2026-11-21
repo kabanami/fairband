@@ -15,8 +15,8 @@ Admitted, with the revenue growth over the last three fiscal years that the deci
   its quote's date, 10.52 SEK per USD: Mature Growth, its value a share in USD.
 
 Not admitted: FIRB, a regional bank (recorded, excluded by industry), and TINY, below the $2 bn
-floor (skipped). The quote, profile, closes, annual consensus, peers, splits and GuruFocus summary
-are ACME's fixtures with the symbol changed.
+floor (skipped). The quote, profile, closes, annual consensus, peers and splits are ACME's
+fixtures with the symbol changed.
 """
 
 import json
@@ -36,7 +36,6 @@ _FIXTURES = {
     "price-history": "fmp/historical-price-eod-full.ACME.json",
     "peers": "fmp/stock-peers.ACME.json",
     "splits": "fmp/splits.ACME.json",
-    "summary": "gurufocus/summary.ACME.json",
 }
 # Revenue step in $ m a year and operating margin in %, where the synthetic company's differ.
 _SHAPES = {"MILD": (30, 20), "NEWT": (10, -10)}

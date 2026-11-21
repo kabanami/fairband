@@ -57,9 +57,9 @@ The tools: 55, listed with their arguments in
 `playbook/fairband-research/reference/tools.md`. Twenty-six read the store (the screen, a
 company's snapshot, its statements, its stored quarters, tables, consensus, closes, multiples
 history and peers, the research on file, the policy and the Methodology page). Nine are vendor
-reads the server fetches with its own key and stores so a report can cite them, none from
-GuruFocus: `transcript`, `news`, `segments`, `insider_trades`, `transcript_dates` and `dcf` from
-FMP, and the filing reads `filings`, `filing_report` and `filing_search` from FMP. A refresh
+reads the server fetches with its own key and stores so a report can cite them: `transcript`,
+`news`, `segments`, `insider_trades`, `transcript_dates` and `dcf` from FMP, and the filing reads
+`filings`, `filing_report` and `filing_search` from FMP. A refresh
 stores some of their answers for each company under the keys the tools read: its segments, its
 news at 60 stories, its list of earnings calls, its filings of the 365 days to the refresh's day,
 and its newest call's transcript where the store holds no copy of it with words. So `segments`,

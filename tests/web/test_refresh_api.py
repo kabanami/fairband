@@ -46,7 +46,8 @@ KEY = "fake-fmp-key-0002"  # not a real key
 HOST = "http://127.0.0.1:8470"
 POST = {"X-Fairband-Request": "1"}
 MISSING_HEADER = {"detail": "missing X-Fairband-Request header"}
-# Each run's moat table, in place of the packaged file: the GuruFocus fixtures' classes.
+# Each run's moat table, in place of the packaged file: the classes GuruFocus's Moat Scores gave
+# the fixtures' companies before method 1.8.
 MOAT = moat_table({"ACME": "Narrow", "BOLT": "None"})
 
 
@@ -58,7 +59,7 @@ class Gate:
         self._entered = threading.Semaphore(0)
         self.release = threading.Event()
 
-    def __call__(self, conn: Any, fmp: Any, gf: Any, symbol: str, *rest: Any) -> FetchOutcome:
+    def __call__(self, conn: Any, fmp: Any, symbol: str, *rest: Any) -> FetchOutcome:
         self._entered.release()
         self.release.wait(5)
         return FetchOutcome(symbol, 0, 0, (), None)
@@ -123,7 +124,6 @@ def worker(db_path: Path, fmp: Fmp, policy: Policy, gate: Gate) -> Iterator[Refr
         return Refresh(
             lambda: connect(db_path),
             fmp,
-            None,
             policy,
             tax,
             lambda: NOW,
@@ -383,15 +383,15 @@ def test_make_refresh_reads_the_overlay_per_run(db_path: Path) -> None:
     assert first._policy.settings_hash == EMPTY_SETTINGS_HASH
     assert second._policy.settings_hash == saved.settings_hash != EMPTY_SETTINGS_HASH
     assert (first._policy.required_return, second._policy.required_return) == (0.09, 0.1)
-    assert (second._fmp, second._gf, second._secrets) == (None, None, ())
+    assert (second._fmp, second._secrets) == (None, ())
     second.close()  # no client to close
 
 
 def test_make_refresh_builds_the_clients_from_the_effective_policy(
     db_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """With an FMP key each run builds clients of its own, from the policy it runs under (the
-    pace is a setting), and ``Refresh.close`` closes them, once. Given the server's limiter, the
+    """With an FMP key each run builds a client of its own, from the policy it runs under (the
+    pace is a setting), and ``Refresh.close`` closes it, once. Given the server's limiter, the
     run paces it to that policy and hands it to its FMP client."""
     closed: list[str] = []
 
@@ -406,15 +406,15 @@ def test_make_refresh_builds_the_clients_from_the_effective_policy(
 
     def clients(
         keys: Keys, policy: Policy, *, limiter: RateLimiter | None = None
-    ) -> tuple[Any, Any, tuple[str, ...]]:
+    ) -> tuple[Any, tuple[str, ...]]:
         built.append((keys, policy, limiter))
-        return Client("fmp"), Client("gf"), (KEY,)
+        return Client("fmp"), (KEY,)
 
     monkeypatch.setattr(cli, "build_clients", clients)
     with closing(connect(db_path)) as conn:
         changes = {"required_return": 0.1, "refresh.fmp_calls_per_minute": 600}
         saved = write_settings(conn, changes, None, NOW)
-    keys = Keys(fmp=KEY, gurufocus=None)
+    keys = Keys(fmp=KEY)
     limiter = RateLimiter(2850, lambda: NOW, lambda _: None)
     tax = load_tax_table()
     refresh = cli.make_refresh(
@@ -433,7 +433,7 @@ def test_make_refresh_builds_the_clients_from_the_effective_policy(
     closed.clear()
     refresh.close()
     refresh.close()
-    assert closed == ["fmp", "gf"]
+    assert closed == ["fmp"]
 
 
 def test_start_full_without_a_key_is_400_not_503(
@@ -498,7 +498,6 @@ def test_start_closes_the_previous_runs_clients(db_path: Path, policy: Policy) -
         number = len(made) + 1
         refresh = Refresh(
             lambda: connect(db_path),
-            None,
             None,
             policy,
             tax,
@@ -580,7 +579,6 @@ def serve_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[Any]:
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
-    monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
     monkeypatch.setattr(cli, "load_moat_table", lambda: MOAT)
     served: list[Any] = []
 
@@ -598,7 +596,8 @@ def test_serve_without_an_fmp_key_runs_a_revalue_only(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The screen is served all the same, with a worker that refuses a full refresh (400) and
-    builds no client; the keys file's mode is checked as the command does."""
+    builds no client; the keys file's mode is checked as the command does. Its ``gurufocus``
+    line, from before spec 2026-11-19 8.10, is not read: no error, no warning of its own."""
     served = serve_env(monkeypatch, tmp_path)
     keys_file = tmp_path / "config" / "fairband" / "keys.toml"
     keys_file.parent.mkdir(parents=True)
@@ -630,17 +629,16 @@ def test_serve_builds_a_worker_with_the_keys(
 
     def clients(
         keys: Keys, policy: Policy, *, limiter: RateLimiter | None = None
-    ) -> tuple[Fmp, None, tuple[str, ...]]:
+    ) -> tuple[Fmp, tuple[str, ...]]:
         built.append(keys.fmp)
-        return fmp, None, (KEY,)
+        return fmp, (KEY,)
 
     monkeypatch.setattr(cli, "build_clients", clients)
     with caplog.at_level(logging.WARNING):
         assert cli.main(["serve"]) == 0
     assert built == [KEY]
     warned = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
-    assert warned == [cli._NO_GF_KEY]
-    assert cli._NO_GF_KEY == "no GuruFocus key: the moat score is not fetched"
+    assert warned == []  # with the FMP key, nothing is missing (spec 2026-11-19 8.10)
     response, body = served
     assert (response.status_code, response.json()) == (200, {"refreshId": 1})
     # The mock FMP's screener has no rows: the worker ran the refresh, and it failed on that.

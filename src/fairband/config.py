@@ -1,7 +1,10 @@
 """Settings and vendor keys: where the data and the config live, and the keys to load.
 
 ``load_settings`` and ``load_keys`` take the environment (and the home directory) as arguments so
-that tests never read the real ones; the defaults are ``os.environ`` and ``Path.home()``.
+that tests never read the real ones; the defaults are ``os.environ`` and ``Path.home()``. The one
+key is FMP's (spec 2026-11-19 8.10): the keys file's other lines, and the environment's other
+variables, are not read, so a file that still names a vendor Fairband no longer calls loads as
+before, with no error and no warning.
 """
 
 import os
@@ -12,16 +15,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-type Vendor = Literal["fmp", "gurufocus"]
+type Vendor = Literal["fmp"]
 
 DEFAULT_PORT = 8470
 
 _KEYS_FILE = "keys.toml"
 _KEYS_FILE_HINT = "~/.config/fairband/keys.toml ($XDG_CONFIG_HOME/fairband/keys.toml when set)"
-_KEY_ENV_VARS: dict[Vendor, str] = {
-    "fmp": "FAIRBAND_FMP_KEY",
-    "gurufocus": "FAIRBAND_GURUFOCUS_KEY",
-}
+_KEY_ENV_VARS: dict[Vendor, str] = {"fmp": "FAIRBAND_FMP_KEY"}
 
 
 @dataclass(frozen=True)
@@ -58,16 +58,12 @@ def _xdg_home(env: Mapping[str, str], name: str, fallback: Path) -> Path:
 
 @dataclass(frozen=True)
 class Keys:
-    """Vendor API keys; a key is ``None`` when absent, never ``""``. The repr hides them."""
+    """The vendor API key, FMP's; ``None`` when absent, never ``""``. The repr hides it."""
 
     fmp: str | None
-    gurufocus: str | None
 
     def __repr__(self) -> str:
-        def shown(key: str | None) -> str:
-            return "None" if key is None else "<set>"
-
-        return f"Keys(fmp={shown(self.fmp)}, gurufocus={shown(self.gurufocus)})"
+        return f"Keys(fmp={'None' if self.fmp is None else '<set>'})"
 
 
 class MissingKey(Exception):
@@ -94,11 +90,12 @@ def load_keys(settings: Settings, env: Mapping[str, str] | None = None) -> Keys:
     def pick(vendor: Vendor) -> str | None:
         return env.get(_KEY_ENV_VARS[vendor], "").strip() or file_keys.get(vendor)
 
-    return Keys(fmp=pick("fmp"), gurufocus=pick("gurufocus"))
+    return Keys(fmp=pick("fmp"))
 
 
 def _read_keys_file(path: Path) -> dict[Vendor, str]:
-    """The non-empty keys under ``[keys]`` in ``path``. Errors name the file, never its text."""
+    """The non-empty keys of ``Vendor`` under ``[keys]`` in ``path``; any other line under it is
+    not read. Errors name the file, never its text."""
     try:
         with path.open("rb") as f:
             document = tomllib.load(f)
@@ -123,7 +120,7 @@ def _read_keys_file(path: Path) -> dict[Vendor, str]:
 
 def require(keys: Keys, vendor: Vendor) -> str:
     """The key for ``vendor``; raises ``MissingKey`` when it is absent."""
-    key = keys.fmp if vendor == "fmp" else keys.gurufocus
+    key = keys.fmp
     if not key:
         raise MissingKey(vendor)
     return key

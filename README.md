@@ -6,7 +6,7 @@ reports.
 
 ![A research report in the Research tab of a company page](docs/images/research-report.png)
 
-It runs on your own machine, with your own data keys. It is currently designed for Claude Code,
+It runs on your own machine, with your own data key. It is currently designed for Claude Code,
 with Codex coming soon.
 
 ## How the parts fit
@@ -20,16 +20,14 @@ flowchart LR
     server -. "starts a research session" .-> agent
     server <--> db[("SQLite database on your disk")]
     server -- "your key" --> fmp["Financial Modeling Prep"]
-    server -- "your key" --> gf["GuruFocus"]
 ```
 
 **You bring**
 
 - **An agent.** Claude Code today. It connects to the MCP server and follows a playbook that is
   in this repository.
-- **Two data keys.** One for Financial Modeling Prep (statements, estimates, prices, filings,
-  transcripts and news) and one for GuruFocus (the moat score). They stay in a
-  file outside the repository.
+- **A data key.** For Financial Modeling Prep (statements, estimates, prices, filings,
+  transcripts and news). It stays in a file outside the repository.
 - **Your judgment.** You set the policy on the Settings page, you ask for the research, and you
   decide what to do with it.
 
@@ -80,9 +78,9 @@ and the ratios, by year or by quarter.
 
 ## Quickstart
 
-You need Python 3.13 or later, [uv](https://docs.astral.sh/uv/), a Financial Modeling Prep key
-and a GuruFocus key. I run Fairband on Linux under WSL, on FMP's Ultimate plan. Other systems and
-smaller plans are untested.
+You need Python 3.13 or later, [uv](https://docs.astral.sh/uv/) and a Financial Modeling Prep
+key. I run Fairband on Linux under WSL, on FMP's Ultimate plan. Other systems and smaller plans
+are untested.
 
 1. **Install.**
 
@@ -92,12 +90,11 @@ smaller plans are untested.
    uv sync
    ```
 
-2. **Add your keys** in `~/.config/fairband/keys.toml`. Never commit this file.
+2. **Add your key** in `~/.config/fairband/keys.toml`. Never commit this file.
 
    ```toml
    [keys]
    fmp = "your FMP key"
-   gurufocus = "your GuruFocus key"
    ```
 
 3. **Start the server**, then open http://127.0.0.1:8470.
@@ -178,7 +175,7 @@ It is young, its method still changes, and it has no track record. Nothing in th
 investment advice.
 
 No market data comes with the repository. The screenshots show Fairband running on my own data
-subscriptions; to run it you need your own keys and must follow your vendors' terms.
+subscriptions; to run it you need your own key and must follow your vendor's terms.
 
 ## Licence
 

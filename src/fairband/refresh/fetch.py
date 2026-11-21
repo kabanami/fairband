@@ -1,31 +1,28 @@
-"""Fetch one company: thirty-one FMP calls and one GuruFocus call (spec 6.5, the peers of growth
-routes spec 5.5, the splits of spec 2026-11-09 10.1, the quarterly balance sheet of spec
-2026-11-13 12.1, and the company page's sixteen: the ten of spec 2026-11-16 10.1, the Financials
-tab's four of spec 2026-11-17 8.1 and the Investor relations tab's two of spec 2026-11-18 8.1),
-each reused while fresh and stored whole, then a thirty-second FMP call, the newest earnings call's
-transcript, where the store holds no copy of it with words. The GuruFocus call is the summary, the
-moat score's; GuruFocus's key ratios are no longer asked (spec 2026-11-19 7.1), and the answers a
-fetch stored before stay in the store.
+"""Fetch one company: thirty-one FMP calls (spec 6.5, the peers of growth routes spec 5.5, the
+splits of spec 2026-11-09 10.1, the quarterly balance sheet of spec 2026-11-13 12.1, and the
+company page's sixteen: the ten of spec 2026-11-16 10.1, the Financials tab's four of spec
+2026-11-17 8.1 and the Investor relations tab's two of spec 2026-11-18 8.1), each reused while
+fresh and stored whole, then a thirty-second, the newest earnings call's transcript, where the
+store holds no copy of it with words. Every call is FMP's (spec 2026-11-19 8.10): the answers of
+the provider ``gf`` a fetch stored before stay in the store, unread.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
 
 1. reuses the newest HTTP 200 response without an error to the same call (provider, endpoint,
-   symbol and params) when it was observed less than the policy's ``reuse_hours`` (FMP) or
-   ``_GF_REUSE``, seven days (GuruFocus), before ``now``, unless ``force``: no call, no write
-   (spec 6.2, D13). Policy v18 dropped GuruFocus's window from the settings (spec 2026-11-19
-   8.9), so the fetch holds it until GuruFocus's call goes. A scoped refresh forces every call,
+   symbol and params) when it was observed less than the policy's ``reuse_hours`` before ``now``,
+   unless ``force``: no call, no write (spec 6.2, D13). A scoped refresh forces every call,
    whatever the window, so on a split's day it reads the splits FMP lists from that day (spec
    2026-11-09 10.3); a full refresh does not, so it continues after a cancel (``run``);
 2. else calls the vendor, outside any transaction;
 3. then stores the response, its body scrubbed of ``secrets``, together with the facts and
    observations normalized from it in one transaction, so a response never stands without its rows.
 
-A 200 whose payload gives no rows (GuruFocus answers some failures with HTTP 200 and an error body;
-FMP answers an unknown symbol with an empty list) is stored with the error ``"unusable payload:
-<the first 80 characters, scrubbed, whitespace collapsed>"`` and counts as failed; a row with an
-error is never reused. The price history stores no rows: its closes stay in the stored payload,
-read back with ``response_payload`` and ``price_closes``, and it is usable when it holds a close.
+A 200 whose payload gives no rows (FMP answers an unknown symbol with an empty list, and some
+failures with an error object) is stored with the error ``"unusable payload: <the first 80
+characters, scrubbed, whitespace collapsed>"`` and counts as failed; a row with an error is never
+reused. The price history stores no rows: its closes stay in the stored payload, read back with
+``response_payload`` and ``price_closes``, and it is usable when it holds a close.
 Nor do the peers: their symbols stay in the stored payload, read back with ``peer_symbols``, and
 the payload is usable when it names a peer or is exactly the empty list (a company with no peers
 has none, and that answer is reused like any other); a list of objects without a ``symbol``, or
@@ -33,10 +30,10 @@ anything but a list, is unusable. The peers are not required. The splits are sto
 (dataset ``split``, ``split_observations``); any list is usable, the empty list among them (a
 company with no split has none, reused like any other answer), and anything but a list is
 unusable. The splits are not required either: without them the company is valued on what it has.
-The company page's sixteen (``PAGE_ENDPOINTS``), fetched after the GuruFocus call, store no
-rows: the page reads their stored payloads. Each is usable when it is a list, the empty list among
-them (a company with no dividend, no analyst, no news, no segments, no earnings call or no filing
-has none, reused like any other answer), and unusable otherwise (FMP's ``{"Error Message":
+The company page's sixteen (``PAGE_ENDPOINTS``), fetched after the fifteen the engine reads, store
+no rows: the page reads their stored payloads. Each is usable when it is a list, the empty list
+among them (a company with no dividend, no analyst, no news, no segments, no earnings call or no
+filing has none, reused like any other answer), and unusable otherwise (FMP's ``{"Error Message":
 ...}``). None of the sixteen is required. ``news``, the two segment answers,
 ``segments-product`` and ``segments-geographic``, the list of earnings calls,
 ``transcript-dates``, and the filings, ``sec-filings``, are stored under the pass-through's
@@ -59,9 +56,7 @@ list, not required, and a 429 on it stops the fetch.
 A ``VendorError`` is stored as a response row with the error, its HTTP status if one came back and
 no payload, in a transaction of its own, and the fetch goes on with the next endpoint, except after
 an HTTP 429, on any call, a page call among them: the fetch stops there and reports
-``rate_limited``; stopping the refresh is the runner's job. Without a GuruFocus client, the
-GuruFocus endpoint fails with "no GuruFocus key" (logged) and stores nothing, unless the store holds
-a fresh response, which is reused.
+``rate_limited``; stopping the refresh is the runner's job.
 
 The stored ``params`` are the call's logical parameters (``symbol``, ``period``, ``limit``, the
 filings' ``from`` and ``to``, a transcript's ``year`` and ``quarter``), never the key, and the
@@ -105,7 +100,6 @@ from fairband.vendors.fmp import (
     Period,
     StatementKind,
 )
-from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.http import VendorError, VendorResponse
 from fairband.vendors.normalize_fmp import (
     as_reported_balance_facts,
@@ -119,13 +113,12 @@ from fairband.vendors.normalize_fmp import (
     split_observations,
     statement_facts,
 )
-from fairband.vendors.normalize_gf import summary_observations
 from fairband.vendors.page_investor import has_words, newest_call
 from fairband.vendors.scrub import scrub
 
 logger = logging.getLogger("fairband.refresh")
 
-type Provider = Literal["fmp", "gf"]
+type Provider = Literal["fmp"]  # the store's name of the one vendor a fetch calls
 
 # The depths of spec 6.5.
 STATEMENT_YEARS = 11  # ten years for the ROIC aggregate plus the opening balance
@@ -141,8 +134,8 @@ FILINGS_WINDOW_DAYS = 365  # the filings' window: the agents' filing list's defa
 
 # The company page's calls (spec 2026-11-16 10.1, the Financials tab's four of spec 2026-11-17 8.1,
 # then the Investor relations tab's two of spec 2026-11-18 8.1), the endpoints as stored, in fetch
-# order after GuruFocus's one. None is required, and none gives a fact or an observation: the page
-# reads their stored payloads.
+# order after the fifteen the engine reads. None is required, and none gives a fact or an
+# observation: the page reads their stored payloads.
 PAGE_ENDPOINTS: tuple[str, ...] = (
     "ratios-ttm",
     "key-metrics-ttm",
@@ -187,9 +180,6 @@ STATEMENT_ENDPOINTS = frozenset(
         "balance-quarter",
     }
 )
-NO_GF_KEY = "no GuruFocus key"
-_GF_ENDPOINTS = frozenset({"summary"})
-_GF_REUSE = timedelta(days=7)  # GuruFocus's reuse window, no setting since policy v18
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error
 _PENDING = 0  # the response id normalized rows carry until their response is recorded
 
@@ -200,7 +190,7 @@ type _Rows = tuple[list[FactRow], list[ObservationRow]]
 class FetchOutcome:
     """What one fetch did. ``calls`` counts the endpoints called, a failed call among them;
     ``reused`` the endpoints served from the store; ``failed`` names, in fetch order, the endpoints
-    that failed, gave an unusable payload or had no client; ``error`` is ``"data fetch failed:
+    that failed or gave an unusable payload; ``error`` is ``"data fetch failed:
     <endpoints>"`` naming the required endpoints among them, or ``None`` when every required
     endpoint has its data. ``rate_limited`` is true when an endpoint answered HTTP 429: the
     endpoints after it are skipped (neither called, reused nor failed), so ``failed`` and
@@ -221,14 +211,13 @@ class _Call:
     provider: Provider
     endpoint: str
     params: Mapping[str, str]
-    send: Callable[[], VendorResponse] | None  # None: no client for the provider
+    send: Callable[[], VendorResponse]
     reuses: bool = True  # False: no reuse window, the call is made whenever it is listed
 
 
 def fetch_company(
     conn: sqlite3.Connection,
     fmp: Fmp,
-    gf: GuruFocus | None,
     symbol: str,
     policy: Policy,
     now: datetime,
@@ -243,29 +232,17 @@ def fetch_company(
     """
     if conn.in_transaction:
         raise ValueError("fetch_company must not run inside a transaction")
-    windows: dict[Provider, timedelta] = {
-        "fmp": timedelta(hours=policy.refresh.reuse_hours),
-        "gf": _GF_REUSE,
-    }
+    window = timedelta(hours=policy.refresh.reuse_hours)
     calls = reused = 0
     failed: list[str] = []
     rate_limited = False
     # ``chain`` is lazy: the newest call's transcript is read from the store only once the listed
     # calls are stored or reused, and never after a 429 has stopped the fetch.
-    listed = _calls(fmp, gf, symbol, now.date())
+    listed = _calls(fmp, symbol, now.date())
     for call in chain(listed, _newest_transcript(conn, fmp, symbol)):
         latest = latest_response(conn, call.provider, call.endpoint, symbol, call.params)
-        if (
-            call.reuses
-            and not force
-            and latest is not None
-            and now - latest.observed_at < windows[call.provider]
-        ):
+        if call.reuses and not force and latest is not None and now - latest.observed_at < window:
             reused += 1
-            continue
-        if call.send is None:
-            _log_failure(symbol, call, NO_GF_KEY)
-            failed.append(call.endpoint)
             continue
         calls += 1
         try:
@@ -296,13 +273,6 @@ def fetch_company(
     required = [endpoint for endpoint in failed if endpoint in REQUIRED]
     error = f"data fetch failed: {', '.join(required)}" if required else None
     return FetchOutcome(symbol, calls, reused, tuple(failed), error, rate_limited)
-
-
-def provider_of(endpoint: str) -> Provider:
-    """The provider of an endpoint name this module stores (``FetchOutcome.failed``, and the
-    rates stage's ``fx-history``): the GuruFocus endpoint is its bare route name, ``summary``;
-    every other endpoint is FMP's."""
-    return "gf" if endpoint in _GF_ENDPOINTS else "fmp"
 
 
 def page_params(endpoint: str, symbol: str, today: date | None = None) -> dict[str, str]:
@@ -340,9 +310,9 @@ def filings_window(today: date) -> tuple[date, date]:
     return today - timedelta(days=FILINGS_WINDOW_DAYS), today
 
 
-def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
-    """The calls for ``symbol`` in fetch order: fifteen FMP, one GuruFocus, then the company
-    page's sixteen FMP, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``."""
+def _calls(fmp: Fmp, symbol: str, today: date) -> list[_Call]:
+    """The calls for ``symbol`` in fetch order: the fifteen the engine reads, then the company
+    page's sixteen, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(
@@ -359,11 +329,6 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
     def estimates(period: Period, limit: int) -> _Call:
         params = {"period": period, "limit": str(limit)}
         return on_fmp(f"estimates-{period}", params, partial(fmp.estimates, symbol, period, limit))
-
-    def on_gf(endpoint: str, send: Callable[[GuruFocus, str], VendorResponse]) -> _Call:
-        assert endpoint in _GF_ENDPOINTS, f"provider_of must name {endpoint} GuruFocus's"
-        bound = None if gf is None else partial(send, gf, symbol)
-        return _Call("gf", endpoint, {"symbol": symbol}, bound)
 
     page_sends: dict[str, Callable[[], VendorResponse]] = {
         "ratios-ttm": partial(fmp.ratios_ttm, symbol),
@@ -406,7 +371,6 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         ),
         on_fmp("peers", {}, partial(fmp.peers, symbol)),
         on_fmp("splits", {}, partial(fmp.splits, symbol)),
-        on_gf("summary", GuruFocus.summary),
         *(
             _Call("fmp", endpoint, page_params(endpoint, symbol, today), page_sends[endpoint])
             for endpoint in PAGE_ENDPOINTS
@@ -521,8 +485,6 @@ def _rows(
             return ([], []) if peer_symbols(payload, symbol) or payload == [] else None
         case "splits":
             return ([], split_observations(payload, *source)) if isinstance(payload, list) else None
-        case "summary":
-            observations = summary_observations(payload, *source)
         case _ if endpoint in PAGE_ENDPOINTS or endpoint == TRANSCRIPT:
             return ([], []) if isinstance(payload, list) else None
         case _:

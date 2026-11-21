@@ -51,7 +51,6 @@ logger = logging.getLogger("fairband")
 
 _HOST = "127.0.0.1"  # the screen is for this machine only (D11)
 _PRIVATE_BITS = 0o077  # group and other
-_NO_GF_KEY = "no GuruFocus key: the moat score is not fetched"
 _WAY_OUT = "Start the server, or run migrate, to mark an interrupted refresh."
 
 
@@ -117,37 +116,35 @@ def make_refresh(
     moat: MoatTable | None = None,
 ) -> Refresh:
     """The server worker's next run: under the effective policy read now (the file and the stored
-    overlay, spec 2026-11-04 8.8), so a setting saved since the last run is this one's, with
-    vendor clients of its own built from that policy (the pace is a setting). Given the server's
+    overlay, spec 2026-11-04 8.8), so a setting saved since the last run is this one's, with an
+    FMP client of its own built from that policy (the pace is a setting). Given the server's
     ``limiter``, which the pass-through shares, the run paces it to that policy and its FMP client
     takes its slots from it. Without an FMP key it builds no client and the run refuses every kind
     but a revalue. The run loads ``moat``, the table the server read as it started, the packaged
-    file without one. ``Refresh.close`` closes the clients. Raises ``ValueError`` when the stored
+    file without one. ``Refresh.close`` closes the client. Raises ``ValueError`` when the stored
     settings no longer apply to the file."""
     with closing(conn_factory()) as conn:
         policy = effective_policy(conn)
     if keys is not None and keys.fmp is not None:
         if limiter is not None:
             limiter.set_pace(policy.refresh.fmp_calls_per_minute)
-        fmp, gf, secrets = build_clients(keys, policy, limiter=limiter)
+        fmp, secrets = build_clients(keys, policy, limiter=limiter)
     else:
-        fmp, gf, secrets = None, None, ()
+        fmp, secrets = None, ()
 
     def close() -> None:
         if fmp is not None:
             fmp.close()
-        if gf is not None:
-            gf.close()
 
     return Refresh(
-        conn_factory, fmp, gf, policy, tax, utcnow, cancel, on_progress, secrets, close, moat
+        conn_factory, fmp, policy, tax, utcnow, cancel, on_progress, secrets, close, moat
     )
 
 
 def _serve(args: argparse.Namespace) -> int:
     """Apply the pending migrations, then serve the screen on 127.0.0.1 until interrupted. The
     server runs refreshes on its worker; each run reads the effective policy and builds its
-    clients as it starts (``make_refresh``). With an FMP key it also builds the agent's vendor
+    client as it starts (``make_refresh``). With an FMP key it also builds the agent's vendor
     pass-through, whose FMP calls run on the request threads, the FMP key the secret it scrubs.
     One limiter paces every FMP call of both: made at the pace of the effective policy as the
     server starts (the file's, when a stored setting no longer applies, which the worker then
@@ -203,10 +200,10 @@ def _serve(args: argparse.Namespace) -> int:
     try:
         uvicorn.run(app, host=_HOST, port=args.port, log_level="info")
     finally:
-        # A run still alive holds the clients, so they close with the process, which ends now:
-        # closed here, they would fail the companies in flight. The cancel keeps the run from
+        # A run still alive holds its client, so it closes with the process, which ends now:
+        # closed here, it would fail the companies in flight. The cancel keeps the run from
         # starting another meanwhile; the next start marks its record interrupted. The server has
-        # answered its last request, so the pass-through's clients close.
+        # answered its last request, so the pass-through's client closes.
         worker.cancel()
         if passthrough is not None:
             passthrough.close()
@@ -247,12 +244,11 @@ def _refresh(args: argparse.Namespace) -> int:
         except ValueError as exc:
             return _usage(str(exc))
     cancel = threading.Event()
-    fmp, gf, secrets = (None, None, ()) if keys is None else build_clients(keys, policy)
+    fmp, secrets = (None, ()) if keys is None else build_clients(keys, policy)
     started: list[int] = []
     refresh = Refresh(
         lambda: connect(settings.db_path),
         fmp,
-        gf,
         policy,
         tax,
         utcnow,
@@ -274,8 +270,6 @@ def _refresh(args: argparse.Namespace) -> int:
     finally:
         if fmp is not None:
             fmp.close()
-        if gf is not None:
-            gf.close()
     with closing(connect(settings.db_path)) as conn:
         last = latest_refresh(conn)  # ours, unless another refresh has started since
         symbols = dict.fromkeys(args.symbols or ())
@@ -326,13 +320,9 @@ def _usage(message: str) -> int:
 
 
 def _keys(settings: Settings) -> Keys:
-    """The vendor keys, read after a warning when others can read the keys file; a warning too
-    when an FMP key comes without a GuruFocus one."""
+    """The vendor key, read after a warning when others can read the keys file."""
     _warn_if_others_can_read_keys(settings)
-    keys = load_keys(settings)
-    if keys.fmp is not None and keys.gurufocus is None:
-        logger.warning(_NO_GF_KEY)
-    return keys
+    return load_keys(settings)
 
 
 def _warn_if_others_can_read_keys(settings: Settings) -> None:

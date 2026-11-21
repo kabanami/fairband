@@ -17,7 +17,7 @@ import httpx
 import pytest
 from refresh_env import Env
 from support.pe_history import report_in
-from vendor_double import FIXTURES, FMP_KEY, GF_TOKEN
+from vendor_double import FIXTURES, FMP_KEY
 
 from fairband.config import Keys
 from fairband.refresh import passthrough as passthrough_module
@@ -520,7 +520,7 @@ def test_the_refresh_s_closes_quarters_and_rates_stay_the_newest(env: Env) -> No
     series' answers add no row under any of the three."""
     with closing(env.connect()) as conn:
         clients = env.clients
-        fetch_company(conn, clients.fmp, None, "ACME", env.policy, env.clock(), clients.secrets)
+        fetch_company(conn, clients.fmp, "ACME", env.policy, env.clock(), clients.secrets)
         before = {key: usable_responses(conn, "fmp", *key) for key in REFRESH_ANSWERS}
         closes = latest_response(conn, "fmp", "price-history", "ACME", {"symbol": "ACME"})
     assert closes is not None and before["fx-history", "USDTWD"] == []
@@ -692,12 +692,12 @@ def test_each_kind_stores_its_call(
 
 def test_the_stored_payload_and_the_answer_carry_no_key(env: Env) -> None:
     """A vendor that echoed a key in its body: the store and the answer hold ``<key>``."""
-    echoed = [{"title": f"see https://example.com/?apikey={FMP_KEY}&token={GF_TOKEN}"}]
+    echoed = [{"title": f"see https://example.com/?apikey={FMP_KEY}&token={FMP_KEY}"}]
     env.router.bodies["news"] = json.dumps(echoed).encode()
     fetched = _passthrough(env).fetch("news", "ACME", {})["news"]
     with closing(env.connect()) as conn:
         payload = response_payload(conn, fetched.row.id)
-    assert payload is not None and FMP_KEY not in payload and GF_TOKEN not in payload
+    assert payload is not None and FMP_KEY not in payload
     assert fetched.payload == [{"title": "see https://example.com/?apikey=<key>&token=<key>"}]
 
 
@@ -743,23 +743,21 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     sleeps: list[float] = []
     pace = env.policy.refresh.fmp_calls_per_minute
     limiter = RateLimiter(pace, env.clock, sleeps.append)
-    keys = Keys(FMP_KEY, None)
+    keys = Keys(FMP_KEY)
     transport = env.router.transport
-    worker_fmp, _, secrets = build_clients(keys, env.policy, transport=transport, limiter=limiter)
+    worker_fmp, secrets = build_clients(keys, env.policy, transport=transport, limiter=limiter)
     passthrough_fmp = build_fmp(keys, env.policy, transport=transport, limiter=limiter)
     try:
         assert worker_fmp.limiter is passthrough_fmp.limiter is limiter
         with closing(env.connect()) as conn:
-            outcome = fetch_company(
-                conn, worker_fmp, None, "ACME", env.policy, env.clock(), secrets
-            )
+            outcome = fetch_company(conn, worker_fmp, "ACME", env.policy, env.clock(), secrets)
         passthrough = Passthrough(passthrough_fmp, env.connect, env.policy, env.clock, secrets)
         q2 = {"year": "2026", "quarter": "2"}
         fetched = passthrough.fetch("transcript", "ACME", q2)["transcript"]
     finally:
         worker_fmp.close()
         passthrough_fmp.close()
-    # The worker's 31 FMP calls and the newest call's transcript; no GuruFocus client.
+    # The worker's 31 FMP calls and the newest call's transcript.
     assert fetched.reused is False and outcome.calls == 32
     # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 32.
     interval = limiter.interval.total_seconds()  # 60 / pace, to the microsecond

@@ -3,11 +3,13 @@
 The router serves these payloads in place of the fixtures (``Router.bodies``). The company is
 twelve calendar fiscal years, 2014 to 2025, and five quarters to 2026-09-30, or, reporting
 half-yearly, four half-years to 2026-06-30; money is in USD, or in the currency ``bodies`` is given
-(the statements' ``reportedCurrency``). The consensus, quote, profile, closes and GuruFocus summary
-stay the ACME fixtures'. ``store_gf_ratios`` stands for GuruFocus's key ratios that a fetch stored
-before spec 2026-11-19 7.1, which the store keeps unread.
+(the statements' ``reportedCurrency``). The consensus, quote, profile and closes stay the ACME
+fixtures'. ``store_gf_ratios`` stands for GuruFocus's key ratios that a fetch stored before spec
+2026-11-19 7.1, and ``store_gf_summary`` for its summary, the moat score's and the depositary
+ratio's, that a fetch stored before spec 2026-11-19 8.10: the store keeps both, unread.
 """
 
+import json
 import sqlite3
 from collections.abc import Iterable, Sequence
 from datetime import UTC, date, datetime, timedelta
@@ -357,5 +359,36 @@ def store_gf_ratios(conn: sqlite3.Connection, as_of: date, symbol: str = "ACME")
             response_id,
         )
         for field, value in (("eps_ttm", "6.00"), ("eps_without_nri", "5.80"))
+    ]
+    insert_observations(conn, rows)
+
+
+def store_gf_summary(
+    conn: sqlite3.Connection, as_of: date, ratio: str | None, symbol: str = "ACME"
+) -> None:
+    """A GuruFocus ``summary`` answer and its two ``gf-score`` rows, as of ``as_of``, as a fetch
+    stored them before spec 2026-11-19 8.10: a moat score of 7 and the depositary receipt ratio
+    ``ratio`` (no value at ``None``). The store keeps them, and assembly reads neither."""
+    observed = datetime.combine(as_of, NOW.timetz())
+    data = {"moat_score": 7, "depositary_receipt_ratio": ratio}
+    payload = json.dumps({"summary": {"company_data": data}})
+    response_id = record_response(
+        conn, "gf", "summary", {"symbol": symbol}, symbol, 200, payload, None, observed
+    )
+    values = {"moat_score": ("7", "score"), "depositary_receipt_ratio": (ratio, "ratio")}
+    rows = [
+        ObservationRow(
+            symbol,
+            "gf-score",
+            None,
+            field,
+            None if value is None else Decimal(value),
+            unit,
+            as_of,
+            observed,
+            observed,
+            response_id,
+        )
+        for field, (value, unit) in values.items()
     ]
     insert_observations(conn, rows)

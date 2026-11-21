@@ -98,10 +98,10 @@ exception outside a symbol's work ends the run ``failed`` with its class and mes
 raised again.
 
 Why daemon threads: an exception in the fetch stage (a second Ctrl-C in the command) must not wait
-for the fetches in flight, which on a stalled vendor run to minutes (31 FMP and 1 GuruFocus call,
-and a 32nd FMP call, the newest earnings call's transcript, where the store holds none with words,
-each up to ``deadline_s`` and an FMP call longer by its waits in the limiter). The run gives them up
-at once: their symbols go back to ``pending``, the run ends ``failed`` and the exception propagates.
+for the fetches in flight, which on a stalled vendor run to minutes (31 FMP calls, and a 32nd, the
+newest earnings call's transcript, where the store holds none with words, each up to
+``deadline_s`` and longer by its waits in the limiter). The run gives them up at once: their
+symbols go back to ``pending``, the run ends ``failed`` and the exception propagates.
 A ``ThreadPoolExecutor``'s workers are joined when the interpreter exits, even after
 ``shutdown(wait=False)``, and ending the command with ``os._exit`` would skip its own cleanup (the
 signal handler, the clients, the output); a daemon thread is simply not joined. What a given-up
@@ -144,9 +144,9 @@ from fairband.policy.moat import MoatTable, load_moat_table
 from fairband.policy.tax import TaxTable
 from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.deciles import deciles_for_universe
-from fairband.refresh.fetch import FetchOutcome, fetch_company, provider_of
+from fairband.refresh.fetch import FetchOutcome, fetch_company
 from fairband.refresh.inputs import build_inputs, latest_price
-from fairband.refresh.rates import FX_HISTORY, currencies_of, fetch_rates
+from fairband.refresh.rates import currencies_of, fetch_rates
 from fairband.refresh.reviews import follow_snapshot, review_refusal
 from fairband.refresh.run_price import PriceRefresh, rate_limited
 from fairband.refresh.universe import build_universe
@@ -172,7 +172,6 @@ from fairband.store.snapshots import (
     refresh_snapshots,
 )
 from fairband.vendors.fmp import Fmp
-from fairband.vendors.gurufocus import GuruFocus
 from fairband.vendors.scrub import scrub
 
 logger = logging.getLogger("fairband.refresh")
@@ -185,7 +184,7 @@ KINDS: tuple[Kind, ...] = ("full", "price", "scoped", "revalue")
 UNCLASSIFIED = "unclassified"  # the calibration's name for a company without a phase
 NO_COMPANY_ADMITTED = "universe admitted no company"
 NO_COMPANY_RANKED = "deciles rank no company"
-_PROVIDER_NAMES = {"fmp": "FMP", "gf": "GuruFocus"}
+_FMP = "FMP"  # the provider a 429 names: every call a refresh makes is FMP's
 _RATE_LIMITED = "data fetch incomplete: rate limited"
 
 
@@ -225,7 +224,6 @@ class Refresh:
         self,
         conn_factory: Callable[[], sqlite3.Connection],
         fmp: Fmp | None,
-        gf: GuruFocus | None,
         policy: Policy,
         tax: TaxTable,
         clock: Callable[[], datetime],
@@ -237,7 +235,6 @@ class Refresh:
     ) -> None:
         self._conn_factory = conn_factory
         self._fmp = fmp
-        self._gf = gf
         self._policy = policy
         self._tax = tax
         self._clock = clock
@@ -434,7 +431,7 @@ class Refresh:
             failed += len(outcome.failed)
             self._report(refresh_id, "rates", done, failed, len(currencies) - done - failed)
             if outcome.rate_limited:
-                return replace(fetched, limited_by=_PROVIDER_NAMES[provider_of(FX_HISTORY)])
+                return replace(fetched, limited_by=_FMP)
         return fetched
 
     def _stopped(
@@ -497,7 +494,7 @@ class Refresh:
                 elif isinstance(result, BaseException):
                     raise result  # not the symbol's failure: SystemExit and the like
                 elif result.rate_limited:
-                    limited_by = limited_by or _PROVIDER_NAMES[provider_of(result.failed[-1])]
+                    limited_by = _FMP
                     reason = _RATE_LIMITED
                 else:
                     reason = result.error
@@ -544,7 +541,7 @@ class Refresh:
             try:
                 with closing(self._conn_factory()) as conn:
                     outcome = fetch_company(
-                        conn, fmp, self._gf, symbol, self._policy, now, self._secrets, force
+                        conn, fmp, symbol, self._policy, now, self._secrets, force
                     )
             except BaseException as exc:  # noqa: BLE001 - handed to the run, which decides
                 finished.put((symbol, exc))

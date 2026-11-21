@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from support.moat import moat_table
-from vendor_double import FMP_KEY, GF_TOKEN, Clients, Clock, Router
+from vendor_double import FMP_KEY, Clients, Clock, Router
 
 from fairband import __main__ as cli
 from fairband.config import Keys
@@ -24,9 +24,9 @@ from fairband.store.db import connect
 from fairband.store.refreshes import RefreshRow, items, latest_refresh
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 
-# The classes the GuruFocus fixtures' Moat Scores gave before method 1.8, so a value under the moat
-# table, which the engine reads, is the value the score gave: ACME's summary, a score of 7, Narrow,
-# which the fixture universe's companies share; BOLT's, no score, None.
+# The classes GuruFocus's Moat Scores gave the fixtures' companies before method 1.8, so a value
+# under the moat table, which the engine reads, is the value the score gave: ACME's, a score of 7,
+# Narrow, which the fixture universe's companies share; BOLT's, no score, None.
 MOAT_CLASSES: dict[str, Moat] = {
     "ACME": "Narrow",
     "AXLE": "Narrow",
@@ -77,7 +77,6 @@ class Env:
         return Refresh(
             self.connect,
             self.clients.fmp,
-            self.clients.gf,
             policy,
             self.tax,
             self.clock,
@@ -114,16 +113,15 @@ class Env:
 
 
 def use_cli(env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Point the command at the env's database, clients and moat table; the keys come from the
+    """Point the command at the env's database, client and moat table; the key comes from the
     environment."""
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("FAIRBAND_FMP_KEY", FMP_KEY)
-    monkeypatch.setenv("FAIRBAND_GURUFOCUS_KEY", GF_TOKEN)
 
-    def clients(keys: Keys, policy: Policy) -> tuple[Any, Any, tuple[str, ...]]:
-        assert (keys.fmp, keys.gurufocus, policy.version) == (FMP_KEY, GF_TOKEN, env.policy.version)
-        return env.clients.fmp, env.clients.gf, env.clients.secrets
+    def clients(keys: Keys, policy: Policy) -> tuple[Any, tuple[str, ...]]:
+        assert (keys.fmp, policy.version) == (FMP_KEY, env.policy.version)
+        return env.clients.fmp, env.clients.secrets
 
     monkeypatch.setattr(cli, "build_clients", clients)
     monkeypatch.setattr(cli, "utcnow", env.clock)

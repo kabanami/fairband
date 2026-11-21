@@ -828,7 +828,7 @@ def test_the_reads_find_what_the_fetch_stores(
         ) as http,
         closing(connect(db_path)) as conn,
     ):
-        fetch_company(conn, Fmp(http, FMP_KEY), None, "ACME", policy, NOW, [FMP_KEY])
+        fetch_company(conn, Fmp(http, FMP_KEY), "ACME", policy, NOW, [FMP_KEY])
     assert router.calls["transcript"] == 1
     tab = "/api/companies/ACME/page/investor-relations"
     body = _get(with_passthrough, tab)

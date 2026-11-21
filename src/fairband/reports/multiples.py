@@ -189,7 +189,8 @@ def stored_trailing(conn: sqlite3.Connection, symbol: str) -> tuple[int, Series 
     exchange form), whatever their age: the newest usable closes and quarters, and, for a company
     in another currency (``reporting_currency``), the newest usable pair's closes. The closes'
     response id and the series (``None`` when it cannot be read); ``None`` when the closes or the
-    quarters are not stored. GuruFocus's ``pettm`` answers, stored before, are not read."""
+    quarters are not stored. The ``pettm`` answers of the provider ``gf``, stored before, are not
+    read."""
     currency = reporting_currency(conn, symbol)
     rows = {
         part: latest_response(conn, FMP, answer.endpoint, answer.symbol, answer.params)

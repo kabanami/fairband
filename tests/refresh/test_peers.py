@@ -55,7 +55,7 @@ def conn_with_peers(
         for endpoint, body in company(symbol).items():
             router.symbol_bodies[(endpoint, symbol)] = body
     for symbol in ("ACME", "BOLT", "NEWT", "FIRB"):
-        fetch_company(conn, clients.fmp, clients.gf, symbol, policy, clock(), clients.secrets)
+        fetch_company(conn, clients.fmp, symbol, policy, clock(), clients.secrets)
     add_company(conn, symbols=("ACME", "BOLT", "NEWT"))
     listed = latest_company(conn, "NEWT")
     assert listed is not None
@@ -78,9 +78,7 @@ def conn_with_industry(
     for symbol in ("AXLE", "COGS", "GEAR"):
         for endpoint, body in company(symbol).items():
             router.symbol_bodies[(endpoint, symbol)] = body
-        fetch_company(
-            conn_with_peers, clients.fmp, clients.gf, symbol, policy, clock(), clients.secrets
-        )
+        fetch_company(conn_with_peers, clients.fmp, symbol, policy, clock(), clients.secrets)
     return conn_with_peers
 
 
@@ -219,7 +217,7 @@ def test_a_peers_margin_takes_its_last_ten_years_with_both(
     for endpoint, body in answers.items():
         router.symbol_bodies[(endpoint, "BOLT")] = body
     for symbol in ("ACME", "BOLT"):
-        fetch_company(conn, clients.fmp, clients.gf, symbol, policy, clock(), clients.secrets)
+        fetch_company(conn, clients.fmp, symbol, policy, clock(), clients.secrets)
     add_company(conn, symbols=("ACME", "BOLT"))
 
     [peer] = peer_figures(conn, "ACME", DECILES, policy, tax, TODAY).figures
@@ -255,7 +253,7 @@ def test_a_peers_sales_to_capital_reads_one_fiscal_year(
     for endpoint, body in answers.items():
         router.symbol_bodies[(endpoint, "BOLT")] = body
     for symbol in ("ACME", "BOLT"):
-        fetch_company(conn, clients.fmp, clients.gf, symbol, policy, clock(), clients.secrets)
+        fetch_company(conn, clients.fmp, symbol, policy, clock(), clients.secrets)
     add_company(conn, symbols=("ACME", "BOLT"))
 
     [peer] = peer_figures(conn, "ACME", DECILES, policy, tax, TODAY).figures
@@ -377,7 +375,7 @@ def test_a_peers_answer_that_is_the_empty_list_falls_back_to_the_industry(
     for endpoint, body in company("LONE").items():
         router.symbol_bodies[(endpoint, "LONE")] = body
     router.symbol_bodies[("peers", "LONE")] = b"[]"
-    fetch_company(conn, clients.fmp, clients.gf, "LONE", policy, clock(), clients.secrets)
+    fetch_company(conn, clients.fmp, "LONE", policy, clock(), clients.secrets)
     universe(conn, {"LONE": 2_500, "AXLE": 3_000, "COGS": 6_000, "GEAR": 8_000})
     assert stored_payload(conn, "peers", "LONE") == []
     peers = peer_figures(conn, "LONE", DECILES, policy, tax, TODAY)

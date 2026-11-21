@@ -4,9 +4,9 @@
 one more since: the cap on the return without goodwill (``method.md`` 4.6 rule 5; the founder's
 ruling of 2026-11-15), after the Wide spread. Since policy v17 the warning ``one-time-items``'
 threshold, ``one_time_items_share``, stands where the non-recurring flag's share stood (spec
-2026-11-19 7.4). Policy v18 drops GuruFocus's reuse window, ``refresh.gf_reuse_days``, the last
-of 8.2's (spec 2026-11-19 8.9), so forty remain. Each has the label, the plain sentence, the unit,
-the range and the effect the Settings page shows.
+2026-11-19 7.4). Policy v18 drops ``refresh.gf_reuse_days``, the reuse window of the provider
+``gf``, the last of 8.2's (spec 2026-11-19 8.9), so forty remain. Each has the label, the plain
+sentence, the unit, the range and the effect the Settings page shows.
 A dotted name (``universe.cap_floor_usd``, ``refresh.workers``) addresses a value inside the
 file's ``[values.universe]`` or ``[values.refresh]`` table.
 
