@@ -547,8 +547,9 @@ decided_by = "Claude, after the closer look the founder asked for"
 - `source` is `rule` or `correction`. A corrected entry holds `rule_class`, `reason` and
   `decided_by`, word for word from the log of the decision document's 6.7 (74 entries). A
   questioned and kept entry holds `note` and `decided_by` (15 entries).
-- The reader refuses a file with a symbol twice, a class outside the three, a `correction`
-  without its three fields, or a `rule` entry with `rule_class` or `reason`.
+- The reader refuses a file with no entry (added on 2026-11-21 by the review of the reader; see
+  the decision log), a symbol twice, a class outside the three, a `correction` without its three
+  fields, or a `rule` entry with `rule_class` or `reason`.
 - The first version is cut when plan 3 is built, on the universe the live database then holds.
   The companies of refresh 68 take the classes of the run of 2026-11-19 with the corrections,
   `judged` 2026-11-19. A company that entered since is drafted by the rule, `judged` the day of

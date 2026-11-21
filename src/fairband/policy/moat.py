@@ -8,9 +8,12 @@ was cut, the universe it covers and the rule that drafted it (``docs/method.md``
 (``rule_class``), the ``reason`` and who ``decided_by``, word for word from the log of the decision
 document's 6.7; a rule entry questioned and kept holds a ``note`` and ``decided_by``.
 
-The reader refuses a file with a symbol twice, a class outside the three, a correction without its
-three fields, a rule entry with ``rule_class`` or ``reason``, a ``judged`` that is not a TOML date,
-and a ``[meta]`` missing a field, which it names. A reason or a note is any TOML string.
+The reader refuses a file with no entry, a symbol twice, a class outside the three, a source other
+than ``rule`` or ``correction``, a correction without its three fields, a rule entry with
+``rule_class`` or ``reason``, a ``judged`` that is not a TOML date, and a ``[meta]`` missing a
+field, which it names. A file with no entry is refused, rows under a misspelled header
+(``[[class]]``) included, because a refresh deletes each file row whose company the file no
+longer holds (spec 8.4). A reason or a note is any TOML string.
 """
 
 import tomllib
@@ -78,6 +81,8 @@ def load_moat_table(path: Path | None = None) -> MoatTable:
     classes = raw.get("classes", [])
     if not isinstance(classes, list):
         raise TypeError("moat table: [[classes]] must be an array of tables")
+    if not classes:
+        raise ValueError("moat table: the file has no [[classes]] entry")
     entries: dict[str, MoatEntry] = {}
     for item in classes:
         entry = _entry(item)

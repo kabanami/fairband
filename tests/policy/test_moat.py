@@ -50,10 +50,12 @@ def _value(x: str | date) -> str:
     return x.isoformat() if isinstance(x, date) else json.dumps(x, ensure_ascii=False)
 
 
-def _file(tmp_path: Path, entries: Sequence[Fields], meta: Fields = _META) -> Path:
+def _file(
+    tmp_path: Path, entries: Sequence[Fields], meta: Fields = _META, header: str = "classes"
+) -> Path:
     blocks = ["[meta]\n" + "".join(f"{k} = {_value(v)}\n" for k, v in meta.items())]
     for entry in entries:
-        blocks.append("[[classes]]\n" + "".join(f"{k} = {_value(v)}\n" for k, v in entry.items()))
+        blocks.append(f"[[{header}]]\n" + "".join(f"{k} = {_value(v)}\n" for k, v in entry.items()))
     path = tmp_path / "moat.toml"
     path.write_text("\n".join(blocks), encoding="utf-8")
     return path
@@ -110,6 +112,23 @@ GUESS = [{**_AAPL, "source": "guess"}]
 def test_a_malformed_file_is_refused(tmp_path: Path, entries: list[Fields], message: str) -> None:
     with pytest.raises(ValueError, match=f"^moat table: {re.escape(message)}$"):
         load_moat_table(_file(tmp_path, entries))
+
+
+@pytest.mark.parametrize(
+    ("entries", "header"),
+    [
+        pytest.param([], "classes", id="no [[classes]] at all"),
+        pytest.param([_AAPL, _SMCI], "class", id="rows under [[class]]"),
+    ],
+)
+def test_a_file_with_no_entry_is_refused(
+    tmp_path: Path, entries: list[Fields], header: str
+) -> None:
+    """A refresh deletes each file row whose company the file no longer holds (spec 8.4), so a
+    file emptied, or its rows under a header the reader does not read, would delete them all."""
+    path = _file(tmp_path, entries, header=header)
+    with pytest.raises(ValueError, match=r"^moat table: the file has no \[\[classes\]\] entry$"):
+        load_moat_table(path)
 
 
 def test_a_judged_that_is_not_a_date_is_refused(tmp_path: Path) -> None:
