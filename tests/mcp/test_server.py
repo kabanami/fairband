@@ -5,6 +5,7 @@ one-sentence description; each reads or writes its route; a write before ``ident
 without a call; a refusal is the API's sentence and a server that does not answer is one
 sentence."""
 
+import json
 import socket
 import threading
 from contextlib import closing
@@ -37,14 +38,15 @@ from fairband.store.refreshes import save_deciles
 from fairband.store.snapshots import insert_snapshot
 from fairband.store.vendor import record_response
 from fairband.web import reviews_api
-from fairband.web.identity import IDENTIFY_FIRST
+from fairband.web.identity import ACTOR_HEADER, IDENTIFY_FIRST, PRINCIPAL_HEADER
 
 PROBE = Implementation(name="probe", version="0")
 AGENT = {"agent": "claude-opus-5-5"}
 ITEM = {"symbol": "AAPL", "mode": "full report"}
 FILING = {"kind": "filing", "ref": "10-K 2025, p. 41", "note": None}
-# Spec 15.2 to 15.4, in its order, with ``quarters`` after ``financials`` and the filing reads
-# after the pass-throughs (spec 2026-11-11, 6).
+# Spec 15.2 to 15.4, in its order, with ``quarters`` after ``financials``, the filing reads after
+# the pass-throughs (spec 2026-11-11, 6) and ``moat_set`` before ``override_add`` (spec 2026-11-19
+# 8.6).
 SPEC_TOOLS = (
     "screen",
     "company",
@@ -89,6 +91,7 @@ SPEC_TOOLS = (
     "note_add",
     "finding_add",
     "guidance_add",
+    "moat_set",  # spec 2026-11-19 8.6, before the overrides
     "override_add",
     "override_drop",
     "secondary_valuation",
@@ -192,6 +195,12 @@ WRITES: dict[str, dict[str, Any]] = {
         "as_of": "2026-10-28",
         "text": "We expect EPS of $6.30 to $6.60 for fiscal 2026.",
         "source": "response:12/0/content",
+    },
+    "moat_set": {
+        "symbol": "AAPL",
+        "moat_class": "Wide",
+        "reason": "switching costs hold: the installed base renews",
+        "evidence": [FILING],
     },
     "override_add": {
         "symbol": "AAPL",
@@ -311,7 +320,9 @@ def test_every_spec_tool_is_registered(api: FairbandClient) -> None:
     assert [tool.name for tool in tools] == list(SPEC_TOOLS)
     # GuruFocus's series and its tool went (spec 2026-11-19 6.3): multiples_history serves the
     # series Fairband builds from FMP's data.
-    assert "pe_history" not in TOOL_NAMES and len(TOOL_NAMES) == 54
+    assert "pe_history" not in TOOL_NAMES
+    # the agent's moat verdict (spec 2026-11-19 8.6): 55 tools again
+    assert len(TOOL_NAMES) == 55
     for tool in tools:  # one sentence each
         description = tool.description or ""
         assert description.endswith(".") and ". " not in description, tool.name
@@ -491,6 +502,85 @@ def test_every_write_tool_reaches_its_route(api: FairbandClient) -> None:
     assert (guided["asOf"], guided["step"]) == ("2026-10-28", None)
     assert guided["midpoint"] == pytest.approx(6.45)
     assert guided["actor"] == "claude-opus-5-5"
+
+
+def test_moat_set_and_company_say_what_the_verdict_is(api: FairbandClient) -> None:
+    """Spec 2026-11-19 8.6: ``moat_set`` records the agent's verdict, also where it agrees, and
+    values the company again; ``company`` names the row of the moat table it answers."""
+
+    async def listed() -> list[Any]:
+        async with Client(build_server(api)) as session:
+            return (await session.list_tools()).tools
+
+    described = {t.name: t.description or "" for t in anyio.run(listed)}
+    assert described["moat_set"] == (
+        "Record your verdict on the company's moat class, Wide, Narrow or None, with your reason"
+        " and evidence, also when you agree with the class in force; the company is valued again"
+        " at once."
+    )
+    assert "(`moatClass`)" in described["company"]
+
+
+def test_moat_set_puts_the_verdict(api: FairbandClient, client: TestClient) -> None:
+    """Spec 2026-11-19 8.6: ``moat_set`` is one ``PUT`` to the company's moat route as the agent,
+    its class sent as ``class`` beside the reason and the evidence; a dotted symbol reaches its own
+    route (Review Focus 1); a class outside the three is a tool error, and nothing is sent, as the
+    tool list says. On the app the row becomes the agent's, the class before it kept as
+    ``previous``, and the company is valued again at once: the answer's snapshot is the one
+    ``company`` then reads, with the row as ``moatClass``. A blank reason is the route's 400."""
+    verdict = {
+        "moat_class": "Narrow",
+        "reason": "rivals sell close substitutes",
+        "evidence": [FILING],
+    }
+    requests: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={})
+
+    async def medium(server: MCPServer) -> Any:
+        """A class outside the three, which the tool's argument does not take."""
+        async with Client(server, client_info=PROBE) as session:
+            await session.call_tool("identify", AGENT)
+            return await session.call_tool(
+                "moat_set", {"symbol": "BF.B"} | verdict | {"moat_class": "Medium"}
+            )
+
+    with httpx.Client(transport=httpx.MockTransport(answer), base_url=HOST) as http:
+        server = build_server(FairbandClient(http))
+        _session(server, ("identify", AGENT), ("moat_set", {"symbol": "bf.b"} | verdict))
+        assert anyio.run(medium, server).is_error  # a tool error, and no call
+    [put] = requests
+    assert (put.method, put.url.path) == ("PUT", "/api/companies/BF.B/moat")
+    assert json.loads(put.content) == {
+        "class": "Narrow",
+        "reason": "rivals sell close substitutes",
+        "evidence": [FILING],
+    }
+    assert (put.headers[PRINCIPAL_HEADER], put.headers[ACTOR_HEADER]) == (
+        "agent",
+        "claude-opus-5-5",
+    )
+    before = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    _, written, read, blank = _session(
+        build_server(api),
+        ("identify", AGENT),
+        ("moat_set", {"symbol": "aapl"} | verdict),
+        ("company", {"symbol": "AAPL"}),
+        ("moat_set", {"symbol": "AAPL"} | verdict | {"reason": " "}),
+    )
+    row = written["moatClass"]
+    assert (row["class"], row["source"], row["previous"], row["actor"], row["reason"]) == (
+        "Narrow",
+        "agent",
+        "Wide",
+        "claude-opus-5-5",
+        "rivals sell close substitutes",
+    )
+    assert written["snapshot"]["id"] == read["snapshot"]["id"] > before
+    assert read["moatClass"] == row and read["moat"] == "Narrow"
+    assert blank == {"refused": "a moat verdict needs a reason", "status": 400}
 
 
 def test_a_finding_and_a_guidance_record_send_their_currency(api: FairbandClient) -> None:

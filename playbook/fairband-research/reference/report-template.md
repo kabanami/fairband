@@ -31,7 +31,10 @@ work_item_id?)`
 - `work_item_id`, optional: the work item the report completes.
 
 The server checks the structure first: the section count, the stance, the judgments, the headings,
-and a secondary valuation on a refused snapshot. A valued snapshot needs none, nor does a refused
+the moat verdict on the snapshot, and a secondary valuation on a refused snapshot. Every report
+needs the moat verdict: your class recorded with `moat_set` on the snapshot it cites, also where
+you agree with the class in force (`SKILL.md`, step 10). A valued snapshot needs no secondary
+valuation, nor does a refused
 one your review values: the secondary valuation is the fallback where neither the route nor your
 review values the company, and the server refuses one where either does. A snapshot refused for
 a reason you cannot fix (no diluted share count, the reporting currency's or the share basis's)

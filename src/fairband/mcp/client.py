@@ -89,6 +89,9 @@ class FairbandClient:
     def post(self, path: str, body: Any) -> Any:
         return self._send("POST", path, body=body)
 
+    def put(self, path: str, body: Any) -> Any:
+        return self._send("PUT", path, body=body)
+
     def patch(self, path: str, body: Any) -> Any:
         return self._send("PATCH", path, body=body)
 

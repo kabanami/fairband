@@ -22,7 +22,15 @@ import httpx
 from mcp import Client
 
 from fairband.config import MissingKey
-from fairband.engine.overrides import BRIDGE_ORDER, LABELS, NO_GUIDANCE, TAGS, anchor_misfit
+from fairband.engine.overrides import (
+    BRIDGE_ORDER,
+    LABELS,
+    MOAT_SET,
+    NO_GUIDANCE,
+    TAGS,
+    anchor_misfit,
+)
+from fairband.engine.route import NO_MOAT_CLASS
 from fairband.launch.command import TEST_PROMPT
 from fairband.launch.settings import DEFAULTS
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
@@ -50,12 +58,14 @@ from fairband.store.secondary import cannot_fix
 from fairband.store.settings import effective_policy
 from fairband.web.app import _NO_WORKER as NO_WORKER
 from fairband.web.identity import IDENTIFY_FIRST
+from fairband.web.moat_api import NEEDS_A_REASON, NEEDS_EVIDENCE, REFRESH_RUNNING
 from fairband.web.reviews_api import (
     DEPENDS_ON_A_FIGURE,
     FIXED_NUMBERS,
     GUIDANCE_REF,
     NEEDS_A_FIGURE,
     REDERIVE,
+    SET_THE_MOAT,
 )
 from fairband.web.vendor_api import NO_FMP_KEY
 
@@ -105,7 +115,15 @@ STEPS: dict[int, tuple[str, ...]] = {
     7: ("financial_tables", "finding_add"),
     8: ("company", "methodology"),
     9: (),
-    10: ("override_add", "override_drop", "secondary_valuation", "dcf", "sensitivity", "derive"),
+    10: (
+        "moat_set",
+        "override_add",
+        "override_drop",
+        "secondary_valuation",
+        "dcf",
+        "sensitivity",
+        "derive",
+    ),
     11: (),
     12: ("report_submit",),
     13: ("inbox_complete",),
@@ -177,6 +195,15 @@ REFUSALS = (
     NEEDS_A_FIGURE,
     DEPENDS_ON_A_FIGURE,
     REDERIVE,  # the controller's ruling 8
+    # the moat table (spec 2026-11-19 8.5 to 8.7): the engine's refusal, the override's, the
+    # report's, the secondary valuation's, and the write's own
+    NO_MOAT_CLASS,
+    MOAT_SET,
+    "the report needs the moat verdict recorded on snapshot <id>: call moat_set",
+    SET_THE_MOAT,
+    NEEDS_A_REASON,
+    NEEDS_EVIDENCE,
+    REFRESH_RUNNING,
 )
 # The forms the example cites at least once: the history, the grid, the guidance.
 EXAMPLE_FORMS = ("multiple", "sensitivity", "guidance")
@@ -733,8 +760,9 @@ def test_the_overrides_table_names_the_twenty_five_inputs() -> None:
     engine's order, the revenue steps' after the consensus steps', the minority interest's after
     cash, the committed shares' after the count's and the one-time item's before the cycle gap's;
     the passage no longer says that a raised count barely moves a Mature Growth value; the tool
-    list counts the twenty-five, names the two revenue steps, and says that the write's refusal of
-    a lasting nil stores nothing."""
+    list counts the twenty-four an override takes, the moat class being `moat_set`'s since spec
+    2026-11-19 8.7, names the two revenue steps, and says that the write's refusal of a lasting nil
+    stores nothing."""
     skill = _read(SKILL)
     table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
     tags: list[str] = []
@@ -833,8 +861,13 @@ def test_the_overrides_table_names_the_twenty_five_inputs() -> None:
         "moat, debt, cash, minority interest, diluted shares, committed shares, outside the business"
     )
     entry = _tool_entry("override_add")
+    assert "twenty-five" not in entry
     for words in (
-        "twenty-five",
+        (
+            "the twenty-four in `SKILL.md`'s table that take an override, every row but"
+            " `moat.class`, which `moat_set` sets"
+        ),
+        f'"{MOAT_SET}"',
         "`shares.diluted`",
         "`shares.committed`",
         "`earnings.ntm_nri`",
@@ -849,6 +882,123 @@ def test_the_overrides_table_names_the_twenty_five_inputs() -> None:
         ),
     ):
         assert words in entry, words
+
+
+def test_the_moat_is_a_standing_step_before_the_overrides() -> None:
+    """Spec 2026-11-19 8.9 (the decision document's 6.4, item 12): step 10 opens with the moat, a
+    standing step of every review, a valuation review too (in words other than "on every report",
+    the old rule's phrase, ``STALE``): the five sources a guide, not a rule, and the agent's own
+    judgment; then the verdict with `moat_set`, its reason and its evidence, also where the agent
+    agrees with the class in force, and before any override, since the write values the company
+    again and gives it a new snapshot. Before it judges, the agent reads the class in force and
+    whose it is in `company`'s `moatClass`, and where its verdict differs from the user's class it
+    records its own all the same and says so in the report (the controller's ruling on Task 9's
+    review). "no moat class" is there with its remedy. The overrides table's `moat.class` row says
+    the class is set through `moat_set`, quotes the override's refusal, and lets a sensitivity
+    reading vary it (spec 8.7), and the section says twenty-four of the twenty-five take an
+    override; `tools.md` describes the tool and `company`'s `moatClass`."""
+    step = _flat(_steps(_frontmatter(_read(SKILL))[1])[10])
+    for words in (
+        "First the moat, a standing step of every review, a valuation review too.",
+        (
+            "Before you judge, read the class in force in `company`'s `moatClass`: whose it is,"
+            " Fairband's own file (`file`), the user's (`owner`) or an agent's (`agent`), and its"
+            " reason."
+        ),
+        "brand name, switching costs, network effect, cost advantages and efficient scale",
+        "a guide, not a rule",
+        "your own judgment",
+        "`moat_set(symbol, moat_class, reason, evidence)`",
+        "also when you agree with the class in force",
+        (
+            "Where your class differs from the user's, record yours all the same, since the newest"
+            " class is in force, and say in the report that it differs and why."
+        ),
+        "before any override",
+        "a new snapshot",
+        f'refused "{NO_MOAT_CLASS}": your verdict gives it a class',
+        f'"{REFRESH_RUNNING}"',
+        f'"{MOAT_SET}"',
+    ):
+        assert words in step, words
+    # the step opens with the moat: the verdict before the decisions and before any override
+    assert step.index("`moat_set(") < step.index("Decide each judgment from the thesis")
+    assert step.index("`moat_set(") < step.index("`override_add`")
+    skill = _read(SKILL)
+    table = _table(skill, ("Tag", "Routes that read it", "The input", "Takes, the ends included"))
+    row = _flat(" ".join(table["`moat.class`"]))
+    for words in ("set through `moat_set` (step 10)", f'"{MOAT_SET}"', "A sensitivity reading"):
+        assert words in row, words
+    # a word input's example is no moat word: no override sets the class
+    new = _flat(skill.split("## Overrides", 1)[1].split("- `reason`", 1)[0])
+    assert (
+        "Twenty-four of the table's twenty-five inputs take an override; the moat class is set"
+        " through `moat_set` alone (step 10)."
+    ) in new
+    assert '`"Wide"`' not in new and '`"None"`' not in new
+    assert 'A word input takes its word, as a string: `"Mature Stable"`, `"excludes"`.' in new
+    entry = _tool_entry("moat_set")
+    for words in (
+        "also when you agree with the class in force",
+        "the company is valued again at once",
+        f'"{NEEDS_A_REASON}" (400)',
+        f'"{NEEDS_EVIDENCE}" (400)',
+        f'"{REFRESH_RUNNING}" (409)',
+        "A class that is not one of the three never reaches the web server",
+    ):
+        assert words in entry, words
+    assert "`moatClass`" in _tool_entry("company")
+
+
+def test_the_report_s_structure_names_the_moat_verdict() -> None:
+    """Spec 2026-11-19 8.7 (Task 9): the report's structural checks are six, the moat verdict on
+    the snapshot after the headings and before the secondary valuation's; the template names them
+    in the server's order, and step 12's list of structural refusals holds the verdict's sentence
+    with its remedy."""
+    assert STRUCTURE[3:] == (
+        "the headings in the spec's order",
+        "the moat verdict on the snapshot",
+        "a secondary valuation on a refused snapshot",
+    )
+    template = _flat(_read(TEMPLATE))
+    assert (
+        "The server checks the structure first: the section count, the stance, the judgments, the"
+        " headings, the moat verdict on the snapshot, and a secondary valuation on a refused"
+        " snapshot. Every report needs the moat verdict: your class recorded with `moat_set` on the"
+        " snapshot it cites, also where you agree with the class in force (`SKILL.md`, step 10)."
+    ) in template
+    twelve = _flat(_steps(_frontmatter(_read(SKILL))[1])[12])
+    assert (
+        "A structural refusal (the section count, the stance, a judgment, a heading, no moat"
+        " verdict on the snapshot, or no secondary valuation on a refused snapshot) is one"
+        " sentence: fix it and submit again. The moat verdict's is \"the report needs the moat"
+        ' verdict recorded on snapshot <id>: call moat_set", where your verdict is missing or'
+        " rests on an older snapshot: record it with `moat_set` (step 10), read `company` again,"
+        " cite the new snapshot, and submit again."
+    ) in twelve
+
+
+def test_the_playbook_reads_the_moat_from_the_moat_table() -> None:
+    """Task 10's three carried points: the secondary valuation's levels take the moat table's class
+    and, with none, are refused "set the moat class first: moat_set" (spec 2026-11-19 8.6, 8.7); a
+    revalue that names companies values those alone (Task 5); and no playbook sentence calls the
+    moat GuruFocus's or names the Moat Score."""
+    skill = _flat(_read(SKILL))
+    assert "The levels take the moat class of the current review" not in skill
+    secondary = skill.split("## The secondary valuation", 1)[1].split("## The sensitivity", 1)[0]
+    assert (
+        "The levels take the company's class in the moat table, and on the drivers form so does"
+        f' the terminal return. A company with no class there is refused, "{SET_THE_MOAT}"'
+    ) in secondary
+    refusals = secondary.split("The refusals, each a sentence, nothing stored:", 1)[1]
+    assert refusals.index(SET_THE_MOAT) < refusals.index("the route values <symbol>")
+    assert (
+        "or `revalue`, which values the `symbols` given alone, or every company without them"
+    ) in _tool_entry("refresh_start")
+    for path in sorted(PLAYBOOK.rglob("*.md")):
+        text = _flat(_read(path)).lower()
+        for words in ("gurufocus", "moat score"):
+            assert words not in text, (path.name, words)
 
 
 def test_the_agent_reads_the_stock_pay_on_mature_growth() -> None:

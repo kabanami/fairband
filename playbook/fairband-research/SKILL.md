@@ -621,6 +621,28 @@ twice, and its threshold dropped without a word. If the report is not published,
 
 ### 10. The decisions and the overrides
 
+First the moat, a standing step of every review, a valuation review too. Judge the company's moat
+class, `None`, `Narrow` or `Wide`: how long the company can earn more than its cost of capital.
+Before you judge, read the class in force in `company`'s `moatClass`: whose it is, Fairband's own
+file (`file`), the user's (`owner`) or an agent's (`agent`), and its reason. The five sources of a
+moat are a guide, not a rule: brand name, switching costs, network effect, cost advantages and
+efficient scale. Weigh what else the business shows in steps 4 to 9, and decide by your own
+judgment.
+
+Record the verdict with `moat_set(symbol, moat_class, reason, evidence)`: your reason in your own
+words, and one evidence item or more, as on an override. Record it also when you agree with the
+class in force: the report needs your verdict on its snapshot, "the report needs the moat verdict
+recorded on snapshot <id>: call moat_set". Where your class differs from the user's, record yours
+all the same, since the newest class is in force, and say in the report that it differs and why.
+Record it before any override, sensitivity reading or secondary valuation: the write values the
+company again at once and gives it a new snapshot. Read `company` again, cite the new snapshot,
+and make again any derivation that cites the old one. A company with no class in the moat table,
+one that entered the universe after Fairband's file was cut, is refused "no moat class": your
+verdict gives it a class, and the company is valued. While a refresh runs the write is refused, "a
+refresh is running: set the class when it ends": wait until `refresh_status()` shows no refresh
+running, then call it again. No override sets the class: `override_add` with `moat.class` is
+refused, "moat.class is the moat table's: record the verdict with moat_set".
+
 Decide each judgment from the thesis (see "The judgments" below). Move an input for a claim of the
 call only when the thesis accepts it and step 5 judged it probable. Where a decision changes an
 input, write an override (a change to one input, with its reason and its evidence) with
@@ -744,7 +766,11 @@ writes". Then read the summary alone: it must stand on its own, since many reade
 Submit with `report_submit`. The server publishes a report whole or rejects it whole. Published, the
 answer is the report's id, symbol, time and work item; `report(symbol, id)` reads it whole, so read
 it only when you need to. A structural refusal (the section count, the stance, a judgment, a
-heading, or no secondary valuation on a refused snapshot) is one sentence: fix it and submit again.
+heading, no moat verdict on the snapshot, or no secondary valuation on a refused snapshot) is one
+sentence: fix it and submit again. The moat verdict's is "the report needs the moat verdict
+recorded on snapshot <id>: call moat_set", where your verdict is missing or rests on an older
+snapshot: record it with `moat_set` (step 10), read `company` again, cite the new snapshot, and
+submit again.
 A valued snapshot needs no secondary valuation: Appendix A says "No secondary valuation: Fairband's
 own valuation gives the company a value". A refused snapshot your review values needs none either:
 Appendix A says "No secondary valuation: the review gives the company a value". A snapshot refused
@@ -895,11 +921,12 @@ year" on `revenue.ntm`.
 ## Overrides
 
 `override_add(symbol, tag, new, reason, evidence, lifetime, period?)` changes one input. The engine,
-not you, computes the value it gives.
+not you, computes the value it gives. Twenty-four of the table's twenty-five inputs take an
+override; the moat class is set through `moat_set` alone (step 10).
 
 - `tag`: the input, from the table below.
 - `new`: the new value in the unit the engine reads. A rate is a fraction: `0.12` is 12%. A word
-  input takes its word, as a string: `"Wide"`, `"None"`.
+  input takes its word, as a string: `"Mature Stable"`, `"excludes"`.
 - `reason`: your own words, kept verbatim.
 - `evidence`: one item or more, each `{kind, ref, note}`. The kind is `filing`, `transcript`,
   `url`, `vendor`, `base-rate`, `finding` or `guidance`; the ref says where the evidence is. A
@@ -915,7 +942,7 @@ not you, computes the value it gives.
 | `path.hold` | High Growth, Young Growth | the held rate of years four to the end of high growth | −0.20 to 3.00 a year |
 | `path.step_2`, `path.step_3` | Mature Growth, High Growth, Young Growth, Decline | the consensus growth of year two or year three | −0.80 to 3.00 |
 | `revenue.step_2`, `revenue.step_3` | Mature Growth | the revenue growth of year two or year three that the charge pays for, in place of the analysts' revenue step, or of the earnings step where they give none: for a revenue step that rests on few analysts or outruns the business's record, from a guidance record or a filing. The earnings path does not move. Its old value is the analysts' step as found | −0.80 to 3.00; period-tied only |
-| `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class; it sets the margin of safety, the runway and the terminal return | `None`, `Narrow` or `Wide` |
+| `moat.class` | Mature Growth, Mature Stable, High Growth, Young Growth, Start-up | the moat class; it sets the margin of safety, the runway and the terminal return. It is set through `moat_set` (step 10), and its override is refused: "moat.class is the moat table's: record the verdict with moat_set". A sensitivity reading may vary it on an axis | `None`, `Narrow` or `Wide` |
 | `margin.target` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten | −0.50 to 0.60 |
 | `capital.sales_to_capital` | High Growth, Young Growth, Decline | the revenue a dollar of invested capital buys | 0.1 to 10 |
 | `return.runway` | Mature Growth, Mature Stable | the return on new capital the charge starts at: it holds while growth runs above the belief, then moves to the terminal return by the runway's end; on a Wide row it also sets the terminal return, at most the Wide cap and never below the hurdle rate | above 0 to 5.00 |
@@ -1220,8 +1247,10 @@ capped at g_T.
   `figure` set to `debt` or `cash`. The secondary valuation subtracts no minority interest, the
   sheet's or an applied `balance.minority`: where one matters, add it to the debt you pass, with
   the filing's note as that item.
-- The levels take the moat class of the current review, else the snapshot's. A value a share at or
-  below zero is kept as computed, with no levels.
+- The levels take the company's class in the moat table, and on the drivers form so does the
+  terminal return. A company with no class there is refused, "set the moat class first: moat_set":
+  record your verdict (step 10) first. A value a share at or below zero is kept as computed, with
+  no levels.
 - A company in another currency is valued in its reporting currency, at r and g_T restated into
   it: the terminal growth runs to the currency's g_T, which `policy()` does not show and the
   refusal names. Pass the path, the debt and the cash in the currency. The value a share, its
@@ -1231,7 +1260,8 @@ capped at g_T.
 The refusals, each a sentence, nothing stored: a blank reason; no evidence; both forms, "a
 secondary valuation takes drivers or parts, not both", or neither, "a secondary valuation needs
 drivers or parts"; "the path needs its own evidence item"; a debt or a cash with no evidence item
-of its own; "settings changed: run a revalue" and its two siblings; where the latest snapshot has a
+of its own; "settings changed: run a revalue" and its two siblings; a company with no class in
+the moat table, "set the moat class first: moat_set"; where the latest snapshot has a
 value, "the route values <symbol>: the secondary valuation is the fallback where it refuses";
 where the current review on that snapshot has one, "the review values <symbol>: the secondary
 valuation is the fallback where neither the route nor the review values the company"; a
@@ -1261,7 +1291,8 @@ Nothing is overridden, and the review does not move.
 - Each axis holds one to five values, in the unit the engine reads, like an override's `new`: "an
   axis holds one to five values".
 - A value is refused as an override of the input would be: a locked input, a tag that is not an
-  input, a route that does not read it, a value outside its range. The evidence rules do not apply.
+  input, a route that does not read it, a value outside its range. The evidence rules do not apply,
+  nor does the refusal of a `moat.class` override: an axis may vary the moat class.
 - The answer marks `current`, the pair in force as `[i, j]`, or `null` when no pair is.
 - A cell whose valuation refuses is `null`. A cite of it is `unresolved reference`.
 
@@ -1297,7 +1328,7 @@ is refused (400), naming the key. The debate lives in section 6, and the thesis 
 | Judgment | On | What it records |
 |---|---|---|
 | `phase` | every report | the life-cycle phase the classifier gave, and whether it fits |
-| `moat` | every report | the moat class: how long the company can earn more than its cost of capital |
+| `moat` | every report | the moat class: how long the company can earn more than its cost of capital; the verdict you recorded with `moat_set` (step 10) |
 | `belief` | every report | the growth rate the route holds: the belief on Mature Growth, the held rate on High Growth and Young Growth, the decline rate on Decline; on Mature Stable and Start-up, which hold none, the growth the evidence supports against the growth the price needs; and whether the higher case stood (step 10) |
 | `roic` | Mature Growth, Mature Stable | the return on invested capital and the runway return; when `heavy-capex` fires, read the newest year's marginal return (`intermediates/runway_return/one_year`) and the capital-spending guidance, decide the runway return and cite both figures; where the charge starts at the five-year marginal return, read the same return at a constant margin (`intermediates/runway_return/constant_margin`) and decide whether new capital earned the margin's gain; when `return-without-goodwill` fires, decide whether the growth ahead is built or bought; and whether the higher case stood (step 10) |
 | `target_margin` | High Growth, Young Growth, Start-up | the operating margin the company reaches in year ten; and whether the higher case stood (step 10) |

@@ -14,7 +14,7 @@ with Codex coming soon.
 ```mermaid
 flowchart LR
     you(["You"]) -- "read, ask, decide" --> pages["Fairband web interface"]
-    agent(["Your agent: Claude Code"]) -- "54 tools" --> mcp["MCP server"]
+    agent(["Your agent: Claude Code"]) -- "55 tools" --> mcp["MCP server"]
     pages --> server["Fairband server and valuation engine"]
     mcp --> server
     server -. "starts a research session" .-> agent
@@ -43,8 +43,8 @@ flowchart LR
 - **Pages.** A screen of all companies; a page for each company with its overview, financials,
   estimates, investor relations and research; and pages for groups, watchlists, the method, the
   settings and the agents' inbox.
-- **An MCP server.** 54 tools through which an agent reads the store, asks the vendors for more,
-  and writes notes, findings, changes to inputs and reports.
+- **An MCP server.** 55 tools through which an agent reads the store, asks the vendors for more,
+  and writes notes, findings, the moat class, changes to inputs and reports.
 
 ## The pages
 
@@ -123,7 +123,7 @@ opens Claude Code for you.
 ## The MCP tools
 
 The server is `fairband mcp`, a stdio server that the agent's host starts. It calls the Fairband
-server on 127.0.0.1 and holds no database and no key. Its 54 tools are of three kinds:
+server on 127.0.0.1 and holds no database and no key. Its 55 tools are of three kinds:
 
 - **26 read the store:** the screen, a company's valuation, its statements, quarters, estimates,
   prices, multiples and peers, the research on file, the policy and the method.
@@ -131,8 +131,8 @@ server on 127.0.0.1 and holds no database and no key. Its 54 tools are of three 
   FMP. The server fetches each with its own key and stores the answer, so a report can refer to
   it. A company's list of earnings calls and its filings of the past year may be answered from
   the copy a refresh stored.
-- **19 write:** the agent's identity, the work inbox, notes, findings, guidance records, changes
-  to inputs, a secondary valuation, reports, kill criteria and refreshes.
+- **20 write:** the agent's identity, the work inbox, notes, findings, guidance records, the moat
+  class, changes to inputs, a secondary valuation, reports, kill criteria and refreshes.
 
 An agent's first call is `identify`, with the model it runs as. Fairband records every write
 under that name. The full list is in

@@ -6,7 +6,9 @@ names. The filings access spec (2026-11-11, 6) adds ``quarters``, the stored qua
 ``financials`` among the reads, and the filing reads, ``filings``, ``filing_report`` and
 ``filing_search``, after the pass-throughs: each is one call to its route (``quarters`` to
 ``fairband.web.reports_api``'s, the filing reads to ``fairband.web.filings_api``'s) and answers
-the route's JSON.
+the route's JSON. The GuruFocus removal (spec 2026-11-19 8.6) adds ``moat_set`` among the writes,
+before ``override_add``: one ``PUT`` to the moat class's route (``fairband.web.moat_api``), the
+class sent as ``class``, so the agent records its verdict and the company is valued again.
 
 A tool answers the API's JSON, an object; ``watchlists``, whose route answers a list, answers it as
 ``{"watchlists": [...]}``. A refusal is ``{"refused": <the API's sentence>, "status":
@@ -55,6 +57,7 @@ from pydantic.alias_generators import to_camel
 from fairband import __version__
 from fairband.engine.overrides import Lifetime
 from fairband.mcp.client import TIMEOUT_S, FairbandClient, Refused, ServerDown
+from fairband.policy import Moat
 from fairband.refresh.run import Kind
 from fairband.store.inbox import Mode, State
 from fairband.store.research import CriterionState, Unit
@@ -115,6 +118,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "note_add",
     "finding_add",
     "guidance_add",
+    "moat_set",  # spec 2026-11-19 8.6
     "override_add",
     "override_drop",
     "secondary_valuation",
@@ -203,7 +207,8 @@ def build_server(client: FairbandClient) -> MCPServer:
 
     @server.tool(
         description="The company's latest snapshot in full: value, levels, inputs, intermediates,"
-        " phase and flags; its universe row; the reporting currency (`currency`), the ADR flag"
+        " phase and flags; its universe row; its row of the moat table, the class in force and"
+        " whose it is (`moatClass`); the reporting currency (`currency`), the ADR flag"
         " (`isAdr`), the whole number Fairband found between FMP's stored share count and the"
         " quote's (`adrRatio`, null where the counts agree) and the exchange rate and its date"
         " (`fxRate`, `fxDate`) its figures are read by; and the company brief, FMP's paragraph on"
@@ -551,6 +556,17 @@ def build_server(client: FairbandClient) -> MCPServer:
             "currency": currency,
         }
         return write(lambda: client.post(_company(symbol, "guidance"), body))
+
+    @server.tool(
+        description="Record your verdict on the company's moat class, Wide, Narrow or None, with"
+        " your reason and evidence, also when you agree with the class in force; the company is"
+        " valued again at once."
+    )
+    def moat_set(
+        symbol: str, moat_class: Moat, reason: str, evidence: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        body = {"class": moat_class, "reason": reason, "evidence": _camel(evidence)}
+        return write(lambda: client.put(_company(symbol, "moat"), body))
 
     @server.tool(
         description="Override one input with a reason and evidence [{kind, ref, note}]; answers"

@@ -53,7 +53,7 @@ Identity: the agent's first call is `identify`, with the model identifier it run
 `claude-opus-5-5` or `gpt-5`. Fairband records every write under that name, with the host's name
 and version from the MCP handshake. A write before `identify` is refused.
 
-The tools: 54, listed with their arguments in
+The tools: 55, listed with their arguments in
 `playbook/fairband-research/reference/tools.md`. Twenty-six read the store (the screen, a
 company's snapshot, its statements, its stored quarters, tables, consensus, closes, multiples
 history and peers, the research on file, the policy and the Methodology page). Nine are vendor
@@ -67,11 +67,12 @@ and its newest call's transcript where the store holds no copy of it with words.
 with its default window on the day of the refresh, and `transcript` of that call may answer
 from the refresh's copy within the reuse window, with `reused` true. FMP's error object in
 place of the list of calls is answered as it came, stored as an error and never reused, so the
-next call asks FMP again. Nineteen write: the identity, the work inbox, notes, findings,
-guidance records, overrides, the secondary valuation, the sensitivity reading, derivations,
-reports, kill criteria, news items and refreshes. The newest are `quarters`, `filings`,
-`filing_report` and `filing_search`; `secondary_valuation` now takes the standard discounted
-cash flow's `drivers` beside its `parts`.
+next call asks FMP again. Twenty write: the identity, the work inbox, notes, findings,
+guidance records, the moat class, overrides, the secondary valuation, the sensitivity reading,
+derivations, reports, kill criteria, news items and refreshes. The newest is `moat_set`, the
+agent's verdict on the company's moat class, which every review records; before it came
+`quarters`, `filings`, `filing_report` and `filing_search`, and `secondary_valuation` took the
+standard discounted cash flow's `drivers` beside its `parts`.
 
 The playbook: `playbook/fairband-research/` is a skill that takes the agent through a research
 report, step by step, starting with `identify`. For Claude Code and Claude Desktop, link it under

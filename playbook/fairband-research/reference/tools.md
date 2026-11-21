@@ -47,7 +47,14 @@ be left out.
 - `company(symbol)`: the latest snapshot in full: `snapshot.id`, `snapshot.refreshId` (the refresh
   that wrote the snapshot), the `result` (the value, the levels, the price, the inputs, the
   intermediates, the phase evidence, the flags, `valid_until`) and the company's row in the
-  universe. `review`: the current review on the latest snapshot, or on one a price refresh repriced,
+  universe. `moatClass`: the company's row of the moat table, `{class, source, fileVersion,
+  judgedOn, previous, reason, actor, at, fileClass}`: the class in force; whose it is, `file`
+  (Fairband's own file, of version `fileVersion`), `owner` (the user) or `agent` (with its
+  `actor`); the day it was judged; on a class the user or an agent set, the class before it and
+  the reason; and `fileClass`, the class Fairband's file holds for the company, `null` where it
+  holds none. `moatClass` is `null` for a company with no class, which the engine refuses "no
+  moat class"; `moat` is the class in force. `review`: the current review on the latest
+  snapshot, or on one a price refresh repriced,
   `null` without one; where it has a value, its `flags` are the review's own, each with its `code`,
   `word` and `sentence`, as the screen's row shows them, so you read what your inputs settled; on a
   refused review `flags` is `null`. The `result`'s flags stay the snapshot's. `priceNeeds`: where
@@ -328,13 +335,27 @@ and store nothing:
   `currency` as a finding's; it answers the record with the midpoint and, for a fiscal-year
   revenue, EPS or net income figure on the `gaap` basis, the step the server computed. An override
   cites it in its evidence as `guidance:<id>`; a report cites its figures.
+- `moat_set(symbol, moat_class, reason, evidence)`: record your verdict on the company's moat
+  class, `Wide`, `Narrow` or `None`, with your reason and one evidence item or more, each
+  `{kind, ref, note}` of an override's kinds, also when you agree with the class in force
+  (`SKILL.md`, step 10). The company's row of the moat table becomes yours, and the company is
+  valued again at once on the data the store holds, with no vendor call: a new snapshot, and a
+  new review on it where overrides apply. It answers `{moatClass, snapshot}`: the row as
+  `company` gives it, and the new snapshot's `{id, value, refusal}`. Read `company` again before
+  you cite the snapshot. Refused, nothing stored: "a moat verdict needs a reason" (400); "a moat
+  verdict needs evidence" (400); "no snapshot for <symbol>" (404); and "a refresh is running: set
+  the class when it ends" (409): wait until `refresh_status()` shows no refresh running, then call
+  again. A class that is not one of the three never reaches the web server: the tool's argument
+  names them, so the MCP tool answers a tool error and calls nothing.
 - `override_add(symbol, tag, new, reason, evidence, lifetime, period?)`: override one input of
-  the twenty-five in `SKILL.md`'s table, the diluted share count (`shares.diluted`), the
+  the twenty-four in `SKILL.md`'s table that take an override, every row but `moat.class`, which
+  `moat_set` sets: an override of it is refused, "moat.class is the moat table's: record the
+  verdict with moat_set". Among them are the diluted share count (`shares.diluted`), the
   committed shares (`shares.committed`), the value outside the business (`value.outside`), the
   one-time item in the NTM consensus (`earnings.ntm_nri`), the two revenue steps of the Mature
   Growth charge (`revenue.step_2`, `revenue.step_3`), the trailing stock pay (`earnings.sbc`),
-  the stock-pay basis (`earnings.sbc_basis`) and the minority interest (`balance.minority`)
-  among them; applied, it answers `{override, review, bridge, dropped}`, `dropped` the overrides
+  the stock-pay basis (`earnings.sbc_basis`) and the minority interest (`balance.minority`).
+  Applied, it answers `{override, review, bridge, dropped}`, `dropped` the overrides
   the system dropped with it because the row's route no longer reads them, each
   `{id, tag, reason}`, empty when none (a `phase` override, new or replacing another, can move the
   route); refused, the sentence and the `override`. A lasting `earnings.sbc` of 0 on a row whose
@@ -420,12 +441,13 @@ and store nothing:
 - `news_item_add(symbol, date, headline, source, text, kill_criterion_id?)`: record a dated news
   item, tied to a kill criterion when one is named.
 - `refresh_start(kind, symbols?)`: start a refresh: `full`, `price`, `scoped` with `symbols`, or
-  `revalue`. It answers `{"refreshId": <id>}`, the started refresh's id. A refresh already running
-  refuses it (409), with that refresh's id as `running`. A server with no FMP key refuses every
-  kind but `revalue`, "no fmp key: ..." (400). A stored setting outside its range refuses every
-  kind, "settings: ...; reset it on the Settings page" (400), and every read of the policy answers
-  the same sentence (409) until the user resets it. A server with no refresh worker answers "no
-  refresh worker" (503). Step 3 of `SKILL.md` says what to do on each.
+  `revalue`, which values the `symbols` given alone, or every company without them. It answers
+  `{"refreshId": <id>}`, the started refresh's id. A refresh already running refuses it (409), with
+  that refresh's id as `running`. A server with no FMP key refuses every kind but `revalue`, "no fmp
+  key: ..." (400). A stored setting outside its range refuses every kind, "settings: ...; reset it
+  on the Settings page" (400), and every read of the policy answers the same sentence (409) until
+  the user resets it. A server with no refresh worker answers "no refresh worker" (503). Step 3 of
+  `SKILL.md` says what to do on each.
 - `refresh_cancel()`: ask the running refresh to stop after the companies in flight.
 
 ## The records inside the arguments
