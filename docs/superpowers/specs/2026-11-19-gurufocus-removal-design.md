@@ -1191,3 +1191,12 @@ series built from several answers; the order of work inside a plan.
   replaces an agent's. RELX's stored reason, an agent's words of 2026-11-11, still names
   GuruFocus's score. "Use Fairband's class" on TTMI, NVO or RELX changes no class, since the
   file and the agent agree, but it ends the agent's ownership of the row.
+- **2026-11-22, the founder on two questions of the look.** "First question keep things as the
+  are": in the moat box the pressed class keeps its tint with no accent edge, and a refusal
+  keeps the caution colour, as on the Financials tab and in the Notes box (B-283). "second
+  question the should be about the last full run": after a write of the moat class the status
+  line, Details and the header's stamp stay about the last run of the whole screen. The refresh
+  route answers `shown` beside `last`: the newest refresh's record, passing over a finished
+  revalue that names its companies, which such a write records; the page reads `shown`. A
+  revalue of named companies that did not end done keeps its line, and so does a scoped refresh
+  (B-280).
