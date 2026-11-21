@@ -11,6 +11,13 @@ ratio (section 3); the daily trailing P/E series (section 4); Altman's Z″ (sec
 Score (section 6), replaced by Fairband's own table of classes. Nothing is built. The work is filed
 in the backlog as B-254 to B-261.
 
+**Status, 2026-11-21:** built, as three plans of one design
+(`docs/superpowers/specs/2026-11-19-gurufocus-removal-design.md`; its decision log holds what
+each plan built, its acceptance and its readout). Plan 1 (sections 3 to 5; method 1.6) and plan 2
+(section 2; method 1.7, policy v17) are live. Plan 3 (section 6 and the removal itself; method
+1.8, policy v18) is built: Fairband reads no GuruFocus data and makes no GuruFocus call. Where a
+section below says "None of it is started", it describes 2026-11-19.
+
 The counts below come from the live data, refresh 68: 1,558 companies, 1,363 of them valued. They
 were read on 2026-11-19 without a write.
 

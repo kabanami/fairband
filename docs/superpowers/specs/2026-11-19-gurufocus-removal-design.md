@@ -1096,4 +1096,54 @@ series built from several answers; the order of work inside a plan.
   the clean P/E also move on rows of other routes that had a found gap; their values do not.
   B-258 and B-259 are closed; the limits met are B-268 to B-272. No tool changed, so no MCP
   process restarts, but a research session started before the merge holds the old playbook.
+- **2026-11-21, plan 3 built.** Thirteen tasks, each built by a subagent and reviewed, four of
+  them with one fix round, then a review of the whole branch and one wave of fixes (commits
+  13ceac0 to 1da3e94). The founder's word for it: "when this completes, please feel free to
+  merge and push to main, then kick off plan 3 implementation".
+- **2026-11-21, the reader refuses a moat file with no entry** (8.1). The review of the reader
+  found that a file with no `[[classes]]` entry, or with its rows under a misspelled header,
+  loaded as an empty table, and the load of 8.4 would then delete every file row, so every
+  company without an owner's or an agent's row would be refused "no moat class" at that
+  refresh. 8.1's "one entry for every company of the universe" already means a valid file is
+  never empty, so the reader refuses one: "moat table: the file has no [[classes]] entry".
+- **2026-11-21, the build's own rulings in plan 3**, for the founder to overturn. An override
+  of `moat.class` is refused with the moat table's sentence before the route's own check, on
+  an unclassified row too. An agent's evidence of kind guidance on a moat write is checked as
+  an override's is. The playbook's standing step tells the agent to read the class in force
+  and whose it is, and to say in the report where its verdict differs from the owner's class;
+  the agent still records its own, since the newest judgment is in force, whoever made it
+  (decision 6.4). A company refused "no moat class" records its verdict at the start of step
+  8 and reads the valuation on the new snapshot, and step 10 sends the agent back to the
+  value, the levels and the flags where its class changed the one in force. After a moat
+  write on the company page the drawer on that company is read again. In the box, a long
+  reason scrolls in an area of its own of about six lines, so the classes, the field and the
+  buttons are in view on open. The run bar names the stage `moat` "reading the moat table".
+  The Methodology page's list of refusals gains "No moat class". `tests/policy/test_moat.py`
+  joins `CLAUDE.md`'s short check, since it reads the decision document. Roku's and 3M's
+  examples stand: Roku, outside the universe, was valued as Narrow and the rule drafts Narrow
+  for a Young Growth company; between the two revalues nothing 3M's example prints moves.
+  The moat file's note on CRM keeps the decision document's words, which name GuruFocus.
+- **2026-11-21, the first moat file** (8.1, 8.2, section 10). The rule, run by the script on
+  the reference database under the code of that day, gives the class of the run of
+  2026-11-19 on all 1,558 companies: 170 Wide, 1,303 Narrow and 85 None, and 169, 1,138 and
+  56 on the 1,363 valued at refresh 68; with the log's 74 corrections 162, 1,320 and 76, and
+  161, 1,155 and 47. The changes of plans 1 and 2 to assembly moved no class. The cut on the
+  live database, read without a write, drafted no company: its universe is still the 1,558 of
+  the full refresh of 2026-11-18. The packaged file is `fairband-moat-v1`.
+- **2026-11-21, plan 3 on a copy of the reference database (section 10).** Two revalues: one
+  with the code before plan 3 (method 1.7), one with the branch's (migration 010, the stage
+  `moat`, method 1.8, policy v18). No snapshot is refused "no moat class". The table holds
+  1,558 rows: 1,555 the file's, and an agent's row each for TTMI (None), NVO (Narrow) and RELX
+  (Wide), equal to their old overrides field by field, those overrides dropped "moved to the
+  moat table"; CRM is the file's Narrow. The `moat_class` inputs of the 1,363 companies valued
+  at refresh 68 read 161 Wide, 1,155 Narrow and 47 None. The script's yearly read lists
+  nothing. Between the two revalues: 285 of the 1,488 companies that carry a class under both
+  methods change class (108 None to Narrow, 67 Narrow to Wide, 57 Narrow to None, 52 Wide to
+  Narrow, 1 Wide to None); of the 1,344 valued rows 165 values move, 108 up and 57 down, 54 up
+  and 12 down by 20% or more; 233 buy levels move, the valued rows whose class changed; no row
+  crosses between valued and refused. One review moves, CRM's (213.35 to 175.15); TTMI's,
+  NVO's, RELX's and the other 24 keep their values. All 33 stored reports render with the
+  branch's code. The moat control was driven in a browser in both themes on a scratch copy:
+  every word reads as section 8.8 and the look as the approved sheets; a set takes about 0.2
+  seconds there.
 
