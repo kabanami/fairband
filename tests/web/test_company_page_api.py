@@ -53,6 +53,7 @@ from fairband.refresh.inputs_statements import YEAR_END_DRIFT
 from fairband.refresh.passthrough import Passthrough
 from fairband.store.db import connect
 from fairband.store.ledger import Writer
+from fairband.store.moat import set_moat
 from fairband.store.observations import insert_observations
 from fairband.store.overrides import insert_override
 from fairband.store.reviews import insert_review
@@ -713,13 +714,14 @@ def test_the_reads_find_what_the_fetch_stores(
 def test_the_detail_carries_the_moat_in_force_and_the_note_count(
     client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
-    """The design's 7.2: the counted review's moat where it has a value, else the snapshot's where
-    it has one, else none; and 11.1: the count of the company's notes."""
+    """The design's 7.2, as spec 2026-11-19 8.6 has it: the class of the company's row of the moat
+    table, a refused row's too, whatever a counted review holds; and 11.1: the count of the
+    company's notes."""
     aapl = _get(client, "/api/companies/AAPL")
     assert (aapl["moat"], aapl["noteCount"]) == ("Wide", 0)
-    # refused for its target margin, AAL keeps a moat class among its intermediates, and no moat
-    assert results["AAL"].intermediates["moat"] == "None"
-    assert _get(client, "/api/companies/AAL")["moat"] is None
+    # refused for its target margin, AAL has its row's class all the same
+    assert results["AAL"].value is None
+    assert _get(client, "/api/companies/AAL")["moat"] == "None"
     with closing(connect(db_path)) as conn:
         snapshot = latest_snapshot(conn, "AAPL")
         assert snapshot is not None
@@ -748,27 +750,25 @@ def test_the_detail_carries_the_moat_in_force_and_the_note_count(
         )
         assert reviewed.result.value is not None
         assert reviewed.result.intermediates["moat"] == "Narrow"
-        # a counted review with no value: the snapshot's moat stands
-        no_value = replace(reviewed.result, value=None, levels=None, refusal="refused")
-        insert_review(
-            conn, replace(reviewed, result=no_value), "AAPL", snapshot.id, None, clock=lambda: NOW
-        )
-        detail = _get(client, "/api/companies/AAPL")
-        assert (detail["review"]["refusal"], detail["moat"]) == ("refused", "Wide")
         insert_review(conn, reviewed, "AAPL", snapshot.id, None, clock=lambda: NOW)
+        # a counted review's moat is not the row's: the row's stands
+        detail = _get(client, "/api/companies/AAPL")
+        assert (detail["review"]["value"], detail["moat"]) == (reviewed.result.value, "Wide")
+        evidence = [{"kind": "filing", "ref": "10-K 2025", "note": None}]
+        set_moat(conn, "AAPL", "Narrow", AGENT, "pricing power is fading", evidence, NOW)
     for text in ("margins look peaked", "the services segment carries the company"):
         r = client.post("/api/companies/AAPL/notes", json={"text": text}, headers=HEADER)
         assert r.status_code == 201, r.text
     aapl = _get(client, "/api/companies/AAPL")
-    assert aapl["review"]["value"] == reviewed.result.value  # it counts on the latest snapshot
     assert (aapl["moat"], aapl["noteCount"]) == ("Narrow", 2)
 
 
-def test_a_refused_row_with_a_counted_valued_review_has_the_review_s_moat(
+def test_a_refused_row_with_a_counted_valued_review_has_its_row_s_moat(
     client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
-    """AAL's snapshot is refused for its target margin and has no moat; an applied margin.target
-    override gives a counted review that values it, and the detail's moat is that review's."""
+    """AAL's snapshot is refused for its target margin; an applied margin.target override gives a
+    counted review that values it on the class None, and the detail's moat is the row's, Narrow
+    once an agent sets it, not the review's."""
     with closing(connect(db_path)) as conn:
         snapshot = latest_snapshot(conn, "AAL")
         assert snapshot is not None and snapshot.value is None
@@ -796,8 +796,10 @@ def test_a_refused_row_with_a_counted_valued_review_has_the_review_s_moat(
             inputs, universe_deciles(), policy, TODAY, [target], results["AAL"]
         )
         insert_review(conn, reviewed, "AAL", snapshot.id, None, clock=lambda: NOW)
-    moat = reviewed.result.intermediates["moat"]
-    assert reviewed.result.value is not None and isinstance(moat, str)
+        evidence = [{"kind": "filing", "ref": "10-K 2025", "note": None}]
+        set_moat(conn, "AAL", "Narrow", AGENT, "a regional network", evidence, NOW)
+    assert reviewed.result.value is not None
+    assert reviewed.result.intermediates["moat"] == "None"
     detail = _get(client, "/api/companies/AAL")
     assert detail["review"]["value"] == reviewed.result.value
-    assert detail["moat"] == moat
+    assert detail["moat"] == "Narrow"

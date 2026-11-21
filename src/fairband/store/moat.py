@@ -51,7 +51,7 @@ class MoatRow:
     judged_on: date
     previous: Moat | None
     reason: str | None
-    evidence: tuple[dict[str, str], ...] | None
+    evidence: tuple[dict[str, str | None], ...] | None
     principal: Principal
     actor: str | None
     client: str | None
@@ -80,7 +80,7 @@ def set_moat(
     moat: Moat,
     writer: Writer,
     reason: str | None,
-    evidence: Sequence[Mapping[str, str]] | None,
+    evidence: Sequence[Mapping[str, str | None]] | None,
     at: datetime,
 ) -> MoatRow:
     """Write the owner's or an agent's class in place of the company's row, judged on ``at``'s UTC

@@ -7,7 +7,11 @@ AAPL is valued on the Mature Growth route; AAL, a Young Growth company with no m
 refused for its target margin; HGCO, the High Growth company, is valued on the revenue growth
 route. ``secondaries`` stores a secondary valuation on each one's snapshot: on AAL's refused one
 the fallback a report needs there (spec 13.3), on AAPL's and HGCO's valued ones a record made before
-plan 3, which stays on file and fills nothing; a test module that submits reports asks for it."""
+plan 3, which stays on file and fills nothing; a test module that submits reports asks for it.
+
+``moat_file`` is the moat table the database loads and the app reads, in place of the packaged
+file (spec 2026-11-19 8.4, 8.6): each company on the class it is valued on (``MOAT_CLASSES``), AAPL
+Wide and the others None. A test module may give its own; the database and the app then share it."""
 
 from collections.abc import Callable, Iterator
 from contextlib import closing
@@ -23,11 +27,13 @@ from fairband.engine import METHOD_VERSION
 from fairband.engine.route import value_company
 from fairband.engine.secondary import Part, secondary_value
 from fairband.engine.types import ValuationResult
-from fairband.policy import Policy, load_policy
+from fairband.policy import Moat, Policy, load_policy
+from fairband.policy.moat import MoatTable
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import insert_companies
 from fairband.store.db import connect, migrate
 from fairband.store.ledger import Writer
+from fairband.store.moat import load_moat_file
 from fairband.store.refreshes import create_refresh, finish_refresh, set_stage
 from fairband.store.secondary import insert_secondary
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
@@ -38,6 +44,7 @@ from support.engine_companies import (
     universe_deciles,
     young_growth_inputs,
 )
+from support.moat import moat_table
 from support.web import (
     CALIBRATION,
     CREATED,
@@ -50,10 +57,19 @@ from support.web import (
     _settings,
 )
 
+# The moat table's class of each company, the one it is valued on (``engine_companies.MOAT_FILE``).
+MOAT_CLASSES: dict[str, Moat] = {"AAPL": "Wide", "AAL": "None", "HGCO": "None"}
+
 
 @pytest.fixture
 def policy() -> Policy:
     return load_policy()
+
+
+@pytest.fixture
+def moat_file() -> MoatTable:
+    """The moat table the database loads and the app reads (module docstring)."""
+    return moat_table(MOAT_CLASSES)
 
 
 @pytest.fixture
@@ -69,10 +85,13 @@ def results(policy: Policy) -> dict[str, ValuationResult]:
 
 
 @pytest.fixture
-def db_path(tmp_path: Path, policy: Policy, results: dict[str, ValuationResult]) -> Path:
+def db_path(
+    tmp_path: Path, policy: Policy, results: dict[str, ValuationResult], moat_file: MoatTable
+) -> Path:
     path = tmp_path / "data" / "fairband.db"
     with closing(connect(path)) as conn:
         migrate(conn)
+        load_moat_file(conn, moat_file, CREATED)
         refresh_id = create_refresh(
             conn, "full", None, policy.version, METHOD_VERSION, STARTED, EMPTY_SETTINGS_HASH
         )
@@ -131,14 +150,18 @@ def secondaries(db_path: Path, policy: Policy) -> dict[str, int]:
 
 @pytest.fixture
 def client_with_clock(
-    tmp_path: Path, db_path: Path, policy: Policy
+    tmp_path: Path, db_path: Path, policy: Policy, moat_file: MoatTable
 ) -> Iterator[Callable[[datetime], TestClient]]:
-    """Makes a client of an app whose clock reads ``now``."""
+    """Makes a client of an app whose clock reads ``now``, reading ``moat_file``."""
     clients: list[TestClient] = []
 
     def make(now: datetime) -> TestClient:
         app = create_app(
-            _settings(tmp_path, db_path), policy, lambda: connect(db_path), clock=lambda: now
+            _settings(tmp_path, db_path),
+            policy,
+            lambda: connect(db_path),
+            clock=lambda: now,
+            moat=moat_file,
         )
         clients.append(TestClient(app, base_url=HOST))
         return clients[-1]

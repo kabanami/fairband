@@ -13,6 +13,7 @@ from support.web_app import (  # noqa: F401
     client,
     client_with_clock,
     db_path,
+    moat_file,
     policy,
     results,
     secondaries,

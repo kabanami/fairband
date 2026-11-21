@@ -77,7 +77,9 @@ blank reason; no evidence; both forms, "a secondary valuation takes drivers or p
 or neither, "a secondary valuation needs drivers or parts"; evidence with no item for the drivers
 or the path itself, every item naming a ``figure``, "the path needs its own evidence item"; a debt
 or a cash passed without its own evidence item, one whose ``figure`` names it. Then, on the
-company's latest snapshot: ``require_current``'s 409s; a snapshot with a value, 400 "the route
+company's latest snapshot: ``require_current``'s 409s; a company with no row in the moat table,
+400 "set the moat class first: moat_set", whatever its snapshot's refusal, since the levels need
+the class and an agent can set it (spec 2026-11-19 8.7); a snapshot with a value, 400 "the route
 values <symbol>: the secondary valuation is the fallback where it refuses", the secondary
 valuation being the fallback where the route refuses or no phase fits (spec 11 as amended for plan
 3, the founder's ruling of 2026-11-08); a current review that rests on the snapshot or one it
@@ -96,22 +98,23 @@ mature routes write; none on the other routes, so r). The debt and the cash are 
 passed, else an applied ``balance.debt`` or ``balance.cash`` override's (both sourced ``agent``),
 else the newest balance sheet's as assembly reads them (``statements``), else nil with the source
 ``none`` when no line is on file; no minority interest is subtracted, an applied
-``balance.minority`` included (spec 2026-11-13 3). The levels take the current review's moat, else
-the snapshot's, else None; the designation the snapshot's price. A company in another currency (spec
-2026-11-10 7.6) is valued in its reporting currency on the policy restated by its snapshot's
-inflation differential (``policy.in_currency``): r, the terminal growth's bound g_T and the Wide
-moat's terminal return cap at r plus the spread are the currency's; the trailing revenue, the
-agent's path, debt and cash, an override's and the balance sheet's are in the currency; and the
-snapshot's USD price comes into it at the snapshot's rate (``types.money_of``). On the way out the
-totals stay in the currency; the value a share and the grid's cells are ÷ the rate, US dollars a
-share, the levels the policy's on that value and the designation the USD price against it, as a
-snapshot's (``_in_usd``); the record stores the rate. A USD row's rate is 1 and its differential 0,
-so its valuation is as before. A rule ``secondary_value`` refuses is a 400 with its sentence. The
-answer's drivers, projection and parts carry camelCase keys, and its grid ``rowsAre``, ``growths``
-or ``shifts`` (``GRID_ROWS``). Anyone may make one, a tool's output rather than an override; the
-write is a ``secondary`` ledger row resting on the snapshot, its summary "<value> a share from
-drivers over three years: <reason>" or "... from 2 parts: ...". ``GET`` on the same path lists the
-company's, newest first.
+``balance.minority`` included (spec 2026-11-13 3). The levels take the class of the company's row
+of the moat table, read at the call, so a company refused for its statements, whose snapshot holds
+no class, takes its row's (spec 2026-11-19 8.6); the designation the snapshot's price. A company
+in another currency (spec 2026-11-10 7.6) is valued in its reporting currency on the policy
+restated by its snapshot's inflation differential (``policy.in_currency``): r, the terminal
+growth's bound g_T and the Wide moat's terminal return cap at r plus the spread are the
+currency's; the trailing revenue, the agent's path, debt and cash, an override's and the balance
+sheet's are in the currency; and the snapshot's USD price comes into it at the snapshot's rate
+(``types.money_of``). On the way out the totals stay in the currency; the value a share and the
+grid's cells are ÷ the rate, US dollars a share, the levels the policy's on that value and the
+designation the USD price against it, as a snapshot's (``_in_usd``); the record stores the rate. A
+USD row's rate is 1 and its differential 0, so its valuation is as before. A rule
+``secondary_value`` refuses is a 400 with its sentence. The answer's drivers, projection and parts
+carry camelCase keys, and its grid ``rowsAre``, ``growths`` or ``shifts`` (``GRID_ROWS``). Anyone
+may make one, a tool's output rather than an override; the write is a ``secondary`` ledger row
+resting on the snapshot, its summary "<value> a share from drivers over three years: <reason>" or
+"... from 2 parts: ...". ``GET`` on the same path lists the company's, newest first.
 
 ``POST /api/companies/{symbol}/derivations`` takes ``{derivations: [{operation, a, b, years?}]}``
 and answers 201 with ``{derivations: [{id, value, unit}]}``, each stored with a ``derivation``
@@ -170,7 +173,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import Any, Literal, cast, get_args
+from typing import Any, Literal, cast
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -228,6 +231,7 @@ from fairband.store.currency import MONEY_UNITS
 from fairband.store.db import transaction
 from fairband.store.guidance import anchor_year, guidance_row
 from fairband.store.ledger import Writer, record
+from fairband.store.moat import moat_row
 from fairband.store.overrides import (
     OverrideRow,
     applied_overrides,
@@ -258,6 +262,7 @@ from fairband.web.agents_api import WriterOf, gist, record_json
 from fairband.web.settings_api import effective
 
 AGENTS_WRITE = "an override is an agent's write"
+SET_THE_MOAT = "set the moat class first: moat_set"
 EvidenceKind = Literal["filing", "transcript", "url", "vendor", "base-rate", "finding", "guidance"]
 GUIDANCE_REF = "a guidance item cites its record as guidance:<id>"
 NIL_ON_FILE = (
@@ -284,7 +289,6 @@ _SCALE = 1.5
 _MOVED = 1e-9
 _BOUND = 4.0
 _EPS = 2.0**-52
-_MOATS: tuple[str, ...] = get_args(Moat)
 type _Figure = tuple[float, str | None]  # a resolved ref's number and unit
 # The overrides the system dropped at a recompute, each with its reason (``drop_off_route``).
 type _Dropped = Sequence[tuple[OverrideRow, str]]
@@ -595,6 +599,9 @@ def add_review_routes(
             snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
+            moat = _moat(conn, symbol)
+            if moat is None:
+                raise HTTPException(400, SET_THE_MOAT)
             if snapshot.value is not None:
                 raise HTTPException(
                     400,
@@ -618,7 +625,6 @@ def add_review_routes(
             shares = diluted_shares(snapshot.result)
             if shares is None:
                 raise HTTPException(400, "no diluted share count")
-            moat = _moat(conn, snapshot)
             # valued in the reporting currency, on the policy's rates restated into it
             rate, _ = money_of(snapshot.result)
             local = _in_currency(snapshot.result, current)
@@ -1049,14 +1055,11 @@ def _balance(
     return figures[0], figures[1]
 
 
-def _moat(conn: sqlite3.Connection, snapshot: SnapshotRow) -> Moat:
-    """The moat class the levels take: the current review's, else the snapshot's, else None."""
-    review = latest_review(conn, snapshot.symbol)
-    for result in ([] if review is None else [review.result]) + [snapshot.result]:
-        found = current_reading(result, "moat.class")
-        if found in _MOATS:
-            return cast(Moat, found)
-    return "None"
+def _moat(conn: sqlite3.Connection, symbol: str) -> Moat | None:
+    """The moat class the levels take: the class of the company's row of the moat table, ``None``
+    without a row."""
+    row = moat_row(conn, symbol)
+    return None if row is None else row.moat
 
 
 def _dollars(x: float) -> str:

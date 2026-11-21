@@ -12,7 +12,11 @@ The secondary valuation is the fallback where neither the route nor the review v
 company, and the route refuses one where either does (plan 3): AAL, refused for its target margin,
 takes one as it stands, and none once a margin override values it (``_aal_review``); a test that
 makes one on AAPL asks for ``refused_aapl``, AAPL revalued and refused (``_refuse``), and spec
-20.4's company is refused the same way."""
+20.4's company is refused the same way.
+
+Every company has a row of the moat table (``moat_file``), the class it is valued on: AAL and HGCO
+None, the others Wide. The levels and the terminal return read the row (spec 2026-11-19 8.6);
+``test_moat_api`` refuses a company with none."""
 
 import sqlite3
 from contextlib import closing
@@ -33,6 +37,7 @@ from support.engine_companies import (
     universe_deciles,
     young_growth_inputs,
 )
+from support.moat import moat_table
 from support.web import CREATED, HEADER, NOW, TODAY, _company
 
 from fairband.engine.classifier import Deciles
@@ -44,7 +49,8 @@ from fairband.engine.roic import terminal_roic
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.secondary import SECONDARY_METHOD, Drivers, secondary_value
 from fairband.engine.types import ValuationResult
-from fairband.policy import Policy, in_currency
+from fairband.policy import Moat, Policy, in_currency
+from fairband.policy.moat import MoatTable
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
 from fairband.store.companies import insert_companies
@@ -52,6 +58,7 @@ from fairband.store.db import connect
 from fairband.store.facts import FactRow, insert_facts
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
+from fairband.store.moat import set_moat
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh, save_deciles
 from fairband.store.research import add_finding, add_kill_criterion
@@ -195,6 +202,25 @@ def _store_more_companies(conn: sqlite3.Connection, policy: Policy) -> None:
     assert results["NOSH"].refusal == "no diluted share count"
     for result in results.values():
         insert_snapshot(conn, result, refresh.id, clock=lambda: CREATED)
+
+
+# Each company's row of the moat table, the class it is valued on.
+MOATS: dict[str, Moat] = {
+    "AAPL": "Wide",
+    "AAL": "None",
+    "HGCO": "None",
+    "FRGN": "Wide",
+    "BSIS": "Wide",
+    "ADRX": "Wide",
+    "NOSH": "Wide",
+    "FXCO": "Wide",
+    "DRVR": "Wide",
+}
+
+
+@pytest.fixture
+def moat_file() -> MoatTable:
+    return moat_table(MOATS)
 
 
 @pytest.fixture(autouse=True)
@@ -582,61 +608,28 @@ def test_the_drivers_form_over_the_api(client: TestClient, db_path: Path, policy
     assert entry["summary"] == f"$39.89 a share from drivers over three years: {reason}"
 
 
-def test_the_terminal_return_follows_the_reviewed_moat(
-    client: TestClient, db_path: Path, policy: Policy, refused_aapl: int
+@pytest.mark.usefixtures("refused_aapl")
+def test_the_terminal_return_follows_the_row_s_moat(
+    client: TestClient, db_path: Path, policy: Policy
 ) -> None:
-    """AAPL's aggregate ROIC, near 22%, takes the Wide moat's cap; under a Narrow moat as reviewed
-    the terminal return is r. Its trailing revenue is fiscal 2025's: no quarters are on file. The
-    review rests on the refused snapshot and refuses as the route does: one that valued it would
-    refuse the fallback (method 15.4)."""
+    """AAPL's aggregate ROIC, near 22%, takes the Wide moat's cap on its row's Wide; once an
+    agent's row holds Narrow the terminal return is r, though the refused snapshot still holds
+    Wide (spec 2026-11-19 8.6). Its trailing revenue is fiscal 2025's: no quarters are on file."""
     wide = _secondary(client, ON_DRIVERS)
     assert wide["projection"]["terminalReturn"] == policy.wide_terminal_roic_cap
     assert wide["projection"]["trailingRevenue"] == 22e9
-    _review_narrow(db_path, policy, refused_aapl)
+    _narrow(db_path, "AAPL")
     body = _secondary(client, ON_DRIVERS)
     assert body["projection"]["terminalReturn"] == policy.required_return
     assert body["buyLevel"] == levels_for(body["valuePerShare"], "Narrow", policy).buy
 
 
-def _review_narrow(db_path: Path, policy: Policy, snapshot_id: int) -> None:
-    """An applied override of AAPL's moat to Narrow on ``snapshot_id`` and the review under it,
-    which refuses as the refused snapshot does, its inputs holding the reviewed moat."""
+def _narrow(db_path: Path, symbol: str) -> None:
+    """An agent's row of Narrow for ``symbol`` in the moat table, written in the store alone: the
+    company is not valued again, as the write's route would value it."""
     writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
-    reason = "the patents lapse"
     with closing(connect(db_path)) as conn:
-        override_id = insert_override(
-            conn,
-            "AAPL",
-            "moat.class",
-            "Wide",
-            "Narrow",
-            "class",
-            reason,
-            [FILING],
-            "lasting",
-            None,
-            None,
-            snapshot_id,
-            writer,
-            CREATED,
-            "applied",
-            "",
-        )
-        inputs = replace(mature_growth_inputs(), symbol="AAPL")
-        mechanical = value_company(inputs, universe_deciles(), policy, TODAY)
-        narrow = Override(override_id, "moat.class", "Narrow", "agent", writer.actor, NOW, reason)
-        reviewed = review_company(inputs, universe_deciles(), policy, TODAY, [narrow], mechanical)
-        refused = replace(
-            reviewed.result,
-            route=None,
-            value=None,
-            levels=None,
-            price_to_value=None,
-            designation=None,
-            refusal=NOT_POSITIVE,
-        )
-        review = Review(refused, None, (), (override_id,))
-        insert_review(conn, review, "AAPL", snapshot_id, None, clock=lambda: CREATED)
+        set_moat(conn, symbol, "Narrow", writer, "the patents lapse", [FILING], CREATED)
 
 
 def test_drivers_or_parts_not_both(client: TestClient) -> None:
@@ -779,21 +772,16 @@ def test_an_applied_balance_override_counts(client: TestClient) -> None:
     assert body["valuePerShare"] == pytest.approx((FIRM - 4e9) / 100e6, abs=1e-3)
 
 
-def test_the_levels_follow_the_reviewed_moat(client: TestClient, policy: Policy) -> None:
-    """AAL's snapshot holds no moat class, so its levels take None's; under a Narrow moat as
-    reviewed, Narrow's: the review the override route writes on the refused row."""
+def test_the_levels_follow_the_row_s_moat(
+    client: TestClient, db_path: Path, policy: Policy
+) -> None:
+    """AAL's row holds None, so its levels take None's; once an agent's row holds Narrow,
+    Narrow's, the refused snapshot unchanged (spec 2026-11-19 8.6)."""
     before = _secondary(client, ONE_PART, symbol="AAL")
     assert before["buyLevel"] == levels_for(before["valuePerShare"], "None", policy).buy
-    narrow = {
-        "tag": "moat.class",
-        "new": "Narrow",
-        "reason": "the patents lapse",
-        "evidence": [FILING],
-        "lifetime": "lasting",
-    }
-    r = client.post("/api/companies/AAL/overrides", json=narrow, headers=AGENT)
-    assert r.status_code == 201, r.text
+    _narrow(db_path, "AAL")
     body = _secondary(client, ONE_PART, symbol="AAL")
+    assert body["snapshotId"] == before["snapshotId"]
     assert body["buyLevel"] == levels_for(body["valuePerShare"], "Narrow", policy).buy
     assert body["buyLevel"] != before["buyLevel"]
 

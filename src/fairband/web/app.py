@@ -2,12 +2,13 @@
 refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
 ``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
 (``agents_api``), the guidance routes (``guidance_api``), the override and review routes
-(``reviews_api``), the sensitivity reading's routes (``sensitivity_api``), the company reads, the
-Methodology section read and the report routes (``reports_api``), the company page's four reads
-(``company_api``), the research read (``research_api``), the multiples history read
-(``multiples_api``), the band's history read (``history_api``), the vendor pass-through route
-(``vendor_api``), the filing reads (``filings_api``), the company logo's read (``logo_api``), and
-the policy values and growth deciles the Methodology page cites (spec 2026-11-04 7.4). The
+(``reviews_api``), the moat class's write (``moat_api``), the sensitivity reading's routes
+(``sensitivity_api``), the company reads, the Methodology section read and the report routes
+(``reports_api``), the company page's four reads (``company_api``), the research read
+(``research_api``), the multiples history read (``multiples_api``), the band's history read
+(``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
+(``filings_api``), the company logo's read (``logo_api``), and the policy values and growth
+deciles the Methodology page cites (spec 2026-11-04 7.4). The
 Agents section's settings routes (``launch_api``) read and write ``launch.json`` in the config
 folder, not the ``settings`` table; its launch routes (``launch_api``) store a launch, open its
 window and take its launcher's reports. The company detail carries the agents' records that the
@@ -113,6 +114,7 @@ from fairband.engine.types import ValuationResult, money_of, rated, result_to_js
 from fairband.launch.command import Opener
 from fairband.launch.settings import read_launch_file
 from fairband.policy import Policy
+from fairband.policy.moat import MoatTable, load_moat_table
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs import adr_flag
 from fairband.refresh.inputs_statements import brief_for
@@ -121,6 +123,7 @@ from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import CompanyRow, latest_companies, latest_company
 from fairband.store.launches import fail_opening
+from fairband.store.moat import moat_row
 from fairband.store.refreshes import (
     RefreshRow,
     RefreshRunning,
@@ -148,6 +151,7 @@ from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.history_api import add_history_routes
 from fairband.web.launch_api import add_launch_routes, add_launch_settings_routes
 from fairband.web.logo_api import add_logo_routes, logo_route
+from fairband.web.moat_api import add_moat_routes, moat_json
 from fairband.web.multiples_api import add_multiples_routes
 from fairband.web.policy_rows import deciles_json, policy_json
 from fairband.web.reports_api import add_report_routes
@@ -230,6 +234,7 @@ def create_app(
     fetch_logo: Callable[[str], bytes] | None = None,
     opener: Opener | None = None,
     port: int | None = None,
+    moat: MoatTable | None = None,
 ) -> FastAPI:
     """The app; ``policy`` is the file's, which the user's settings overlay; ``clock`` gives the
     day the validity states are judged on and the time a refresh left running is marked
@@ -245,8 +250,11 @@ def create_app(
     port the server listens on, which the window's launcher calls back on. Without an opener or a
     port the launch route answers 503 and starts nothing; without an opener the save checks no
     program and the read suggests none. ``clock`` also gives the time a launch is made, moved and
-    read at."""
+    read at. ``moat`` is the moat table the moat class's write loads in its revalue and returns
+    a company to, and whose class the detail names beside the row: the packaged file when
+    ``None``; ``serve`` passes the one its refreshes load, so the two read one version."""
     taxed = load_tax_table() if tax is None else tax
+    table = load_moat_table() if moat is None else moat
     logos = Logos(settings.data_dir / "logos", fetch_logo or _no_fetch, clock)
 
     @asynccontextmanager
@@ -375,17 +383,21 @@ def create_app(
         the company page's design 11); and the agents' records that the drawer and the company page
         read (``research_api.agent_records``: ``review``, ``secondary``, ``report``, ``item``), with
         ``moat``, the moat class in force, which the drawer's head and the company page's head
-        stamp (the company page's design, 7.2); and ``noteCount``, the count of the company's
-        notes, which the Notes control draws beside its word (11.1); and the company brief (B-149),
-        the latest stored profile's description, which the drawer shows cut at six lines and the
-        MCP ``company`` tool carries (the company page's Overview reads its own, ``page_fmp``); and
-        ``logo`` (B-203), the address of the company's logo read where the latest stored profile
-        names a logo, which the heads of the drawer and the company page draw, ``None`` without one
-        (``logo_api.logo_route``). And what the figures are in (spec 2026-11-10 7.4), which the
-        drawer's head and the Research tab name: ``currency``, the reporting currency the snapshot
-        was valued or refused in (``types.money_of``: USD for a USD row, the code for a row refused
-        for its currency); ``isAdr``, the ADR flag as assembly reads it, the latest stored
-        profile's, else the universe row's, ``None`` with neither (``inputs.adr_flag``);
+        stamp (the company page's design, 7.2): the class of the company's row of the moat table,
+        a refused row's too, ``None`` without a row (spec 2026-11-19 8.6); and ``moatClass``, that
+        row with the class the moat table the app was given holds for the company
+        (``moat_api.moat_json``), ``None`` without a row; and ``noteCount``, the count of the
+        company's notes, which the Notes control draws beside its word (11.1); and the company
+        brief (B-149), the latest stored profile's description, which the drawer shows cut at six
+        lines and the MCP ``company`` tool carries (the company page's Overview reads its own,
+        ``page_fmp``); and ``logo`` (B-203), the address of the company's logo read where the
+        latest stored profile names a logo, which the heads of the drawer and the company page
+        draw, ``None`` without one (``logo_api.logo_route``). And what the figures are in (spec
+        2026-11-10 7.4), which the drawer's head and the Research tab name: ``currency``, the
+        reporting currency the snapshot was valued or refused in (``types.money_of``: USD for a
+        USD row, the code for a row refused for its currency); ``isAdr``, the ADR flag as assembly
+        reads it, the latest stored profile's, else the universe row's, ``None`` with neither
+        (``inputs.adr_flag``);
         ``adrRatio``, the ADR ratio the share count was read by, the whole number Fairband found
         between FMP's stored share count and the quote's (spec 2026-11-19 6.2), the result's
         ``adr_ratio`` input, ``None`` without one, an ADR whose counts agree included; neither
@@ -413,6 +425,7 @@ def create_app(
             logo = logo_route(conn, snapshot.symbol)
             adr = adr_flag(conn, symbol, listed)
             note_count = len(notes_for(conn, snapshot.symbol))
+            moat_class = moat_json(moat_row(conn, snapshot.symbol), table)
         warnings = warning_words(snapshot.result.flags)
         review = records["review"]
         reviewed = None if review is None else review["value"]
@@ -430,6 +443,7 @@ def create_app(
             "designationEdges": list(read_under.designation_edges),
             "agingFraction": read_under.aging_fraction,
             **records,
+            "moatClass": moat_class,
             "noteCount": note_count,
             "launchReady": read_launch_file(settings.config_dir).ready,
         }
@@ -494,6 +508,7 @@ def create_app(
     add_agent_routes(app, conn_factory, clock, settings.config_dir)
     add_guidance_routes(app, conn_factory, policy, taxed, clock)
     add_review_routes(app, conn_factory, policy, taxed, clock)
+    add_moat_routes(app, conn_factory, policy, taxed, table, clock)
     add_sensitivity_routes(app, conn_factory, policy, taxed, clock)
     add_report_routes(app, conn_factory, policy, taxed, clock)
     add_company_page_routes(app, conn_factory, policy, taxed, clock, passthrough)

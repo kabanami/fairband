@@ -160,8 +160,9 @@ def _serve(args: argparse.Namespace) -> int:
     machine's opener (``launch.command.system_opener``) and tells the window's launcher the port of
     ``--port``, the one uvicorn listens on. The app reads the policy file as its base. Each run
     loads the moat table the server read as it started, as it values under the tax table read
-    then. When it starts, the app marks every ``running`` refresh interrupted; with no process
-    lock in this cut, that includes one a command in another process is running at that moment."""
+    then, and the app's moat class write loads and returns to the same table. When it starts, the
+    app marks every ``running`` refresh interrupted; with no process lock in this cut, that
+    includes one a command in another process is running at that moment."""
     settings = load_settings()
     policy, tax, moat = load_policy(), load_tax_table(), load_moat_table()
     with closing(connect(settings.db_path)) as conn:
@@ -197,6 +198,7 @@ def _serve(args: argparse.Namespace) -> int:
         fetch_logo=fetch_logo,
         opener=system_opener(),
         port=args.port,
+        moat=moat,
     )
     try:
         uvicorn.run(app, host=_HOST, port=args.port, log_level="info")

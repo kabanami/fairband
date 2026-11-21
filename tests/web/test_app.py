@@ -768,6 +768,8 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         # design, 7.2 and 11.1): tests/web/test_company_page_api.py
         "moat",
         "noteCount",
+        # the company's row of the moat table (spec 2026-11-19 8.6): tests/web/test_moat_api.py
+        "moatClass",
         # the plain words of the snapshot's quality warnings and the mark (spec 2026-11-19 7.5):
         # test_the_detail_carries_warnings_and_marked
         "warnings",

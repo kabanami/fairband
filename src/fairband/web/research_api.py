@@ -40,9 +40,10 @@ it), each ``None`` without one:
 Beside them it gives ``priceNeeds`` (``method.md`` 4.11): the sentences on what the price needs
 when it is well above the value the meter draws, the review's when the review counts and has a
 value, else the snapshot's; ``None`` otherwise. And ``moat`` (the company page's design, 7.2), the
-moat class in force (method 4.9), ``"Wide"``, ``"Narrow"`` or ``"None"``: the review's when it
-counts and has a value, else the snapshot's when the snapshot has a value, else ``None``. So a
-refused snapshot with a counted review that values the company has that review's moat.
+moat class in force (method 4.9), ``"Wide"``, ``"Narrow"`` or ``"None"``: the class of the
+company's row of the moat table, on a refused snapshot too, ``None`` without a row (spec 2026-11-19
+8.6). Every write of a class values the company again, so a valued snapshot holds the row's class;
+a snapshot refused before its route holds none, and the row still has one.
 
 ``GET /api/companies/{symbol}/research`` answers the company's research records (18.3,
 ``research_records``), which the drawer's Details listed until it left (the company page's design,
@@ -76,6 +77,7 @@ from fairband.store.guidance import guidance_for
 from fairband.store.inbox import WorkItem, open_item
 from fairband.store.launches import newest_launch
 from fairband.store.ledger import entries
+from fairband.store.moat import moat_row
 from fairband.store.overrides import OverrideRow, overrides_for
 from fairband.store.reports import ReportRow, latest_judgments, latest_report
 from fairband.store.research import findings_for, kill_criteria_for, news_items_for, notes_for
@@ -124,7 +126,7 @@ def agent_records(
             )
         ),
         "priceNeeds": _price_needs(snapshot, counted, edges),
-        "moat": _moat(snapshot, counted),
+        "moat": _moat(conn, symbol),
         "secondary": (
             _secondary(secondary, snapshot.price, edges)
             if secondary is not None and counts_on(snapshot, cited, secondary)
@@ -224,16 +226,11 @@ def _price_needs(
     )
 
 
-def _moat(snapshot: SnapshotRow, review: ReviewRow | None) -> str | None:
-    """The moat class in force (module docstring): the counted ``review``'s when it has a value,
-    else the snapshot's when it has one; ``None`` otherwise."""
-    if review is not None and review.value is not None:
-        moat = review.result.intermediates.get("moat")
-    elif snapshot.value is not None:
-        moat = snapshot.result.intermediates.get("moat")
-    else:
-        return None
-    return moat if isinstance(moat, str) else None
+def _moat(conn: sqlite3.Connection, symbol: str) -> str | None:
+    """The moat class in force (module docstring): the class of the company's row of the moat
+    table, ``None`` without a row."""
+    row = moat_row(conn, symbol)
+    return None if row is None else row.moat
 
 
 def _required_return(result: ValuationResult) -> float | None:
