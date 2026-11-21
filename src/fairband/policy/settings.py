@@ -10,7 +10,9 @@ file's ``[values.universe]`` or ``[values.refresh]`` table.
 The user's values are an overlay of name to value, in the JSON form the API serves; ``default_of``
 and ``value_of`` give a setting's file value and its value in a policy in that form.
 ``apply_overlay`` converts each value as ``load_policy`` converts the file's, replaces it in the
-policy, sets the settings hash and checks every range; the policy's version stays the file's.
+policy, sets the settings hash and checks every range; the policy's version stays the file's. It
+skips a name that is no longer a setting, so a stored value of a removed setting changes nothing
+(spec 2026-11-19 7.4); the store deletes such a row at its next save or reset.
 ``check`` holds the ranges of 8.2 and the rules of 8.9 and runs at the end of ``load_policy``
 too, so a file and an overlay fail alike, with the sentence ``"<name>[, <name>]: <rule>"`` the API
 serves; a rule between two settings names both.
@@ -18,7 +20,8 @@ serves; a rule between two settings names both.
 The settings hash (8.4) is the sha256 of the JSON, sorted by key, of the overlay's entries that
 change a snapshot's figures: groups valuation and flags and ``validity_fallback_days``. The
 universe and refresh settings change which companies are valued and how they are fetched, and
-``aging_fraction`` is read when a row is shown, so none of them enters it.
+``aging_fraction`` is read when a row is shown, so none of them enters it, nor does a name that is
+no longer a setting.
 """
 
 import copy
@@ -517,8 +520,9 @@ def setting(name: str) -> Setting:
 
 
 def settings_hash(overlay: Mapping[str, Any]) -> str:
-    """The sha256 of the sorted JSON of the overlay's hashed entries (spec 8.4)."""
-    hashed = {k: v for k, v in overlay.items() if setting(k).hashed}
+    """The sha256 of the sorted JSON of the overlay's hashed entries (spec 8.4); a name that is
+    no setting is skipped (spec 2026-11-19 7.4)."""
+    hashed = {k: v for k, v in overlay.items() if k in _BY_NAME and _BY_NAME[k].hashed}
     return hashlib.sha256(json.dumps(hashed, sort_keys=True).encode()).hexdigest()
 
 
@@ -543,16 +547,15 @@ def value_of(name: str, policy: Policy) -> Any:
 
 def apply_overlay(base: Policy, overlay: Mapping[str, Any]) -> Policy:
     """``base`` with each overlay value converted and in place, the settings hash set, and every
-    range checked. A value that is not a setting, or does not convert, raises
-    ``ValueError("<name>: <reason>")``.
+    range checked. A name that is no setting, a stored value of a removed setting, is skipped
+    (spec 2026-11-19 7.4); a value that does not convert raises ``ValueError("<name>: <reason>")``.
 
     A size floor changed without the cap bands carries the lowest band's floor with it, since the
     lowest band must equal the size floor (spec 8.9)."""
+    overlay = {name: value for name, value in overlay.items() if name in _BY_NAME}
     top: dict[str, Any] = {}
     nested: dict[str, dict[str, Any]] = {"universe": {}, "refresh": {}}
     for name, value in overlay.items():
-        if name not in _BY_NAME:
-            raise ValueError(f"{name}: not a setting")
         try:
             converted = _converted(_BY_NAME[name], value)
         except (KeyError, TypeError, ValueError) as e:

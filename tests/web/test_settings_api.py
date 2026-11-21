@@ -26,7 +26,7 @@ from fairband.store.snapshots import insert_snapshot
 from fairband.web.app import create_app
 
 R_SOURCE = "design.md 6.2 (stocks method v1.7 section 3): required return r = 9%"
-STALE = "settings: gone_value: not a setting; reset it on the Settings page"
+STALE = "settings: required_return: must be from 4% to 20%; reset it on the Settings page"
 
 
 def _setting(body: dict[str, Any], name: str) -> dict[str, Any]:
@@ -260,15 +260,35 @@ def test_a_stored_row_the_policy_refuses_is_a_409_until_reset(
 ) -> None:
     client.put("/api/settings", json={"changes": {"fade_years": 3}}, headers=HEADER)
     with closing(connect(db_path)) as conn, conn:
-        conn.execute("INSERT INTO settings VALUES ('gone_value', '1', ?)", (NOW.isoformat(),))
+        conn.execute(
+            "INSERT INTO settings VALUES ('required_return', '0.5', ?)", (NOW.isoformat(),)
+        )
     for path in ("/api/settings", "/api/policy", "/api/screen", "/api/groups?by=phase"):
         r = client.get(path)
         assert (r.status_code, r.json()) == (409, {"detail": STALE}), path
     assert client.get("/api/companies/AAPL").status_code == 409
-    r = client.post("/api/settings/reset", json={"names": ["gone_value"]}, headers=HEADER)
+    r = client.post("/api/settings/reset", json={"names": ["required_return"]}, headers=HEADER)
     assert r.status_code == 200
     assert _setting(r.json(), "fade_years")["changed"] is True  # the other row is kept
     assert client.get("/api/screen").status_code == 200
+
+
+def test_a_stored_row_of_a_removed_setting_is_skipped(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-19 5 point 4 and 7.4: every read answers as if the row were not stored, and
+    the next save deletes it."""
+    client.put("/api/settings", json={"changes": {"fade_years": 3}}, headers=HEADER)
+    with closing(connect(db_path)) as conn, conn:
+        conn.execute("INSERT INTO settings VALUES ('gone_value', '1', ?)", (NOW.isoformat(),))
+    for path in ("/api/settings", "/api/policy", "/api/screen", "/api/groups?by=phase"):
+        assert client.get(path).status_code == 200, path
+    assert client.get("/api/companies/AAPL").status_code == 200
+    r = client.get("/api/settings")
+    assert r.json()["current"]["settingsHash"] == settings_hash({"fade_years": 3})
+    r = client.put("/api/settings", json={"changes": {"required_return": 0.1}}, headers=HEADER)
+    assert r.status_code == 200
+    with closing(connect(db_path)) as conn:
+        names = [row[0] for row in conn.execute("SELECT name FROM settings ORDER BY name")]
+    assert names == ["fade_years", "required_return"]
 
 
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:

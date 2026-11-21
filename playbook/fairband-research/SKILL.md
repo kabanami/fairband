@@ -98,9 +98,9 @@ fetched that day) and values it. It takes about a minute.
   on with the stored snapshot, and write the price's date in section 9 of the report. Skip the wait
   below and read `company(symbol)`.
 - When it is refused with "settings: ...; reset it on the Settings page" (400), a stored setting
-  the policy file no longer accepts, every read of the policy answers the same sentence (409),
-  `company` among them. Tell the user, and wait until they reset the setting, as for a server that
-  is not running. Then start the refresh again.
+  outside its range, every read of the policy answers the same sentence (409), `company` among
+  them. Tell the user, and wait until they reset the setting, as for a server that is not running.
+  Then start the refresh again.
 - Call `refresh_status()` until its `refresh` is `null`: no refresh is running.
 - Call `company(symbol)`. When its `snapshot.refreshId` is not the id you kept, the company was not
   refreshed: its fetch failed inside the run, or another run wrote the snapshot. A run that ends

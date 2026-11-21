@@ -554,14 +554,16 @@ def test_every_item_is_refreshed_before_it_is_read(tmp_path: Path) -> None:
     no_key = str(MissingKey("fmp")).split(": ", 1)[0]
     with closing(connect(tmp_path / "f.db")) as conn:
         migrate(conn)
-        conn.execute("INSERT INTO settings VALUES ('gone_value', '1', '2026-11-15T00:00:00+00:00')")
+        conn.execute(
+            "INSERT INTO settings VALUES ('required_return', '0.5', '2026-11-15T00:00:00+00:00')"
+        )
         conn.commit()
         try:
             effective_policy(conn)
             stale = ""
         except ValueError as exc:
             stale = str(exc)
-    assert stale.startswith("settings: gone_value: "), stale
+    assert stale.startswith("settings: required_return: "), stale
     head, tail = stale.split(": ", 1)[0], stale.rsplit("; ", 1)[1]
     for words in (
         (
@@ -573,9 +575,9 @@ def test_every_item_is_refreshed_before_it_is_read(tmp_path: Path) -> None:
             " of the report. Skip the wait below and read `company(symbol)`."
         ),
         (
-            f'When it is refused with "{head}: ...; {tail}" (400), a stored setting the policy file'
-            " no longer accepts, every read of the policy answers the same sentence (409),"
-            " `company` among them."
+            f'When it is refused with "{head}: ...; {tail}" (400), a stored setting outside its'
+            " range, every read of the policy answers the same sentence (409), `company` among"
+            " them."
         ),
         (
             "Tell the user, and wait until they reset the setting, as for a server that is not"
@@ -587,6 +589,9 @@ def test_every_item_is_refreshed_before_it_is_read(tmp_path: Path) -> None:
     entry = _tool_entry("refresh_start")
     for words in (f'"{no_key}: ..." (400)', f'"{head}: ...; {tail}" (400)', f'"{NO_WORKER}" (503)'):
         assert words in entry, words
+    # a stored value of a removed setting is skipped, so only a value outside its range refuses
+    # (spec 2026-11-19 5 point 4 and 7.4)
+    assert "A stored setting outside its range refuses every kind" in entry
     # a split's remedy is this refresh, every call made again (the whole-branch review of plan 2)
     assert "When a stock split has taken effect, this scoped refresh is the remedy" in three
     assert "(every call, whatever was fetched that day)" in three

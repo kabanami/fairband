@@ -277,23 +277,25 @@ def test_cli_revalue_runs_under_the_overlay(
     assert {env.snapshot(symbol).settings_hash for symbol in ADMITTED} == {saved.settings_hash}
 
 
-def test_cli_refuses_settings_the_policy_no_longer_knows(
+def test_cli_refuses_a_stored_setting_outside_its_range(
     env_valued: Env,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """A stored setting the policy file does not know is one line naming it, before any record,
-    never a traceback."""
+    """A stored setting outside its range is one line naming it, before any record, never a
+    traceback."""
     env = env_valued
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     with closing(env.connect()) as conn, conn:
         conn.execute(
-            "INSERT INTO settings (name, value, changed_at) VALUES ('gone', '1', ?)",
+            "INSERT INTO settings (name, value, changed_at) VALUES ('required_return', '0.5', ?)",
             (env.clock().isoformat(),),
         )
     assert cli.main(["refresh", "--kind", "revalue"]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("settings: gone: ") and "reset it on the Settings page" in err
+    assert err.startswith(
+        "settings: required_return: must be from 4% to 20%; reset it on the Settings page"
+    )
     assert env.last().id == 1

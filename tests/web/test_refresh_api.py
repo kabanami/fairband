@@ -431,15 +431,15 @@ def test_start_full_without_a_key_is_400_not_503(
     assert (last["kind"], last["status"], body["error"]) == ("revalue", "done", None)
 
 
-def test_start_under_settings_the_policy_no_longer_knows_is_400(
+def test_start_under_a_stored_setting_outside_its_range_is_400(
     tmp_path: Path, db_path: Path, policy: Policy
 ) -> None:
-    """A stored setting the policy file does not know: the worker cannot build the run's policy,
-    so the start is a 400 naming the setting, before any record, and the server stays up."""
+    """A stored setting outside its range: the worker cannot build the run's policy, so the
+    start is a 400 naming the setting, before any record, and the server stays up."""
     tax = load_tax_table()
     with closing(connect(db_path)) as conn, conn:
         conn.execute(
-            "INSERT INTO settings (name, value, changed_at) VALUES ('gone', '1', ?)",
+            "INSERT INTO settings (name, value, changed_at) VALUES ('required_return', '0.5', ?)",
             (NOW.isoformat(),),
         )
     worker = RefreshWorker(
@@ -451,7 +451,9 @@ def test_start_under_settings_the_policy_no_longer_knows_is_400(
         response = start(client, kind="revalue")
         assert response.status_code == 400
         detail = response.json()["detail"]
-        assert detail.startswith("settings: gone: ") and "reset it on the Settings page" in detail
+        assert detail == (
+            "settings: required_return: must be from 4% to 20%; reset it on the Settings page"
+        )
         assert current(client) == {"refresh": None, "last": None, "error": None}
 
 

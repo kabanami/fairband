@@ -51,15 +51,57 @@ def test_reset_names_or_all(conn: sqlite3.Connection) -> None:
     assert effective_policy(conn).settings_hash == EMPTY_SETTINGS_HASH
 
 
-def test_an_unknown_overlay_row_names_itself(conn: sqlite3.Connection) -> None:
+def test_a_stored_row_of_a_removed_setting_is_skipped_then_deleted(
+    conn: sqlite3.Connection,
+) -> None:
+    """Spec 2026-11-19 5 point 4 and 7.4: skipped at every read, deleted at the next save."""
     conn.execute("INSERT INTO settings VALUES ('gone_value', '1', ?)", (AT.isoformat(),))
     conn.commit()
-    with pytest.raises(
-        ValueError, match="settings: gone_value: not a setting; reset it on the Settings page"
-    ):
-        effective_policy(conn)
-    reset_settings(conn, ["gone_value"], AT)
     assert effective_policy(conn).settings_hash == EMPTY_SETTINGS_HASH
+    write_settings(conn, {"fade_years": 3}, None, AT)
+    assert read_overlay(conn) == {"fade_years": 3}
+    assert changes(conn)[0].changes == [
+        {"name": "fade_years", "old": None, "new": 3},
+        {"name": "gone_value", "old": 1, "new": None},
+    ]
+
+
+def test_a_save_that_names_no_setting_writes_nothing(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ValueError, match="gone_value: not a setting"):
+        write_settings(conn, {"gone_value": 1, "fade_years": 3}, None, AT)
+    assert read_overlay(conn) == {}
+    # nor does it delete a stored row of a removed setting: the refusal comes before the sweep
+    conn.execute("INSERT INTO settings VALUES ('gone_value', '1', ?)", (AT.isoformat(),))
+    conn.commit()
+    with pytest.raises(ValueError, match="gone_value: not a setting"):
+        write_settings(conn, {"fade_years": 3, "gone_value": 1}, None, AT)
+    assert not conn.in_transaction
+    assert read_overlay(conn) == {"gone_value": 1} and changes(conn) == []
+
+
+def test_a_reset_deletes_a_stored_row_of_a_removed_setting(conn: sqlite3.Connection) -> None:
+    write_settings(conn, {"required_return": 0.1, "fade_years": 3}, None, AT)
+    conn.execute("INSERT INTO settings VALUES ('gone_value', '1', ?)", (AT.isoformat(),))
+    conn.commit()
+    reset_settings(conn, ["fade_years"], LATER)
+    assert read_overlay(conn) == {"required_return": 0.1}
+    assert changes(conn)[0].changes == [
+        {"name": "fade_years", "old": 3, "new": None},
+        {"name": "gone_value", "old": 1, "new": None},
+    ]
+    conn.execute("INSERT INTO settings VALUES ('gone_value', '1', ?)", (AT.isoformat(),))
+    conn.commit()
+    reset_settings(conn, [], LATER)  # no setting named: the removed one goes all the same
+    assert read_overlay(conn) == {"required_return": 0.1}
+    assert changes(conn)[0].changes == [{"name": "gone_value", "old": 1, "new": None}]
+    conn.execute("INSERT INTO settings VALUES ('gone_value', '1', ?)", (AT.isoformat(),))
+    conn.commit()
+    reset_settings(conn, None, LATER)  # every row: the removed one is logged once
+    assert read_overlay(conn) == {}
+    assert changes(conn)[0].changes == [
+        {"name": "gone_value", "old": 1, "new": None},
+        {"name": "required_return", "old": 0.1, "new": None},
+    ]
 
 
 def test_an_out_of_range_overlay_row_names_itself(conn: sqlite3.Connection) -> None:

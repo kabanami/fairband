@@ -6,17 +6,20 @@ has no row. ``settings_changes`` logs each save and reset with its reason, as a 
 ``{"name", "old", "new"}``, where ``None`` stands for the default.
 
 ``effective_policy`` is the policy a run or a request reads: the file's values with the overlay
-applied and every range checked (``fairband.policy.settings.apply_overlay``). A row the policy no
-longer accepts, a name a later file dropped or a value outside its range, raises ``ValueError``
-naming the row and the way out, rather than valuing under a policy nobody chose.
+applied and every range checked (``fairband.policy.settings.apply_overlay``). A row outside its
+range raises ``ValueError`` naming the row and the way out, rather than valuing under a policy
+nobody chose. A row of a name that is no longer a setting, one a later file dropped, is skipped
+(spec 2026-11-19 5 point 4 and 7.4).
 
-``write_settings`` applies a save all or none: it takes the write lock, checks the overlay with
-the changes over it, and writes only when every range and rule passes. Each value is stored in its
-converted form, the form ``apply_overlay`` gives it (a float for a fraction, a whole number for a
-count, symbols upper-cased), so one choice always hashes alike. A value equal to its default is
-stored as no row, and a value equal to the stored one is neither written nor logged, so a save
-that changes nothing never moves the settings hash or a ``changed_at``. ``reset_settings``
-deletes rows by name, whether or not the name is still a setting.
+``write_settings`` applies a save all or none: it refuses a name that is no setting, takes the
+write lock, checks the overlay with the changes over it, and writes only when every range and rule
+passes. Each value is stored in its converted form, the form ``apply_overlay`` gives it (a float
+for a fraction, a whole number for a count, symbols upper-cased), so one choice always hashes
+alike. A value equal to its default is stored as no row, and a value equal to the stored one is
+neither written nor logged, so a save that changes nothing never moves the settings hash or a
+``changed_at``. ``reset_settings`` deletes rows by name, whether or not the name is still a
+setting. Each of the two, in its transaction, also deletes every stored row of a name that is no
+longer a setting and logs it after its own entries, with ``None`` as the new value.
 """
 
 import json
@@ -27,9 +30,11 @@ from datetime import datetime
 from typing import Any
 
 from fairband.policy import Policy, load_policy
-from fairband.policy.settings import apply_overlay, default_of, value_of
+from fairband.policy.settings import SETTINGS, apply_overlay, default_of, value_of
 from fairband.store._codec import dump_stamp, load_stamp
 from fairband.store.db import transaction
+
+_NAMES = frozenset(s.name for s in SETTINGS)
 
 
 @dataclass(frozen=True)
@@ -72,8 +77,12 @@ def write_settings(
     base: Policy | None = None,
 ) -> Policy:
     """Store the changes over the overlay and log them as one save; return the new effective
-    policy. ``ValueError("<name>[, <name>]: <rule>")`` on the first failing setting, with nothing
-    written."""
+    policy. ``ValueError("<name>: not a setting")`` on the first name of ``changes`` that is no
+    setting, then ``ValueError("<name>[, <name>]: <rule>")`` on the first failing setting, with
+    nothing written. A stored row of a name that is no longer a setting is deleted with the save."""
+    for name in changes:
+        if name not in _NAMES:
+            raise ValueError(f"{name}: not a setting")
     file_policy = load_policy() if base is None else base
     with transaction(conn, immediate=True):
         before = read_overlay(conn)
@@ -92,6 +101,7 @@ def write_settings(
             else:
                 after[name] = new
             entries.append({"name": name, "old": old, "new": new})
+        entries += [{"name": n, "old": before[n], "new": None} for n in _removed(before)]
         policy = apply_overlay(file_policy, after)
         for entry in entries:
             if entry["new"] is None:
@@ -109,10 +119,12 @@ def write_settings(
 
 def reset_settings(conn: sqlite3.Connection, names: Sequence[str] | None, at: datetime) -> None:
     """Delete the named settings' rows (every row when ``names`` is ``None``) and log the reset.
-    A name with no row is no change."""
+    A name with no row is no change. A stored row of a name that is no longer a setting is deleted
+    with the reset."""
     with transaction(conn, immediate=True):
         before = read_overlay(conn)
         gone = list(before) if names is None else [n for n in dict.fromkeys(names) if n in before]
+        gone += [n for n in _removed(before) if n not in gone]
         for name in gone:
             conn.execute("DELETE FROM settings WHERE name = ?", (name,))
         _log(conn, at, None, [{"name": n, "old": before[n], "new": None} for n in gone])
@@ -130,6 +142,11 @@ def changes(conn: sqlite3.Connection) -> list[ChangeRow]:
         )
         for r in rows
     ]
+
+
+def _removed(overlay: Mapping[str, Any]) -> list[str]:
+    """The overlay's names that are no longer settings, in its order (spec 2026-11-19 7.4)."""
+    return [name for name in overlay if name not in _NAMES]
 
 
 def _log(

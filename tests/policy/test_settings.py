@@ -140,6 +140,13 @@ def test_the_empty_overlay_is_the_file() -> None:
     assert apply_overlay(base, {}) == base
 
 
+def test_apply_overlay_skips_a_name_that_is_no_setting() -> None:
+    """A stored value of a removed setting is skipped (spec 2026-11-19 5 point 4, 7.4)."""
+    p = apply_overlay(load_policy(), {"gone_value": 1, "fade_years": 3})
+    assert p.fade_years == 3 and p.settings_hash == settings_hash({"fade_years": 3})
+    assert settings_hash({"gone_value": 1}) == EMPTY_SETTINGS_HASH
+
+
 def test_apply_overlay_converts_as_the_loader_does() -> None:
     p = apply_overlay(
         load_policy(),
@@ -209,7 +216,6 @@ def test_a_new_size_floor_carries_the_lowest_band() -> None:
             {"universe.manual_admissions": ["v", "bad symbol"]},
             "universe.manual_admissions: 'bad symbol' is not a symbol",
         ),
-        ({"unknown_name": 1}, "unknown_name: not a setting"),
     ],
 )
 def test_ranges_and_rules_name_the_setting(overlay: dict[str, Any], rule: str) -> None:

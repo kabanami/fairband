@@ -4,10 +4,11 @@ A save applies all or none (``fairband.store.settings.write_settings``); a refus
 whose detail is ``"<name>[, <name>]: <rule>"``, naming the first failing setting, or both
 settings of a rule between two. A reset deletes the named
 rows, or every row when it names none, and never builds the policy first, so it clears a stored
-row the policy no longer accepts: a name a later policy file dropped, or a value outside a new
-range. While such a row is stored, every route that reads the effective policy answers 409 with
-the sentence that names it (``effective``), rather than show figures under a policy nobody chose
-or fail with a 500. Each answers with the form as ``GET`` serves it.
+value outside a new range. While such a row is stored, every route that reads the effective policy
+answers 409 with the sentence that names it (``effective``), rather than show figures under a
+policy nobody chose or fail with a 500. A stored value of a name a later policy file dropped is
+skipped, and the next save or reset deletes it (spec 2026-11-19 7.4). Each answers with the form
+as ``GET`` serves it.
 
 ``valuedUnder`` says what the screen's figures were valued under: the policy version and settings
 hash most of the screen's snapshots cite, the start of the latest full refresh that finished, and
