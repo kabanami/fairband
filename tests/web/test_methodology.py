@@ -153,7 +153,7 @@ def test_the_page_says_what_method_0_9_changed() -> None:
     assert "years 1 to 3" in trend[: trend.index("</li>")]
 
 
-def test_the_examples_are_dated_to_methods_1_4_and_1_7() -> None:
+def test_the_examples_are_dated_to_methods_1_4_1_7_and_1_8() -> None:
     """The examples, re-read at each change of method version (CLAUDE.md: a change of method
     version re-reads its examples' figures). Five, re-read under method 1.4, are dated to that run:
     the data of 11 Nov 2026, the quarterly balance sheets of 14 Nov, the closes of 13 Nov and
@@ -169,7 +169,15 @@ def test_the_examples_are_dated_to_methods_1_4_and_1_7() -> None:
     7.1). Coca-Cola, on that route, was re-read on 21 Nov 2026 under method 1.7 from its snapshot
     of refresh 68, whose data and price are of 18 Nov 2026: with no gap its normalized earnings
     are its trailing net income, $14.6 billion, its value $47 and its EPV $38 at a price of
-    $98.31, and the cross-check needs a belief of 11.6% to reach that price."""
+    $98.31, and the cross-check needs a belief of 11.6% to reach that price. Method 1.8 reads the
+    moat class from the moat table (spec 2026-11-19 8.5), and plan 3's acceptance revalued a copy
+    of refresh 68's data under 1.7 and 1.8 on 21 Nov 2026: Microsoft and Coca-Cola stay Wide and
+    Revolution Medicines Narrow, and 3M's Wide to Narrow sets only its margin of safety, which its
+    example does not print, so those four stand under 1.8; Roku, outside that universe, was valued
+    with Narrow, the class the rule drafts for a Young Growth company, so it stands too.
+    CrowdStrike goes from Wide to Narrow, so it was re-read under 1.8 from its snapshot of that
+    revalue, whose data and price are of 18 Nov 2026: its terminal return falls to the hurdle
+    rate, 9.0%, its firm value to $21.5 billion and its value to $25 at a price of $231.26."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     asof = html[html.index('<p class="caption app-prose__asof">') :]
     asof = asof[: asof.index("</p>")]
@@ -180,7 +188,9 @@ def test_the_examples_are_dated_to_methods_1_4_and_1_7() -> None:
     assert "method 0.8" not in html and "method 0.9" not in asof and "method 1.0" not in asof
     assert (
         "Figures as of the data and the price of "
-        '<time datetime="2026-11-18">18 Nov 2026</time> for Coca-Cola, valued under method 1.7 on '
+        '<time datetime="2026-11-18">18 Nov 2026</time> for Coca-Cola and CrowdStrike. '
+        'Coca-Cola\'s were valued under method 1.7 on <time datetime="2026-11-21">21 Nov 2026</time>'
+        " and are unchanged under method 1.8. CrowdStrike's were valued under method 1.8 on "
         '<time datetime="2026-11-21">21 Nov 2026</time>. The other examples\' figures are as of '
         'the data of <time datetime="2026-11-11">11 Nov 2026</time>'
     ) in asof
@@ -194,9 +204,78 @@ def test_the_examples_are_dated_to_methods_1_4_and_1_7() -> None:
         " the examples on other routes stand under 1.7."
     ) in comment
     assert "the five examples on other routes" not in comment
-    assert "14 Nov 2026</time> and are unchanged under methods 1.5, 1.6 and 1.7." in asof
+    # and says what 1.8 moves: CrowdStrike's class alone among the examples it values, Roku's
+    # class read from its stored snapshots and the class the rule would draft for it
+    for words in (
+        "Method 1.8 (21 Nov 2026, the moat class from Fairband's moat table in place of",
+        "Microsoft and Coca-Cola stay Wide and Revolution Medicines stays Narrow",
+        (
+            "3M goes from Wide to Narrow, but the Decline route reads the class for the margin of "
+            "safety alone, which its example does not print"
+        ),
+        (
+            "CrowdStrike goes from Wide to Narrow, so its terminal return falls from 13.0% to the "
+            "hurdle rate, 9.0%"
+        ),
+        "Its figures were re-read under 1.8 on 21 Nov 2026 from its snapshot of that revalue",
+        'were it to enter, 1.8 would refuse it "no moat class" until a class is set',
+        "Its example was valued with the class Narrow",
+        "so its figures stand under 1.8 with the class the next table would give it",
+    ):
+        assert words in comment, words
+    assert "14 Nov 2026</time> and are unchanged under methods 1.5, 1.6, 1.7 and 1.8." in asof
     assert "Their prices are the closes of" in asof
-    assert "methods 1.5 and 1.6." not in asof and "methods 1.1, 1.2 and 1.3" not in asof
+    assert "methods 1.5, 1.6 and 1.7." not in asof and "methods 1.1, 1.2 and 1.3" not in asof
+    # CrowdStrike's table, caption and sentences, read under 1.8 from its snapshot of plan 3's
+    # acceptance: the moat table's Narrow puts its terminal return at the hurdle rate
+    growth = _section(html, "growth")
+    crwd = growth[
+        growth.index("Worked example: CrowdStrike") : growth.index("Worked example: Roku")
+    ]
+    assert (
+        '<caption class="caption">CrowdStrike (CRWD), High Growth, as of 18 Nov 2026</caption>'
+        in crwd
+    )
+    for label, figure in (
+        ("Price", "$231.26"),
+        ("Trailing revenue", "$5.4 billion"),
+        ("Revenue, next twelve months", "$6.7 billion"),
+        ("Consensus growth, years 2 and 3", "22.5%, 16.5%"),
+        ("Cap on the held rate", "20.0%"),
+        ("Target margin, 5 mature peers", "22.8%"),
+        ("Sales-to-capital, own five-year measure", "8.74"),
+        ("Terminal return, Narrow moat", "9.0%"),
+        ("Trailing operating margin", "−2.2%"),
+        ("Firm value", "$21.5 billion"),
+        ("Less minority interest", "$38 million"),
+        ("Value a share", "$25"),
+        ("Price ÷ value", "9.37 · Well above"),
+        ("Growth the price needs, held years", "108.8%"),
+    ):
+        row = crwd[crwd.index(f'<td class="body">{label}</td>') :]
+        row = row[: row.index("</tr>")]
+        assert f'<td class="figure fb-num">{figure}</td>' in row, label
+    assert (
+        '<td class="body">Margin the price needs</td><td></td>'
+        '<td class="body fb-num">none up to 100.0%</td>'
+    ) in crwd
+    terminal = crwd[crwd.index('<td class="body">Terminal return, Narrow moat</td>') :]
+    assert '<span class="fb-tag figure-sm">RULE</span>' in terminal[: terminal.index("</tr>")]
+    for sentence in (
+        (
+            "Analysts expect CrowdStrike's revenue to grow from $5.4 billion to $6.7 billion over"
+            " the next twelve months."
+        ),
+        "They see 22.5% and then 16.5% in the next two fiscal years.",
+        "The engine holds 16.5%, under the 20.0% cap, then fades it to 3.0%.",
+        "The margin climbs from −2.2% to the peers' 22.8% by year 10.",
+        "The value is $25 a share against a price of $231.26, so the word is Well above.",
+        "The price would need 108.8% growth a year in the held years.",
+    ):
+        assert sentence in crwd, sentence
+    for old in ("$226.61", "$24.1 billion", "$27", "8.30", "101.7%", "Wide moat", "13.0%"):
+        assert old not in crwd, old
+    assert "14 Nov 2026" not in crwd
     # Coca-Cola's table, caption and sentence, as the acceptance of plan 2 read them under 1.7
     stable = _section(html, "mature-stable")
     ko = stable[stable.index("Worked example: Coca-Cola") :]
@@ -631,7 +710,7 @@ def test_the_moat_class_is_fairband_s_own() -> None:
     """Spec 2026-11-19 8.5 and 12, method 1.8: the moat's paragraph is the Words table's, in place
     of the Moat Score's sentence and its two spans; the examples' moat rows name the moat table;
     the agents' section counts the inputs an override may change without the moat class, which an
-    agent records in each review."""
+    agent records in each review; the refusals list names "no moat class" and what lifts it."""
     html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
     value = _section(html, "value")
     assert (
@@ -651,6 +730,22 @@ def test_the_moat_class_is_fairband_s_own() -> None:
         "reasons, in each review."
     ) in agents
     assert "twenty-five" not in agents
+    # the refusals list names the guard (method 4.9, 5.1, section 9), after the missing figures
+    # it comes after and before the routes' own refusals: what lifts it, and that the company is
+    # then valued (the write revalues it at once; the file's next version at the refresh that
+    # reads it)
+    refusals = value[value.index(">Refusals</h3>") :]
+    refusals = refusals[: refusals.index("</ul>")]
+    items = re.findall(r"<li>(.*?)</li>", refusals)
+    moat = (
+        "No moat class: the moat table holds no class for the company yet, as for a company new "
+        "to the universe. You may set one on its page, an agent may record one in a review, or the "
+        "next version of the table gives one. The company is valued as soon as it has a class."
+    )
+    assert moat in items
+    labels = [item.split(":")[0] for item in items]
+    assert labels.index("No moat class") == labels.index("Missing figures") + 1
+    assert labels.index("Incomplete forecasts") == labels.index("No moat class") + 1
 
 
 def test_a_mechanical_value_keeps_one_time_items() -> None:

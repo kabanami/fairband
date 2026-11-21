@@ -536,6 +536,31 @@ def test_method_1_8_reads_the_moat_table() -> None:
     assert rows[-2].startswith("| 1.8, policy v17 | 2026-11-21 | The moat table (spec 2026-11-19 8")
     for words in ('"no moat class"', "`moat_score`", "`moat_classes`", "unread", "74 corrections"):
         assert words in rows[-2], words
+    # the acceptance's counts on refresh 68's data, each with its denominator (spec 2026-11-19 10),
+    # as the 1.7 row gives plan 2's; the class triples read again on the acceptance's copy
+    for words in (
+        (
+            "161, 1,155 and 47 over its 1,363 valued rows, where the Moat Score as the policy read "
+            "it gave 145, 1,132 and 86"
+        ),
+        (
+            "285 of the 1,488 companies with a class under both change it: 108 None to Narrow, 67 "
+            "Narrow to Wide, 57 Narrow to None, 52 Wide to Narrow and 1 Wide to None"
+        ),
+        "1.7 refused 45 more before it read a class, and 25 are refused before either reads one",
+        (
+            "Of the 1,344 valued rows, 165 values move, 108 up and 57 down, 54 of them up and 12 "
+            "down by 20% or more; 233 buy levels move, every valued row whose class changed"
+        ),
+        'No row crosses between valued and refused, and none is refused "no moat class".',
+        (
+            "Of the 28 reviews, one moves: CRM's, from $213.35 to $175.15, its mechanical value "
+            "falling from $235.84 to $187.30 under Narrow."
+        ),
+        "TTMI's, NVO's and RELX's stay",
+    ):
+        assert words in rows[-2], words
+    assert "plan 3's readout counts them" not in rows[-2]
 
 
 def test_policy_v18_drops_three_values() -> None:
