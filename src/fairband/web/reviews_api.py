@@ -18,16 +18,18 @@ override needs a gaap guidance record of <eps or net_income|revenue> for a fisca
 (``overrides.anchor_misfit``), nothing stored; the override's figure is not checked against the
 record, since an EPS from a net income record is the agent's cited division; one with no
 guidance item at all is left to the evidence rule, which stores it refused. An override applied
-before a later record superseded the one it cites stays applied. ``check_override`` then judges
-it on the route the row takes: its phase's, or the phase an applied ``phase`` override sets (the
-new one included); an unclassified row with no phase override reads no input but its phase. The
-evidence rule's cap is the ``sales_p90_5y`` of the sales class of the snapshot's trailing
-revenue (its ``revenue_ttm`` input), the class the routes find, so it holds on a row a phase
-override moves onto a route that reads the input (a Start-up put in Young Growth); none when the
-snapshot cites no trailing revenue. On a row in another currency (spec 2026-11-10 7.3) the class
-reads that revenue ÷ the snapshot's rate, in USD as the class bounds are, and the cap is restated
-by the row's inflation differential, as the routes read it; the money ranges are read in the
-currency at the snapshot's rate (``types.money_of``). An NTM anchor's override needs a
+before a later record superseded the one it cites stays applied. An override of ``moat.class``
+is then refused ``refused-locked``, "moat.class is the moat table's: record the verdict with
+moat_set" (``overrides.MOAT_SET``), on any row, an unclassified one too (spec 2026-11-19 8.7).
+``check_override`` then judges it on the route the row takes: its phase's, or the phase an applied
+``phase`` override sets (the new one included); an unclassified row with no phase override reads
+no input but its phase. The evidence rule's cap is the ``sales_p90_5y`` of the sales class of the
+snapshot's trailing revenue (its ``revenue_ttm`` input), the class the routes find, so it holds on
+a row a phase override moves onto a route that reads the input (a Start-up put in Young Growth);
+none when the snapshot cites no trailing revenue. On a row in another currency (spec 2026-11-10
+7.3) the class reads that revenue ÷ the snapshot's rate, in USD as the class bounds are, and the
+cap is restated by the row's inflation differential, as the routes read it; the money ranges are
+read in the currency at the snapshot's rate (``types.money_of``). An NTM anchor's override needs a
 ``guidance`` item among its evidence. A lasting ``earnings.sbc`` of 0 that the rules apply is
 then refused where the snapshot's own trailing stock pay, the engine's reading of the input on
 it, is above zero: 400 "a lasting earnings.sbc of 0 is refused: the snapshot's trailing stock pay
@@ -187,6 +189,7 @@ from fairband.engine.designation import designation_for
 from fairband.engine.levels import levels_for
 from fairband.engine.overrides import (
     ANCHOR_METRICS,
+    MOAT_SET,
     PHASES,
     TAGS,
     Lifetime,
@@ -919,7 +922,10 @@ def judged_route(
 def _check(
     body: OverridePost, applied: Sequence[OverrideRow], snapshot: SnapshotRow, policy: Policy
 ) -> tuple[State, str]:
-    """The rule's answer on the route the row takes (module docstring)."""
+    """The rule's answer on the route the row takes (module docstring); the moat class's before
+    the route's, an unclassified row's among them (spec 2026-11-19 8.7)."""
+    if body.tag == "moat.class":
+        return "refused-locked", MOAT_SET
     route = judged_route(body.tag, applied, snapshot, body.new if body.tag == "phase" else None)
     if isinstance(route, tuple):
         return route

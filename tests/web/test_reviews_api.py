@@ -234,6 +234,47 @@ def test_the_override_route_stores_it_refused(client: TestClient) -> None:
     assert entries[0]["summary"] == f"moat.class refused-locked: {MOAT_SET}"
 
 
+def test_an_unclassified_row_refuses_the_moat_before_its_route(
+    client: TestClient, db_path: Path, stored_inputs: dict[str, CompanyInputs], policy: Policy
+) -> None:
+    """Spec 2026-11-19 8.7, the review of Task 9: a row with one fiscal year has no phase, and an
+    override of any other input there is refused for its route, "set its phase first"; the moat
+    class's refusal comes before that rule too, so the agent is sent to ``moat_set``, not to a
+    ``phase`` override. A sensitivity reading on the row still refuses the class for its route,
+    as every input but the phase (method 14.8)."""
+    aapl = stored_inputs["AAPL"]
+    unclassified = replace(aapl, symbol="UNCL", series=aapl.series[:1])
+    result = value_company(unclassified, universe_deciles(), policy, TODAY)
+    assert (result.phase.phase, result.refusal) == (None, "fewer than two fiscal years")
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, result, 1, clock=lambda: CREATED)
+    stored_inputs["UNCL"] = unclassified
+    r = client.post("/api/companies/UNCL/overrides", json=MOAT_NARROW, headers=AGENT)
+    assert (r.status_code, r.json()["detail"]) == (400, MOAT_SET)
+    stored = r.json()["override"]
+    assert (stored["state"], stored["message"], stored["old"]) == ("refused-locked", MOAT_SET, None)
+    r = client.post("/api/companies/UNCL/overrides", json=BELIEF_8, headers=AGENT)
+    unread = "an unclassified row reads no growth.belief: set its phase first"
+    assert (r.status_code, r.json()["detail"]) == (400, unread)
+    assert r.json()["override"]["state"] == "refused-route"
+    assert [(o["tag"], o["state"]) for o in _overrides(client, "UNCL")] == [
+        ("growth.belief", "refused-route"),
+        ("moat.class", "refused-locked"),
+    ]
+    assert client.get("/api/companies/UNCL/reviews").json() == {"reviews": []}
+    reading = {
+        "rowTag": "moat.class",
+        "rowValues": ["Narrow", "Wide"],
+        "colTag": "growth.belief",
+        "colValues": [0.05],
+    }
+    r = client.post("/api/companies/UNCL/sensitivities", json=reading, headers=AGENT)
+    assert (r.status_code, r.json()) == (
+        400,
+        {"detail": "an unclassified row reads no moat.class: set its phase first"},
+    )
+
+
 def test_a_stored_bridge_with_a_moat_line_still_reads(
     client: TestClient,
     db_path: Path,
