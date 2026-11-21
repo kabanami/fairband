@@ -1,8 +1,10 @@
 """The trailing P/E series Fairband builds from FMP's data (spec 2026-11-19 6.3, the text for
 ``method.md`` 16.7): a day's P/E is its close ÷ the trailing diluted EPS of the periods with the
-latest ends at or before it, four quarters or two half-years; a loss day is a row with no point,
-and a day without a trailing EPS, or without a rate for a company in another currency, is no row.
-On synthetic closes and periods; then the series of the three answers as FMP sends them
+latest ends at or before it, four quarters or two half-years; for a company in another currency
+each period's EPS comes into USD at the pair's last close at or before the period's end, and the
+day's rate is not read (the founder's ruling of 2026-11-21). A loss day is a row with no point,
+and a day without a trailing EPS is no row, a day whose year holds a period with no rate among
+them. On synthetic closes and periods; then the series of the three answers as FMP sends them
 (``trailing_series``), and as the pass-through stores them (``stored_trailing``)."""
 
 import json
@@ -59,11 +61,49 @@ def test_a_half_yearly_reporter_sums_two_periods() -> None:
     assert rows == [(date(2026, 1, 5), 20.0)]
 
 
-def test_another_currency_reads_the_close_at_the_days_rate() -> None:
-    closes = [(date(2026, 1, 2), 10.0), (date(2026, 1, 5), 10.0)]
-    rates = [(date(2026, 1, 5), 30.0)]
-    rows = built_rows(closes, _periods([3.0, 4.0, 4.0, 4.0], "TWD"), "TWD", rates)
-    assert rows == [(date(2026, 1, 5), 20.0)]  # 10 × 30 ÷ 15; no rate on 2 January
+def test_another_currency_reads_each_period_at_its_end_s_rate() -> None:
+    """Four quarters of EUR 1.00 at 0.80, 0.90, 1.00 and 1.25 EUR per USD at their ends: the
+    trailing EPS is USD 1.25 + 1.11 + 1.00 + 0.80, so a close of USD 100 is about 24.03 times it,
+    not 100 × 2.0 ÷ 4 = 50 at the day's own rate."""
+    rates = [*zip(Q[:4], (0.80, 0.90, 1.00, 1.25)), (date(2026, 1, 5), 2.0)]
+    rows = built_rows([(date(2026, 1, 5), 100.0)], _periods([1.0] * 4, "EUR"), "EUR", rates)
+    assert rows == [(date(2026, 1, 5), pytest.approx(100.0 / (1 / 0.80 + 1 / 0.90 + 1 + 1 / 1.25)))]
+
+
+def test_another_currency_does_not_read_the_day_s_rate() -> None:
+    """Two days after the same period end, equal closes, the pair at 2.0 on one and 3.0 on the
+    other: the same P/E, 40 ÷ 4."""
+    rates = [*((end, 1.0) for end in Q[:4]), (date(2026, 1, 5), 2.0), (date(2026, 1, 6), 3.0)]
+    closes = [(date(2026, 1, 5), 40.0), (date(2026, 1, 6), 40.0)]
+    rows = built_rows(closes, _periods([1.0] * 4, "EUR"), "EUR", rates)
+    assert rows == [(date(2026, 1, 5), 10.0), (date(2026, 1, 6), 10.0)]
+
+
+def test_a_period_before_the_pair_s_first_close_leaves_its_year_with_no_row() -> None:
+    """The pair's first close is on the second quarter's end: a day whose year holds the first
+    quarter has no row, a day after it left the year has one, though both have a rate."""
+    closes = [(date(2026, 1, 5), 40.0), (date(2026, 4, 1), 40.0)]
+    rows = built_rows(closes, _periods([1.0] * 5, "EUR"), "EUR", [(Q[1], 1.0)])
+    assert rows == [(date(2026, 4, 1), 10.0)]
+
+
+def test_another_currency_with_a_sum_not_above_zero_is_a_loss_day() -> None:
+    """EUR 2.00, 1.00, 1.00 and −3.00, a year of EUR 1.00, at 2.0, 1.0, 1.0 and 0.5 at the ends:
+    USD 1 + 1 + 1 − 6 = −3, a loss in USD."""
+    rates = [*zip(Q[:4], (2.0, 1.0, 1.0, 0.5)), (date(2026, 1, 5), 1.0)]
+    periods = _periods([2.0, 1.0, 1.0, -3.0], "EUR")
+    assert built_rows([(date(2026, 1, 5), 50.0)], periods, "EUR", rates) == [
+        (date(2026, 1, 5), None)
+    ]
+
+
+def test_a_half_yearly_reporter_in_another_currency_reads_each_half_at_its_end_s_rate() -> None:
+    """GBP 1.00 at 0.5 and GBP 2.00 at 0.8: USD 2.00 + 2.50, so a close of 60 is 13.33 times it."""
+    ends = [date(2024, 12, 31), date(2025, 6, 30), date(2025, 12, 31)]
+    rates = [*zip(ends, (1.0, 0.5, 0.8)), (date(2026, 1, 5), 3.0)]
+    periods = _periods([9.0, 1.0, 2.0], "GBP", ends=ends)
+    rows = built_rows([(date(2026, 1, 5), 60.0)], periods, "GBP", rates)
+    assert rows == [(date(2026, 1, 5), pytest.approx(60.0 / (1 / 0.5 + 2 / 0.8)))]
 
 
 def test_periods_that_are_not_consecutive_give_no_row() -> None:
@@ -115,11 +155,12 @@ def test_an_eps_that_is_not_a_finite_number_is_none(huge: str) -> None:
     assert built_rows([(date(2026, 1, 5), 50.0)], periods, "USD", None) == []
 
 
-def test_a_rate_holds_until_the_pairs_next_close() -> None:
-    closes = [(date(2026, 1, 6), 10.0), (date(2026, 1, 8), 10.0)]
-    rates = [(date(2026, 1, 7), 15.0), (date(2026, 1, 2), 30.0)]
-    rows = built_rows(closes, _periods([3.0, 4.0, 4.0, 4.0], "TWD"), "TWD", rates)
-    assert rows == [(date(2026, 1, 6), 20.0), (date(2026, 1, 8), 10.0)]
+def test_a_period_that_ends_on_a_day_with_no_close_reads_the_last_close_before_it() -> None:
+    """The pair has no close on 31 March 2025: the first quarter reads 28 March's 0.5, not 1
+    April's 4.0, so USD 2 + 1 + 1 + 1 and 50 ÷ 5. The rates come in any order."""
+    rates = [*((end, 1.0) for end in Q[1:4]), (date(2025, 4, 1), 4.0), (date(2025, 3, 28), 0.5)]
+    rows = built_rows([(date(2026, 1, 5), 50.0)], _periods([1.0] * 4, "EUR"), "EUR", rates[::-1])
+    assert rows == [(date(2026, 1, 5), 10.0)]
 
 
 def test_no_close_and_no_period_give_an_empty_series() -> None:
@@ -150,8 +191,8 @@ def test_a_period_with_no_stated_currency_is_in_the_reporting_currency() -> None
     """The ruling on Task 4's review: a statement that names no currency is read in the reporting
     currency, as ``method.md`` 4.2 reads one."""
     periods = [*_periods([3.0, 4.0, 4.0], "TWD"), PeriodEps(Q[3], 4.0, None)]
-    rows = built_rows([(date(2026, 1, 5), 10.0)], periods, "TWD", [(date(2026, 1, 5), 30.0)])
-    assert rows == [(date(2026, 1, 5), 20.0)]
+    rows = built_rows([(date(2026, 1, 5), 10.0)], periods, "TWD", [(date(2025, 1, 2), 30.0)])
+    assert rows == [(date(2026, 1, 5), 20.0)]  # 10 ÷ (15 ÷ 30)
     unstated = _periods([1.0, 1.0, 1.0, 1.0], None)
     rows = built_rows([(date(2026, 1, 5), 50.0)], unstated, "USD", None)
     assert rows == [(date(2026, 1, 5), 12.5)]
@@ -176,14 +217,25 @@ def _parts(
 
 
 def test_the_series_of_the_three_answers() -> None:
-    """The close in USD at the pair's rate, ÷ the four quarters' diluted EPS in TWD: 10 × 30 ÷ 15
-    and 11 × 30 ÷ 15; a day before the pair's first close has no rate and no row. In USD the pair
-    is not read: 30 ÷ 15."""
-    closes = {"2026-01-02": 9.0, "2026-01-05": 10.0, "2026-01-06": 11.0}
-    parts = _parts(closes, "TWD", {"2026-01-05": 30.0})
-    series = trailing_series(parts, "TWD")
+    """ASML's shape: four quarters of EUR 1.00, each brought into USD at the pair's close on its
+    end, and the day's close in USD ÷ their sum; the pair's close on the day, 2.0, is not read. In
+    USD the pair is not read: 30 ÷ 15."""
+    rates = {
+        **{end.isoformat(): r for end, r in zip(Q, (0.80, 0.90, 1.00, 1.25))},
+        "2026-01-05": 2.0,
+    }
+    parts = {
+        "closes": closes_payload("ASML", {"2026-01-05": 100.0, "2026-01-06": 110.0}),
+        "quarters": quarters_payload("ASML", [(end, 1.0) for end in Q[:4]], "EUR"),
+        "rates": rates_payload("USDEUR", rates),
+    }
+    series = trailing_series(parts, "EUR")
+    trailing = 1 / 0.80 + 1 / 0.90 + 1 + 1 / 1.25
     assert series is not None and series.since == date(2026, 1, 5)
-    assert series.points == ((date(2026, 1, 5), 20.0), (date(2026, 1, 6), 22.0))
+    assert series.points == (
+        (date(2026, 1, 5), pytest.approx(100.0 / trailing)),
+        (date(2026, 1, 6), pytest.approx(110.0 / trailing)),
+    )
     usd = trailing_series(_parts({"2026-01-05": 30.0}, rates={"2026-01-05": 99.0}), "USD")
     assert usd is not None and usd.points == ((date(2026, 1, 5), 2.0),)
 
@@ -230,20 +282,21 @@ def test_a_close_that_is_not_a_positive_number_gives_no_row(bad: Any) -> None:
 
 @pytest.mark.parametrize("bad", [0, 0.0, -30.0, "n/a", None, "1e400"])
 def test_a_rate_that_is_not_a_positive_number_is_not_read(bad: Any) -> None:
-    """A bad rate is no rate: with none before it the day has no row; with one before it, the
-    day reads that one."""
+    """A bad rate is no rate: with none before it a period has none, and the day no row; with one
+    before it, the period reads that one, 10 ÷ (15 ÷ 30)."""
     closes = {"2026-01-05": 10.0}
-    alone = trailing_series(_parts(closes, "TWD", {"2026-01-05": bad}), "TWD")
+    alone = trailing_series(_parts(closes, "TWD", {"2025-03-31": bad}), "TWD")
     assert alone is not None and alone.points == ()
-    earlier = trailing_series(_parts(closes, "TWD", {"2026-01-02": 30.0, "2026-01-05": bad}), "TWD")
+    earlier = trailing_series(_parts(closes, "TWD", {"2025-03-28": 30.0, "2025-12-31": bad}), "TWD")
     assert earlier is not None and earlier.points == ((date(2026, 1, 5), 20.0),)
 
 
 def _seed(conn: sqlite3.Connection, at: datetime = AT) -> int:
     """TWCO reporting in TWD, with its three answers stored, observed ``at``: a close of USD 10 on
-    5 January 2026 at TWD 30 per USD, ÷ TWD 15 of trailing EPS. The closes' response id."""
+    5 January 2026 ÷ a trailing EPS of TWD 15 at TWD 30 per USD each quarter, USD 0.50. The
+    closes' response id."""
     report_in(conn, "TWCO", "TWD")
-    parts = _parts({"2026-01-05": 10.0}, "TWD", {"2026-01-05": 30.0})
+    parts = _parts({"2026-01-05": 10.0}, "TWD", {"2025-03-31": 30.0})
     return store_pe_history(conn, "TWCO", parts, at, "TWD")["closes"]
 
 
@@ -263,7 +316,7 @@ def test_stored_trailing_reads_the_newest_usable_answer_of_each_whatever_its_age
     _seed(conn, AT - timedelta(days=365))
     closes = {"closes": closes_payload("TWCO", {"2026-01-05": 11.0})}
     newer = store_pe_history(conn, "TWCO", closes, AT, "TWD")["closes"]
-    unusable = {"rates": rates_payload("USDTWD", {"2026-01-05": 60.0})}
+    unusable = {"rates": rates_payload("USDTWD", {"2025-03-31": 60.0})}
     store_pe_history(conn, "TWCO", unusable, AT, "TWD", error="unusable payload: x")
     stored = stored_trailing(conn, "TWCO")
     assert stored is not None and stored[0] == newer

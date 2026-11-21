@@ -96,14 +96,14 @@ be left out.
   month; `daily` answers every point, about 2,500 a series, which overflows the host's result.
   Fairband builds the trailing series from FMP's daily closes and quarterly diluted EPS: a day's
   close ÷ the EPS of the four quarters (two half-years for a company that reports twice a year)
-  ended by that day, the close brought into the reporting currency at the pair's last close on
-  or before the day for a company in another currency; a loss day has no point. It fetches
-  FMP's answers when you call and reuses them for a day. Each point is `{day, value, ref}`; each
-  statistic, `avg10y`, `median10y`, `high10y` and `low10y`, is `{value, unit, ref}` over every
-  daily point, its ref `multiple:<symbol>/pe/avg_10y` and its siblings. `peNote` says why the
-  trailing series could not be fetched or read, when it could not ("the series could not be
-  read"); the read then serves the newest one stored. An EPS near zero gives a very large P/E: the
-  median is the safe statistic.
+  ended by that day, for a company in another currency each period's EPS brought into USD at
+  the pair's last close on or before the period's end, and the close in USD ÷ their sum; a loss
+  day has no point. It fetches FMP's answers when you call and reuses them for a day. Each point
+  is `{day, value, ref}`; each statistic, `avg10y`, `median10y`, `high10y` and `low10y`, is
+  `{value, unit, ref}` over every daily point, its ref `multiple:<symbol>/pe/avg_10y` and its
+  siblings. `peNote` says why the trailing series could not be fetched or read, when it could not
+  ("the series could not be read"); the read then serves the newest one stored. An EPS near zero
+  gives a very large P/E: the median is the safe statistic.
 - `peers(symbol)`: the company's mature peers with their figures, each with its `peer:` ref, and
   where the list of peers came from.
 - `watchlists()`: the watchlists with their companies.

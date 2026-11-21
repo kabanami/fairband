@@ -21,12 +21,15 @@ half-years of a company that reports twice a year (``cadence_of`` on the periods
 when they give none), with the latest period ends at or before the day, so the EPS changes at a
 period's end. The sum stands only when the periods are consecutive by that spacing
 (``consecutive_periods``), each holds its EPS and each is in the reporting currency, a period that
-names none counting as in it, as 4.2 reads a statement; a day with no such sum is no row. A day
-whose trailing EPS is not above zero is a loss: a row with no point, and nothing fills its days, so
-the series keeps the gap. A company in another currency has its close brought into the currency
-at the pair's last close at or before the day, and a day with none is no row. A close or a rate
-that is not a positive number is not read. No split rule and no share-basis rule applies: FMP's
-closes are adjusted for splits and its EPS restated.
+names none counting as in it, as 4.2 reads a statement; a day with no such sum is no row. A
+company in another currency has each period's EPS brought into USD at the pair's last close at or
+before the period's end (units of the currency per USD, so the EPS ÷ the rate), and the day's
+close, in USD, ÷ the sum of those USD figures: a past period's earnings stand at the rate of their
+time, the day's rate is not read, and a period with no rate at or before its end leaves every
+year that holds it with no sum. A day whose trailing EPS is not above zero is a loss: a row with
+no point, and nothing fills its days, so the series keeps the gap. A close or a rate that is not
+a positive number is not read. No split rule and no share-basis rule applies: FMP's closes are
+adjusted for splits and its EPS restated for them.
 """
 
 import json
@@ -120,23 +123,20 @@ def built_rows(
     rates: Sequence[tuple[date, float]] | None,
 ) -> list[tuple[date, float | None]]:
     """Each day of ``closes`` that has a trailing EPS, with its P/E, in the order of ``closes``:
-    the close, brought into ``currency`` (the reporting currency) at the last of ``rates`` (units
-    of the currency per USD; ``None``, and not read, for USD) at or before the day, ÷ the trailing
-    EPS; a loss day is ``(day, None)``."""
+    the close, in USD as FMP gives it, ÷ the trailing EPS of the newest period ended at or before
+    the day (``_trailing_eps``), each period's EPS of a company in ``currency`` other than USD
+    brought into USD at the last of ``rates`` (units of the currency per USD, each above zero;
+    ``None``, and not read, for USD) at or before the period's end; the day's own rate is not
+    read. A loss day is ``(day, None)``."""
     ordered = sorted(periods, key=lambda period: period.end)
     ends = [period.end for period in ordered]
-    trailing = _trailing_eps(ordered, currency)
-    pair = None if currency == _USD else sorted(rates or ())
-    rate_days = [day for day, _ in pair or ()]
+    trailing = _trailing_eps(ordered, currency, None if currency == _USD else (rates or ()))
     rows: list[tuple[date, float | None]] = []
     for day, close in closes:
         newest = bisect_right(ends, day) - 1
         eps = trailing[newest] if newest >= 0 else None
-        at = bisect_right(rate_days, day) - 1
-        if eps is None or (pair is not None and at < 0):
-            continue
-        price = close if pair is None else close * pair[at][1]
-        rows.append((day, price / eps if eps > 0 else None))
+        if eps is not None:
+            rows.append((day, close / eps if eps > 0 else None))
     return rows
 
 
@@ -150,18 +150,32 @@ def built_series(
     return _series(built_rows(closes, periods, currency, rates))
 
 
-def _trailing_eps(periods: Sequence[PeriodEps], currency: str) -> list[float | None]:
+def _trailing_eps(
+    periods: Sequence[PeriodEps], currency: str, rates: Sequence[tuple[date, float]] | None
+) -> list[float | None]:
     """By period, oldest first: the sum of the EPS over the year of periods it ends, ``None``
-    where there are too few, they are not consecutive, or one has no EPS or is in another
-    currency; a period that names no currency is in ``currency``, as 4.2 reads a statement."""
+    where there are too few, they are not consecutive, or one has no EPS, is in another currency
+    or has no rate; a period that names no currency is in ``currency``, as 4.2 reads a statement.
+    With ``rates`` (a company in another currency) each EPS is in USD, ÷ the last rate at or
+    before the period's end; with ``None`` (USD) the EPS is summed as stated."""
     cadence = cadence_of([period.end for period in periods]) or "quarterly"
     count = PERIODS_PER_YEAR[cadence]
+    pair = None if rates is None else sorted(rates)
+    rate_days = [day for day, _ in pair or ()]
+    figures: list[float | None] = []
+    for period in periods:
+        eps = period.eps if period.currency in (None, currency) else None
+        if eps is not None and pair is not None:
+            at = bisect_right(rate_days, period.end) - 1
+            eps = eps / pair[at][1] if at >= 0 else None
+        figures.append(eps)
     sums: list[float | None] = []
     for newest in range(len(periods)):
-        year = periods[max(0, newest + 1 - count) : newest + 1]
-        eps = [p.eps for p in year if p.eps is not None and p.currency in (None, currency)]
-        whole = len(eps) == count and consecutive_periods([p.end for p in year], cadence)
-        sums.append(sum(eps) if whole else None)
+        first = max(0, newest + 1 - count)
+        year = [eps for eps in figures[first : newest + 1] if eps is not None]
+        ends = [period.end for period in periods[first : newest + 1]]
+        whole = len(year) == count and consecutive_periods(ends, cadence)
+        sums.append(sum(year) if whole else None)
     return sums
 
 

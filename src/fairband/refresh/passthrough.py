@@ -40,9 +40,10 @@ under, the key the stored series is read back by:
 - ``quarters``: ``pe-quarters``, the newest ``PE_QUARTERS_LIMIT`` (44) quarterly income
   statements;
 - ``rates``, a company in another currency only: ``pe-rates``, the pair's closes
-  (``historical-price-eod/light`` on ``USD<code>``, ``rates.pair_of``) over the same years, under
-  the pair as the symbol, as the rates stage stores ``fx-history``; a code that names no pair has
-  no call.
+  (``historical-price-eod/light`` on ``USD<code>``, ``rates.pair_of``) from ``PE_RATE_YEARS``
+  (eleven) years before the clock's day, since each period's EPS is read at its end's rate and
+  the first day's trailing year reaches a year behind the closes, under the pair as the symbol,
+  as the rates stage stores ``fx-history``; a code that names no pair has no call.
 
 The endpoint names are the series' own: one stored as ``price-history`` would become the newest
 copy of the five-year closes for every reader, the engine among them; one as ``income-quarter``
@@ -135,7 +136,8 @@ SERIES_KIND = "pe-history"  # the trailing P/E history's answers; not the generi
 PE_CLOSES = "pe-closes"  # the endpoints the history's answers are stored under
 PE_QUARTERS = "pe-quarters"
 PE_RATES = "pe-rates"
-PE_YEARS = 10  # the years of closes and of the pair's closes
+PE_YEARS = 10  # the years of closes
+PE_RATE_YEARS = 11  # the years of the pair's closes: the first day's trailing year reaches back
 PE_QUARTERS_LIMIT = 44  # the quarterly income statements: eleven years
 FILING_PERIODS = ("FY", "Q1", "Q2", "Q3", "Q4")
 BAD_PERIOD = "period is FY or Q1 to Q4"
@@ -177,7 +179,8 @@ class SeriesAnswer:
 def series_answers(symbol: str, currency: str) -> dict[str, SeriesAnswer]:
     """The P/E history's answers for ``symbol`` (the store's exchange form) reporting in
     ``currency``, by part: ``closes`` and ``quarters``, and ``rates`` for a currency other than
-    USD that names a pair (``rates.pair_of``)."""
+    USD that names a pair (``rates.pair_of``); the closes' key holds ``PE_YEARS``, the pair's
+    ``PE_RATE_YEARS``."""
     years = str(PE_YEARS)
     quarters = {"symbol": symbol, "period": "quarter", "limit": str(PE_QUARTERS_LIMIT)}
     answers = {
@@ -189,7 +192,8 @@ def series_answers(symbol: str, currency: str) -> dict[str, SeriesAnswer]:
             pair = pair_of(currency)
         except ValueError:  # a code that names no pair: no rate to read
             return answers
-        answers["rates"] = SeriesAnswer(PE_RATES, pair, {"symbol": pair, "years": years})
+        rate_years = {"symbol": pair, "years": str(PE_RATE_YEARS)}
+        answers["rates"] = SeriesAnswer(PE_RATES, pair, rate_years)
     return answers
 
 
@@ -387,16 +391,18 @@ class Passthrough:
         raise ValueError(unknown_kind(kind))
 
     def _series_calls(self, symbol: str, currency: str) -> list[_Call]:
-        """The P/E history's calls for ``symbol`` reporting in ``currency``, in order: the closes,
-        the quarters and, in another currency, the pair's closes, each stored under its
-        ``series_answers`` key."""
-        fmp, start = self._fmp, _years_before(self._clock().date(), PE_YEARS)
+        """The P/E history's calls for ``symbol`` reporting in ``currency``, in order: the closes
+        from ``PE_YEARS`` before the clock's day, the quarters and, in another currency, the
+        pair's closes from ``PE_RATE_YEARS`` before it, each stored under its ``series_answers``
+        key."""
+        fmp, today = self._fmp, self._clock().date()
         answers = series_answers(symbol, currency)
         sends = {
-            "closes": partial(fmp.price_history, symbol, start),
+            "closes": partial(fmp.price_history, symbol, _years_before(today, PE_YEARS)),
             "quarters": partial(fmp.statement, symbol, "income", "quarter", PE_QUARTERS_LIMIT),
         }
         if "rates" in answers:
+            start = _years_before(today, PE_RATE_YEARS)
             sends["rates"] = partial(fmp.fx_history, answers["rates"].symbol, start)
         return [
             _Call(part, a.endpoint, a.params, sends[part], usable=_is_list, symbol=a.symbol)

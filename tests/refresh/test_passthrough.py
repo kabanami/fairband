@@ -32,12 +32,14 @@ from fairband.refresh.passthrough import (
     PE_CLOSES,
     PE_QUARTERS,
     PE_QUARTERS_LIMIT,
+    PE_RATE_YEARS,
     PE_RATES,
     PE_YEARS,
     SERIES_KIND,
     Passthrough,
     PassthroughBusy,
     filing_report_usable,
+    series_answers,
 )
 from fairband.refresh.rates import rates_for
 from fairband.reports.multiples import trailing_series, years_before
@@ -88,7 +90,17 @@ def test_kinds() -> None:
     )
     assert SERIES_KIND == "pe-history" and SERIES_KIND not in KINDS + FILING_KINDS
     assert (PE_CLOSES, PE_QUARTERS, PE_RATES) == ("pe-closes", "pe-quarters", "pe-rates")
-    assert (PE_YEARS, PE_QUARTERS_LIMIT) == (10, 44)
+    assert (PE_YEARS, PE_RATE_YEARS, PE_QUARTERS_LIMIT) == (10, 11, 44)
+
+
+def test_the_pair_s_closes_reach_a_year_behind_the_closes() -> None:
+    """The founder's ruling of 2026-11-21: each period's EPS is read at its end's rate, and the
+    first day's trailing year reaches a year behind the ten years of closes, so the pair's closes
+    are eleven years in their key; the closes stay ten."""
+    answers = series_answers("ASML", "EUR")
+    assert answers["rates"].params == {"symbol": "USDEUR", "years": "11"}
+    assert answers["closes"].params == {"symbol": "ASML", "years": "10"}
+    assert "rates" not in series_answers("AAPL", "USD")
 
 
 def test_the_filing_kinds_are_not_the_generic_route_s() -> None:
@@ -464,20 +476,25 @@ def test_pe_history_stores_closes_and_quarters_under_their_own_names(env: Env) -
 
 
 def test_pe_history_adds_the_pair_for_a_company_in_another_currency(env: Env) -> None:
-    """TWCO reports in TWD, its newest snapshot's currency: a third call, the pair's closes over
-    the same ten years, stored under the pair as the rates stage stores its history, but under
-    the series' own endpoint."""
+    """TWCO reports in TWD, its newest snapshot's currency: a third call, the pair's closes from
+    eleven years before the clock's day, a year behind the closes' ten, since the first day's
+    trailing year reaches back that far, stored under the pair as the rates stage stores its
+    history, but under the series' own endpoint."""
     _serve_twco(env)
     parts = _passthrough(env).fetch("pe-history", "TWCO", {})
     assert set(parts) == {"closes", "quarters", "rates"}
     assert env.router.calls == {"price-history": 1, "income-quarter": 1, "fx-history": 1}
-    start = years_before(env.clock().date(), 10).isoformat()
+    today = env.clock().date()
+    start = years_before(today, 11).isoformat()
     assert env.router.requested["fx-history"] == {"symbol": "USDTWD", "from": start}
-    years = {"symbol": "USDTWD", "years": "10"}
+    closes_from = years_before(today, 10).isoformat()
+    assert env.router.requested["price-history"] == {"symbol": "TWCO", "from": closes_from}
+    years = {"symbol": "USDTWD", "years": "11"}
     rates = parts["rates"]
     assert _stored(env, rates.row.id) == ("pe-rates", "USDTWD", years, None)
     assert rates.payload == _fixture("historical-price-eod-light.USDTWD.json")
-    assert _stored(env, parts["closes"].row.id)[:2] == ("pe-closes", "TWCO")
+    ten = {"symbol": "TWCO", "years": "10"}
+    assert _stored(env, parts["closes"].row.id) == ("pe-closes", "TWCO", ten, None)
 
 
 def test_pe_history_is_reused_within_reuse_hours(env: Env) -> None:

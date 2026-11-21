@@ -259,7 +259,7 @@ pacing, its slots and its key scrubbing:
 |---|---|---|
 | Ten years of daily closes | `historical-price-eod/full`, from ten years before today | provider `fmp`, endpoint `pe-closes` |
 | 44 quarterly income statements | `income-statement`, `period=quarter`, `limit=44` | endpoint `pe-quarters` |
-| Ten years of the pair's closes, a company in another currency only | `historical-price-eod/light` on `USD<code>` | endpoint `pe-rates` |
+| Eleven years of the pair's closes, a company in another currency only (changed on 2026-11-21 by the founder's ruling; see the decision log) | `historical-price-eod/light` on `USD<code>`, from eleven years before today | endpoint `pe-rates` |
 
 The endpoint names are the series' own. A deeper answer stored as `price-history` would become
 the newest copy for every reader of the five-year closes, the engine among them. One stored as
@@ -278,11 +278,17 @@ the screen's data; the seven days were GuruFocus's).
 > EPS changes at a period's end, not at its filing date. The sum stands only when the periods
 > are consecutive by 4.2's spacing and each holds the line; else the day has no point. A day
 > whose trailing EPS is not above zero is a loss: it has no point and nothing fills it, so the
-> series keeps the gap. A company in another currency: the day's close comes into the reporting
-> currency at the pair's last close at or before the day (units of the currency per USD), as
-> the price comes into the currency in section 7; a day whose periods are not all in the
-> reporting currency, or with no rate at or before it, has no point. FMP's closes are adjusted
-> for splits and its EPS restated; the series applies no split rule and no share-basis rule.
+> series keeps the gap. A company in another currency: each period's EPS comes into USD at the
+> pair's last close at or before the period's end (units of the currency per USD, so the EPS ÷
+> the rate, 7.3), the trailing EPS is the sum of those USD figures, and the day's P/E is the
+> day's close in USD ÷ that sum. A past period's earnings so stand at the rate of their time,
+> and the day's rate is not read. A day whose periods are not all in the reporting currency, or
+> that holds a period with no rate at or before its end, has no point. FMP's closes are
+> adjusted for splits and its EPS restated for them; the series applies no split rule and no
+> share-basis rule.
+
+The quote's sentence on a company in another currency and its "restated for them" are new
+(changed on 2026-11-21 by the founder's ruling; see the decision log).
 
 The paragraph on the fetch follows it: the three answers and their names, the reuse, and what
 the read serves when the fetch cannot be had (the newest stored answers, whatever their age,
@@ -298,7 +304,16 @@ stored as unusable and fetched again at every open (FRVO and RKLB on the live da
 old share basis for some days, and the series then steps by the split's ratio (B-199's family);
 an ADR period whose EPS FMP holds off by the depositary's ratio (6.2) steps the same way; the
 cadence is today's for all ten years; an EPS near zero gives a very large P/E, so the median is
-the safe statistic.
+the safe statistic. Added (changed on 2026-11-21 by the founder's ruling; see the decision
+log): FMP can hold an ADR's period off by the ratio on a company that is no ADR on the screen;
+FMP states EPS to the cent; FMP's EPS is as FMP holds it (a restatement for an accounting change
+can stand as first reported, and one period held wrong moves every day of the year that holds
+it), and the series checks no EPS against another line; the series steps on FMP's period end,
+the fiscal week's end for a 52- or 53-week year, and its newest days change when a quarter is
+filed; and for a company in another currency the forward P/E and a row's own P/E (5.9) read the
+price at the day's rate, so they differ from the trailing series' newest point by the
+currency's move since the periods' ends. The comparison of 2026-11-21 with GuruFocus's stored
+series, on 29 companies over ten years, is in the decision log.
 
 **The foreign filers and the half-yearly reporters were not tested** (decision document 4.4).
 Plan 1 tests them before the merge: the built series against GuruFocus's stored series for

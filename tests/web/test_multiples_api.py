@@ -220,32 +220,34 @@ def test_the_multiples_history_read(
             assert (found.value, found.unit) == (figure["value"], "multiple"), figure["ref"]
 
 
-def test_a_company_in_another_currency_reads_its_close_at_the_pair_s_rate(
+def test_a_company_in_another_currency_reads_each_quarter_at_its_end_s_rate(
     with_history: TestClient, fmp: FmpDouble, db_path: Path
 ) -> None:
-    """TWCO reports in TWD: the read asks the pair's closes too, and a day's close in USD comes
-    into TWD at the pair's last close at or before it: 10 × 30 ÷ 15 on the 28th, 10 × 31 ÷ 15 on
-    the 29th and on the 30th, at the 29th's rate; nothing before the pair's first close."""
+    """TWCO reports in TWD: the read asks the pair's closes too, and each quarter's TWD 3.75
+    comes into USD at the pair's last close at or before its end, 30, 30, 25 and 20, USD 0.5875
+    in all, so every day's close of USD 10 is 17.02 times it; the 29th's own rate, 31, is not
+    read."""
     with closing(connect(db_path)) as conn:
         report_in(conn, "TWCO", "TWD")
     closes = {"2026-10-26": 10.0, "2026-10-28": 10.0, "2026-10-29": 10.0, "2026-10-30": 10.0}
-    eps = [(end, 3.75) for end in quarter_ends(date(2025, 12, 31), 4)]
+    ends = quarter_ends(date(2025, 12, 31), 4)
+    rates = {end.isoformat(): rate for end, rate in zip(ends, (30.0, 30.0, 25.0, 20.0))}
     fmp.bodies = {
         CLOSES: closes_payload("TWCO", closes),
-        QUARTERS: quarters_payload("TWCO", eps, "TWD"),
-        RATES: rates_payload("USDTWD", {"2026-10-28": 30.0, "2026-10-29": 31.0}),
+        QUARTERS: quarters_payload("TWCO", [(end, 3.75) for end in ends], "TWD"),
+        RATES: rates_payload("USDTWD", rates | {"2026-10-29": 31.0}),
     }
     body = _get(with_history, "/api/companies/TWCO/multiples-history")
     [(closes_id, error)] = _stored(db_path, "pe-closes", "TWCO")
     [(_, rates_error)] = _stored(db_path, "pe-rates", "USDTWD")  # stored under the pair
     assert error is None and rates_error is None
     assert fmp.calls == {CLOSES: 1, QUARTERS: 1, RATES: 1} and fmp.asked[RATES] == "USDTWD"
-    at_30, at_31 = 10 * 30 / 15, 10 * 31 / 15
+    pe = pytest.approx(10 / (3.75 / 30 + 3.75 / 30 + 3.75 / 25 + 3.75 / 20))
     days = [(point["day"], point["value"]) for point in body["pe"]["points"]]
-    assert days == [("2026-10-28", at_30), ("2026-10-29", at_31), ("2026-10-30", at_31)]
-    assert body["pe"]["stats"]["high10y"]["value"] == at_31
+    assert days == [(day, pe) for day in closes]
+    assert body["pe"]["stats"]["high10y"]["value"] == pe
     assert (body["pe"]["since"], body["pe"]["responseId"], body["peNote"]) == (
-        "2026-10-28",
+        "2026-10-26",
         closes_id,
         None,
     )
