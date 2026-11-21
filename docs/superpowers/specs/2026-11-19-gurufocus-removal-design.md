@@ -1050,3 +1050,49 @@ series built from several answers; the order of work inside a plan.
   server: 2,514 points each from 2016-11-21, with no note. B-255, B-256 and B-257 are closed;
   the limits met are B-262 to B-267. Every research session must restart its MCP process,
   since `pe_history` is gone.
+- **2026-11-21, plan 2 built.** Nine tasks, each built by a subagent and reviewed, one fix round
+  on the playbook, then a review of the whole branch and one wave of fixes (commits 5e2bec7 to
+  8e4410f). The build's own rulings, for the founder to overturn: the playbook's template says
+  that under the agent's gap the clean P/E is the review's and that a report with no gap gives
+  the reported P/E alone, since a snapshot's two P/Es are equal from now on; its example cites
+  one P/E; the `split-pending` entry names GuruFocus's EPS no more; the rule for an asset
+  outside the business keeps its guard against counting a gain twice; and the cycle gap of a
+  Mature Stable row is measured on the trailing figures less the agent's `earnings.nri_gap`,
+  since the engine takes that gap off first and a one-time charge would else be added back
+  twice (the formula of 2026-11-11 does not change). In the drawer the dot hangs in the gap
+  before the Fair value figure, so the four levels keep one left edge. The warning fires at an
+  exact 20% within 1e-12.
+- **2026-11-21, plan 2 on the reference database (section 10).** Every company of refresh 68
+  valued in memory with the branch's code: 1,558 read, none raising. The 915 valued rows of
+  Mature Growth, High Growth, Young Growth and Decline keep their values. Of Mature Stable's
+  448 valued rows 301 go down, 90 up, 38 stay and 19 are refused "no positive trailing
+  earnings", each value and refusal the one the test of 2026-11-19 gave with no gap.
+  `one-time-items` is on 211 rows, 173 valued and 38 refused: 191 of the 437 valued Mature
+  Stable rows that hold both EPS figures (the test's own 392 rows give 176, not 177: NTAP's
+  street quarters do not sit on the exact period end). 162 valued rows hold three warnings or
+  more, 156 of them with no reviewed value. Reason 1 of `sbc-basis-uncertain` is on 24 rows,
+  against 48 under 1.6 on the same data. CLS's override 36 is the one override that drops;
+  PLTR's 20 stays. The look was checked in a browser in both themes on a scratch copy valued
+  under 1.7: the dot is U+2022 of the page's own IBM Plex Mono, as form A draws it, and every
+  hover reads as section 7.5 words it.
+- **2026-11-21, the founder: "you have concent for live steps"**, given while the fix wave ran,
+  and then "when this completes, please feel free to merge and push to main, then kick off
+  plan 3 implementation".
+- **2026-11-21, plan 2 live.** The backup is `fairband-before-method-1.7-2026-11-21.db`. Main
+  went to 8e4410f by a fast-forward and was pushed. Refresh 71, a revalue under method 1.7 and
+  policy v17: 1,558 rows, 1,344 valued (1,363 before); the server runs on 8470 from main.
+  Against refresh 70: of the 448 valued Mature Stable rows 301 go down, 90 up, 38 stay and 19
+  are refused "no positive trailing earnings"; no value differs on any other row. The largest
+  moves are GPC (60.65 to 2.49), CRL, LFUS, APD and ACI down, and TAC (0.28 to 2.54), ZIM, SUZ,
+  CNX and BKV up; CX goes from 7.49 to 4.93 and SIMO from 95.71 to 105.82. 76 rows change
+  designation. `one-time-items` is on 211 rows, 173 valued and 38 refused; `large-nri` left
+  691 rows and `consensus-basis-unknown` 559; `sbc-basis-uncertain` is on 115 rows (133
+  before), reason 1 on 24. 164 valued rows hold three warnings or more and 158 carry the mark.
+  No `split-pending` sentence changes. CLS's override 36 dropped, "the input the override
+  corrected changed", and its review went from 271.27 to 291.62 (+7.50%): the override was
+  the agent's way to make the basis test charge stock pay, and the charge left with it; the
+  other 27 reviews keep their values, PLTR's with its override 20. EPV, the growth share and
+  the clean P/E also move on rows of other routes that had a found gap; their values do not.
+  B-258 and B-259 are closed; the limits met are B-268 to B-272. No tool changed, so no MCP
+  process restarts, but a research session started before the merge holds the old playbook.
+
