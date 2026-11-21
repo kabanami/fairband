@@ -34,6 +34,12 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
   statement lines the normalizer gained after their responses were stored, from the stored
   payloads (spec 2026-11-03 section 11): a full refresh's fetch reuses a response observed
   within ``reuse_hours`` without a call, so it may predate a line. The stage reports its start alone.
+- ``moat``: the first step of every value stage, so after a 429 too: on the run's own connection,
+  ``load_moat_file`` reads the run's moat table (``moat``, the packaged file by default) into the
+  database: the file's row for a company the database lacks, a file row that differs from the
+  file's entry replaced, a file row whose company the file no longer holds deleted, and the
+  owner's and the agents' rows left as they are (spec 2026-11-19 8.4). The stage reports its
+  start alone.
 - ``value``: on the run's own connection, one fetched symbol at a time: ``build_inputs`` and
   ``value_company`` with the latest stored deciles (a full refresh's own; assembly classifies the
   company's peers on them), ``insert_snapshot``; the symbol is ``valued``. Without stored deciles the snapshot is the refusal "no universe deciles
@@ -48,13 +54,22 @@ A scoped refresh takes the symbols it is given. Both then list each symbol ``pen
 Every kind but a revalue fetches, so without an FMP client (the server's worker without a key)
 ``run`` refuses it with a ``ValueError`` naming the keys file, before the record exists.
 
-A revalue takes no symbols, makes no vendor call and needs no FMP client (calibration spec 5.9): it
-lists the latest universe's admitted companies (``latest_companies``) ``pending``, in symbol order,
-or, before any universe, every company with a snapshot (``latest_snapshots``), as the price
-refresh does; then it runs the ``backfill`` and the ``value`` stage on the facts the store holds,
-with the latest stored deciles, then ``done``. A company the store holds no facts for gets the
-engine's refusal. It saves its ``calibration`` like a full refresh, with no listing left out: it
-builds no universe.
+A revalue makes no vendor call and needs no FMP client (calibration spec 5.9). Given symbols, it
+values those alone, each once in the order given, and the record names them (spec 2026-11-19
+8.6); given none, it lists the latest universe's admitted companies (``latest_companies``) in
+symbol order, or, before any universe, every company with a snapshot (``latest_snapshots``), as
+the price refresh does. It lists them ``pending``, then runs the ``backfill`` and the value stage
+on the facts the store holds, with the latest stored deciles, then ``done``. A company the store
+holds no facts for gets the engine's refusal. A revalue of every company saves its
+``calibration`` like a full refresh, with no listing left out, since it builds no universe; one
+that names companies saves none, as a scoped refresh.
+
+``revalue_company`` values one company again inside its caller's transaction, for the write of a
+moat class (spec 2026-11-19 8.6): the policy recorded, a ``revalue`` record naming the company
+(``RefreshRunning`` while a refresh runs), the ``moat`` stage, the company valued as the value
+stage values it, and the record finished ``done``. It makes no vendor call, runs no backfill and
+reports no progress, and what it meets rises, so the caller's transaction rolls back whole, the
+record with it.
 
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
@@ -96,7 +111,8 @@ before it starts another run.
 
 A price refresh takes no symbols; ``run_price.PriceRefresh`` runs its stages (``quotes``, ``fx``,
 ``reprice``, ``done``) on the run's connection, and its module docstring says how. It values
-nothing and runs no backfill. Neither it nor a revalue runs a ``rates`` stage.
+nothing, so it runs no backfill and loads no moat table. Neither it nor a revalue runs a ``rates``
+stage.
 
 The record carries the policy's version and its settings hash (spec 2026-11-04, 8.4): the run
 values under the policy it was built with, the effective one its caller read when it started.
@@ -114,15 +130,17 @@ from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import date, datetime
 from functools import partial
 from typing import Any, Literal
 
 from fairband.config import MissingKey
 from fairband.engine import METHOD_VERSION
+from fairband.engine.classifier import Deciles
 from fairband.engine.route import refusal_result, value_company
 from fairband.engine.types import PHASE_NUMBER
 from fairband.policy import Policy
+from fairband.policy.moat import MoatTable, load_moat_table
 from fairband.policy.tax import TaxTable
 from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.deciles import deciles_for_universe
@@ -134,6 +152,7 @@ from fairband.refresh.run_price import PriceRefresh, rate_limited
 from fairband.refresh.universe import build_universe
 from fairband.store.companies import latest_companies
 from fairband.store.db import transaction
+from fairband.store.moat import load_moat_file
 from fairband.store.multiples import log_snapshot
 from fairband.store.policy import record_policy
 from fairband.store.refreshes import (
@@ -199,7 +218,8 @@ class Refresh:
     """One refresh run (see the module docstring). ``conn_factory`` opens a connection to the
     store: ``run`` opens one for itself and each fetch one of its own. ``secrets`` are the vendor
     keys, scrubbed from what the fetch stores and from every message the run writes. ``close``
-    closes the run's clients, when its caller hands it the clients to close."""
+    closes the run's clients, when its caller hands it the clients to close. ``moat`` is the moat
+    table the run's value stage loads first; without one, the run reads the packaged file."""
 
     def __init__(
         self,
@@ -213,6 +233,7 @@ class Refresh:
         on_progress: Callable[[Progress], None] | None = None,
         secrets: Sequence[str] = (),
         close: Callable[[], None] | None = None,
+        moat: MoatTable | None = None,
     ) -> None:
         self._conn_factory = conn_factory
         self._fmp = fmp
@@ -224,6 +245,7 @@ class Refresh:
         self._on_progress = on_progress
         self._secrets = tuple(secrets)
         self._close = close
+        self._moat = load_moat_table() if moat is None else moat
         self._in_flight = 0
         self._in_flight_lock = threading.Lock()
 
@@ -234,16 +256,17 @@ class Refresh:
         on_started: Callable[[int], None] | None = None,
     ) -> int:
         """Run a refresh of ``kind`` and return its id. Raises ``ValueError`` without an FMP
-        client for a kind that fetches (all but a revalue), with ``MissingKey``'s text, and for a
-        scoped refresh without symbols or another kind with them, all before any work."""
+        client for a kind that fetches (all but a revalue), with ``MissingKey``'s text, for a
+        scoped refresh without symbols, and for a full or a price refresh with them, all before any
+        work. A revalue values the symbols it is given, or every company without them."""
         fmp = self._fmp
         if kind != "revalue" and fmp is None:
             raise ValueError(str(MissingKey("fmp")))
         names: list[str] | None = None
-        if kind == "scoped":
-            if not symbols:
+        if kind in ("scoped", "revalue"):
+            if kind == "scoped" and not symbols:
                 raise ValueError("a scoped refresh needs symbols")
-            names = list(dict.fromkeys(symbols))
+            names = list(dict.fromkeys(symbols)) if symbols else None
         elif symbols:
             raise ValueError(f"a {kind} refresh takes no symbols")
         with closing(self._conn_factory()) as conn:
@@ -261,7 +284,7 @@ class Refresh:
                 if on_started is not None:
                     on_started(refresh_id)
                 if kind == "revalue":
-                    status, message, counts = self._revalue(conn, refresh_id)
+                    status, message, counts = self._revalue(conn, refresh_id, names)
                 else:
                     assert fmp is not None  # refused above, before the record
                     if kind == "price":
@@ -352,9 +375,12 @@ class Refresh:
         self._done(conn, refresh_id, fetched, valued)
         return "done", None, None
 
-    def _revalue(self, conn: sqlite3.Connection, refresh_id: int) -> _Finish:
-        """The stages of a revalue; the status, message and calibration to finish it with."""
-        symbols = _revalue_symbols(conn)
+    def _revalue(
+        self, conn: sqlite3.Connection, refresh_id: int, names: Sequence[str] | None
+    ) -> _Finish:
+        """The stages of a revalue of the companies ``names`` names, or of every company without
+        them; the status, message and calibration to finish it with."""
+        symbols = _revalue_symbols(conn) if names is None else tuple(names)
         self._list_pending(conn, refresh_id, symbols)
         self._backfill(conn, refresh_id)
         valued = self._value_stage(conn, refresh_id, symbols)
@@ -362,6 +388,8 @@ class Refresh:
             return "cancelled", None, None
         # The store's facts stand in for a fetch: every company counts as fetched.
         self._done(conn, refresh_id, _Fetched(symbols, 0, None), valued)
+        if names is not None:
+            return "done", None, None
         snapshots = refresh_snapshots(conn, refresh_id)
         return "done", None, calibration(symbols, {}, snapshots)
 
@@ -538,8 +566,10 @@ class Refresh:
     def _value_stage(
         self, conn: sqlite3.Connection, refresh_id: int, symbols: Sequence[str]
     ) -> int | None:
-        """Value ``symbols`` one at a time; the number valued, or ``None`` when a cancel
-        stopped the stage."""
+        """The ``moat`` stage, then value ``symbols`` one at a time; the number valued, or
+        ``None`` when a cancel stopped the stage."""
+        self._stage(conn, refresh_id, "moat", 0)
+        load_moat_file(conn, self._moat, self._clock())
         self._stage(conn, refresh_id, "value", len(symbols))
         deciles = latest_deciles(conn)
         today = self._clock().date()
@@ -548,23 +578,9 @@ class Refresh:
             if self._cancel.is_set():
                 return None
             try:
-                inputs = build_inputs(conn, symbol, self._policy, self._tax, today, deciles)
-                result = value_company(inputs, deciles, self._policy, today)
-                with transaction(conn):
-                    snapshot_id = insert_snapshot(conn, result, refresh_id, clock=self._clock)
-                    log_snapshot(conn, result, snapshot_id, refresh_id, self._clock())
-                    follow_snapshot(
-                        conn,
-                        inputs,
-                        result,
-                        snapshot_id,
-                        deciles,
-                        self._policy,
-                        today,
-                        refresh_id,
-                        self._clock,
-                    )
-                    upsert_item(conn, refresh_id, symbol, "valued", None, self._clock())
+                _value_symbol(
+                    conn, refresh_id, symbol, self._policy, self._tax, deciles, today, self._clock
+                )
             except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own
                 self._fail(conn, refresh_id, symbol, f"valuation failed: {self.describe(exc)}")
                 failed += 1
@@ -603,6 +619,66 @@ class Refresh:
     ) -> None:
         if self._on_progress is not None:
             self._on_progress(Progress(refresh_id, stage, done, failed, remaining, current))
+
+
+def revalue_company(
+    conn: sqlite3.Connection,
+    symbol: str,
+    policy: Policy,
+    tax: TaxTable,
+    moat: MoatTable,
+    clock: Callable[[], datetime],
+) -> int:
+    """Value ``symbol`` again inside the caller's transaction, or one of its own without one, and
+    return the snapshot's id (module docstring; spec 2026-11-19 8.6): the policy recorded, a
+    ``revalue`` record naming ``symbol``, the ``moat`` stage loading ``moat``, the symbol valued on
+    the latest stored deciles as the value stage values it, and the record finished ``done``.
+    ``RefreshRunning`` while a refresh runs; any other exception rises as it comes."""
+    with transaction(conn, immediate=True):
+        record_policy(conn, policy, clock())
+        refresh_id = create_refresh(
+            conn,
+            "revalue",
+            [symbol],
+            policy.version,
+            METHOD_VERSION,
+            clock(),
+            policy.settings_hash,
+        )
+        set_stage(conn, refresh_id, "moat")
+        load_moat_file(conn, moat, clock())
+        set_stage(conn, refresh_id, "value")
+        deciles = latest_deciles(conn)
+        today = clock().date()
+        snapshot_id = _value_symbol(conn, refresh_id, symbol, policy, tax, deciles, today, clock)
+        set_stage(conn, refresh_id, "done")
+        finish_refresh(conn, refresh_id, "done", clock())
+    return snapshot_id
+
+
+def _value_symbol(
+    conn: sqlite3.Connection,
+    refresh_id: int,
+    symbol: str,
+    policy: Policy,
+    tax: TaxTable,
+    deciles: Deciles | None,
+    today: date,
+    clock: Callable[[], datetime],
+) -> int:
+    """Value ``symbol`` on the facts the store holds and ``deciles``, then, in one transaction (the
+    caller's when there is one), write its snapshot, log its multiples, follow it with a review and
+    mark the symbol ``valued``; the snapshot's id."""
+    inputs = build_inputs(conn, symbol, policy, tax, today, deciles)
+    result = value_company(inputs, deciles, policy, today)
+    with transaction(conn):
+        snapshot_id = insert_snapshot(conn, result, refresh_id, clock=clock)
+        log_snapshot(conn, result, snapshot_id, refresh_id, clock())
+        follow_snapshot(
+            conn, inputs, result, snapshot_id, deciles, policy, today, refresh_id, clock
+        )
+        upsert_item(conn, refresh_id, symbol, "valued", None, clock())
+    return snapshot_id
 
 
 def _revalue_symbols(conn: sqlite3.Connection) -> tuple[str, ...]:

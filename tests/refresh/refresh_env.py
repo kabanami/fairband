@@ -11,23 +11,38 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from support.moat import moat_table
 from vendor_double import FMP_KEY, GF_TOKEN, Clients, Clock, Router
 
 from fairband import __main__ as cli
 from fairband.config import Keys
-from fairband.policy import Policy
+from fairband.policy import Moat, Policy
+from fairband.policy.moat import MoatTable
 from fairband.policy.tax import TaxTable
 from fairband.refresh.run import Progress, Refresh
 from fairband.store.db import connect
 from fairband.store.refreshes import RefreshRow, items, latest_refresh
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 
+# The classes the GuruFocus fixtures give, so the moat table agrees with the Moat Score the engine
+# reads: ACME's summary, a score of 7, Narrow, which the fixture universe's companies share; BOLT's,
+# no score, None.
+MOAT_CLASSES: dict[str, Moat] = {
+    "ACME": "Narrow",
+    "AXLE": "Narrow",
+    "BOLT": "None",
+    "KRON": "Narrow",
+    "MILD": "Narrow",
+    "NEWT": "Narrow",
+}
+
 
 @dataclass
 class Env:
     """A migrated database, and the clients over the router. ``universe_id`` is the refresh whose
     universe the database lists, 0 when it lists none. ``progress`` collects every event of every
-    refresh built by ``refresh``."""
+    refresh built by ``refresh``, and ``moat`` is the moat table each one loads, in place of the
+    packaged file."""
 
     db_path: Path
     universe_id: int
@@ -37,6 +52,7 @@ class Env:
     policy: Policy
     tax: TaxTable
     progress: list[Progress] = field(default_factory=list)
+    moat: MoatTable = field(default_factory=lambda: moat_table(MOAT_CLASSES))
 
     def connect(self) -> sqlite3.Connection:
         return connect(self.db_path)
@@ -46,7 +62,9 @@ class Env:
         workers: int | None = None,
         cancel: threading.Event | None = None,
         then: Callable[[Progress], None] | None = None,
+        moat: MoatTable | None = None,
     ) -> Refresh:
+        """A refresh over the env, loading ``moat``, else the env's table."""
         policy = self.policy
         if workers is not None:
             policy = replace(policy, refresh=replace(policy.refresh, workers=workers))
@@ -66,6 +84,7 @@ class Env:
             cancel or threading.Event(),
             record,
             self.clients.secrets,
+            moat=self.moat if moat is None else moat,
         )
 
     def run(self, symbols: list[str], **refresh: Any) -> int:
@@ -95,7 +114,8 @@ class Env:
 
 
 def use_cli(env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Point the command at the env's database and clients; the keys come from the environment."""
+    """Point the command at the env's database, clients and moat table; the keys come from the
+    environment."""
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(env.db_path.parent))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("FAIRBAND_FMP_KEY", FMP_KEY)
@@ -107,3 +127,4 @@ def use_cli(env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(cli, "build_clients", clients)
     monkeypatch.setattr(cli, "utcnow", env.clock)
+    monkeypatch.setattr(cli, "load_moat_table", lambda: env.moat)

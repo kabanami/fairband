@@ -18,6 +18,7 @@ import httpx
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
+from support.moat import moat_table
 
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Keys, MissingKey, Settings
@@ -45,6 +46,8 @@ KEY = "fake-fmp-key-0002"  # not a real key
 HOST = "http://127.0.0.1:8470"
 POST = {"X-Fairband-Request": "1"}
 MISSING_HEADER = {"detail": "missing X-Fairband-Request header"}
+# Each run's moat table, in place of the packaged file: the GuruFocus fixtures' classes.
+MOAT = moat_table({"ACME": "Narrow", "BOLT": "None"})
 
 
 class Gate:
@@ -127,6 +130,7 @@ def worker(db_path: Path, fmp: Fmp, policy: Policy, gate: Gate) -> Iterator[Refr
             cancel,
             on_progress,
             [KEY],
+            moat=MOAT,
         )
 
     worker = RefreshWorker(make_refresh)  # waits up to 5 s for a given-up fetch to end
@@ -330,6 +334,30 @@ def test_api_price_refresh_starts(client_with_worker: TestClient, db_path: Path)
     assert snapshot is not None and snapshot.refresh_id == scoped  # no new row
 
 
+def test_api_revalue_with_symbols(client_with_worker: TestClient, db_path: Path) -> None:
+    """A revalue that names companies values those alone (spec 2026-11-19 8.6), with no fetch:
+    the store holds no facts for ACME, so its snapshot is the engine's refusal. The record names
+    ACME and, as a scoped refresh's, saves no calibration."""
+    client = client_with_worker
+    response = start(client, kind="revalue", symbols=["ACME"])
+    assert (response.status_code, response.json()) == (200, {"refreshId": 1})
+    join_runs()
+    last = current(client)["last"]
+    assert (last["id"], last["kind"], last["status"], last["stage"]) == (
+        1,
+        "revalue",
+        "done",
+        "done",
+    )
+    assert last["calibration"] is None
+    with closing(connect(db_path)) as conn:
+        record = latest_refresh(conn)
+        assert record is not None and record.symbols == ("ACME",)
+        assert [(i.symbol, i.status) for i in items(conn, 1)] == [("ACME", "valued")]
+        snapshot = latest_snapshot(conn, "ACME")
+    assert snapshot is not None and (snapshot.refresh_id, snapshot.value) == (1, None)
+
+
 def test_api_without_worker_503(client_without_worker: TestClient) -> None:
     client = client_without_worker
     response = start(client, kind="full")
@@ -347,10 +375,11 @@ def test_make_refresh_reads_the_overlay_per_run(db_path: Path) -> None:
     def conn_factory() -> sqlite3.Connection:
         return connect(db_path)
 
-    first = cli.make_refresh(conn_factory, None, tax, threading.Event(), lambda p: None)
+    first = cli.make_refresh(conn_factory, None, tax, threading.Event(), lambda p: None, moat=MOAT)
     with closing(connect(db_path)) as conn:
         saved = write_settings(conn, {"required_return": 0.1}, None, NOW)
-    second = cli.make_refresh(conn_factory, None, tax, threading.Event(), lambda p: None)
+    second = cli.make_refresh(conn_factory, None, tax, threading.Event(), lambda p: None, moat=MOAT)
+    assert first._moat is second._moat is MOAT  # the server's table, read as it started
     assert first._policy.settings_hash == EMPTY_SETTINGS_HASH
     assert second._policy.settings_hash == saved.settings_hash != EMPTY_SETTINGS_HASH
     assert (first._policy.required_return, second._policy.required_return) == (0.09, 0.1)
@@ -387,11 +416,12 @@ def test_make_refresh_builds_the_clients_from_the_effective_policy(
         saved = write_settings(conn, changes, None, NOW)
     keys = Keys(fmp=KEY, gurufocus=None)
     limiter = RateLimiter(2850, lambda: NOW, lambda _: None)
+    tax = load_tax_table()
     refresh = cli.make_refresh(
-        lambda: connect(db_path), keys, load_tax_table(), threading.Event(), lambda p: None
+        lambda: connect(db_path), keys, tax, threading.Event(), lambda p: None, moat=MOAT
     )
     shared = cli.make_refresh(
-        lambda: connect(db_path), keys, load_tax_table(), threading.Event(), lambda p: None, limiter
+        lambda: connect(db_path), keys, tax, threading.Event(), lambda p: None, limiter, MOAT
     )
     [(given, policy, own), (_, _, passed)] = built
     assert given is keys and policy == refresh._policy
@@ -414,7 +444,7 @@ def test_start_full_without_a_key_is_400_not_503(
     tax = load_tax_table()
     worker = RefreshWorker(
         lambda cancel, on_progress: cli.make_refresh(
-            lambda: connect(db_path), None, tax, cancel, on_progress
+            lambda: connect(db_path), None, tax, cancel, on_progress, moat=MOAT
         )
     )
     with make_client(tmp_path, db_path, policy, worker) as client:
@@ -444,7 +474,7 @@ def test_start_under_a_stored_setting_outside_its_range_is_400(
         )
     worker = RefreshWorker(
         lambda cancel, on_progress: cli.make_refresh(
-            lambda: connect(db_path), None, tax, cancel, on_progress
+            lambda: connect(db_path), None, tax, cancel, on_progress, moat=MOAT
         )
     )
     with make_client(tmp_path, db_path, policy, worker) as client:
@@ -477,6 +507,7 @@ def test_start_closes_the_previous_runs_clients(db_path: Path, policy: Policy) -
             on_progress,
             (),
             lambda: closed.append(number),
+            moat=MOAT,
         )
         made.append(refresh)
         return refresh
@@ -542,13 +573,15 @@ def test_controls_js_calibration_reads_flagged() -> None:
 
 
 def serve_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[Any]:
-    """Point ``serve`` at a temporary data and config directory, with no key in the environment,
-    and stand in for uvicorn: while "serving", it starts a full refresh through the app and reads
-    the result; the list gets the response and the body."""
+    """Point ``serve`` at a temporary data and config directory, with no key in the environment
+    and the tests' moat table in place of the packaged file, and stand in for uvicorn: while
+    "serving", it starts a full refresh through the app and reads the result; the list gets the
+    response and the body."""
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
     monkeypatch.delenv("FAIRBAND_GURUFOCUS_KEY", raising=False)
+    monkeypatch.setattr(cli, "load_moat_table", lambda: MOAT)
     served: list[Any] = []
 
     def run_app(app: Any, **kwargs: Any) -> None:

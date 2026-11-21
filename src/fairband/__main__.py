@@ -32,6 +32,7 @@ from fairband.launch.command import system_opener
 from fairband.launch.run import run_launcher
 from fairband.mcp.server import main as run_mcp
 from fairband.policy import load_policy
+from fairband.policy.moat import MoatTable, load_moat_table
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.clients import build_clients, build_fmp
 from fairband.refresh.passthrough import Passthrough
@@ -78,8 +79,8 @@ def _build_parser() -> argparse.ArgumentParser:
     refresh.add_argument(
         "--kind",
         choices=KINDS,
-        help="default: scoped when symbols are given, full otherwise; revalue: value every"
-        " company again from the stored facts, with no vendor call",
+        help="default: scoped when symbols are given, full otherwise; revalue: value the companies"
+        " named, or every company, again from the stored facts, with no vendor call",
     )
 
     commands.add_parser(
@@ -113,13 +114,15 @@ def make_refresh(
     cancel: threading.Event,
     on_progress: Callable[[Progress], None],
     limiter: RateLimiter | None = None,
+    moat: MoatTable | None = None,
 ) -> Refresh:
     """The server worker's next run: under the effective policy read now (the file and the stored
     overlay, spec 2026-11-04 8.8), so a setting saved since the last run is this one's, with
     vendor clients of its own built from that policy (the pace is a setting). Given the server's
     ``limiter``, which the pass-through shares, the run paces it to that policy and its FMP client
     takes its slots from it. Without an FMP key it builds no client and the run refuses every kind
-    but a revalue. ``Refresh.close`` closes the clients. Raises ``ValueError`` when the stored
+    but a revalue. The run loads ``moat``, the table the server read as it started, the packaged
+    file without one. ``Refresh.close`` closes the clients. Raises ``ValueError`` when the stored
     settings no longer apply to the file."""
     with closing(conn_factory()) as conn:
         policy = effective_policy(conn)
@@ -136,7 +139,9 @@ def make_refresh(
         if gf is not None:
             gf.close()
 
-    return Refresh(conn_factory, fmp, gf, policy, tax, utcnow, cancel, on_progress, secrets, close)
+    return Refresh(
+        conn_factory, fmp, gf, policy, tax, utcnow, cancel, on_progress, secrets, close, moat
+    )
 
 
 def _serve(args: argparse.Namespace) -> int:
@@ -153,11 +158,12 @@ def _serve(args: argparse.Namespace) -> int:
     (``vendors.logos.fetch_logo``): FMP's image host takes no key, and the fetch goes through
     no limiter, since it counts against no quota. The app opens a research window through this
     machine's opener (``launch.command.system_opener``) and tells the window's launcher the port of
-    ``--port``, the one uvicorn listens on. The app reads the policy file as its base. When it
-    starts, the app marks every ``running`` refresh interrupted; with no process lock in this cut,
-    that includes one a command in another process is running at that moment."""
+    ``--port``, the one uvicorn listens on. The app reads the policy file as its base. Each run
+    loads the moat table the server read as it started, as it values under the tax table read
+    then. When it starts, the app marks every ``running`` refresh interrupted; with no process
+    lock in this cut, that includes one a command in another process is running at that moment."""
     settings = load_settings()
-    policy, tax = load_policy(), load_tax_table()
+    policy, tax, moat = load_policy(), load_tax_table(), load_moat_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
         try:
@@ -178,7 +184,7 @@ def _serve(args: argparse.Namespace) -> int:
         passthrough = Passthrough(fmp, conn_factory, started, utcnow, (keys.fmp,))
     worker = RefreshWorker(
         lambda cancel, on_progress: make_refresh(
-            conn_factory, keys, tax, cancel, on_progress, limiter
+            conn_factory, keys, tax, cancel, on_progress, limiter, moat
         )
     )
     app = create_app(
@@ -206,15 +212,16 @@ def _serve(args: argparse.Namespace) -> int:
 
 
 def _refresh(args: argparse.Namespace) -> int:
-    """A refresh in the foreground with its progress lines, then, for a scoped refresh, one line
-    per symbol from its latest snapshot, for a full one or a revalue its calibration, and for a
-    price one its counts on the status line: ``refresh 7: done · 1,800 repriced, 3 failed, 9
-    skipped``. A revalue reads no key and builds no vendor client. A ``VendorError`` or
-    ``ValueError`` from the run (the screener failed or gave no rows) is one line, never a
-    traceback: ``refresh <id>: failed: <message>``, or ``refresh failed: <message>`` when the run
-    refused before its record existed. The run reads the effective policy (the file and the
-    stored overlay) as it starts; stored settings that no longer apply to the file are one line
-    naming the setting. Exits 0 when the refresh is done, 1 when not, 2 when it cannot start."""
+    """A refresh in the foreground with its progress lines, then, for a scoped refresh or a
+    revalue that names companies, one line per symbol from its latest snapshot, for a full one or
+    a revalue of every company its calibration, and for a price one its counts on the status line:
+    ``refresh 7: done · 1,800 repriced, 3 failed, 9 skipped``. A revalue reads no key and builds no
+    vendor client. A ``VendorError`` or ``ValueError`` from the run (the screener failed or gave no
+    rows) is one line, never a traceback: ``refresh <id>: failed: <message>``, or ``refresh
+    failed: <message>`` when the run refused before its record existed. The run reads the
+    effective policy (the file and the stored overlay) and the packaged moat table as it starts;
+    stored settings that no longer apply to the file are one line naming the setting. Exits 0 when
+    the refresh is done, 1 when not, 2 when it cannot start."""
     if args.symbols == []:
         return _usage("no symbols given: name them as AAPL,MSFT")
     if args.kind == "price" and args.symbols:
@@ -223,8 +230,6 @@ def _refresh(args: argparse.Namespace) -> int:
         return _usage("a scoped refresh needs symbols, e.g. AAPL,MSFT")
     if args.kind == "full" and args.symbols:
         return _usage("a full refresh takes no symbols: name none, or add --kind scoped")
-    if args.kind == "revalue" and args.symbols:
-        return _usage("a revalue takes no symbols: name none, or leave out --kind revalue")
     settings = load_settings()
     keys = None if args.kind == "revalue" else _keys(settings)
     if keys is not None:
@@ -232,7 +237,7 @@ def _refresh(args: argparse.Namespace) -> int:
             require(keys, "fmp")
         except MissingKey as exc:
             return _usage(str(exc))
-    base, tax = load_policy(), load_tax_table()
+    base, tax, moat = load_policy(), load_tax_table(), load_moat_table()
     with closing(connect(settings.db_path)) as conn:
         migrate(conn)
         try:
@@ -252,6 +257,7 @@ def _refresh(args: argparse.Namespace) -> int:
         cancel,
         _print_progress,
         secrets,
+        moat=moat,
     )
     try:
         with _ctrl_c_cancels(cancel):

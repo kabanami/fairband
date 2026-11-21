@@ -30,6 +30,7 @@ from fairband import __main__ as cli
 from fairband.config import MissingKey
 from fairband.engine import METHOD_VERSION
 from fairband.engine.classifier import Deciles
+from fairband.policy.moat import load_moat_table
 from fairband.refresh import fetch as fetch_module
 from fairband.refresh import run as run_module
 from fairband.refresh.run import Progress, Refresh
@@ -98,6 +99,7 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
         Progress(refresh_id, "fetch", 2, 0, 0, None),
         Progress(refresh_id, "rates", 0, 0, 0, None),  # both report in USD: no pair
         Progress(refresh_id, "backfill", 0, 0, 0, None),
+        Progress(refresh_id, "moat", 0, 0, 0, None),
         Progress(refresh_id, "value", 0, 0, 2, None),
         Progress(refresh_id, "value", 1, 0, 1, None),
         Progress(refresh_id, "value", 2, 0, 0, None),
@@ -382,6 +384,7 @@ def test_run_refuses_before_any_work(env: Env) -> None:
         env.tax,
         env.clock,
         threading.Event(),
+        moat=env.moat,
     )
     with pytest.raises(ValueError, match="no fmp key"):
         no_fmp.run("scoped", ["ACME"])
@@ -401,7 +404,16 @@ def test_refresh_without_fmp_refuses_every_kind_but_revalue(env: Env) -> None:
     """Without an FMP client (the server's worker without a key), a kind that fetches is a
     ``ValueError`` naming the keys file, before its record exists; a revalue runs."""
     refresh = Refresh(
-        env.connect, None, None, env.policy, env.tax, env.clock, threading.Event(), None, ()
+        env.connect,
+        None,
+        None,
+        env.policy,
+        env.tax,
+        env.clock,
+        threading.Event(),
+        None,
+        (),
+        moat=env.moat,
     )
     for kind, symbols in (("full", None), ("price", None), ("scoped", ["ACME"])):
         with pytest.raises(ValueError, match=re.escape(str(MissingKey("fmp")))):
@@ -411,6 +423,13 @@ def test_refresh_without_fmp_refuses_every_kind_but_revalue(env: Env) -> None:
     row = env.last()
     assert (row.id, row.kind, row.status) == (env.universe_id + 1, "revalue", "done")
     assert refresh_id == row.id and env.router.calls == Counter()
+
+
+def test_a_refresh_given_no_moat_table_reads_the_packaged_file(env: Env) -> None:
+    """The packaged file is the default (spec 2026-11-19 8.4); every other test hands a refresh
+    the fixtures' classes, so none loads the file's real tickers."""
+    refresh = Refresh(env.connect, None, None, env.policy, env.tax, env.clock, threading.Event())
+    assert refresh._moat == load_moat_table()
 
 
 def test_an_exception_outside_a_symbol_fails_the_run(env: Env) -> None:
@@ -442,6 +461,7 @@ def test_cli_refresh_prints_rows(
         "fetch: 2 done, 0 failed, 0 to go",
         "rates: 0 done, 0 failed, 0 to go",
         "backfill: 0 done, 0 failed, 0 to go",
+        "moat: 0 done, 0 failed, 0 to go",
         "value: 0 done, 0 failed, 2 to go",
         "value: 1 done, 0 failed, 1 to go",
         "value: 2 done, 0 failed, 0 to go",
@@ -676,7 +696,6 @@ def test_cli_off_the_main_thread_leaves_sigint_alone(
         (["refresh", ","], "no symbols given"),
         (["refresh", "ACME", "--kind", "full"], "a full refresh takes no symbols"),
         (["refresh", "ACME", "--kind", "price"], "a price refresh takes no symbols"),
-        (["refresh", "AAPL", "--kind", "revalue"], "a revalue takes no symbols"),
         (["refresh", "--kind", "scoped"], "a scoped refresh needs symbols"),
     ],
 )

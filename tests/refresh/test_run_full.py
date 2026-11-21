@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from fixture_universe import ADMITTED, SCREENER, serve_universe
-from refresh_env import Env, use_cli
+from refresh_env import MOAT_CLASSES, Env, use_cli
 from synthetic import SIX_LINES
 from vendor_double import FIXTURES, FMP_KEY
 
@@ -190,6 +190,7 @@ def test_full_refresh_builds_universe_deciles_and_values(env_fixture_universe: E
         "rates",
         "deciles",
         "backfill",
+        "moat",
         "value",
         "done",
     ]
@@ -382,7 +383,8 @@ def test_full_refresh_screener_failure_finishes_failed(
 
 def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -> None:
     """As in a scoped refresh, a 429 stops the fetch and what was fetched is valued, after the
-    backfill, here with no deciles stored: the run saves none from part of the universe."""
+    backfill and the moat table's load (spec 2026-11-19 8.4), here with no deciles stored: the run
+    saves none from part of the universe."""
     env = env_fixture_universe
     env.router.fail_status = 429
     env.router.fail_symbols.add("MILD")
@@ -411,9 +413,13 @@ def test_full_refresh_rate_limited_saves_no_deciles(env_fixture_universe: Env) -
         "universe",
         "fetch",
         "backfill",
+        "moat",
         "value",
     ]
     assert env.router.calls["fx-history"] == 0
+    with closing(env.connect()) as conn:
+        rows = conn.execute("SELECT symbol, class, source FROM moat_classes ORDER BY 1")
+        assert [tuple(r) for r in rows] == [(s, m, "file") for s, m in sorted(MOAT_CLASSES.items())]
 
 
 def test_a_single_429_does_not_end_the_run(env_fixture_universe: Env, sleeps: list[float]) -> None:
@@ -594,6 +600,7 @@ def test_a_scoped_refresh_fetches_its_pair_again_and_a_revalue_fetches_none(
         "fetch",
         "rates",
         "backfill",
+        "moat",
         "value",
         "done",
     ]
@@ -665,6 +672,7 @@ def test_a_429_in_the_rates_stage_ends_the_run(env_fixture_universe: Env) -> Non
         "fetch",
         "rates",
         "backfill",
+        "moat",
         "value",
     ]
 

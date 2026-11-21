@@ -707,7 +707,8 @@ def build_server(client: FairbandClient) -> MCPServer:
         return write(lambda: client.post(_company(symbol, "news-items"), body))
 
     @server.tool(
-        description="Start a refresh on the server: full, price, scoped with symbols, or revalue."
+        description="Start a refresh on the server: full, price, scoped with symbols, or revalue,"
+        " which values the symbols given alone, or every company without them."
     )
     def refresh_start(kind: Kind, symbols: list[str] | None = None) -> dict[str, Any]:
         body = {"kind": kind, "symbols": symbols}
