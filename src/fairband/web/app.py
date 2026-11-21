@@ -172,6 +172,7 @@ from fairband.web.rows import (
 from fairband.web.sensitivity_api import add_sensitivity_routes
 from fairband.web.settings_api import add_settings_routes, effective
 from fairband.web.vendor_api import add_vendor_routes
+from fairband.web.warning_words import is_marked, warning_words
 from fairband.web.watchlists_api import add_watchlist_routes
 
 logger = logging.getLogger("fairband.web")
@@ -318,12 +319,14 @@ def create_app(
             symbol: agent_fields(snapshots[symbol], *found, cited, today, edges)
             for symbol, found in records.items()
         }
-        aging = read_under.aging_fraction
+        aging, mark_min = read_under.aging_fraction, read_under.warning_mark_min
 
         def valued(snapshot: SnapshotRow, company: CompanyRow | None) -> dict[str, Any]:
             watchlists = lists.get(snapshot.symbol, [])
             fields = agents.get(snapshot.symbol, NO_AGENT_FIELDS)
-            return screen_row(snapshot, company, today, aging, watchlists, fields)
+            return screen_row(
+                snapshot, company, today, aging, watchlists, fields, mark_min=mark_min
+            )
 
         def row(company: CompanyRow) -> dict[str, Any]:
             snapshot = snapshots.get(company.symbol)
@@ -391,7 +394,12 @@ def create_app(
         ``None`` on a row with no rate (``types.rated``). And ``launchReady``
         (spec 2026-11-16 agent launch, 9), whether launching is set up: the launch file in the
         config folder, read at each request, can be used and its window command holds a word
-        (``launch.settings``); the open item's ``launch`` is read at the clock's time."""
+        (``launch.settings``); the open item's ``launch`` is read at the clock's time. And the
+        mark's two fields, as a screen row has them (spec 2026-11-19 7.5; ``rows``):
+        ``warnings``, the plain words of the snapshot's quality warnings in the order of its
+        flags, never a review's (``warning_words``), and ``marked``, read against the counting
+        review: the snapshot has a value, the review is none or has no value, and the snapshot
+        carries the effective policy's ``warning_mark_min`` warnings or more (``is_marked``)."""
         now = clock()
         today = now.date()
         with closing(conn_factory()) as conn:
@@ -405,6 +413,10 @@ def create_app(
             logo = logo_route(conn, snapshot.symbol)
             adr = adr_flag(conn, symbol, listed)
             note_count = len(notes_for(conn, snapshot.symbol))
+        warnings = warning_words(snapshot.result.flags)
+        review = records["review"]
+        reviewed = None if review is None else review["value"]
+        mark_min = read_under.warning_mark_min
         return {
             "company": None if listed is None else company_json(listed),
             "brief": brief,
@@ -412,6 +424,8 @@ def create_app(
             **_money_json(snapshot.result, adr),
             "snapshot": snapshot_json(snapshot),
             "result": json.loads(result_to_json(snapshot.result)),
+            "warnings": warnings,
+            "marked": is_marked(snapshot.value, reviewed, warnings, mark_min),
             "today": today.isoformat(),
             "designationEdges": list(read_under.designation_edges),
             "agingFraction": read_under.aging_fraction,

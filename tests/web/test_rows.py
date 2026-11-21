@@ -9,10 +9,11 @@ filled, the row's band, levels, price ÷ value and designation are the filling r
 the latest price on the effective edges, and ``mechanical`` stays the engine's value (18.1, plan
 3). Where a review fills ``reviewed``, the row's flag words and its count of quality warnings are
 the review's; a secondary valuation has no flags, so a row it fills keeps the snapshot's (spec
-2026-11-13 8a)."""
+2026-11-13 8a). The row's ``warnings`` and ``marked`` read the snapshot's flags alone, never a
+review's (spec 2026-11-19 7.5)."""
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -29,7 +30,7 @@ from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.secondary import Part, secondary_value
-from fairband.engine.types import ValuationResult
+from fairband.engine.types import Flag, ValuationResult
 from fairband.policy import Policy
 from fairband.store.db import connect
 from fairband.store.ledger import OWNER, Writer
@@ -538,14 +539,14 @@ def test_agent_fields_read_the_edges_and_the_price_they_are_given(
     fields = agent_fields(snapshot, review, None, None, {}, TODAY, low)
     assert fields["levels"] == _record(review, value, 150.0, low)
     assert fields["levels"]["designation"] == "well-above"
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields)
+    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3)
     assert _levels(row) == fields["levels"] and row["mechanical"] == snapshot.value
     assert "levels" not in row
     for price in (None, 0.0):
         unpriced = agent_fields(replace(snapshot, price=price), review, None, None, {}, TODAY, low)
         assert unpriced["levels"] == fields["levels"] | {"priceToValue": None, "designation": None}
     assert NO_AGENT_FIELDS["levels"] is None
-    assert _levels(screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS)) == (
+    assert _levels(screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3)) == (
         _engines(snapshot)
     )
 
@@ -561,9 +562,9 @@ def test_a_counting_review_sets_the_rows_flags(
     settled = replace(review, result=replace(review.result, flags=()))
     fields = agent_fields(snapshot, settled, None, None, {}, TODAY, EDGES)
     assert fields["flags"] == ()
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields)
+    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3)
     assert (row["flags"], row["flagCount"]) == ([], 0)
-    kept = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS)
+    kept = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3)
     assert kept["flags"] == [f.word for f in snapshot.result.flags] and kept["flagCount"] == 1
     assert NO_AGENT_FIELDS["flags"] is None
 
@@ -609,7 +610,10 @@ def test_a_refused_review_leaves_the_engines_flags(
     assert fields["flags"] is None
     engines = ([f.word for f in snapshot.result.flags], flag_count(snapshot.result.flags))
     assert engines[1] == 1
-    for row in (screen_row(snapshot, None, TODAY, 0.6667, [], fields), _rows(client)["AAPL"]):
+    for row in (
+        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3),
+        _rows(client)["AAPL"],
+    ):
         assert (row["flags"], row["flagCount"]) == engines
 
 
@@ -626,8 +630,72 @@ def test_a_refused_rows_secondary_leaves_the_engines_flags(
     assert (fields["reviewed"], fields["flags"]) == (secondary.value_per_share, None)
     engines = ([f.word for f in snapshot.result.flags], flag_count(snapshot.result.flags))
     assert (len(engines[0]), engines[1]) == (3, 0)
-    for row in (screen_row(snapshot, None, TODAY, 0.6667, [], fields), _rows(client)["AAL"]):
+    for row in (
+        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3),
+        _rows(client)["AAL"],
+    ):
         assert (row["flags"], row["flagCount"]) == engines
+
+
+def test_the_row_reads_the_snapshots_flags_not_the_reviews(
+    db_path: Path, policy: Policy, results: dict[str, ValuationResult], secondaries: dict[str, int]
+) -> None:
+    """Spec 2026-11-19 7.5: ``warnings`` are the plain words of the snapshot's quality warnings,
+    whatever flags a counting review holds, where ``flags`` and ``flagCount`` read the review's;
+    ``marked`` holds on a mechanical value with ``mark_min`` warnings or more and no reviewed
+    value. A review that fills the row takes the mark away, a refused review fills nothing and
+    leaves it, two warnings under three have none, and a refused row has none whatever its
+    warnings, a secondary standing in or not."""
+    _review(db_path, policy, results)
+    snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
+    assert [f.code for f in snapshot.result.flags] == ["value-spread"]
+    three = (
+        Flag("heavy-capex", "Heavy capex", ""),
+        Flag("fcf-sign", "Free cash flow disagrees", ""),  # a note
+        Flag("negative-fcf", "Negative free cash flow", ""),
+        Flag("equity-raise", "Equity raise", ""),
+    )
+    words = ["heavy capital spending", "negative free cash flow", "new shares issued"]
+
+    def row(found: SnapshotRow, fields: Mapping[str, Any], mark_min: int = 3) -> dict[str, Any]:
+        return screen_row(found, None, TODAY, 0.6667, [], fields, mark_min=mark_min)
+
+    def mark(found: SnapshotRow, fields: Mapping[str, Any], mark_min: int = 3) -> tuple[Any, Any]:
+        """The row's ``warnings`` and ``marked``."""
+        drawn = row(found, fields, mark_min)
+        return drawn["warnings"], drawn["marked"]
+
+    # a counting review with three warnings: the row's flags are its, the warnings the snapshot's
+    warned_review = replace(review, result=replace(review.result, flags=three))
+    fields = agent_fields(snapshot, warned_review, None, None, {}, TODAY, EDGES)
+    drawn = row(snapshot, fields)
+    assert (drawn["flags"], drawn["flagCount"]) == ([f.word for f in three], 3)
+    assert mark(snapshot, fields) == (["value sensitive to its inputs"], False)
+
+    # the snapshot with three warnings: marked alone, unmarked under a review that fills the row,
+    # still marked under a review that refused, which fills nothing
+    warned = replace(snapshot, result=replace(snapshot.result, flags=three))
+    assert mark(warned, NO_AGENT_FIELDS) == (words, True)
+    settled = replace(review, result=replace(review.result, flags=()))
+    filled = agent_fields(warned, settled, None, None, {}, TODAY, EDGES)
+    assert row(warned, filled)["flags"] == [] and mark(warned, filled) == (words, False)
+    refused = agent_fields(warned, replace(settled, value=None), None, None, {}, TODAY, EDGES)
+    assert refused["reviewed"] is None and mark(warned, refused) == (words, True)
+    # the cut-off is the caller's, and two warnings are under three
+    assert mark(warned, NO_AGENT_FIELDS, mark_min=4) == (words, False)
+    two = replace(snapshot, result=replace(snapshot.result, flags=three[:3]))
+    assert mark(two, NO_AGENT_FIELDS) == (words[:2], False)
+
+    # a refused row: its warnings read, and no mark, a secondary standing in or not
+    aal = _newest(db_path, "AAL")
+    refused_row = replace(aal, result=replace(aal.result, flags=three))
+    assert refused_row.value is None
+    with closing(connect(db_path)) as conn:
+        secondary = secondary_row(conn, secondaries["AAL"])
+    stood_in = agent_fields(refused_row, None, secondary, None, {}, TODAY, EDGES)
+    assert stood_in["reviewed"] is not None
+    for standing_in in (NO_AGENT_FIELDS, stood_in):
+        assert mark(refused_row, standing_in) == (words, False)
 
 
 def test_a_secondary_at_or_below_zero_fills_no_reviewed_value(

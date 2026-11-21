@@ -21,6 +21,13 @@ its stored result holds (spec 2026-11-13 8a); a secondary valuation has none, so
 keeps the snapshot's. A row with no agent's record has ``NO_AGENT_FIELDS``. The fields are
 computed from records already read: the snapshots the records rest on (``rested_on``) are read
 once for all the rows.
+
+Every row also has the mark's two fields (spec 2026-11-19 7.5), which no column draws and nothing
+sorts by, so neither is a row key: ``warnings``, the plain words of the snapshot's quality warnings
+in the order of its flags (``warning_words``), never a review's, and ``marked``, whether the
+mechanical value carries the mark: a value, no ``reviewed`` value and the policy's
+``warning_mark_min`` warnings or more (``is_marked``). ``flags`` and ``flagCount`` stay, for the
+agents' ``screen`` tool.
 """
 
 import statistics
@@ -40,6 +47,7 @@ from fairband.store.reports import ReportRow
 from fairband.store.reviews import ReviewRow
 from fairband.store.secondary import SecondaryRow
 from fairband.store.snapshots import SnapshotRow
+from fairband.web.warning_words import is_marked, warning_words
 
 NOT_YET_VALUED = "not yet valued"
 GROUP_BY = ("sector", "phase", "cap")
@@ -274,6 +282,8 @@ def screen_row(
     aging_fraction: float,
     watchlists: Sequence[int],
     agents: Mapping[str, Any],
+    *,
+    mark_min: int,
 ) -> dict[str, Any]:
     """The snapshot as a screen row; the name, sector, cap band and market cap come from
     ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
@@ -282,7 +292,10 @@ def screen_row(
     ``levels``, when set, stand in the row's ``LEVEL_KEYS`` for the snapshot's; ``mechanical``
     stays the snapshot's value (spec 2026-11-06 Tier 2, 18.1, plan 3). ``flags`` are the flags'
     words and ``flagCount`` counts the quality warnings among them, a refusal's too: the review's
-    flags where ``agents`` holds them, else the snapshot's (spec 2026-11-13 8a). The moat shows on
+    flags where ``agents`` holds them, else the snapshot's (spec 2026-11-13 8a). ``warnings`` are
+    the plain words of the snapshot's own quality warnings, never a review's, and ``marked`` holds
+    on a mechanical value with no reviewed value in ``agents`` and ``mark_min``, the effective
+    policy's ``warning_mark_min``, warnings or more (spec 2026-11-19 7.5). The moat shows on
     a row with a value only: a growth refusal keeps the moat class for the price refresh, not for
     the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the price
     needs, a growth row's; a row refused for its target margin has the latter alone.
@@ -301,6 +314,7 @@ def screen_row(
     writes."""
     result = snapshot.result
     flags = result.flags if agents["flags"] is None else agents["flags"]
+    warnings = warning_words(result.flags)
     phase = result.phase.phase
     im = result.intermediates
     multiples = _table(im, "multiples")
@@ -363,6 +377,8 @@ def screen_row(
         "watchlists": list(watchlists),
         "flagCount": flag_count(flags),
         "covered": agents["covered"],
+        "warnings": warnings,
+        "marked": is_marked(snapshot.value, agents["reviewed"], warnings, mark_min),
     }
     if agents["levels"] is not None:
         row |= agents["levels"]
@@ -404,8 +420,9 @@ def _piotroski_f(im: dict[str, Any]) -> str | None:
 def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str, Any]:
     """The row of an admitted company with no snapshot yet: its name, sector, cap band and
     market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
-    agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a snapshot; ``levels`` is
-    no row key, and ``flags`` stands for the row's flags, not in them) and ``None`` elsewhere."""
+    warning and no mark, no agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a
+    snapshot; ``levels`` is no row key, and ``flags`` stands for the row's flags, not in them) and
+    ``None`` elsewhere."""
     row: dict[str, Any] = dict.fromkeys(ROW_KEYS)
     row |= {key: value for key, value in NO_AGENT_FIELDS.items() if key not in ("levels", "flags")}
     market_cap = company.market_cap
@@ -419,6 +436,8 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
         "refusal": NOT_YET_VALUED,
         "watchlists": list(watchlists),
         "flagCount": 0,
+        "warnings": [],
+        "marked": False,
     }
     return row
 

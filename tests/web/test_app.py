@@ -51,8 +51,9 @@ from support.web import (
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT
 from fairband.engine import METHOD_VERSION
+from fairband.engine.review import Review
 from fairband.engine.route import value_company
-from fairband.engine.types import Designation, ValuationResult, result_to_json
+from fairband.engine.types import Designation, Flag, ValuationResult, result_to_json
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.reports.charts import (
@@ -66,8 +67,11 @@ from fairband.reports.charts import (
 from fairband.reports.tables import financial_tables, quarters_table
 from fairband.store.companies import insert_companies
 from fairband.store.db import applied_versions, connect, migrate
+from fairband.store.ledger import Writer
+from fairband.store.overrides import insert_override
 from fairband.store.refreshes import create_refresh, finish_refresh
-from fairband.store.snapshots import insert_snapshot
+from fairband.store.reviews import insert_review
+from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
 from fairband.web.rows import EXTRA_KEYS, ROW_KEYS
 
@@ -266,6 +270,8 @@ def test_screen_rows_and_default_sort(
         "watchlists": [],
         "flagCount": 1,  # value-spread; its other flags are notes
         "covered": None,
+        "warnings": ["value sensitive to its inputs"],
+        "marked": False,  # one warning, under three
     }
 
     refused = results["AAL"]
@@ -294,8 +300,9 @@ def test_screen_sort_nulls_last(client: TestClient) -> None:
     assert _tickers(client, "?sort=marketCap&dir=desc") == ["AAPL", "HGCO", "AAL"]
     assert _tickers(client, "?sort=ticker&dir=desc") == ["HGCO", "AAPL", "AAL"]
     assert _tickers(client, "?sort=marketCap") == ["AAL", "HGCO", "AAPL"]  # ascending by default
-    # every row key sorts but the coverage mark's record, which no column draws
-    assert set(_screen(client)["rows"][0]) == {*ROW_KEYS, "covered"}
+    # every row key sorts but the coverage mark's record and the warning mark's two fields, which
+    # no column draws
+    assert set(_screen(client)["rows"][0]) == {*ROW_KEYS, "covered", "warnings", "marked"}
     for key in ROW_KEYS:
         for direction in ("asc", "desc"):
             assert len(_tickers(client, f"?sort={key}&dir={direction}")) == 3, key
@@ -459,7 +466,7 @@ def test_screen_placeholder_row_not_yet_valued(
 ) -> None:
     _universe(db_path, policy, ("NEWC", "New Co", 3_000_000_000, True))
     [row] = _screen(client)["rows"]
-    assert set(row) == {*DESIGN_ROW_KEYS, *EXTRA_COLUMNS, "covered"}
+    assert set(row) == {*DESIGN_ROW_KEYS, *EXTRA_COLUMNS, "covered", "warnings", "marked"}
     assert {key: value for key, value in row.items() if value is not None} == {
         "ticker": "NEWC",
         "name": "New Co",
@@ -471,6 +478,8 @@ def test_screen_placeholder_row_not_yet_valued(
         "refusal": "not yet valued",
         "watchlists": [],
         "flagCount": 0,
+        "warnings": [],
+        "marked": False,
     }
 
 
@@ -759,7 +768,12 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         # design, 7.2 and 11.1): tests/web/test_company_page_api.py
         "moat",
         "noteCount",
+        # the plain words of the snapshot's quality warnings and the mark (spec 2026-11-19 7.5):
+        # test_the_detail_carries_warnings_and_marked
+        "warnings",
+        "marked",
     }
+    assert (body["warnings"], body["marked"]) == (["value sensitive to its inputs"], False)
     assert body["launchReady"] is False
     # The company brief (B-149) is the stored profile's description; none is stored here.
     assert body["brief"] is None
@@ -811,6 +825,158 @@ def test_unknown_company_404(client: TestClient) -> None:
     response = client.get("/api/companies/NOPE")
     assert response.status_code == 404
     assert response.json() == {"detail": "no snapshot for NOPE"}
+
+
+# HGCO's three quality warnings in the order of its flags, in their plain words.
+HGCO_WARNINGS = ["new shares issued", "negative free cash flow", "value sensitive to its inputs"]
+
+
+def _valued_before_1_7(result: ValuationResult) -> ValuationResult:
+    """OLDC: AAPL's Mature Growth result as a snapshot valued before method 1.7 holds it, with a
+    found non-recurring gap and the two codes 1.7 removed among its flags, beside two warnings:
+    its own ``value-spread`` and an ``equity-raise``."""
+    old = (
+        Flag("large-nri", "Large non-recurring item", "The non-recurring gap is large."),
+        Flag("consensus-basis-unknown", "Consensus basis unknown", "The basis is unknown."),
+        Flag("equity-raise", "Equity raise", "The share count rose."),
+    )
+    return replace(
+        result,
+        symbol="OLDC",
+        flags=(*old, *result.flags),
+        intermediates=result.intermediates | {"nri_gap": 0.10},
+    )
+
+
+def _review_hgco(db_path: Path, result: ValuationResult, mechanical: float | None) -> None:
+    """HGCO's newest review on its latest snapshot, with ``result`` over the ``mechanical`` value,
+    and an applied override inside it, which keeps the review current."""
+    with closing(connect(db_path)) as conn:
+        snapshot = latest_snapshot(conn, "HGCO")
+        assert snapshot is not None
+        override_id = insert_override(
+            conn,
+            "HGCO",
+            "growth.belief",
+            None,
+            0.08,
+            "ratio",
+            "guidance raised",
+            [{"kind": "transcript", "ref": "Q3 call", "note": ""}],
+            "lasting",
+            None,
+            None,
+            snapshot.id,
+            Writer("agent", "claude-opus-5-5", "claude-code/2.1"),
+            NOW,
+            "applied",
+            "",
+        )
+        review = Review(result, mechanical, (), (override_id,))
+        insert_review(conn, review, "HGCO", snapshot.id, None, clock=lambda: NOW)
+
+
+def test_the_screen_rows_carry_warnings_and_marked(
+    tmp_path: Path,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    client: TestClient,
+) -> None:
+    """Spec 2026-11-19 7.5: a row's ``warnings`` are the plain words of its snapshot's quality
+    warnings in the order of its flags, and ``marked`` holds on a mechanical value with the
+    effective policy's ``warning_mark_min`` (3) of them or more and no reviewed value: HGCO's
+    three mark it, AAPL's one does not, AAL's refusal has none; at a cut-off of one AAPL's is
+    marked too. Neither field is a row key, so neither sorts. A snapshot valued before method 1.7
+    counts neither code it removed, and nothing raises: OLDC's two warnings leave it unmarked. A
+    placeholder has no warning and no mark."""
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+    assert {t: (r["warnings"], r["marked"]) for t, r in rows.items()} == {
+        "AAL": ([], False),
+        "AAPL": (["value sensitive to its inputs"], False),
+        "HGCO": (HGCO_WARNINGS, True),
+    }
+    for key in ("warnings", "marked"):
+        response = client.get(f"/api/screen?sort={key}")
+        assert (response.status_code, response.json()) == (
+            400,
+            {"detail": f"unknown sort column: {key}"},
+        )
+
+    under_one = replace(policy, warning_mark_min=1)
+    app = create_app(
+        _settings(tmp_path, db_path), under_one, lambda: connect(db_path), clock=lambda: NOW
+    )
+    with TestClient(app, base_url=HOST) as c:
+        marked = {row["ticker"]: row["marked"] for row in _screen(c)["rows"]}
+    assert marked == {"AAL": False, "AAPL": True, "HGCO": True}
+
+    _add_snapshots(db_path, _valued_before_1_7(results["AAPL"]))
+    oldc = {row["ticker"]: row for row in _screen(client)["rows"]}["OLDC"]
+    assert (oldc["warnings"], oldc["marked"], oldc["flagCount"]) == (
+        ["new shares issued", "value sensitive to its inputs"],
+        False,
+        2,
+    )
+
+    _universe(db_path, policy, ("NEWC", "New Co", 3_000_000_000, True))
+    [placeholder] = _screen(client)["rows"]
+    assert (placeholder["warnings"], placeholder["marked"]) == ([], False)
+
+
+def test_the_detail_carries_warnings_and_marked(
+    tmp_path: Path,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    client: TestClient,
+) -> None:
+    """Spec 2026-11-19 7.5: the detail's ``warnings`` are the plain words of the snapshot's
+    quality warnings, never a review's, and ``marked`` reads them against the counting review, as
+    the screen's row does: HGCO's three mark its mechanical value until a review values it,
+    whatever flags the review holds, and a newer review that refused leaves the mark; AAPL's one
+    warning and AAL's refusal have none, and at a cut-off of one AAPL's is marked. A snapshot
+    valued before method 1.7 counts neither code it removed."""
+
+    def detail(symbol: str, read: TestClient = client) -> tuple[list[str], bool]:
+        body = read.get(f"/api/companies/{symbol}").json()
+        return body["warnings"], body["marked"]
+
+    def row(symbol: str) -> tuple[list[str], bool]:
+        found = {r["ticker"]: r for r in _screen(client)["rows"]}[symbol]
+        return found["warnings"], found["marked"]
+
+    assert detail("HGCO") == (HGCO_WARNINGS, True)
+    assert detail("AAPL") == (["value sensitive to its inputs"], False)
+    assert detail("AAL") == ([], False)
+    app = create_app(
+        _settings(tmp_path, db_path),
+        replace(policy, warning_mark_min=1),
+        lambda: connect(db_path),
+        clock=lambda: NOW,
+    )
+    with TestClient(app, base_url=HOST) as c:
+        assert detail("AAPL", c) == (["value sensitive to its inputs"], True)
+
+    mechanical = results["HGCO"]
+    _review_hgco(db_path, replace(mechanical, flags=()), mechanical.value)
+    reviewed = client.get("/api/companies/HGCO").json()["review"]
+    assert (reviewed["value"], reviewed["flags"]) == (mechanical.value, [])
+    assert detail("HGCO") == row("HGCO") == (HGCO_WARNINGS, False)
+    refused = replace(
+        mechanical,
+        value=None,
+        levels=None,
+        price_to_value=None,
+        designation=None,
+        refusal="the reviewed belief is refused",
+    )
+    _review_hgco(db_path, refused, mechanical.value)
+    assert client.get("/api/companies/HGCO").json()["review"]["value"] is None
+    assert detail("HGCO") == row("HGCO") == (HGCO_WARNINGS, True)
+
+    _add_snapshots(db_path, _valued_before_1_7(results["AAPL"]))
+    assert detail("OLDC") == (["new shares issued", "value sensitive to its inputs"], False)
 
 
 class _References(HTMLParser):
