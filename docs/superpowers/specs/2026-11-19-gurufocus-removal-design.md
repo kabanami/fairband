@@ -1036,3 +1036,17 @@ series built from several answers; the order of work inside a plan.
   run under it. The pair's closes are fetched eleven years back, so the first trailing year
   has its rates. The scripts, the answers and the outputs of the comparison are kept outside
   the repository, with the other results of 2026-11-19.
+- **2026-11-21, plan 1 live.** The backup is `fairband-before-method-1.6-2026-11-21.db`. Main
+  went to ac27be0 by a fast-forward and was pushed. Refresh 70, a revalue under method 1.6 and
+  policy v16: 1,558 rows, 1,363 valued; the server runs on 8470 from main. Against each row's
+  snapshot before it (refresh 69, a price refresh): CX is 7.49 and SIMO 95.71; `basis-scaled`
+  is on CX, SIMO, TAL and XPEV, and the six rows of the acceptance lost it; GDS and GRFS are
+  refused "share basis unclear"; RML and TXR read "no financial statements" where the fetch
+  stage had written "data fetch failed". One value differs, SBS (5.3364 against 5.3452), and
+  ACN, BSP, GRDN and MNDY gain `equity-raise`: the code of before this plan, run in memory on
+  the same data, gives the same value and the same four flags, so these come from the data a
+  price refresh does not value again, not from this plan (B-267). No route, phase, designation
+  or settings hash differs. The P/E history opened on AAPL, ASML and RELX through the live
+  server: 2,514 points each from 2016-11-21, with no note. B-255, B-256 and B-257 are closed;
+  the limits met are B-262 to B-267. Every research session must restart its MCP process,
+  since `pe_history` is gone.
