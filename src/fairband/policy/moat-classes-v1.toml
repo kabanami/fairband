@@ -1,0 +1,9605 @@
+[meta]
+version = "fairband-moat-v1"
+date = 2026-11-21
+universe = "the universe of the full refresh of 2026-11-18, 1,558 companies"
+rule = "docs/method.md 4.9a"
+
+[[classes]]
+symbol = "A"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AAL"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AAOI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AAON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AAP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AAPL"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AAUC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABBV"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABCL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABEV"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABNB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ABVX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACAD"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACHR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACIW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A small supplier of chip-making equipment. Its ROIC ranged from 7% to 62% with the chip cycle."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "ACM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACMR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ACN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AD"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADBE"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADMA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADP"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADPT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADSK"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Design software that customers cannot easily leave, with a ROIC of 29% over ten years and 45% over five. Three early loss years, from its move to subscriptions, stop it."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "ADT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ADUS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AEE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AEIS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AEM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AEO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AEP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AER"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AERO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AES"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AG"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AGCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AGI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AGX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AGYS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AIR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AIT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AKAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALAB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALGM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALGN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALGT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALKS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALLE"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALMR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALNY"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Patented drugs, revenue up 53% a year, and its first profit in the newest year."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "ALRM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALSN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ALV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMAT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMBA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMBP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMC"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMCR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AME"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMGN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "A steady fall: its ROIC went from 28% to 14% and its operating margin from 43% to 25%. Other large drug makers are Wide by the rule, so this is not fully consistent."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "AMKR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMLX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMPL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMRX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMRZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMTM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AMZN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ANDG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ANET"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ANF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ANT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AOS"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APH"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APLD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APPF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "APPN"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+note = "It burned cash in nine of the ten years, so it fails the test that made the other loss-making software companies Narrow."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "APTV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AQN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AR"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARCB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARDT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARGX"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARIS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARLP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARMK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AROC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARQT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARWR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ARXS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASAN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASH"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASML"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASND"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASTS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ASX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATAT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATMU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATRC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ATRO"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AUGO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AUPH"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AUR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVAH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVAV"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVGO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVPT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AVY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AWI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AWK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AWR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AXGN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AXON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AXSM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AXTA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AXTI"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AYA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AYI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AZN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AZO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AZTA"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "AZZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "B"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BA"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BABA"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BAH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BALL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BATRA"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BAX"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BB"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BBIO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BBUC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BBWI"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A mall retailer of one brand, with falling revenue."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "BBY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BCC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BCE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Cash transport. Its ROIC is 10% over the ten years and was below 9% in four of them."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "BCPC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BDC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BDX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BE"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BEAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BEKE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BELFB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BEPC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BETA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BF.B"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "A strong spirits brand, but it is in Decline, which the phase limit stops. Its ROIC fell from 22% to 13% and its revenue falls."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "BFAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BHE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BHP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BIDU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BIIB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BILI"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BILL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BIO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BIP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BIPC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BIPI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BIRK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BJ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BKD"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BKE"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A mall clothing chain, easy to copy. None was arguable; its ROIC was 16% or more in all ten years, so Narrow."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "BKNG"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BKR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BKV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BLCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BLDR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BLKB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BLLN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BLSH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BLTE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BMI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BMRN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BMY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BNTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BOBS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BOOT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BOX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BRC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BRKR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BROS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BRZE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BSM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BSP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BSX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BSY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BTE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BTG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BTI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BTSG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BTU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BUD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BULL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BURL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BVC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BVN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BWA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BWLP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BWXT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BYD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "BZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAAP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CACI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAKE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CALM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CALY"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAMT"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A small supplier of chip-making equipment. Its ROIC ranged from −5% to 101% with the chip cycle."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "CAR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CARG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CARR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CART"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CASY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CAVA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CBRE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CBRS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CBT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CCC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CCEP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CCJ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CCK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CCL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CDE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CDNA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CDNS"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CDW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CEG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CELC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CELH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CENT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CENX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CGAU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CGNX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CGON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHDN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHE"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHEF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHH"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHKP"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHRD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHRW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHWY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CHYM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CIEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CIFR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CIG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CIG.C"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CIGI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CL"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLBT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLDX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLMT"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLOV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CLX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CMBT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CMC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CMCSA"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CME"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "The market's trading volume sits there. An operating margin of 53% to 65% and a ROIC of 22% to 24% since 2022; the ten-year figure is 10%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "CMG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CMI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CMS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNI"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "A railway cannot be copied. An operating margin of 35% to 42%; UNP is Wide by the rule; no route."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "CNK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNQ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CNXN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COGT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COHR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COIN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COKE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COLM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COMP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COR"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CORT"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "One drug, and rivals challenge its patents. None was arguable; it is still protected today, so Narrow."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "CORZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COST"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "COTY"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CPA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CPAY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CPB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CPK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CPNG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CPRT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CQP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRDO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRGY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "A ROIC of 5% over ten years and 7% over five, after large purchases. Its review of 2026-11-10 confirmed GuruFocus's Wide before the moat was a standing step of a review."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "CROX"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "One fashion product. Its newest ROIC is 4%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "CRS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRSP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRUS"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A chip maker that depends on one customer."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "CRWD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CRWV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CSCO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CSGP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CSL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CSQR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CSTM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CSW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CSX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CTAS"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CTOS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CTRI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CTSH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CTVA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVLT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVNA"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVSA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CVX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CWEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CWK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CWST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CWT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CXT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CXW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CYTK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "CZR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "D"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DAC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DAN"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DAO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DAR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DASH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DAVE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DBX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DCI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DDOG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DE"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DECK"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Two brands, UGG and HOKA, each above $2.5 billion, with a gross margin that rose from 47% to 58%. But its operating margin was nil in 2017, when UGG was out of fashion: the protection is a fashion's, and it can turn."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "DELL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DEO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DFTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DGII"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DGX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DHI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DHR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "It spent $46 billion on purchases, with a ROIC on all capital of 5% to 8%. It is also in Decline, which the phase limit stops."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "DHT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DINO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DIOD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DIS"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Its parks and characters cannot be copied. Its ROIC on all capital fell to 2% in 2020, in the pandemic and at the start of streaming, and rose each year since to 9% and 13%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "DK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DKL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DKNG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DKS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DLB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DLO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DLTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DNLI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DNOW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DNTH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DOCN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DOCS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DOCU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DOO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DORM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DOV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DOW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DOX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DPC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DPZ"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DRI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DRS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DSGX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DTE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DTM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DUK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DUOL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DVA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DVN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DXC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DXCM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DXPE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "DYN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "E"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EAT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EBAY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ECG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ECHO"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ECL"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Its service staff work at the customers' sites. Its ROIC on all capital was 7% to 9% until 2023, then 11% and 12%; its operating margin rose from 11% to 18%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "ECO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ED"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EDU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EEFT"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Payment and cash machines in competitive markets. Its ROIC fell to 2% in 2020."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "EFX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EFXT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EGO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EIX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ELAN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ELC"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ELF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ELV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ELVN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EMA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EMBJ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EME"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EMN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EMR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ENB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ENIC"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ENLT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ENPH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ENS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ENSG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ENTG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EOG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EPAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EPD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EQNR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EQPT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EQT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EQX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ERAS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ERIC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ERO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EROK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ES"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ESAB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ESE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ESI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ESLT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ESTA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ESTC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ETN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ETR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ETSY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EVRG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EW"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EWTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXEL"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "One drug franchise. Its patents still protect the drug, so Narrow."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "EXLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXPD"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXPE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXPO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "EXTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "F"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FANG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FAST"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FBIN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FCN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FCX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FDS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FDX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FDXF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FELE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FER"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FERG"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FFIV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FICO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FIG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FIGS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FIS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FISV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FIVE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FIX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FIZZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "One brand of sparkling water. Its ROIC was 40% or more in all ten years, so Narrow and not None."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "FLEX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FLR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FLUT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FLY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FLYW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FMS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FMX"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A ROIC of 10% to 14%, near the hurdle, with one year at 1%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "FN"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Contract manufacturing with a gross margin of 12%; its customers own the products, as at JBL. Its ROIC was 20% or more in all ten years and its operating margin is 10%, so Narrow and not None."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "FND"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FNV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "Royalties, as TPL, but it pays for them: a ROIC below 9% in six of the ten years, and a loss in 2023."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "FORM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FOUR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FOX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FPS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FRO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FROG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FRPT"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FRSH"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Software with revenue up 19% a year, a gross margin of 85% and free cash in each of the last three years, 28% of revenue in the newest."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "FRVO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FSLR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FSLY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FSM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FSS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FSV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FTAI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FTDR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FTI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FTNT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FTS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FTV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FUL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "FWONA"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "It holds Formula One's commercial rights. Its ROIC is low for the price paid for them; its operating margin rose to 13%."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "G"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GAP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GATX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GCT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GD"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GDDY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GDS"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GE"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Aircraft engines with a very large installed base, and a ROIC of 20%, 42% and 56% in the last three years. The old conglomerate's years weigh on the ten-year record."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "GEF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GEHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GEO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GEV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GFF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GFI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GFL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GFS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GGB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GGG"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GIB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GIL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GILD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GIS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GKOS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GLBE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GLNG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GLW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GMAB"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GME"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GMED"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GNRC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GNTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GOLF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GOOG"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GPC"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Parts distribution with an operating margin of 5% to 8%. Its ROIC ranged from 7% to 19%, and the newest year is 7%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "GPGI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GPI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GPK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GPN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GPOR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GRAB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GRAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GRBK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GRDN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GRFS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GRMN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GRND"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GSAT"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GSK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GTES"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GTLB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GVA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GWRE"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Insurers run their core systems on it. Revenue up 18% a year, free cash of 26% of revenue and an operating margin of 10% in the newest year."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "GWW"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "GXO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "H"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HAE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HAFN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HALO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HAS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HAYW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HBM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HCA"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HCC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HCM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HD"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HEI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HESM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HGV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HHH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HII"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HIMS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HL"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HLN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HLT"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "The same business as MAR, with a ROIC of 30% to 43% since 2022. Its ten-year ROIC is 16%, under the return route's 20%, and it has one scale mark."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "HMC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HMY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HNGE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HNI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HOG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "The company is splitting up, so its ten-year record describes a company that no longer exists in that form."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "HONA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HPE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HPQ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HQY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HRB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HRI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HRL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HSIC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HSY"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "A ROIC of 21% to 26% for nine years. The newest year fell to 11% on cocoa costs, and the steady-margin mark fails."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "HTFL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HTHT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HTO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HUBB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HUBS"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Software that customers keep: revenue up 22% a year, a gross margin of 84% and free cash of 23% of revenue. The accounting loss is stock pay."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "HUM"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HURN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HWKN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HWM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HXL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "HZN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IAG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IBM"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Its revenue fell 1.9% a year over the ten years and its ROIC is 10%, above 9% in six of the ten years. Its enterprise customers face a high cost to switch, so Narrow and not None."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "IBP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IBRX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ICE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "Exchanges as strong as CME's, with an operating margin of 36% to 41%. A purchase in 2023 lowered its ROIC on all capital from 8% to 10% down to 6% to 7%. The closest call of the nine."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "ICL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ICLR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ICUI"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IDA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IDCC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IDXX"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IDYA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IEP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IESC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IEX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IFF"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "It makes flavours and scents to each customer's product. Its margins fell after a merger, so the judgment is less sure."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "IHG"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "The same business as MAR and HLT, so it follows them. Its ROIC was 35% or more in every year but 2020."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "IHS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ILMN"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IMAX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IMO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IMVT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INCY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INFY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INGM"
+class = "None"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Distribution with a gross margin of 7% and an operating margin of 1.6%. Its ROIC was below 9% in three of the ten years."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "INGR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INIO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INSM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INSW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INTA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INTC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "INTU"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IOND"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IONQ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IONS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IOT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IOVA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IPAR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IPGP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IQV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IRDM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IREN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IRON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IRTC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ISRG"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "IT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ITRI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ITT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ITW"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "J"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JAZZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JBHT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JBL"
+class = "None"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Contract manufacturing with a gross margin of 8% and an operating margin of 4%. Its customers own the products. The same reasoning as SMCI."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "JBS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JBTM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JCI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JHX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JKHY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JLL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JMKE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JNJ"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JOBY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JOE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "JOYY"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KAI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KBH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KBR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KDP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KEN"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KEP"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KEX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KEYS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KFY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KGC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KGS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KLAC"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KLIC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KMB"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KMI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KMX"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KNF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KNSA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KNTK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KNX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KOD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KOF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KRMN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KRYS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KSPI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KSS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KTB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KTOS"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KVYO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KWR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KYIV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "KYMR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LAD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LASR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LAUR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LBTYK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LCII"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LDOS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LEA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LECO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LEGN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LEVI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LFST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LFTO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LFUS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LGN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LGND"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LHX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LIF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LII"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LILA"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LIN"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Industrial gases. Its goodwill comes from a merger of equals in 2018, not from a cash purchase. Its ROIC on all capital rose from 4% to 9%, 10%, 10% and 11%, and its operating margin from 12% to 27%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "LIND"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LION"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LITE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LIVN"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LKFT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LKQ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LLY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LLYVK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LMT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LNG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LNTH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LOAR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LOGI"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Over half the market in mice. But a buyer can change brand at no cost, its revenue fell by a fifth after 2022, and three resellers make 44% of its sales."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "LOPE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LOW"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LPL"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LPX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LQDA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LRCX"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LRN"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Online schooling that depends on state contracts and funding; its ROIC was below 9% in the early years. None was arguable; it has scale and rising returns, so Narrow."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "LSCC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LSTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LTH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LTM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LULU"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LUMN"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LUNR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LUV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LVS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LYB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LYFT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "LYV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "M"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MA"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MAAS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MAIR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MAN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MANE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MANH"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MANU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MAR"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "A hotel brand that lives on franchise fees, with a ROIC of 14% to 18% since 2022. The return route asks for 20%, and it has one scale mark."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "MAS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MAT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MATX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MBGL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MBLY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MBX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MCD"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "A ROIC above 9% in all ten years and an operating margin of 46%. Its gross margin rose from 41% to 57%, so the steady-margin mark fails."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "MCHP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MCK"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MCO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MDA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MDB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MDGL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MDLN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MDLZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "Strong brands. Its ROIC on all capital reached 9% and 10% in 2023 and 2024, and the cocoa cost took it back to 5%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "MDT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "Its ROIC on all capital was 6% to 8% for nine years and 9% in the newest: the price of one purchase in 2015 is still not earned. Revenue grew 2.3% a year."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "MDU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MEDP"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MELI"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "The leading marketplace and payment network in Latin America, with a ROIC of 18% to 37% since 2020. Two loss years, 2018 and 2019, stop it."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "MEOH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "META"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MFP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MGA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MGEE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MGM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MGNI"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MGRC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MGY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MHK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MHO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MICC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MIDD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MIR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MIRM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MKC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "Its ROIC on all capital is 7% to 9% since a purchase in 2017, and its revenue grows 2.5% a year."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "MKSI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MLI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MLM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MMED"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MMM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MMS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MMSI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MMYT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MNDY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MNSO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MNST"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MO"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MOD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MOG.A"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MOH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MORN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MOS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MPC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MPLX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MPWR"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MRCY"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MRK"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MRNA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MRVI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MRVL"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "It designs chips with its customers. Free cash of 10% to 24% of revenue in each of the last nine years; its losses are the cost of purchases."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "MSA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSCI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSFT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSGE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSGK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSGR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MSTR"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTCH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTD"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTDR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTRN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTSI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MTZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MUR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MUSA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MWA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MWH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MXL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MYRG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "MZTI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NAMS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NATL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NAVN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NBIS"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NBIX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NCLH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NCNO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NDAQ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NDSN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NEE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NEM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NEOG"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NESR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NET"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NEU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NFG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NFLX"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NGG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NICE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NIO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NIQ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NJR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NKE"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NMM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NOC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NOG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NOK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NOV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NOVT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NOW"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Workflow software with very high renewal and very high returns. Three early loss years stop it."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "NPO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NRG"
+class = "None"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "It sells electricity, a commodity. One loss year, and its gross margin fell to 8% in one year."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "NSC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NSIT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NTAP"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Customers keep their data on its systems, and support is 38% of revenue. But it is second in storage with about a tenth of the market, and its revenue grew 2.6% a year over the ten years."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "NTCT"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NTES"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NTNX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NTRA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NTSK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NUE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NVDA"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NVMI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NVO"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "An agent's review of 2026-11-11 judged the moat Narrow (override 34). The rule reads the past record alone, which is Wide."
+decided_by = "an agent's review, which takes precedence"
+
+[[classes]]
+symbol = "NVR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NVS"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NVST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NVT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NWL"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NWN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NWS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NXE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NXPI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NXST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NXT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "NYT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OCTV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ODFL"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "A freight network that is hard to copy. Its ROIC was 13% or more in all ten years and 20% or more in eight. It fails the steady-margin mark only because its gross margin rose."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "OGC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OGE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OGN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OGS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OII"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OKE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OKLO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OKTA"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Software that customers keep: revenue up 16% a year, free cash of 30% of revenue and its first accounting profit in the newest year."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "OLED"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OLLI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OMAB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OMC"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "An advertising agency, Wide by the leader and steady-margin marks. Client relationships give some protection, and the business is under pressure."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "ON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ONC"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ONDS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ONON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ONTO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OPCH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OPLN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ORA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ORCL"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ORKA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ORLY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OSCR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OSIS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OSK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OSW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OTEX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OTIS"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "The largest elevator service base, with a ROIC of 43% to 72% in all eight years on file. Listed in 2020, so it has fewer than ten years."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "OTTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OUST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OVV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "OXY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "P"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAAS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PACS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAGP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAGS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PANW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PARR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PATH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PATK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAYC"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAYO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAYP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PAYX"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PBA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PBF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PBH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PBI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PBLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PBR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PBR.A"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PCAR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PCG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PCOR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PCTY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PCVX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PDD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PEG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PEGA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PENG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PENN"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PEP"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PFE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PFGC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PG"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PGNY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PHG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PHI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PHIN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PHM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PHVS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PII"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PINS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PKG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PKX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PLBL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PLNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PLSE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PLTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PLUS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PLXS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PM"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PNR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PNW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PODD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "POOL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "POR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "POST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "POWI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "POWL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PPC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PPG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PPL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PPLI"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PPTA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PRAX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PRGO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PRIM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PRM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PRMB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PRVA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PSMT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PSN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PSO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PSX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PTC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PTCT"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PTEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PTGX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PTON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PTRN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PVH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PVLA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "PWR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "Q"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QBTS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QCOM"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QGEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QLYS"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QSR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "QTWO"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Banks rarely change this software. Revenue up 12% a year and free cash of 24% of revenue."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "QXO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "R"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RACE"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Stopped by the cyclical list as a car maker. Ferrari's brand is not typical of the industry: its operating margin rose from 19% to 29%, and its ROIC is 21%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "RAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RBA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RBC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RBLX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RBRK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RCI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RCL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RCUS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RDDT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RDNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RDY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "REGN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RELX"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+note = "An agent's review of 2026-11-11 judged it Wide (override 45), and the rule gives Wide too."
+decided_by = "an agent's review, which takes precedence"
+
+[[classes]]
+symbol = "RELY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "REYN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "REZI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RGC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RGEN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RGLD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RGTI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RHI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RIG"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RIO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RIVN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RKLB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RLAY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RMBS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RMD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RML"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RNG"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Business phone systems, which customers rarely change. Free cash of 23% of revenue; growth is slowing, at 8% a year."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "RNW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ROAD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ROG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ROIV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ROK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ROL"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ROP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ROST"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "The same business and record as TJX, which is Wide. One year, 2020, puts its gross margin one point under the steady-margin floor."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "RPM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RPRX"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RRC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RRR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RRX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RSG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RSI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RTO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RUM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RUSHA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RVMD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RVTY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RXO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RYAAY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "RYTM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "S"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SAIA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SAIC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SAIL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SANM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SAP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SARO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SBLK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SBS"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A regulated water utility. Its returns are uneven, 8% to 24%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "SBSW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SBUX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "Its ROIC fell from 49% to between 8% and 11%, and its operating margin from 18% to 10%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "SCCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SCI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SDRL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SEB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SEI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SFD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SFM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SGHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SGI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SGRY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SHAK"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SHC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SHEL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SHOO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SHOP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SHW"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Its own paint shops and its hold on professional painters. A ROIC of 9% to 15% since a large purchase in 2017; no route."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "SIG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SIM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SIMO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SIRI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SITE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SITM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SJM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SKE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SKHY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SKM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SKY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SKYD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SKYW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SLAB"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SLB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SLGN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SMCI"
+class = "None"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "It assembles servers from other companies' parts, and rivals sell the same. Its size and growth marks come from one boom: revenue was $3.6 billion in 2021. Its ROIC was 7% to 9% until 2021, and its gross margin fell from 18.0% to 10.8% while revenue grew more than ten times, so it has no pricing power."
+decided_by = "the founder"
+
+[[classes]]
+symbol = "SMG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SMMT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SMTC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNA"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNAP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNDK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNDR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNOW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNPS"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "One of two makers of chip-design software; CDNS, the other, is Wide by the rule. A large purchase in 2025 lowered its newest ROIC to 3%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "SNX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SNY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SOBO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SOLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SOLV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SONO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SONY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+note = "First doubted as a mixed group. Games, music and image sensors make most of its profit, and each leads its market; its sensors hold over half of theirs."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "SPCX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SPGI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SPHR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SPOT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SPSC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SPXC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SQM"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Lithium, a commodity. Its industry label is Chemicals - Specialty, so the cyclical list did not stop it. Its low-cost deposits are a real cost advantage, so Narrow and not None."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "SR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SRAD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SRE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SRRK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SSD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SSL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SSNC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SSRM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STGW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STLA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STLD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STNG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STRL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STVN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "STZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SUNB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SUPN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SUZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SWK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SWKS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SWX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SXI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SXT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SYK"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Surgeons train on its tools and robots. A ROIC of 10% to 14% in all ten years; no route."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "SYM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SYNA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SYRE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "SYY"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "T"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TAC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TAK"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "A large drug maker with patents. Its ROIC is 2%: goodwill and intangibles, most of them from one purchase, are 60% of its assets."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "TAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TALO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TAP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TARS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TBBB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TCOM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TCPA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TDC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TDG"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "The only maker of many aircraft parts, with an operating margin of 34% to 47% and a ROIC above 9% in all ten years. At its size and a ROIC below 20% it has no route."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "TDS"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TDW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TDY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TEAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Software that customers keep: revenue up 23% a year, a gross margin of 82% to 85% and free cash in all ten years. The accounting loss is stock pay, 24% of revenue."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "TECH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TEL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TEM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TENB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TEO"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TER"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TEVA"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TEX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TFII"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TFPM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TFX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TGB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TGLS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TGS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TGT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TGTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "THC"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A hospital operator, Wide by the leader and steady-margin marks. Its ROIC was 4% to 8% until 2020 and above 9% in five of the ten years. None was arguable; local hospital networks have some scale, so Narrow."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "THO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TIC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TIGO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TIMB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TJX"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TKC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TKO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TKR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TLK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TLN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TLX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TMDX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TME"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TMO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+note = "It spent $44 billion on purchases in the ten years, and its ROIC on all capital stays at 7% to 8%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "TMUS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TNET"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TNGX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TNK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TNL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TOL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TOST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TPC"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TPL"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Stopped by the cyclical list as an oil and gas producer. It earns royalties on land it owns, with a ROIC of 89% or more in all ten years, and is not typical of the industry."
+decided_by = "the founder"
+
+[[classes]]
+symbol = "TPR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TREX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TRGP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TRI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TRMB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TRMD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TRN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TRP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TRU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TSCO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TSEM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TSLA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TSM"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TSN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TTAM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TTAN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TTC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TTD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TTE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TTEK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TTMI"
+class = "None"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "An agent's review of 2026-11-11 judged that it has no moat (override 31)."
+decided_by = "an agent's review, which takes precedence"
+
+[[classes]]
+symbol = "TTWO"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "It owns Grand Theft Auto and NBA 2K, which nobody can copy. Its losses are write-downs after a large purchase in 2022."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "TU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TVTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TWLO"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Customers build its services into their own software. Free cash of 19% of revenue and a first accounting profit; its gross margin, 49%, is low for software."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "TWST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TXG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TXN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TXNM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TXR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TXRH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TXT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "TYL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "U"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UBER"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UCTT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UEC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UFPI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UFPT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UGI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UGP"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UHAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UHS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UI"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UL"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ULS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ULTA"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UMC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UNF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UNFI"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UNH"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UNP"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UPS"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "URBN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "URI"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Equipment rental, which follows construction. Its ROIC was 8% to 10% for six of the ten years."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "USFD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "USLM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "UTHR"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "V"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VAC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VAL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VALE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VCEL"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VCYT"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VECO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VEEV"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VEON"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VERX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VFC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VFS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VGNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VIA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VIAV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VICR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VIK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VIPS"
+class = "None"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Discount online retail in China against much larger rivals, with an operating margin of 5%. Nothing protects it."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "VIST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VIV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VKTX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VLO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VLTO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VMC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VMI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VNOM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VOD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VRDN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VRNS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VRSK"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "Insurers share their data through it. A ROIC of 28% to 34% since 2022; the ten-year figure is 17%, under the return route's 20%."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "VRSN"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VRT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VRTX"
+class = "Wide"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Narrow"
+reason = "It has the only drugs for its disease, with a ROIC of 51% to 102% since 2018 in every year but one. That year, 2024, is a loss from a purchase charge, and it stops it."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "VSAT"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VSEC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VSH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VSNT"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VST"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VSXY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VTMX"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "A property developer. Its ROIC figures are not meaningful, and Real Estate - Development was not on the cyclical list. None was arguable; its industrial land is well placed, so Narrow."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "VTRS"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VVV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VVX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VYLR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "VZ"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "W"
+class = "None"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WAB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WAT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WAY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WCC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WCN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WDAY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WDC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WDFC"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WDS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WEC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WES"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WEX"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WFG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WFRD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WHD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WING"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WIT"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "Outsourcing, Wide by the return route. Its customers stay and its ROIC was above 14% in all ten years, but the service is one that rivals also sell."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "WIX"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "None"
+reason = "Customers build their websites on it and stay. Revenue up 13% a year and free cash of 29% of revenue."
+decided_by = "Claude, after the closer look the founder asked for"
+
+[[classes]]
+symbol = "WK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WLK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WLY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WM"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WMB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WMG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WMK"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WMS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WMT"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WOR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WPM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WPP"
+class = "Narrow"
+judged = 2026-11-19
+source = "correction"
+rule_class = "Wide"
+reason = "An advertising agency with falling revenue and a ROIC above 9% in six of the ten years. None was arguable; long client relationships keep it at Narrow."
+decided_by = "the founder, on Claude's proposal"
+
+[[classes]]
+symbol = "WRBY"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WSC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WSE"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WSM"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WSO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WST"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WTRG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WTS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WTTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WWD"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WWW"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "WYNN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XEL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XENE"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XERS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XMTR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XNCR"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XOM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XPEV"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XPO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XYL"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "XYZ"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "YETI"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "YMM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "YOU"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "YPF"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "YUM"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "YUMC"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZBH"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZBRA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZETA"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZG"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZGN"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZIM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZLAB"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZM"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZTO"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZTS"
+class = "Wide"
+judged = 2026-11-19
+source = "rule"
+
+[[classes]]
+symbol = "ZWS"
+class = "Narrow"
+judged = 2026-11-19
+source = "rule"

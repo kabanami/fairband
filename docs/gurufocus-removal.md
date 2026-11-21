@@ -751,7 +751,7 @@ figures are those of refresh 68.
 | SBUX | Starbucks Corporation | Narrow | Its ROIC fell from 49% to between 8% and 11%, and its operating margin from 18% to 10%. | the founder, on Claude's proposal |
 | AMGN | Amgen Inc. | Narrow | A steady fall: its ROIC went from 28% to 14% and its operating margin from 43% to 25%. Other large drug makers are Wide by the rule, so this is not fully consistent. | the founder, on Claude's proposal |
 | HON | Honeywell International Inc. | Narrow | The company is splitting up, so its ten-year record describes a company that no longer exists in that form. | the founder, on Claude's proposal |
-| CRM | Salesforce, Inc. | Narrow | A ROIC of 5% over ten years and 7% over five, after large purchases. Its review's Wide was GuruFocus's score carried through, not a judgment. | the founder, on Claude's proposal |
+| CRM | Salesforce, Inc. | Narrow | A ROIC of 5% over ten years and 7% over five, after large purchases. Its review of 2026-11-10 confirmed GuruFocus's Wide before the moat was a standing step of a review. | the founder, on Claude's proposal |
 | MDT | Medtronic Plc | Narrow | Its ROIC on all capital was 6% to 8% for nine years and 9% in the newest: the price of one purchase in 2015 is still not earned. Revenue grew 2.3% a year. | the founder, on Claude's proposal |
 | TMO | Thermo Fisher Scientific Inc. | Narrow | It spent $44 billion on purchases in the ten years, and its ROIC on all capital stays at 7% to 8%. | the founder, on Claude's proposal |
 | DHR | Danaher Corporation | Narrow | It spent $46 billion on purchases, with a ROIC on all capital of 5% to 8%. It is also in Decline, which the phase limit stops. | the founder, on Claude's proposal |
