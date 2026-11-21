@@ -6,7 +6,7 @@
 row is ``running``. Each row records the policy version, the method version and the settings hash
 the run reads. ``refresh_items`` holds each company's latest status within a refresh, and
 ``deciles`` the decile edges as JSON lists of floats. Apart from the user's settings and
-watchlists, these are the only rows the store updates.
+watchlists and the moat table, these are the only rows the store updates.
 """
 
 import json

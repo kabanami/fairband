@@ -5,17 +5,22 @@ import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import closing
-from datetime import UTC, date, datetime
+from dataclasses import replace
+from datetime import UTC, date, datetime, timedelta
 from importlib import resources
 from pathlib import Path
 
 import pytest
 
+from fairband.engine.overrides import State
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store import db
 from fairband.store.db import applied_versions, connect, migrate
 from fairband.store.guidance import GuidanceRow, guidance_row
 from fairband.store.inbox import WorkItem, work_item
+from fairband.store.ledger import Writer
+from fairband.store.moat import MoatRow, moat_row
+from fairband.store.overrides import drop_override, insert_override, override_row
 from fairband.store.reports import JudgmentRow, judgments_for
 from fairband.store.research import FindingRow, KillCriterionRow, finding_row, kill_criterion_row
 
@@ -45,6 +50,7 @@ _ALL = [
     "007_secondary_fx.sql",
     "008_record_currency.sql",
     "009_launches.sql",
+    "010_moat_classes.sql",
 ]
 # The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
 # fields in order, as 005 made them and 006, 007 and 008 changed them: a judgment without its
@@ -158,7 +164,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -201,7 +207,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -393,7 +399,7 @@ def test_migration_008_gives_a_record_its_currency(
 
     assert migrate(conn) == _ALL[7:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     at = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
     by_agent = {"principal": "agent", "actor": "claude-opus-5-5", "client": "claude-code/2.1"}
     assert finding_row(conn, 1) == FindingRow(
@@ -471,9 +477,9 @@ def test_migration_009_adds_the_launch_record(
     )
     conn.commit()
 
-    assert migrate(conn) == ["009_launches.sql"]
+    assert migrate(conn) == _ALL[8:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     recorded = conn.execute("select filename, checksum from schema_versions where version = 9")
     assert tuple(recorded.fetchone()) == (
         "009_launches.sql",
@@ -519,6 +525,109 @@ def test_migration_009_adds_the_launch_record(
     assert keys == [("item_id", "work_items", "id")]
     [index] = [r["name"] for r in conn.execute("pragma index_list(launches)")]
     assert [c["name"] for c in conn.execute(f"pragma index_info({index})")] == ["item_id", "id"]
+
+
+def test_migration_010_moves_the_applied_moat_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 009 holds TTMI's applied ``moat.class`` override, a dropped and a refused one
+    of the tag, and an applied override of another tag. 010 adds the moat table (spec 2026-11-19
+    8.3) and turns the applied one into its agent's row: the override's class, its old class the
+    previous one, its reason, evidence, writer and time, judged on its UTC day, no snapshot. The
+    override is dropped, "moved to the moat table", at a time the store reads; the others stay as
+    they were, and the move writes no ledger row."""
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:9]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:9]
+    agent = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    at = datetime(2026, 11, 11, 21, 15, 30, 250000, tzinfo=UTC)
+    filing = {"kind": "filing", "ref": "10-K 2025, segment note", "note": "margins below peers"}
+
+    def override(symbol: str, tag: str, old: str | float, new: str | float, state: State) -> int:
+        applied = state == "applied"
+        return insert_override(
+            conn,
+            symbol,
+            tag,
+            old,
+            new,
+            "class" if tag == "moat.class" else "ratio",
+            f"why {symbol} {tag}",
+            [filing] if applied else [],
+            "lasting",
+            None,
+            None,
+            7,
+            agent,
+            at,
+            state,
+            "" if applied else "an override needs evidence",
+        )
+
+    replaced = override("NVO", "moat.class", "Wide", "Narrow", "applied")
+    drop_override(conn, replaced, "replaced by override 9", at)
+    moved = override("TTMI", "moat.class", "Narrow", "None", "applied")
+    refused = override("RELX", "moat.class", "Narrow", "Wide", "refused-evidence")
+    runway = override("TTMI", "return.runway", 0.3, 0.15, "applied")
+    before = {i: override_row(conn, i) for i in (replaced, moved, refused, runway)}
+
+    started = datetime.now(UTC)
+    assert migrate(conn) == ["010_moat_classes.sql"]
+    finished = datetime.now(UTC)
+
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    columns = [
+        (r["name"], r["type"], r["notnull"], r["pk"])
+        for r in conn.execute("pragma table_info(moat_classes)")
+    ]
+    assert columns == [
+        ("symbol", "TEXT", 0, 1),
+        ("class", "TEXT", 1, 0),
+        ("source", "TEXT", 1, 0),
+        ("file_version", "TEXT", 0, 0),
+        ("judged_on", "TEXT", 1, 0),
+        ("previous", "TEXT", 0, 0),
+        ("reason", "TEXT", 0, 0),
+        ("evidence", "TEXT", 0, 0),
+        ("principal", "TEXT", 1, 0),
+        ("actor", "TEXT", 0, 0),
+        ("client", "TEXT", 0, 0),
+        ("at", "TEXT", 1, 0),
+        ("snapshot_id", "INTEGER", 0, 0),
+    ]
+    assert [r["symbol"] for r in conn.execute("select symbol from moat_classes")] == ["TTMI"]
+    assert moat_row(conn, "TTMI") == MoatRow(
+        symbol="TTMI",
+        moat="None",
+        source="agent",
+        file_version=None,
+        judged_on=date(2026, 11, 11),
+        previous="Narrow",
+        reason="why TTMI moat.class",
+        evidence=(filing,),
+        principal="agent",
+        actor="claude-opus-5-5",
+        client="claude-code/2.1",
+        at=at,
+        snapshot_id=None,
+    )
+    after = override_row(conn, moved)
+    assert after is not None and after.dropped_at is not None
+    assert after.dropped_at.utcoffset() == timedelta(0)
+    second = timedelta(seconds=1)
+    assert started - second <= after.dropped_at <= finished + second
+    assert after == replace(
+        before[moved],
+        state="dropped",
+        drop_reason="moved to the moat table",
+        dropped_at=after.dropped_at,
+    )
+    for i in (replaced, refused, runway):
+        assert override_row(conn, i) == before[i]
+    assert conn.execute("select count(*) from ledger").fetchone()[0] == 0
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -632,6 +741,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 007_secondary_fx.sql",
         "Applied 008_record_currency.sql",
         "Applied 009_launches.sql",
+        "Applied 010_moat_classes.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()
