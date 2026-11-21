@@ -24,7 +24,7 @@ from fairband.store.vendor import record_response, response_payload
 from fairband.vendors.normalize_fmp import price_closes
 from fairband.web import filings_api
 
-# The company page's sixteen, fetched after the two GuruFocus calls: the ten of spec 2026-11-16
+# The company page's sixteen, fetched after the GuruFocus call: the ten of spec 2026-11-16
 # 10.1, the Financials tab's four of spec 2026-11-17 8.1, then the Investor relations tab's two
 # of spec 2026-11-18 8.1.
 PAGE_ENDPOINTS = (
@@ -87,8 +87,9 @@ FMP_ENDPOINTS = (
     "splits",
     *PAGE_ENDPOINTS,
 )
-GF_ENDPOINTS = ("summary", "keyratios")
-# In fetch order: the fifteen FMP calls the engine reads, GuruFocus's two, the page's sixteen.
+# GuruFocus's one call, the moat score's: its key ratios are no longer asked (spec 2026-11-19 7.1).
+GF_ENDPOINTS = ("summary",)
+# In fetch order: the fifteen FMP calls the engine reads, GuruFocus's one, the page's sixteen.
 LISTED = (*FMP_ENDPOINTS[: -len(PAGE_ENDPOINTS)], *GF_ENDPOINTS, *PAGE_ENDPOINTS)
 # The newest call's transcript (spec 2026-11-18 8.1), asked after the listed calls where the store
 # holds none of it with words: ACME's list of calls names its fiscal 2026 Q3 call, and the
@@ -116,7 +117,6 @@ DATASETS = {
     ("street-actual", "earnings"),
     ("earnings-date", "earnings"),
     ("gf-score", "summary"),
-    ("gf-ratio", "keyratios"),
     ("split", "splits"),
 }
 
@@ -158,11 +158,11 @@ def test_fetches_all_endpoints_and_stores(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=34, reused=0, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=33, reused=0, failed=(), error=None)
     assert router.calls == Counter(dict.fromkeys(ENDPOINTS, 1))
 
     stored = responses(conn)
-    assert count(conn, "vendor_responses") == 34
+    assert count(conn, "vendor_responses") == 33
     assert [(r["provider"], r["endpoint"]) for r in stored.values()] == [
         ("gf" if e in GF_ENDPOINTS else "fmp", e) for e in ENDPOINTS
     ]
@@ -212,16 +212,16 @@ def test_reuses_within_24h(
     # The filings' window is the day's, as the agents' default is: the next day's is another call.
     # The newest call's transcript, stored with words, is no call of the second fetch.
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=1, reused=32, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=1, reused=31, failed=(), error=None)
     assert router.calls == Counter({**dict.fromkeys(ENDPOINTS, 1), "sec-filings": 2})
-    assert count(conn, "vendor_responses") == 35
+    assert count(conn, "vendor_responses") == 34
     filings = conn.execute("SELECT params FROM vendor_responses WHERE endpoint = 'sec-filings'")
     assert [json.loads(row[0])["to"] for row in filings] == ["2026-11-01", "2026-11-02"]
     # Inside the day, every listed call is reused.
     clock.now += timedelta(minutes=30)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=0, reused=33, failed=(), error=None)
-    assert count(conn, "vendor_responses") == 35
+    assert outcome == FetchOutcome("ACME", calls=0, reused=32, failed=(), error=None)
+    assert count(conn, "vendor_responses") == 34
 
 
 def test_force_fetches_fresh_endpoints(
@@ -230,9 +230,9 @@ def test_force_fetches_fresh_endpoints(
     """Every listed call again; the newest call's transcript, stored with words, is not asked."""
     fetch(conn, clients, policy, clock)
     outcome = fetch(conn, clients, policy, clock, force=True)
-    assert outcome == FetchOutcome("ACME", calls=33, reused=0, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=32, reused=0, failed=(), error=None)
     assert router.calls == Counter({**dict.fromkeys(LISTED, 2), TRANSCRIPT: 1})
-    assert count(conn, "vendor_responses") == 67
+    assert count(conn, "vendor_responses") == 65
 
 
 def test_gf_reused_for_7_days(
@@ -242,15 +242,32 @@ def test_gf_reused_for_7_days(
     fetch(conn, clients, policy, clock)
     clock.now = start + timedelta(days=2)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=31, reused=2, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=31, reused=1, failed=(), error=None)
     assert router.calls == Counter(
         {**dict.fromkeys(FMP_ENDPOINTS, 2), **dict.fromkeys(GF_ENDPOINTS, 1), TRANSCRIPT: 1}
     )
     # Seven days after the GuruFocus responses were observed they are fetched again.
     clock.now = start + timedelta(days=7)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=33, reused=0, failed=(), error=None)
-    assert router.calls["summary"] == router.calls["keyratios"] == 2
+    assert outcome == FetchOutcome("ACME", calls=32, reused=0, failed=(), error=None)
+    assert router.calls["summary"] == 2 and router.calls["keyratios"] == 0
+
+
+def test_a_fetch_makes_one_gurufocus_call(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """Spec 2026-11-19 7.1: the engine reads no GuruFocus EPS, so the fetch no longer asks
+    GuruFocus's key ratios; its one call is the summary, which holds the moat score. A forced
+    fetch asks no more of it, and nothing stores a ``gf-ratio`` row."""
+    fetch(conn, clients, policy, clock)
+    fetch(conn, clients, policy, clock, force=True)
+    assert router.calls["summary"] == 2 and router.calls["keyratios"] == 0
+    stored = conn.execute(
+        "SELECT DISTINCT provider, endpoint FROM vendor_responses WHERE provider = 'gf'"
+    )
+    assert [tuple(row) for row in stored] == [("gf", "summary")]
+    assert observations_for(conn, "ACME", "gf-ratio") == []
+    assert fetch_module.provider_of("keyratios") == "fmp"  # no longer a GuruFocus endpoint
 
 
 def test_response_and_its_rows_commit_together(
@@ -291,7 +308,7 @@ def test_endpoint_failure_recorded_and_continues(
     clients = clients_with_500_on_quote
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=34, reused=0, failed=("quote",), error="data fetch failed: quote"
+        "ACME", calls=33, reused=0, failed=("quote",), error="data fetch failed: quote"
     )
     assert router.calls["quote"] == policy.refresh.attempts
     failed = responses(conn)["quote"]
@@ -306,7 +323,7 @@ def test_endpoint_failure_recorded_and_continues(
     # A failed call is not reused: the next fetch calls it again and reuses the rest.
     router.fail.clear()
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=1, reused=32, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=1, reused=31, failed=(), error=None)
     assert stored_datasets(conn) == DATASETS
 
 
@@ -344,7 +361,7 @@ def test_unusable_200_is_failed_and_not_reused(
     router.bodies.update({"quote": b"[]", "summary": error_body.encode()})
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=34, reused=0, failed=("quote", "summary"), error="data fetch failed: quote"
+        "ACME", calls=33, reused=0, failed=("quote", "summary"), error="data fetch failed: quote"
     )
     stored = responses(conn)
     assert (stored["quote"]["http_status"], stored["quote"]["payload"]) == (200, "[]")
@@ -360,20 +377,20 @@ def test_unusable_200_is_failed_and_not_reused(
 
     router.bodies.clear()
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=2, reused=31, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=2, reused=30, failed=(), error=None)
     assert stored_datasets(conn) == DATASETS
 
 
 def test_only_required_endpoints_set_the_error(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
-    router.fail.update({"profile", "estimates-quarter", "income-annual", "keyratios"})
+    router.fail.update({"profile", "estimates-quarter", "income-annual", "summary"})
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome.failed == ("income-annual", "profile", "estimates-quarter", "keyratios")
+    assert outcome.failed == ("income-annual", "profile", "estimates-quarter", "summary")
     assert outcome.error == "data fetch failed: income-annual"
-    router.fail = {"profile", "keyratios"}
+    router.fail = {"profile", "summary"}
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.failed, outcome.error) == (4, ("profile", "keyratios"), None)
+    assert (outcome.calls, outcome.failed, outcome.error) == (4, ("profile", "summary"), None)
 
 
 def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(
@@ -386,7 +403,7 @@ def test_an_empty_quarterly_consensus_is_not_a_fetch_failure(
     router.bodies["estimates-quarter"] = b"[]"
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=34, reused=0, failed=("estimates-quarter",), error=None
+        "ACME", calls=33, reused=0, failed=("estimates-quarter",), error=None
     )
     assert responses(conn)["estimates-quarter"]["error"] == "unusable payload: []"
 
@@ -401,14 +418,12 @@ def test_missing_gf_key_marks_gf_failed(
 ) -> None:
     caplog.set_level(logging.WARNING, logger="fairband.refresh")
     outcome = fetch(conn, clients_no_gf, policy, clock)
-    assert outcome == FetchOutcome(
-        "ACME", calls=32, reused=0, failed=("summary", "keyratios"), error=None
-    )
+    assert outcome == FetchOutcome("ACME", calls=32, reused=0, failed=("summary",), error=None)
     assert router.calls == Counter(dict.fromkeys((*FMP_ENDPOINTS, TRANSCRIPT), 1))
     # no row for a call not made
     assert set(responses(conn)) == {*FMP_ENDPOINTS, TRANSCRIPT}
     assert "ACME gf summary failed: no GuruFocus key" in caplog.text
-    assert "ACME gf keyratios failed: no GuruFocus key" in caplog.text
+    assert "keyratios" not in caplog.text
 
 
 def test_missing_gf_key_still_reuses_fresh_gf_responses(
@@ -420,28 +435,28 @@ def test_missing_gf_key_still_reuses_fresh_gf_responses(
 ) -> None:
     fetch(conn, clients, policy, clock)
     outcome = fetch(conn, clients_no_gf, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=0, reused=33, failed=(), error=None)
+    assert outcome == FetchOutcome("ACME", calls=0, reused=32, failed=(), error=None)
     outcome = fetch(conn, clients_no_gf, policy, clock, force=True)
-    assert (outcome.calls, outcome.failed) == (31, ("summary", "keyratios"))
+    assert (outcome.calls, outcome.failed) == (31, ("summary",))
 
 
 def test_no_key_in_stored_params_or_payload(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
-    # The failed calls store an error that quotes the request URL, and the profile and key-ratios
+    # The failed calls store an error that quotes the request URL, and the profile and peers
     # bodies echo the keys, so the scrub has something to remove in each column.
     router.fail.update({"quote", "summary"})
     echo = [{"symbol": "ACME", "isAdr": False, "note": f"apikey={FMP_KEY} user/{GF_TOKEN}"}]
     router.bodies["profile"] = json.dumps(echo).encode()
     # An unusable answer stores the start of its body as the error.
-    router.bodies["keyratios"] = json.dumps({"error": f"invalid token {GF_TOKEN}"}).encode()
+    router.bodies["peers"] = json.dumps({"error": f"invalid key {FMP_KEY}"}).encode()
     fetch(conn, clients, policy, clock)
 
     rows = conn.execute("SELECT params, payload, error FROM vendor_responses").fetchall()
-    assert len(rows) == 34
+    assert len(rows) == 33
     texts = [text for row in rows for text in row if text is not None]
     assert any("<key>" in text for text in texts)
-    assert 'unusable payload: {"error": "invalid token <key>"}' in texts
+    assert 'unusable payload: {"error": "invalid key <key>"}' in texts
     forms = {
         form for key in clients.secrets for form in (key, quote(key, safe=""), quote_plus(key))
     }
@@ -473,16 +488,16 @@ def test_a_peer_list_or_an_empty_list_is_usable_and_nothing_else(
 
     router.bodies["peers"] = b'[{"companyName": "Bolt Industries"}]'
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 32, ("peers",))
+    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 31, ("peers",))
     assert responses(conn)["peers"]["error"] == (
         'unusable payload: [{"companyName": "Bolt Industries"}]'
     )
 
     router.bodies["peers"] = b"[]"
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 32, ())
+    assert (outcome.calls, outcome.reused, outcome.failed) == (1, 31, ())
     assert (responses(conn)["peers"]["payload"], responses(conn)["peers"]["error"]) == ("[]", None)
-    assert fetch(conn, clients, policy, clock).reused == 33
+    assert fetch(conn, clients, policy, clock).reused == 32
     assert stored_datasets(conn) == DATASETS  # the peers store no rows
 
 
@@ -524,7 +539,7 @@ def test_the_quarterly_balance_sheet_is_not_required(
     router.fail_status = 404
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=34, reused=0, failed=("balance-quarter",), error=None
+        "ACME", calls=33, reused=0, failed=("balance-quarter",), error=None
     )
     assert fetch_module.REQUIRED == {"income-annual", "balance-annual", "cashflow-annual", "quote"}
     failed = responses(conn)["balance-quarter"]
@@ -549,14 +564,14 @@ def test_the_page_calls_come_last_in_this_order(
     conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
 ) -> None:
     """Spec 2026-11-16 10.1, spec 2026-11-17 8.1 and spec 2026-11-18 8.1: the company page's
-    sixteen calls follow GuruFocus's two, in this order, on their FMP routes, each with its depth:
+    sixteen calls follow GuruFocus's one, in this order, on their FMP routes, each with its depth:
     the ratios and the key metrics by fiscal year cover the statements' years, and the filings the
     365 days to the fetch's day (the clock's 1 November 2026). The newest call's transcript comes
     last of all."""
     assert fetch_module.PAGE_ENDPOINTS == PAGE_ENDPOINTS
     fetch(conn, clients, policy, clock)
     assert list(router.calls) == list(ENDPOINTS)
-    assert list(responses(conn))[-18:] == ["keyratios", *PAGE_ENDPOINTS, TRANSCRIPT]
+    assert list(responses(conn))[-18:] == ["summary", *PAGE_ENDPOINTS, TRANSCRIPT]
     assert router.requested["price-change"] == {"symbol": "ACME"}
     assert router.requested["financial-growth"] == {"symbol": "ACME", "limit": "1"}
     assert router.requested["dividends"] == {"symbol": "ACME", "limit": "4"}
@@ -630,7 +645,7 @@ def test_a_failed_page_call_is_named_and_costs_nothing(
     caplog.set_level(logging.WARNING, logger="fairband.refresh")
     router.fail = set(PAGE_ENDPOINTS)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=33, reused=0, failed=PAGE_ENDPOINTS, error=None)
+    assert outcome == FetchOutcome("ACME", calls=32, reused=0, failed=PAGE_ENDPOINTS, error=None)
     assert all(f"ACME fmp {e} failed: GET " in caplog.text for e in PAGE_ENDPOINTS)
     stored = responses(conn)
     assert {(stored[e]["http_status"], stored[e]["payload"]) for e in PAGE_ENDPOINTS} == {
@@ -649,23 +664,23 @@ def test_a_page_payload_is_usable_when_it_is_a_list(
     nor an empty list of calls names a call, so no transcript is asked."""
     router.bodies.update(dict.fromkeys(PAGE_ENDPOINTS, ERROR_BODY))
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.failed, outcome.error) == (33, PAGE_ENDPOINTS, None)
+    assert (outcome.calls, outcome.failed, outcome.error) == (32, PAGE_ENDPOINTS, None)
     stored = responses(conn)
     for endpoint in PAGE_ENDPOINTS:
         row = stored[endpoint]
         assert (row["http_status"], row["payload"]) == (200, ERROR_BODY.decode())
         assert row["error"] == ERROR_STORED
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.reused, outcome.failed) == (16, 17, PAGE_ENDPOINTS)
+    assert (outcome.calls, outcome.reused, outcome.failed) == (16, 16, PAGE_ENDPOINTS)
 
     router.bodies.update(dict.fromkeys(PAGE_ENDPOINTS, b"[]"))
     outcome = fetch(conn, clients, policy, clock)
-    assert (outcome.calls, outcome.reused, outcome.failed) == (16, 17, ())
+    assert (outcome.calls, outcome.reused, outcome.failed) == (16, 16, ())
     stored = responses(conn)
     assert {(stored[e]["payload"], stored[e]["error"]) for e in PAGE_ENDPOINTS} == {("[]", None)}
     calls = router.calls.total()
     assert fetch(conn, clients, policy, clock) == FetchOutcome(
-        "ACME", calls=0, reused=33, failed=(), error=None
+        "ACME", calls=0, reused=32, failed=(), error=None
     )
     assert router.calls.total() == calls
     assert router.calls[TRANSCRIPT] == 0
@@ -704,7 +719,7 @@ def test_a_429_on_a_page_call_stops_the_fetch(
     router.fail_status = 429
     outcome = fetch(conn, clients, policy, clock)
     assert outcome == FetchOutcome(
-        "ACME", calls=24, reused=0, failed=("grades",), error=None, rate_limited=True
+        "ACME", calls=23, reused=0, failed=("grades",), error=None, rate_limited=True
     )
     assert router.calls["grades"] == policy.refresh.attempts
     after = PAGE_ENDPOINTS[PAGE_ENDPOINTS.index("grades") + 1 :]
@@ -764,7 +779,7 @@ def test_the_newest_call_s_transcript_is_fetched_once(
     A copy with words is never asked again: not by a forced fetch, nor past the window."""
     clock.now = datetime(2026, 11, 18, 9, 30, tzinfo=UTC)
     first = fetch(conn, clients, policy, clock)
-    assert (first.calls, first.failed) == (34, ())
+    assert (first.calls, first.failed) == (33, ())
     assert router.requested[TRANSCRIPT] == Q3
     row = responses(conn)[TRANSCRIPT]
     assert (json.loads(row["params"]), row["http_status"], row["error"]) == (Q3, 200, None)
@@ -775,8 +790,8 @@ def test_the_newest_call_s_transcript_is_fetched_once(
     clock.now = datetime(2026, 11, 19, 9, 30, tzinfo=UTC)
     forced = fetch(conn, clients, policy, clock, force=True)
     clock.now += timedelta(days=3)
-    later = fetch(conn, clients, policy, clock)  # GuruFocus's two reused, inside seven days
-    assert (forced.calls, later.calls, later.reused) == (33, 31, 2)
+    later = fetch(conn, clients, policy, clock)  # GuruFocus's one reused, inside seven days
+    assert (forced.calls, later.calls, later.reused) == (32, 31, 1)
     assert router.calls[TRANSCRIPT] == 1
 
 
@@ -828,7 +843,7 @@ def test_no_transcript_without_a_stored_list_that_names_a_call(
     usable and names no call. No transcript is asked; the error stays ``None``."""
     router.bodies["transcript-dates"] = dates
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=33, reused=0, failed=failed, error=None)
+    assert outcome == FetchOutcome("ACME", calls=32, reused=0, failed=failed, error=None)
     assert router.calls[TRANSCRIPT] == 0 and TRANSCRIPT not in responses(conn)
 
 
@@ -857,13 +872,13 @@ def test_a_transcript_with_no_words_is_asked_again_by_the_next_fetch(
     router.bodies[TRANSCRIPT] = b"[]"
     first = fetch(conn, clients, policy, clock)
     row = responses(conn)[TRANSCRIPT]
-    assert (first.calls, first.failed, row["payload"], row["error"]) == (34, (), "[]", None)
+    assert (first.calls, first.failed, row["payload"], row["error"]) == (33, (), "[]", None)
 
     blank = [{"symbol": "ACME", "period": "Q3", "year": 2026, "date": "2026-10-28", "content": " "}]
     router.bodies[TRANSCRIPT] = json.dumps(blank).encode()
     clock.now += timedelta(hours=1)
     again = fetch(conn, clients, policy, clock)
-    assert again == FetchOutcome("ACME", calls=1, reused=33, failed=(), error=None)
+    assert again == FetchOutcome("ACME", calls=1, reused=32, failed=(), error=None)
     assert responses(conn)[TRANSCRIPT]["error"] is None
 
     del router.bodies[TRANSCRIPT]  # the fixture's transcript, with words
@@ -884,8 +899,8 @@ def test_any_stored_copy_with_words_keeps_the_transcript_from_being_asked(
     for body in ("[]", ERROR_BODY.decode()):
         record_response(conn, "fmp", TRANSCRIPT, Q3, "ACME", 200, body, None, later)
     clock.now = later + timedelta(hours=1)
-    outcome = fetch(conn, clients, policy, clock)  # GuruFocus's two reused, inside seven days
-    assert (outcome.calls, outcome.reused) == (31, 2)
+    outcome = fetch(conn, clients, policy, clock)  # GuruFocus's one reused, inside seven days
+    assert (outcome.calls, outcome.reused) == (31, 1)
     assert router.calls[TRANSCRIPT] == 1
 
 
@@ -897,7 +912,7 @@ def test_a_failed_or_unusable_transcript_costs_nothing(
     so the next fetch asks again."""
     router.fail.add(TRANSCRIPT)
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=34, reused=0, failed=(TRANSCRIPT,), error=None)
+    assert outcome == FetchOutcome("ACME", calls=33, reused=0, failed=(TRANSCRIPT,), error=None)
     row = responses(conn)[TRANSCRIPT]
     assert (row["http_status"], row["payload"]) == (500, None)
     assert stored_datasets(conn) == DATASETS
@@ -905,7 +920,7 @@ def test_a_failed_or_unusable_transcript_costs_nothing(
     router.fail.clear()
     router.bodies[TRANSCRIPT] = ERROR_BODY
     outcome = fetch(conn, clients, policy, clock)
-    assert outcome == FetchOutcome("ACME", calls=1, reused=33, failed=(TRANSCRIPT,), error=None)
+    assert outcome == FetchOutcome("ACME", calls=1, reused=32, failed=(TRANSCRIPT,), error=None)
     row = responses(conn)[TRANSCRIPT]
     assert (row["http_status"], row["payload"], row["error"]) == (
         200,
@@ -918,9 +933,9 @@ def test_a_failed_or_unusable_transcript_costs_nothing(
 @pytest.mark.parametrize(
     ("endpoint", "calls", "not_called"),
     [
-        pytest.param("transcript-dates", 32, ("sec-filings", TRANSCRIPT), id="list-of-calls"),
-        pytest.param("sec-filings", 33, (TRANSCRIPT,), id="filings"),
-        pytest.param(TRANSCRIPT, 34, (), id="transcript"),
+        pytest.param("transcript-dates", 31, ("sec-filings", TRANSCRIPT), id="list-of-calls"),
+        pytest.param("sec-filings", 32, (TRANSCRIPT,), id="filings"),
+        pytest.param(TRANSCRIPT, 33, (), id="transcript"),
     ],
 )
 def test_a_429_on_a_new_call_stops_the_fetch(
@@ -1094,7 +1109,7 @@ def test_the_fetch_reuses_the_pass_through_s_copies(env: Env) -> None:
     passthrough.fetch("transcript", "ACME", {"year": "2026", "quarter": "3"})
     assert investor_calls(env) == (1, 1, 1)
     outcome = env_fetch(env, "ACME")
-    assert (outcome.calls, outcome.reused, outcome.failed) == (31, 2, ())
+    assert (outcome.calls, outcome.reused, outcome.failed) == (30, 2, ())
     assert investor_calls(env) == (1, 1, 1)
 
 

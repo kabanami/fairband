@@ -49,7 +49,8 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   rate; the statements', the tax rate's and an unknown currency's are not;
 - the GuruFocus moat score, the next earnings date (``None`` when before ``today``) and the
   closes of the latest price-history payload (none when it is absent or does not parse). The
-  engine reads no GuruFocus EPS (spec 2026-11-19 7.1), so none is given;
+  engine reads no GuruFocus EPS (spec 2026-11-19 7.1): GuruFocus's key ratios that a fetch stored
+  before stay in the store, unread;
 - the newest balance sheet (``newest_sheet``, spec 2026-11-13 12.2), a fiscal year's or a
   quarter's, the fiscal year's on a tie: ``sheet``, with its period, its label, whether it is a
   quarter's, the liquidation floor's two lines and the minority interest as presented, cited as
@@ -127,7 +128,6 @@ _OBSERVATIONS = frozenset(
         "quote",
         "profile",
         "gf-score",
-        "gf-ratio",
         "split",
     }
 )
@@ -137,7 +137,7 @@ _ONE_ANSWER = frozenset({"estimate-annual", "estimate-quarter"})
 _QUOTE, _PROFILE, _SCREENER = "FMP quote", PROFILE_SOURCE, SCREENER_SOURCE
 _ESTIMATES, _EARNINGS = "FMP analyst-estimates", "FMP earnings"
 _CLOSES = "FMP historical-price-eod/full"
-_SUMMARY, _KEYRATIOS = "GuruFocus summary", "GuruFocus keyratios"
+_SUMMARY = "GuruFocus summary"
 _FX_HISTORY = "FMP historical-price-eod/light"
 _BALANCE_SHEET = "FMP balance-sheet-statement"
 _CURRENCY_UNKNOWN = "reporting currency unknown"
@@ -179,7 +179,7 @@ def build_inputs(
             return answer_observations(conn, symbol, dataset)
         return observations_for(conn, symbol, dataset)
 
-    quote, profile, ratios = read("quote"), read("profile"), read("gf-ratio")
+    quote, profile = read("quote"), read("profile")
     price = _field(quote, "price")
     calendar = stated.calendar
     currency = stated.currency or (None if company is None else company.currency)
@@ -194,10 +194,6 @@ def build_inputs(
     actuals = cite("street_ttm_eps", money.actuals(street, policy))
     scores = read("gf-score")
     moat = cite("moat_score", _value(_field(scores, "moat_score"), _SUMMARY))
-    ttm_row, clean_row = _field(ratios, "eps_ttm"), _field(ratios, "eps_without_nri")
-    ends = [period.end for period in stated.trailing_periods]
-    eps_ttm = cite("gf_eps_ttm", money.mean(_value(ttm_row, _KEYRATIOS), ends, policy))
-    eps_clean = cite("gf_eps_without_nri", money.mean(_value(clean_row, _KEYRATIOS), ends, policy))
     read_sheet = newest_sheet(conn, symbol)
     sheet = cite("balance_sheet", _sheet(read_sheet))
     sums = balance_sums({} if read_sheet is None else read_sheet.lines)
@@ -209,10 +205,6 @@ def build_inputs(
         trailing=stated.trailing,
         periods=stated.trailing_periods,
         street_actuals=actuals,
-        gf_eps_ttm=eps_ttm,
-        gf_eps_ttm_as_of=None if ttm_row is None else ttm_row.as_of,
-        gf_eps_without_nri=eps_clean,
-        gf_eps_without_nri_as_of=None if clean_row is None else clean_row.as_of,
         quarter_estimates=quarters,
         annual_estimates=annual,
     )
@@ -303,17 +295,6 @@ class _Money:
                 return (), None
             moved.append((end, eps * rate))
         return tuple(moved), source
-
-    def mean(
-        self, found: _Cited[float | None], ends: Sequence[date], policy: Policy
-    ) -> _Cited[float | None]:
-        """GuruFocus's EPS at the mean of the period ends' rates in the currency; unknown when
-        one has none. USD's as found."""
-        value, source = found
-        if self.currency == "USD" or value is None:
-            return found
-        rate = None if self.series is None else self.series.mean_at(ends, policy.fx_stale_days)
-        return (None, None) if rate is None else (value * rate.rate, source)
 
     def _at(self, day: date, policy: Policy) -> float | None:
         rate = None if self.series is None else self.series.at(day, policy.fx_stale_days)

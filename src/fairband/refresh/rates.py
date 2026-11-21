@@ -94,21 +94,6 @@ class FxSeries:
         stale = (day - when).days > stale_days
         return Rate(rate, when, self.observed_at, stale, when in self.quoted)
 
-    def mean_at(self, days: Sequence[date], stale_days: int) -> Rate | None:
-        """The mean of ``at`` over ``days``; None when any day has none (or no day is given);
-        stale when any is, and quoted when a quote supplied any; the date the latest close read."""
-        rates = [self.at(day, stale_days) for day in days]
-        found = [rate for rate in rates if rate is not None]
-        if not found or len(found) < len(rates):
-            return None
-        return Rate(
-            sum(rate.rate for rate in found) / len(found),
-            max(rate.date for rate in found),
-            self.observed_at,
-            any(rate.stale for rate in found),
-            any(rate.quoted for rate in found),
-        )
-
 
 def rates_for(conn: sqlite3.Connection, currency: str) -> FxSeries | None:
     """The latest usable fx-history response of the pair, its closes merged with every stored

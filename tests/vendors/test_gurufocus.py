@@ -2,7 +2,7 @@
 against the synthetic fixtures in ``tests/fixtures/gurufocus``.
 
 ACME's responses hold every value, as strings where GuruFocus sends strings; BOLT's hold a null, a
-``"-"``, a key the response lacks and an EPS key under an unexpected category.
+``"-"`` and a key the response lacks.
 """
 
 import json
@@ -18,13 +18,10 @@ import pytest
 
 from fairband.policy import load_policy
 from fairband.store.observations import ObservationRow
+from fairband.vendors import normalize_gf
 from fairband.vendors.gurufocus import BASE_URL, GuruFocus
 from fairband.vendors.http import VendorHttp, VendorResponse
-from fairband.vendors.normalize_gf import (
-    keyratios_observations,
-    num,
-    summary_observations,
-)
+from fairband.vendors.normalize_gf import num, summary_observations
 
 TOKEN = "T0K3N"  # not a real token
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "gurufocus"
@@ -66,16 +63,23 @@ def test_token_only_in_path_and_scrubbed(caplog: pytest.LogCaptureFixture) -> No
     assert caplog.records and TOKEN not in caplog.text
 
 
-def test_keyratios_keeps_the_exchange_symbol() -> None:
-    request, response = fetch(TOKEN, lambda gf: gf.keyratios("BRK.B"))
-    assert request.url.path == "/public/user/T0K3N/stock/BRK.B/keyratios"
-    assert response.url == "https://api.gurufocus.com/public/user/<key>/stock/BRK.B/keyratios"
+def test_summary_keeps_the_exchange_symbol() -> None:
+    request, response = fetch(TOKEN, lambda gf: gf.summary("BRK.B"))
+    assert request.url.path == "/public/user/T0K3N/stock/BRK.B/summary"
+    assert response.url == "https://api.gurufocus.com/public/user/<key>/stock/BRK.B/summary"
 
 
 def test_the_client_asks_no_pe_series() -> None:
     """Spec 2026-11-19 6.3: Fairband builds the trailing P/E from FMP's data, so the client has no
     call for GuruFocus's series."""
     assert not hasattr(GuruFocus, "pe_ttm")
+
+
+def test_the_client_asks_no_key_ratios() -> None:
+    """Spec 2026-11-19 7.1: the engine reads no GuruFocus EPS, so neither the client nor the
+    normalizer has the key ratios; the summary, which holds the moat score, is the one call."""
+    assert not hasattr(GuruFocus, "keyratios")
+    assert not hasattr(normalize_gf, "keyratios_observations")
 
 
 def test_a_token_with_a_colon_stays_whole() -> None:
@@ -147,33 +151,6 @@ def test_summary_null_and_missing_key_have_no_value() -> None:
 )
 def test_summary_without_company_data_gives_no_rows(payload: Any) -> None:
     assert summary_observations(payload, "ACME", RID, OBSERVED, ENTERED) == []
-
-
-def test_keyratios_search_across_categories() -> None:
-    assert keyratios_observations(load("keyratios.ACME"), "ACME", RID, OBSERVED, ENTERED) == [
-        row("ACME", "gf-ratio", "eps_ttm", "6.11", "per-share"),
-        row("ACME", "gf-ratio", "eps_without_nri", "5.87", "per-share"),
-    ]
-    # BOLT's "EPS (TTM)" sits under "Valuation Ratio", as "-".
-    assert keyratios_observations(load("keyratios.BOLT"), "BOLT", RID, OBSERVED, ENTERED) == [
-        row("BOLT", "gf-ratio", "eps_ttm", None, "per-share"),
-        row("BOLT", "gf-ratio", "eps_without_nri", "-0.42", "per-share"),
-    ]
-
-
-def test_keyratios_first_category_wins_and_a_missing_key_has_no_value() -> None:
-    payload = {"Fundamental": {"EPS (TTM)": "2.50"}, "Per Share Data": {"EPS (TTM)": "9.99"}}
-    assert keyratios_observations(payload, "ACME", RID, OBSERVED, ENTERED) == [
-        row("ACME", "gf-ratio", "eps_ttm", "2.50", "per-share"),
-        row("ACME", "gf-ratio", "eps_without_nri", None, "per-share"),
-    ]
-
-
-@pytest.mark.parametrize(
-    "payload", [None, [], {}, {"error": "Stock not found"}, {"EPS (TTM)": "6.11"}]
-)
-def test_keyratios_without_categories_gives_no_rows(payload: Any) -> None:
-    assert keyratios_observations(payload, "ACME", RID, OBSERVED, ENTERED) == []
 
 
 @pytest.mark.parametrize(

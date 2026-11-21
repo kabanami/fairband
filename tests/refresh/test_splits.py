@@ -9,14 +9,14 @@ ACME fixture.
 import json
 import sqlite3
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pytest
 from support import engine_companies
-from synthetic import QUARTERS, M, add_company, bodies, estimates_quarter
+from synthetic import QUARTERS, M, add_company, bodies, estimates_quarter, store_gf_ratios
 from vendor_double import FIXTURES, Clients, Clock, Router
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
@@ -166,10 +166,6 @@ def _figures(
             TrailingPeriod(end, e, n) for end, e, n in zip(ENDS, quarters, each, strict=True)
         ),
         street_actuals=tuple((end, street / 4) for end in ENDS),
-        gf_eps_ttm=None,
-        gf_eps_ttm_as_of=None,
-        gf_eps_without_nri=None,
-        gf_eps_without_nri_as_of=None,
         quarter_estimates=(),
         annual_estimates=(),
     )
@@ -401,25 +397,6 @@ def test_a_row_within_both_counts_is_left_alone() -> None:
     )
 
 
-def test_gurufocus_figures_scale_by_observation_date() -> None:
-    before, after = date(2026, 10, 10), date(2026, 10, 20)
-    figures = replace(
-        _figures(),
-        gf_eps_ttm=6.0,
-        gf_eps_ttm_as_of=before,
-        gf_eps_without_nri=5.8,
-        gf_eps_without_nri_as_of=after,
-    )
-    out = _apply(figures)
-    assert (out.figures.gf_eps_ttm, out.figures.gf_eps_without_nri) == (3.0, 5.8)
-    # the figure observed before the split is noted under its DATA input; the later one is not
-    assert out.notes["gf_eps_ttm"] == "÷2 for the 2-for-1 split of 15 Oct 2026"
-    assert out.estimate_methods["gf_eps_ttm"] == "split-scaled"
-    assert set(out.notes) == set(out.estimate_methods) == {*STATEMENT_KEYS, "gf_eps_ttm"}
-    assert "GuruFocus's EPS observed 10 Oct 2026 is read ÷2." in _sentence(out)
-    assert "GuruFocus's EPS observed 20 Oct 2026" not in _sentence(out)
-
-
 def test_a_reverse_split_multiplies_the_per_share_figures() -> None:
     reverse = SplitRow(date(2026, 10, 15), 1.0, 10.0)
     figures = _figures(count=1000.0, eps=4.0, street=4.2)
@@ -506,6 +483,23 @@ def test_build_inputs_reads_a_pending_split(store: Store) -> None:
     assert inputs.notes["shares_diluted"] == "×2 for the 2-for-1 split of 15 Oct 2026"
     assert inputs.notes["street_ttm_eps"] == "÷2 for the 2-for-1 split of 15 Oct 2026"
     assert inputs.market_cap == pytest.approx(25.0 * 208 * M) and inputs.price == 25.0
+
+
+def test_the_split_rule_names_no_gurufocus_figure(store: Store) -> None:
+    """Spec 2026-11-19 7.1: the engine reads no GuruFocus EPS, so the split rule scales none. A
+    ``gf-ratio`` answer the store kept from before, observed on 10 Oct 2026, ahead of the 2-for-1
+    split of 15 Oct, is not read: no note under ``gf_eps_*``, no figure marked ``split-scaled``
+    but the statements', and the ``split-pending`` sentence says nothing of GuruFocus."""
+    conn = _acme_split(store)
+    store_gf_ratios(conn, date(2026, 10, 10))
+    inputs = build(conn)
+    gurufocus = [n for n in (*inputs.notes, *inputs.estimate_methods) if n.startswith("gf_eps")]
+    assert gurufocus == []
+    marked = {name for name, method in inputs.estimate_methods.items() if method == "split-scaled"}
+    assert marked == STATEMENT_KEYS
+    [split] = [f for f in inputs.input_flags if f.code == "split-pending"]
+    assert "GuruFocus" not in split.sentence and "EPS observed" not in split.sentence
+    assert not [f.name for f in fields(SplitFigures) if f.name.startswith("gf_")]
 
 
 @pytest.mark.parametrize("failed", [False, True], ids=["old-split", "failed-call"])
@@ -995,10 +989,6 @@ def _split_inputs(inputs: CompanyInputs) -> CompanyInputs:
         trailing=t,
         periods=tuple(TrailingPeriod(end, t.eps_diluted / 4, count) for end in ENDS),
         street_actuals=() if street is None else tuple((end, street / 4) for end in ENDS),
-        gf_eps_ttm=None,  # the engine reads no GuruFocus EPS (spec 2026-11-19 7.1)
-        gf_eps_ttm_as_of=None,
-        gf_eps_without_nri=None,
-        gf_eps_without_nri_as_of=None,
         quarter_estimates=inputs.quarter_estimates,
         annual_estimates=inputs.annual_estimates,
     )

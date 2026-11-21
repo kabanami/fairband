@@ -1,9 +1,11 @@
-"""Fetch one company: thirty-one FMP calls and two GuruFocus calls (spec 6.5, the peers of growth
+"""Fetch one company: thirty-one FMP calls and one GuruFocus call (spec 6.5, the peers of growth
 routes spec 5.5, the splits of spec 2026-11-09 10.1, the quarterly balance sheet of spec
 2026-11-13 12.1, and the company page's sixteen: the ten of spec 2026-11-16 10.1, the Financials
 tab's four of spec 2026-11-17 8.1 and the Investor relations tab's two of spec 2026-11-18 8.1),
 each reused while fresh and stored whole, then a thirty-second FMP call, the newest earnings call's
-transcript, where the store holds no copy of it with words.
+transcript, where the store holds no copy of it with words. The GuruFocus call is the summary, the
+moat score's; GuruFocus's key ratios are no longer asked (spec 2026-11-19 7.1), and the answers a
+fetch stored before stay in the store.
 
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
@@ -30,7 +32,7 @@ anything but a list, is unusable. The peers are not required. The splits are sto
 (dataset ``split``, ``split_observations``); any list is usable, the empty list among them (a
 company with no split has none, reused like any other answer), and anything but a list is
 unusable. The splits are not required either: without them the company is valued on what it has.
-The company page's sixteen (``PAGE_ENDPOINTS``), fetched after the two GuruFocus calls, store no
+The company page's sixteen (``PAGE_ENDPOINTS``), fetched after the GuruFocus call, store no
 rows: the page reads their stored payloads. Each is usable when it is a list, the empty list among
 them (a company with no dividend, no analyst, no news, no segments, no earnings call or no filing
 has none, reused like any other answer), and unusable otherwise (FMP's ``{"Error Message":
@@ -56,9 +58,9 @@ list, not required, and a 429 on it stops the fetch.
 A ``VendorError`` is stored as a response row with the error, its HTTP status if one came back and
 no payload, in a transaction of its own, and the fetch goes on with the next endpoint, except after
 an HTTP 429, on any call, a page call among them: the fetch stops there and reports
-``rate_limited``; stopping the refresh is the runner's job. Without a GuruFocus client, the two
-GuruFocus endpoints fail with "no GuruFocus key" (logged) and store nothing, unless the store holds
-fresh responses, which are reused.
+``rate_limited``; stopping the refresh is the runner's job. Without a GuruFocus client, the
+GuruFocus endpoint fails with "no GuruFocus key" (logged) and stores nothing, unless the store holds
+a fresh response, which is reused.
 
 The stored ``params`` are the call's logical parameters (``symbol``, ``period``, ``limit``, the
 filings' ``from`` and ``to``, a transcript's ``year`` and ``quarter``), never the key, and the
@@ -116,7 +118,7 @@ from fairband.vendors.normalize_fmp import (
     split_observations,
     statement_facts,
 )
-from fairband.vendors.normalize_gf import keyratios_observations, summary_observations
+from fairband.vendors.normalize_gf import summary_observations
 from fairband.vendors.page_investor import has_words, newest_call
 from fairband.vendors.scrub import scrub
 
@@ -138,7 +140,7 @@ FILINGS_WINDOW_DAYS = 365  # the filings' window: the agents' filing list's defa
 
 # The company page's calls (spec 2026-11-16 10.1, the Financials tab's four of spec 2026-11-17 8.1,
 # then the Investor relations tab's two of spec 2026-11-18 8.1), the endpoints as stored, in fetch
-# order after GuruFocus's two. None is required, and none gives a fact or an observation: the page
+# order after GuruFocus's one. None is required, and none gives a fact or an observation: the page
 # reads their stored payloads.
 PAGE_ENDPOINTS: tuple[str, ...] = (
     "ratios-ttm",
@@ -185,7 +187,7 @@ STATEMENT_ENDPOINTS = frozenset(
     }
 )
 NO_GF_KEY = "no GuruFocus key"
-_GF_ENDPOINTS = frozenset({"summary", "keyratios"})
+_GF_ENDPOINTS = frozenset({"summary"})
 _DETAIL_CHARS = 80  # of an unusable payload, kept as its error
 _PENDING = 0  # the response id normalized rows carry until their response is recorded
 
@@ -296,8 +298,8 @@ def fetch_company(
 
 def provider_of(endpoint: str) -> Provider:
     """The provider of an endpoint name this module stores (``FetchOutcome.failed``, and the
-    rates stage's ``fx-history``): the two GuruFocus endpoints are its bare route names,
-    ``summary`` and ``keyratios``; every other endpoint is FMP's."""
+    rates stage's ``fx-history``): the GuruFocus endpoint is its bare route name, ``summary``;
+    every other endpoint is FMP's."""
     return "gf" if endpoint in _GF_ENDPOINTS else "fmp"
 
 
@@ -337,7 +339,7 @@ def filings_window(today: date) -> tuple[date, date]:
 
 
 def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Call]:
-    """The calls for ``symbol`` in fetch order: fifteen FMP, two GuruFocus, then the company
+    """The calls for ``symbol`` in fetch order: fifteen FMP, one GuruFocus, then the company
     page's sixteen FMP, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``."""
     start = _years_before(today, PRICE_YEARS)
 
@@ -403,7 +405,6 @@ def _calls(fmp: Fmp, gf: GuruFocus | None, symbol: str, today: date) -> list[_Ca
         on_fmp("peers", {}, partial(fmp.peers, symbol)),
         on_fmp("splits", {}, partial(fmp.splits, symbol)),
         on_gf("summary", GuruFocus.summary),
-        on_gf("keyratios", GuruFocus.keyratios),
         *(
             _Call("fmp", endpoint, page_params(endpoint, symbol, today), page_sends[endpoint])
             for endpoint in PAGE_ENDPOINTS
@@ -520,8 +521,6 @@ def _rows(
             return ([], split_observations(payload, *source)) if isinstance(payload, list) else None
         case "summary":
             observations = summary_observations(payload, *source)
-        case "keyratios":
-            observations = keyratios_observations(payload, *source)
         case _ if endpoint in PAGE_ENDPOINTS or endpoint == TRANSCRIPT:
             return ([], []) if isinstance(payload, list) else None
         case _:

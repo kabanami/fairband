@@ -1,6 +1,7 @@
-"""The GuruFocus adapter: the two calls per company of spec 6.5, ``summary`` and ``keyratios``.
-The daily trailing P/E series, ``pettm``, is no longer asked: Fairband builds the series from
-FMP's data (spec 2026-11-19 6.3).
+"""The GuruFocus adapter: the one call per company, ``summary`` (spec 6.5), which holds the moat
+score. The daily trailing P/E series, ``pettm``, is no longer asked: Fairband builds the series from
+FMP's data (spec 2026-11-19 6.3). Nor are the key ratios: the engine reads no GuruFocus EPS (spec
+2026-11-19 7.1).
 
 Each method makes one ``VendorHttp.get`` and returns the ``VendorResponse``; build the client with
 ``BASE_URL`` and the token among its secrets, so the token is scrubbed from everything it emits.
@@ -16,7 +17,7 @@ for a payload without the expected shape.
 from fairband.vendors.http import VendorHttp, VendorResponse
 
 BASE_URL = "https://api.gurufocus.com/public/user"
-PROVIDER = "gf"  # GuruFocus's name in the store, the provider of the refresh's two responses
+PROVIDER = "gf"  # GuruFocus's name in the store, the provider of the refresh's summary
 
 
 class GuruFocus:
@@ -33,10 +34,6 @@ class GuruFocus:
     def summary(self, symbol: str) -> VendorResponse:
         """``stock/{symbol}/summary``: the moat score and the depositary's ratio."""
         return self._get(symbol, "summary")
-
-    def keyratios(self, symbol: str) -> VendorResponse:
-        """``stock/{symbol}/keyratios``: EPS (TTM) and EPS without NRI among the key ratios."""
-        return self._get(symbol, "keyratios")
 
     def _get(self, symbol: str, route: str) -> VendorResponse:
         # The leading slash keeps the path a path: a real token is two halves joined by a colon,

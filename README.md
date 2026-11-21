@@ -28,7 +28,7 @@ flowchart LR
 - **An agent.** Claude Code today. It connects to the MCP server and follows a playbook that is
   in this repository.
 - **Two data keys.** One for Financial Modeling Prep (statements, estimates, prices, filings,
-  transcripts and news) and one for GuruFocus (the moat score and a few figures). They stay in a
+  transcripts and news) and one for GuruFocus (the moat score). They stay in a
   file outside the repository.
 - **Your judgment.** You set the policy on the Settings page, you ask for the research, and you
   decide what to do with it.

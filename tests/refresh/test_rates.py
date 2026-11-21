@@ -91,20 +91,10 @@ def test_at_reads_the_last_close_at_or_before_the_day() -> None:
     )
 
 
-def test_mean_at_reads_every_day_or_none() -> None:
-    s = FxSeries("SEK", ((date(2026, 11, 1), 10.5), (date(2026, 11, 5), 10.6)), NOW)
-    mean = s.mean_at([date(2026, 11, 1), date(2026, 11, 5)], 7)
-    assert mean is not None
-    assert (mean.rate, mean.date, mean.observed_at, mean.stale) == (
-        pytest.approx(10.55),
-        date(2026, 11, 5),
-        NOW,
-        False,
-    )
-    stale = s.mean_at([date(2026, 11, 2), date(2026, 11, 13)], 7)  # the second 8 days on
-    assert stale is not None and stale.stale and stale.rate == pytest.approx(10.55)
-    assert s.mean_at([date(2026, 10, 31), date(2026, 11, 5)], 7) is None  # no close for one
-    assert s.mean_at([], 7) is None
+def test_a_series_reads_no_mean_of_several_days() -> None:
+    """Spec 2026-11-19 7.1: the mean of the trailing periods' rates translated GuruFocus's EPS,
+    which the engine no longer reads; a rate is read at one date."""
+    assert not hasattr(FxSeries, "mean_at")
 
 
 def test_usd_is_one_on_every_day(conn: sqlite3.Connection) -> None:
@@ -112,8 +102,6 @@ def test_usd_is_one_on_every_day(conn: sqlite3.Connection) -> None:
     assert usd is not None and usd.currency == "USD"
     for day in (date(1990, 1, 1), date(2026, 11, 10)):
         assert usd.at(day, 7) == Rate(1.0, day, usd.observed_at, False)
-    mean = usd.mean_at(QUARTER_ENDS, 7)
-    assert mean == Rate(1.0, QUARTER_ENDS[-1], usd.observed_at, False)
 
 
 def test_rates_for_merges_the_history_and_the_pair_quotes(

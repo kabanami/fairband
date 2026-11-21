@@ -29,6 +29,7 @@ from synthetic import (
     income_annual,
     income_quarter,
     statement,
+    store_gf_ratios,
 )
 from vendor_double import FIXTURES, Clients, Clock, Router
 
@@ -78,8 +79,6 @@ ROUTE_KEYS = {
     "estimates_annual",
     "street_ttm_eps",
     "moat_score",
-    "gf_eps_ttm",
-    "gf_eps_without_nri",
     "next_earnings",
     "tax_rate_latest",
     "closes",
@@ -1021,11 +1020,29 @@ def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:
     assert p["street_ttm_eps"] == Provenance("FMP earnings", date(2026, 10, 30), NOW, NOW)
     assert p["next_earnings"] == Provenance("FMP earnings", TODAY, NOW, NOW)
     assert p["moat_score"] == Provenance("GuruFocus summary", TODAY, NOW, NOW)
-    assert p["gf_eps_ttm"] == p["gf_eps_without_nri"]
-    assert p["gf_eps_ttm"] == Provenance("GuruFocus keyratios", TODAY, NOW, NOW)
     assert p["closes"] == Provenance("FMP historical-price-eod/full", date(2026, 10, 30), NOW, None)
     assert p["tax_rate_latest"].source.startswith("OECD")
     assert inputs.data_date == TODAY
+
+
+@pytest.mark.parametrize("currency", ["USD", "SEK"])
+def test_assembly_reads_no_gurufocus_eps(
+    store: Store, clients: Clients, clock: Clock, policy: Policy, currency: str
+) -> None:
+    """Spec 2026-11-19 7.1: a ``gf-ratio`` answer the store kept from before is not read, in US
+    dollars or in another currency, where its EPS came in at the mean of the trailing periods'
+    rates: no input cites it, no note names it, and the moat score is still GuruFocus's."""
+    if currency == "USD":
+        conn = store(**bodies())
+    else:
+        conn = _sek_store(store, clients, clock, policy)
+    store_gf_ratios(conn, TODAY)
+    inputs = build(conn)
+    assert inputs.currency == currency and inputs.refusal is None
+    named = [*inputs.provenance, *inputs.notes, *inputs.estimate_methods]
+    assert [name for name in named if name.startswith("gf_eps")] == []
+    assert not [p for p in inputs.provenance.values() if p.source == "GuruFocus keyratios"]
+    assert inputs.provenance["moat_score"].source == "GuruFocus summary"
 
 
 def test_consensus_and_market_values(conn_with_company: sqlite3.Connection) -> None:

@@ -3,8 +3,9 @@
 The router serves these payloads in place of the fixtures (``Router.bodies``). The company is
 twelve calendar fiscal years, 2014 to 2025, and five quarters to 2026-09-30, or, reporting
 half-yearly, four half-years to 2026-06-30; money is in USD, or in the currency ``bodies`` is given
-(the statements' ``reportedCurrency``). The consensus, quote, profile, closes and GuruFocus answers
-stay the ACME fixtures'.
+(the statements' ``reportedCurrency``). The consensus, quote, profile, closes and GuruFocus summary
+stay the ACME fixtures'. ``store_gf_ratios`` stands for GuruFocus's key ratios that a fetch stored
+before spec 2026-11-19 7.1, which the store keeps unread.
 """
 
 import sqlite3
@@ -16,7 +17,9 @@ from typing import Any
 from fairband.engine.anchor import Cadence
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import CompanyRow, insert_companies
+from fairband.store.observations import ObservationRow, insert_observations
 from fairband.store.refreshes import create_refresh, finish_refresh
+from fairband.store.vendor import record_response
 
 M = 1_000_000
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)  # the refresh fixtures' clock
@@ -330,3 +333,29 @@ def add_company(
     ]
     insert_companies(conn, rows)
     return refresh_id
+
+
+def store_gf_ratios(conn: sqlite3.Connection, as_of: date, symbol: str = "ACME") -> None:
+    """A GuruFocus ``keyratios`` answer and its two ``gf-ratio`` rows, as of ``as_of``, as a fetch
+    stored them before spec 2026-11-19 7.1: EPS (TTM) 6.00 and EPS without NRI 5.80. The store
+    keeps them, and assembly reads neither. Recorded after the fetch, they are the newest rows."""
+    observed = datetime.combine(as_of, NOW.timetz())
+    response_id = record_response(
+        conn, "gf", "keyratios", {"symbol": symbol}, symbol, 200, "{}", None, observed
+    )
+    rows = [
+        ObservationRow(
+            symbol,
+            "gf-ratio",
+            None,
+            field,
+            Decimal(value),
+            "per-share",
+            as_of,
+            observed,
+            observed,
+            response_id,
+        )
+        for field, value in (("eps_ttm", "6.00"), ("eps_without_nri", "5.80"))
+    ]
+    insert_observations(conn, rows)

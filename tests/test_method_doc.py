@@ -409,6 +409,32 @@ def test_method_1_7_takes_no_gap() -> None:
         assert words in rows[-1], words
 
 
+def test_the_method_reads_no_gurufocus_key_ratios() -> None:
+    """Spec 2026-11-19 7.1: the ``keyratios`` call goes, and with it the rules written for its two
+    figures. Section 2 lists GuruFocus's ``summary`` alone; the split rule and the listed-share
+    basis (4.2), 7.1 and the currency's table (7.4) name no GuruFocus EPS, 7.4 bringing the street
+    actuals alone into the currency; 1.7's row names the call and its stored answers, unread."""
+    text = METHOD.read_text(encoding="utf-8")
+    outside_history = text.replace(_section(11), "")
+    for gone in (
+        "keyratios",
+        "gf-ratio",
+        "GuruFocus's EPS",
+        "GuruFocus's two EPS",
+        "GuruFocus's trailing EPS",
+        "GuruFocus states its EPS",
+    ):
+        assert gone not in outside_history, gone
+    assert "| Moat score | GuruFocus `summary` | current; reused for 7 days |" in _section(2)
+    seven = _section(7)
+    assert "Assembly brings the street actuals into the currency" in seven
+    assert "the mean of the trailing periods' period-end rates" not in seven
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-1].startswith("| 1.7, policy v17 |")
+    for words in ("`keyratios`", "`gf-ratio`", "unread", "`summary`"):
+        assert words in rows[-1], words
+
+
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:
     """Spec 2026-11-19 6.2: the counts cannot say which way a depositary's ratio runs, so 7.4's line
     under the drawer's head names no ratio, the Research tab's being the same line; 16.2 and 16.6

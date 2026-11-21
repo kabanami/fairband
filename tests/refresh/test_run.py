@@ -87,8 +87,8 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
         QUOTE_DATE,
         None,
     )
-    # ACME's newest call's transcript beside each company's 33; BOLT's list of calls is empty.
-    assert env.router.symbol_calls == Counter({"ACME": 34, "BOLT": 33})
+    # ACME's newest call's transcript beside each company's 32; BOLT's list of calls is empty.
+    assert env.router.symbol_calls == Counter({"ACME": 33, "BOLT": 32})
     with closing(env.connect()) as conn:
         versions = [r[0] for r in conn.execute("SELECT version FROM policy_versions")]
     assert versions == [env.policy.version]
@@ -185,13 +185,13 @@ def test_stop_after_first_then_continue(env: Env) -> None:
     assert (row.id, row.status, row.stage, row.message) == (first, "cancelled", "fetch", None)
     assert env.items(first) == [("ACME", "fetched", None), ("BOLT", "pending", None)]
     assert env.snapshots() == []
-    assert env.router.symbol_calls == Counter({"ACME": 34})
+    assert env.router.symbol_calls == Counter({"ACME": 33})
 
     env.router.symbol_calls.clear()
     env.clock.now += timedelta(hours=1)
     second = env.run(["ACME", "BOLT"])
     assert (env.last().id, env.last().status) == (second, "done")
-    assert env.router.symbol_calls == Counter({"ACME": 33, "BOLT": 33})
+    assert env.router.symbol_calls == Counter({"ACME": 32, "BOLT": 32})
     assert env.items(second) == [("ACME", "valued", None), ("BOLT", "valued", None)]
     # both fetched at once: the snapshots follow the order the fetches finished
     assert sorted((symbol, refresh) for symbol, refresh, _ in env.snapshots()) == [
@@ -201,16 +201,16 @@ def test_stop_after_first_then_continue(env: Env) -> None:
 
 
 def test_a_scoped_refresh_fetches_every_call_again(env: Env) -> None:
-    """Within the reuse window too, GuruFocus's two calls among them (method 10); a full
+    """Within the reuse window too, GuruFocus's call among them (method 10); a full
     refresh's reuse is ``test_run_full``'s. The newest call's transcript, stored with words by the
     first run, is not asked again."""
     first = env.run(["ACME"])
     env.router.calls.clear()
     env.clock.now += timedelta(hours=23)
     second = env.run(["ACME"])
-    assert sum(env.router.calls.values()) == 33  # 31 FMP and 2 GuruFocus calls
+    assert sum(env.router.calls.values()) == 32  # 31 FMP and 1 GuruFocus call
     assert env.router.calls["transcript"] == 0
-    assert env.router.calls["summary"] == env.router.calls["keyratios"] == 1
+    assert env.router.calls["summary"] == 1 and env.router.calls["keyratios"] == 0
     assert env.last().status == "done"
     assert env.items(second) == [("ACME", "valued", None)]
     assert [refresh for _, refresh, _ in env.snapshots()] == [first, second]
@@ -328,7 +328,7 @@ def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> Non
         ("BOLT", refresh_id, RATE_LIMITED),
         ("ACME", refresh_id, "no universe deciles yet"),
     ]
-    assert env.router.symbol_calls == Counter({"ACME": 34, "BOLT": 3})  # three tries, then stop
+    assert env.router.symbol_calls == Counter({"ACME": 33, "BOLT": 3})  # three tries, then stop
 
 
 def test_the_fetch_stage_logs_the_fmp_pace(env: Env, caplog: pytest.LogCaptureFixture) -> None:
@@ -370,7 +370,7 @@ def test_second_refresh_refused_while_running(env: Env) -> None:
     first = env.run(["ACME"], then=start_another)
     assert refused == [first]
     assert env.last().id == first and env.last().status == "done"
-    assert env.router.symbol_calls == Counter({"ACME": 34})
+    assert env.router.symbol_calls == Counter({"ACME": 33})
 
 
 def test_run_refuses_before_any_work(env: Env) -> None:
