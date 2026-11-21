@@ -343,10 +343,12 @@ purchases carried the growth of the company's capital, the hurdle rate stays.</p
 
 <h3 class="heading">The moat and the runway</h3>
 <p class="body">A moat is a lasting edge over competitors
-<a class="app-cite" href="#methodology/src-moat">[Mauboussin and Callahan 2016]</a>. Fairband reads
-it from the GuruFocus Moat Score. A score of
-<span data-policy="moat_wide_min">—</span> or more is Wide, <span data-policy="moat_narrow_min">—</span>
-or more is Narrow, and any lower score is None. The moat sets the runway (the years a company keeps
+<a class="app-cite" href="#methodology/src-moat">[Mauboussin and Callahan 2016]</a>. Fairband keeps
+its own table of moat classes, one for each company. A rule on ten years of returns drafted it, and
+the table corrects the rule by hand where it is wrong. You may change a company's class on its
+page, and an agent records its own in each review. The newest class is in force, and the company is
+valued again at once.</p>
+<p class="body">The moat sets the runway (the years a company keeps
 growing faster than terminal growth). The runway is <span data-policy="runway_years.None">—</span>
 with no moat, <span data-policy="runway_years.Narrow">—</span> with a Narrow moat and
 <span data-policy="runway_years.Wide">—</span> with a Wide moat. The runway sets the forecast's
@@ -558,7 +560,7 @@ returns gets a warning. A runway of <span data-policy="runway_years.Wide">—</s
 <tr><td class="body">Consensus growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.9%, 23.0%</td></tr>
 <tr><td class="body">Consensus revenue growth, years 2 and 3</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.6%, 22.5%</td></tr>
 <tr><td class="body">Belief: sales above $50 billion, 3.3% plus 2.0%</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">5.3%</td></tr>
-<tr><td class="body">Moat, from a score of 9</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
+<tr><td class="body">Moat, from the moat table</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
 <tr><td class="body">Runway</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20 years</td></tr>
 <tr><td class="body">Runway return, five-year marginal</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">20.4%</td></tr>
 <tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
@@ -611,7 +613,7 @@ give, as a cross-check. The cross-check never sets the levels or the word.</p>
 <tr><td class="body">Trailing net income</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">$14.6 billion</td></tr>
 <tr><td class="body">Normalized earnings</td><td></td><td class="figure fb-num">$14.6 billion</td></tr>
 <tr><td class="body">Growth in every year</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">3.0%</td></tr>
-<tr><td class="body">Moat, from a score of 10</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
+<tr><td class="body">Moat, from the moat table</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="body fb-num">Wide</td></tr>
 <tr><td class="body">Runway</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">20 years</td></tr>
 <tr><td class="body">Runway return, three-year average</td><td><span class="fb-tag figure-sm">DATA</span></td><td class="figure fb-num">30.5%</td></tr>
 <tr><td class="body">Terminal return</td><td><span class="fb-tag figure-sm">RULE</span></td><td class="figure fb-num">13.0%</td></tr>
@@ -1121,8 +1123,9 @@ Fairband's tools) makes to one input of the engine. It carries a reason and evid
 filing or a finding (a dated fact with its source). The engine values the company again under its
 overrides: the reviewed value. An agent never writes a value. The mechanical value (the engine's
 value with no override) does not move.</p>
-<p class="body">An agent may change twenty-five inputs, such as the phase, the belief and the moat,
-each within set bounds. One is the diluted share count, for a share class the count leaves out.
+<p class="body">An agent may change twenty-four inputs by an override, such as the phase and the
+belief, each within set bounds. The moat class is not one: an agent records its verdict, with its
+reasons, in each review. One is the diluted share count, for a share class the count leaves out.
 Another is the shares a company has promised to issue but not yet counted, such as warrants
 given to a customer. The analysts' forecast does not hold them either. They join the count, so
 they dilute the value a share. Another is the value outside the business, such as a stake in

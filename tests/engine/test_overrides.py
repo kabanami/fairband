@@ -12,6 +12,7 @@ from support.engine_companies import (
     fiscal_years,
     fx_inputs,
     high_growth_inputs,
+    judged_moat,
     mature_growth_inputs,
     mature_stable_inputs,
     start_up_inputs,
@@ -826,6 +827,24 @@ def test_current_reading_on_each_golden(policy: Policy, deciles: Deciles) -> Non
         assert current_reading(result, "earnings.ntm") is None
     for result in (mg, ms, su):
         assert current_reading(result, "revenue.ntm") is None
+
+
+def test_the_moat_s_reading_whatever_its_tag(policy: Policy, deciles: Deciles) -> None:
+    """The engine's reading of ``moat.class`` is the intermediates' ``moat``, else the word leading
+    the note of the ``moat_class`` input, whatever its tag (spec 2026-11-19 8.5): a Start-up
+    result, whose intermediates hold no moat, on the owner's row noted "Wide: ..." reads Wide, and
+    on the file's row its RULE note's word; a Mature Growth result on an agent's row its moat."""
+    reason = "a network no rival can build"
+    owner = judged_moat(start_up_inputs(), "Wide", "owner", NOW, reason)
+    su = value_company(owner, deciles, policy, TODAY)
+    assert "moat" not in su.intermediates
+    [moat] = [x for x in su.inputs if x.name == "moat_class"]
+    assert (moat.tag, moat.note) == ("JUDGMENT", f"Wide: {reason}")
+    assert current_reading(su, "moat.class") == "Wide"
+    plain = value_company(replace(start_up_inputs(), moat_class="Narrow"), deciles, policy, TODAY)
+    assert current_reading(plain, "moat.class") == "Narrow"
+    agent = judged_moat(mature_growth_inputs(), "Narrow", "agent claude-opus-5-5", NOW, reason)
+    assert current_reading(value_company(agent, deciles, policy, TODAY), "moat.class") == "Narrow"
 
 
 def test_the_ntm_readings_off_a_valued_route(policy: Policy, deciles: Deciles) -> None:

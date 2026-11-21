@@ -68,7 +68,6 @@ override.
 
 from typing import Any
 
-from fairband.engine.anchor import moat_class
 from fairband.engine.flags import margin_flag, median_margin, one_time_items_flag
 from fairband.engine.mature_growth import GrowthPath
 from fairband.engine.mature_stable import mature_stable_values, normalize_for_margin
@@ -103,6 +102,7 @@ from fairband.engine.route_steps import (
     price_facts_for,
     revenue_by_fiscal_year,
     rule,
+    table_moat,
     trailing_flags,
     ttm_margin,
 )
@@ -118,7 +118,7 @@ def value_mature_stable(c: Context) -> Valued | Refused:
     cycle = cycle_gap(c)
     # the two gaps a share are on the diluted count, without committed shares (spec 2026-11-14 4)
     e = None if t.net_income is None else t.net_income - nil(gap) * c.consensus_shares
-    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
+    moat = chosen(c, "moat.class", table_moat(i))
     runway_return: float | None = chosen(c, "return.runway", None)
     roic = RoicTerms.of(
         i.capital_years,

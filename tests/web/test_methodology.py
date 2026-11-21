@@ -627,6 +627,32 @@ def test_sources_have_links() -> None:
     assert "OECD" in sources and "docs/method.md" in sources
 
 
+def test_the_moat_class_is_fairband_s_own() -> None:
+    """Spec 2026-11-19 8.5 and 12, method 1.8: the moat's paragraph is the Words table's, in place
+    of the Moat Score's sentence and its two spans; the examples' moat rows name the moat table;
+    the agents' section counts the inputs an override may change without the moat class, which an
+    agent records in each review."""
+    html = re.sub(r"\s+", " ", _static_file("methodology.html"))  # lines wrap in the file
+    value = _section(html, "value")
+    assert (
+        "Fairband keeps its own table of moat classes, one for each company. A rule on ten years "
+        "of returns drafted it, and the table corrects the rule by hand where it is wrong. You "
+        "may change a company's class on its page, and an agent records its own in each review. "
+        "The newest class is in force, and the company is valued again at once."
+    ) in value
+    for gone in ("Moat Score", 'data-policy="moat_wide_min"', 'data-policy="moat_narrow_min"'):
+        assert gone not in html, gone
+    assert html.count('<td class="body">Moat, from the moat table</td>') == 2
+    assert "from a score of" not in html
+    agents = _section(html, "agents")
+    assert (
+        "An agent may change twenty-four inputs by an override, such as the phase and the belief, "
+        "each within set bounds. The moat class is not one: an agent records its verdict, with its "
+        "reasons, in each review."
+    ) in agents
+    assert "twenty-five" not in agents
+
+
 def test_a_mechanical_value_keeps_one_time_items() -> None:
     """Spec 2026-11-19 7.1 and 7.5: the engine takes no non-recurring gap, so the value section
     says a mechanical value is preliminary and keeps one-time items, which a review takes out, in

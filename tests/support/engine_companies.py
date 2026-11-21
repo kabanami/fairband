@@ -10,6 +10,10 @@ value on 2026-10-31.
 ``in_sek`` restates any of them as a company reporting in SEK (spec 2026-11-10 section 7), and
 ``fx_inputs`` is FXCO, spec 11.2's company in SEK. ``as_live`` dates any of them as assembly
 does.
+
+Each company is valued on its file row of the moat table (``MOAT_FILE``), Mature Growth Co Wide
+and the others None, the classes their GuruFocus Moat Scores gave before method 1.8 (8 and none);
+``judged_moat`` puts any of them on an owner's or an agent's row.
 """
 
 from dataclasses import fields, replace
@@ -23,9 +27,16 @@ from fairband.engine.revenue_growth import PeerFigures
 from fairband.engine.roic import CapitalYear
 from fairband.engine.route import CompanyInputs
 from fairband.engine.types import Provenance
+from fairband.policy import Moat
 
 DATA_DATE = date(2026, 10, 30)
 OBSERVED = datetime(2026, 10, 30, 21, 0, tzinfo=UTC)
+# The moat table's file row each company is valued on, cited as assembly cites it (spec 2026-11-19
+# 8.5): the table's version, as of the entry's date, entered when the refresh's stage wrote the
+# row. The companies hold no note for it: the engine notes a class without a reason by its word.
+MOAT_JUDGED = date(2026, 11, 19)
+MOAT_AT = datetime(2026, 11, 21, 9, 0, tzinfo=UTC)
+MOAT_FILE = Provenance("moat table fairband-moat-v1", MOAT_JUDGED, None, MOAT_AT)
 
 # Every provenance key the route reads, with the source assembly would cite.
 SOURCES = {
@@ -37,7 +48,6 @@ SOURCES = {
     "estimates_quarter": "FMP analyst-estimates",
     "estimates_annual": "FMP analyst-estimates",
     "street_ttm_eps": "FMP earnings",
-    "moat_score": "GuruFocus summary",
     "next_earnings": "FMP earnings-calendar",
     "tax_rate_latest": "OECD corporate tax statistics",
     "closes": "FMP historical-price-eod",
@@ -297,12 +307,13 @@ def mature_growth_inputs() -> CompanyInputs:
             annual(2029, 7_392e6, 7.39, 6),
         ),
         street_ttm_eps=5.35,  # 0.05 above GAAP, under half the after-tax SBC: SBC is a cost
-        moat_score=8.0,
+        moat_class="Wide",
         next_earnings=date(2027, 1, 28),
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 100.0, 150.0),
         data_date=DATA_DATE,
         provenance={
-            name: Provenance(source, DATA_DATE, OBSERVED, None) for name, source in SOURCES.items()
+            **{name: Provenance(src, DATA_DATE, OBSERVED, None) for name, src in SOURCES.items()},
+            "moat_class": MOAT_FILE,
         },
         input_flags=(),
         refusal=None,
@@ -351,12 +362,13 @@ def _growth_revenue() -> list[float]:
 
 def high_growth_inputs() -> CompanyInputs:
     """A High Growth company: revenue up 35% a year from $1 bn over eight fiscal years, the
-    operating margin negative and improving three points a year from -30% to -9%; no moat score,
-    100 m shares at $150. Trailing revenue is $10 bn at a -9% margin. The NTM consensus is $12.4 bn
-    of revenue (24% above trailing) at a loss a share; the annual revenue consensus from fiscal
-    2027 grows 23.1% then 20%, on 20, 15 and 12 revenue analysts and 3 EPS analysts. Three mature
-    peers at margins of 10%, 20% and 30%; debt $1 bn and cash $3 bn, from the newest balance
-    sheet, fiscal 2025's, cited as of its period end, which presents no minority interest."""
+    operating margin negative and improving three points a year from -30% to -9%; the moat class
+    None, 100 m shares at $150. Trailing revenue is $10 bn at a -9% margin. The NTM consensus is
+    $12.4 bn of revenue (24% above trailing) at a loss a share; the annual revenue consensus from
+    fiscal 2027 grows 23.1% then 20%, on 20, 15 and 12 revenue analysts and 3 EPS analysts. Three
+    mature peers at margins of 10%, 20% and 30%; debt $1 bn and cash $3 bn, from the newest
+    balance sheet, fiscal 2025's, cited as of its period end, which presents no minority
+    interest."""
     series = fiscal_years(_growth_revenue(), [-0.30 + 0.03 * k for k in range(8)])
     grown = replace(
         mature_growth_inputs(),
@@ -393,7 +405,7 @@ def high_growth_inputs() -> CompanyInputs:
             annual(2029, 100e6, 1.00, 3, 19_200e6, 12),
         ),
         street_ttm_eps=None,
-        moat_score=None,
+        moat_class="None",
         peers=(
             PeerFigures("PEER1", 10e9, 0.10, 10, 2.5, 0.12),
             PeerFigures("PEER2", 50e9, 0.20, 10, 1.5, 0.20),
@@ -489,7 +501,7 @@ def decline_inputs() -> CompanyInputs:
             annual(2029, 39e6, 0.39, 6, 940.9e6, 6),
         ),
         street_ttm_eps=None,
-        moat_score=None,
+        moat_class="None",
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 4.0, 3.0),
         debt=200e6,
         cash=100e6,
@@ -538,8 +550,8 @@ def start_up_inputs() -> CompanyInputs:
     with no revenue and an operating loss of 50 a year; trailing revenue 0 and operating income
     −50; trailing operating cash flow −60 and capital spending −15, a burn of 75 a year; three
     mature peers at margins of 20%, 25% and 30% (target 25%) and sales-to-capital of 1.0, 1.5 and
-    2.0 (median 1.5); tax 25%; no moat score; no kept ROIC year; a market cap of 2,000 on 100
-    diluted shares at $20; debt 0 and cash 300, from the newest balance sheet, fiscal 2025's,
+    2.0 (median 1.5); tax 25%; the moat class None; no kept ROIC year; a market cap of 2,000 on
+    100 diluted shares at $20; debt 0 and cash 300, from the newest balance sheet, fiscal 2025's,
     cited as of its period end, which presents no minority interest. EV_price is 1,700, the
     year-10 revenue the price needs 1,725.73, the cash floor $3.00 a share and the burn cover 4.0
     years."""
@@ -574,7 +586,7 @@ def start_up_inputs() -> CompanyInputs:
         quarter_estimates=(),
         annual_estimates=(),
         street_ttm_eps=None,
-        moat_score=None,
+        moat_class="None",
         closes=weekday_closes(date(2024, 10, 31), DATA_DATE, 25.0, 20.0),
         peers=(
             PeerFigures("PEER1", 10e9, 0.20, 10, 1.0, 0.12),
@@ -710,3 +722,21 @@ def as_live(inputs: CompanyInputs) -> CompanyInputs:
         "shares_diluted": replace(p["shares_diluted"], as_of=inputs.trailing.period_end),
     }
     return replace(inputs, provenance=p | dated)
+
+
+def judged_moat(
+    inputs: CompanyInputs, moat: Moat, writer: str, at: datetime, reason: str | None = None
+) -> CompanyInputs:
+    """``inputs`` on an owner's or an agent's row of the moat table, as assembly reads it (spec
+    2026-11-19 8.5): the class ``moat``, judged, cited to ``writer`` ("owner", "agent
+    claude-opus-5-5") as of the write's day and entered at ``at``, its note the class with the
+    reason after it, where there is one."""
+    cited = Provenance(writer, at.date(), None, at)
+    note = moat if reason is None else f"{moat}: {reason}"
+    return replace(
+        inputs,
+        moat_class=moat,
+        moat_judged=True,
+        provenance=inputs.provenance | {"moat_class": cited},
+        notes=inputs.notes | {"moat_class": note},
+    )

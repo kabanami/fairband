@@ -14,6 +14,7 @@ from refresh.synthetic import NOW, bodies
 from support.engine_companies import (
     decline_inputs,
     fx_inputs,
+    judged_moat,
     mature_growth_inputs,
     on_quarter_sheet,
     universe_deciles,
@@ -87,7 +88,6 @@ def test_snapshot_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
         f"{s}/inputs/shares_diluted": (1_000 * M, "count"),
         f"{s}/inputs/moat_class": ("Wide", None),  # a word input: the word leading its note
         f"{s}/inputs/runway_years": (20.0, "years"),
-        f"{s}/inputs/moat_score": (8.0, "score"),
         f"{s}/intermediates/belief/rate": (0.063, None),
         f"{s}/intermediates/growth_rates/0": (result.intermediates["growth_rates"][0], None),
         f"{s}/phase/phase": ("Mature Growth", None),
@@ -106,6 +106,7 @@ def test_snapshot_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
         "snapshot:999/value",
         f"{s}/levels/nope",
         f"{s}/inputs/no_such_input",
+        f"{s}/inputs/moat_score",  # no route cites GuruFocus's score since method 1.8
         f"{s}/intermediates/roic",  # a table, not a figure
         f"{s}/intermediates/no/such/path",
         f"{s}/phase/checks",
@@ -116,6 +117,26 @@ def test_snapshot_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict
         "no colon",
     ):
         assert _resolve(conn, ref, policy) is None, ref
+
+
+def test_a_ref_on_an_owner_s_moat_reads_its_word(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-19 8.5: on the owner's row of the moat table the input ``moat_class`` is a
+    JUDGMENT noted with the reason after the class, "Wide: <reason>"; a ref on it reads the word
+    leading the note, as it reads the file's RULE entry, with no unit."""
+    aapl = snapshot_row(conn, snapshots["AAPL"])
+    assert aapl is not None
+    reason = "the ecosystem holds its users"
+    owner = judged_moat(
+        replace(mature_growth_inputs(), symbol="AAPL"), "Wide", "owner", NOW, reason
+    )
+    valued = value_company(owner, universe_deciles(), policy, TODAY)
+    [moat] = [x for x in valued.inputs if x.name == "moat_class"]
+    assert (moat.tag, moat.note) == ("JUDGMENT", f"Wide: {reason}")
+    sid = insert_snapshot(conn, valued, aapl.refresh_id, clock=lambda: NOW)
+    found = _resolve(conn, f"snapshot:{sid}/inputs/moat_class", policy)
+    assert found == Resolved("Wide", None, None, sid)
 
 
 @pytest.mark.parametrize("record", ["99999999999999999999", "²"])

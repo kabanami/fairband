@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 from support.engine_companies import mature_growth_inputs, universe_deciles
+from support.moat import moat_table
 from synthetic import (
     NOW,
     QUARTERS,
@@ -51,7 +52,7 @@ from fairband.policy import Policy, load_policy
 from fairband.policy.inflation import load_inflation_table
 from fairband.policy.tax import LATEST_YEAR_METHOD, TaxTable, load_tax_table
 from fairband.refresh.fetch import fetch_company
-from fairband.refresh.inputs import build_inputs, series_for
+from fairband.refresh.inputs import build_inputs, series_for, with_table_moat
 from fairband.refresh.inputs_statements import (
     QuarterFigures,
     StoredQuarters,
@@ -62,6 +63,8 @@ from fairband.refresh.inputs_statements import (
 )
 from fairband.refresh.peers import peer_figures
 from fairband.refresh.rates import FX_QUOTE, fetch_rates
+from fairband.store.ledger import OWNER, Writer
+from fairband.store.moat import load_moat_file, set_moat
 from fairband.store.observations import insert_observations
 from fairband.store.vendor import record_response
 from fairband.vendors.normalize_fmp import fx_quote_observations
@@ -78,7 +81,6 @@ ROUTE_KEYS = {
     "estimates_quarter",
     "estimates_annual",
     "street_ttm_eps",
-    "moat_score",
     "next_earnings",
     "tax_rate_latest",
     "closes",
@@ -891,7 +893,9 @@ def test_a_company_in_another_currency_reads_its_rate_and_its_street_figures(
     price and the market cap stay the quote's, in USD. The engine reads no GuruFocus EPS (spec
     2026-11-19 7.1), so the inputs carry none."""
     consensus = {"estimates-quarter": estimates_quarter()}  # four NTM quarters, as KRON's
-    inputs = build(_sek_store(store, clients, clock, policy, **consensus))
+    conn = _sek_store(store, clients, clock, policy, **consensus)
+    load_moat_file(conn, moat_table({"ACME": "Narrow"}), NOW)  # the stage of a refresh that values
+    inputs = build(conn)
     table = load_inflation_table()
     assert inputs.refusal is None and inputs.currency == "SEK"
     assert (inputs.fx_rate, inputs.fx_date, inputs.fx_stale) == (10.52, date(2026, 10, 30), False)
@@ -1019,7 +1023,6 @@ def test_provenance_dates(conn_with_company: sqlite3.Connection) -> None:
     assert p["balance_sheet"] == Provenance(SHEET_SOURCE, date(2026, 9, 30), NOW, NOW)
     assert p["street_ttm_eps"] == Provenance("FMP earnings", date(2026, 10, 30), NOW, NOW)
     assert p["next_earnings"] == Provenance("FMP earnings", TODAY, NOW, NOW)
-    assert p["moat_score"] == Provenance("GuruFocus summary", TODAY, NOW, NOW)
     assert p["closes"] == Provenance("FMP historical-price-eod/full", date(2026, 10, 30), NOW, None)
     assert p["tax_rate_latest"].source.startswith("OECD")
     assert inputs.data_date == TODAY
@@ -1031,7 +1034,8 @@ def test_assembly_reads_no_gurufocus_eps(
 ) -> None:
     """Spec 2026-11-19 7.1: a ``gf-ratio`` answer the store kept from before is not read, in US
     dollars or in another currency, where its EPS came in at the mean of the trailing periods'
-    rates: no input cites it, no note names it, and the moat score is still GuruFocus's."""
+    rates: no input cites it and no note names it. Nor does assembly read GuruFocus's moat score
+    since method 1.8 (spec 2026-11-19 8.5): no input cites GuruFocus at all."""
     if currency == "USD":
         conn = store(**bodies())
     else:
@@ -1042,7 +1046,59 @@ def test_assembly_reads_no_gurufocus_eps(
     named = [*inputs.provenance, *inputs.notes, *inputs.estimate_methods]
     assert [name for name in named if name.startswith("gf_eps")] == []
     assert not [p for p in inputs.provenance.values() if p.source == "GuruFocus keyratios"]
-    assert inputs.provenance["moat_score"].source == "GuruFocus summary"
+    assert not [p for p in inputs.provenance.values() if p.source.startswith("GuruFocus")]
+
+
+def test_assembly_reads_the_table_s_row(conn_with_company: sqlite3.Connection) -> None:
+    """Spec 2026-11-19 8.5: assembly reads the company's row of the moat table, its class and,
+    by the row, its citation and note: the file's row cited to the table's version as of the
+    entry's date, its note the class; the owner's or an agent's judged, cited to the writer as of
+    the day of the write, the reason after the class. Each is entered at the row's time. With no
+    row the class is ``None``, cited and noted nowhere, which the engine refuses. A test's fake
+    takes the row through ``with_table_moat``."""
+    conn = conn_with_company
+    none = build(conn)
+    assert (none.moat_class, none.moat_judged) == (None, False)
+    assert "moat_class" not in none.provenance and "moat_class" not in none.notes
+    load_moat_file(conn, moat_table({"ACME": "Narrow"}), NOW)
+    file = build(conn)
+    assert (file.moat_class, file.moat_judged, file.notes["moat_class"]) == (
+        "Narrow",
+        False,
+        "Narrow",
+    )
+    assert file.provenance["moat_class"] == Provenance(
+        "moat table fairband-moat-v1", date(2026, 11, 19), None, NOW
+    )
+    at = datetime(2026, 11, 21, 23, 30, tzinfo=UTC)
+    set_moat(conn, "ACME", "Wide", OWNER, None, None, at)
+    owner = build(conn)
+    assert (owner.moat_class, owner.moat_judged, owner.notes["moat_class"]) == (
+        "Wide",
+        True,
+        "Wide",
+    )
+    assert owner.provenance["moat_class"] == Provenance("owner", date(2026, 11, 21), None, at)
+    set_moat(conn, "ACME", "Wide", OWNER, "pricing power", None, at)
+    assert build(conn).notes["moat_class"] == "Wide: pricing power"
+    set_moat(conn, "ACME", "Wide", OWNER, "   ", None, at)  # a reason of spaces is none
+    assert build(conn).notes["moat_class"] == "Wide"
+    agent = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    evidence = [{"kind": "filing", "ref": "filing:1", "note": "the 10-K"}]
+    set_moat(conn, "ACME", "None", agent, "a commodity seller", evidence, at)
+    judged = build(conn)
+    assert (judged.moat_class, judged.moat_judged) == ("None", True)
+    assert judged.notes["moat_class"] == "None: a commodity seller"
+    assert judged.provenance["moat_class"] == Provenance(
+        "agent claude-opus-5-5", date(2026, 11, 21), None, at
+    )
+    # a fake's inputs take the table's row, or none without one
+    fake = with_table_moat(conn, replace(mature_growth_inputs(), symbol="ACME"))
+    assert (fake.moat_class, fake.moat_judged) == ("None", True)
+    assert fake.provenance["moat_class"] == judged.provenance["moat_class"]
+    missing = with_table_moat(conn, mature_growth_inputs())  # MGCO: no row
+    assert (missing.moat_class, missing.moat_judged) == (None, False)
+    assert "moat_class" not in missing.provenance and "moat_class" not in missing.notes
 
 
 def test_consensus_and_market_values(conn_with_company: sqlite3.Connection) -> None:
@@ -1069,7 +1125,7 @@ def test_consensus_and_market_values(conn_with_company: sqlite3.Connection) -> N
         5_000 * M,
     )
     assert inputs.is_adr is False
-    assert inputs.moat_score == 7.0
+    assert inputs.moat_class is None  # the moat table holds no row for ACME here
     assert inputs.next_earnings == date(2027, 2, 4)
     assert inputs.closes == (
         (date(2026, 10, 28), 49.0),

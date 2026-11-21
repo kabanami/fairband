@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import cast
 
 from fairband.engine.roic import aggregate_roic
-from fairband.engine.route import CompanyInputs
+from fairband.engine.route import NO_MOAT_CLASS, CompanyInputs
 from fairband.engine.types import ValuationResult
 from fairband.policy import Moat
 from fairband.policy.moat import MoatEntry, MoatTable, load_moat_table
@@ -57,7 +57,6 @@ from fairband.store.snapshots import latest_snapshot
 
 FIRST_VERSION = "fairband-moat-v1"
 RULE = "docs/method.md 4.9a"
-NO_MOAT_CLASS = "no moat class"  # the engine's refusal of a company the table lacks
 _LOG_SECTION = "### 6.7 "
 _PAIR = re.compile(r"^\*From (Wide|Narrow|None) to (Wide|Narrow|None) \((\d+)\):\*$")
 _CORRECTIONS = ["Ticker", "Company", "Why", "Decided by"]

@@ -74,7 +74,7 @@ refusal "Start-up: no value by design".
 
 from typing import Any
 
-from fairband.engine.anchor import TrailingFigures, moat_class
+from fairband.engine.anchor import TrailingFigures
 from fairband.engine.classifier import FiscalYear, Series
 from fairband.engine.requirement import RampValuation, ramp_ev, required_revenue
 from fairband.engine.revenue_growth import (
@@ -109,6 +109,7 @@ from fairband.engine.route_steps import (
     present,
     rule,
     sheet_entry,
+    table_moat,
 )
 from fairband.engine.types import Flag, TaggedInput
 from fairband.policy import Moat, Policy
@@ -130,7 +131,7 @@ def value_start_up(c: StartUpContext) -> Refused:
     cash_line = chosen(c, "balance.cash", i.cash)
     debt, cash = nil(chosen(c, "balance.debt", i.debt)), nil(cash_line)
     minority_interest = minority(c)
-    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
+    moat = chosen(c, "moat.class", table_moat(i))
     target = judged_target(c, target_margin(i.peers, policy))
     s2c = peer_sales_to_capital(i.peers, policy)
     tax = i.tax_rate_latest
@@ -389,13 +390,11 @@ def _inputs(
         *fiscal_income,
         *flows,
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),
-        data(i, "moat_score", i.moat_score, "score"),
         *peers,
         *debt_and_cash(i),
         minority_input(i),
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
-        rule(policy, "moat_class", None, "class", moat),
         rule(policy, "terminal_roic", terminal, "ratio", f"{moat} moat"),
         rule(policy, "peer_min", policy.peer_min, "peers"),
         rule(policy, "peer_margin_min_years", policy.peer_margin_min_years, "years"),

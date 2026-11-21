@@ -16,7 +16,8 @@ from typing import Any
 
 import pytest
 from support import engine_companies
-from synthetic import QUARTERS, M, add_company, bodies, estimates_quarter, store_gf_ratios
+from support.moat import moat_table
+from synthetic import NOW, QUARTERS, M, add_company, bodies, estimates_quarter, store_gf_ratios
 from vendor_double import FIXTURES, Clients, Clock, Router
 
 from fairband.engine.anchor import AnnualEstimate, QuarterEstimate, TrailingFigures
@@ -36,6 +37,7 @@ from fairband.refresh.inputs_splits import (
     splits_for,
 )
 from fairband.refresh.inputs_statements import TrailingPeriod, statements_for
+from fairband.store.moat import load_moat_file
 from fairband.store.observations import insert_observations, observations_for
 
 TODAY = date(2026, 11, 1)
@@ -524,8 +526,9 @@ def test_the_flag_reaches_the_snapshot(store: Store) -> None:
     """The DATA inputs that hold a scaled figure read as estimates under ``split-scaled`` with the
     split note: the count, the trailing EPS, the street EPS and, since the NTM quarters scaled,
     the NTM EPS. Four consensus quarters (each implying 100 m) give a full NTM window, so the row
-    is valued."""
+    is valued, on its row of the moat table, as a refresh's stage loads it (method 1.8)."""
     conn = _acme_split(store, **{"estimates-quarter": estimates_quarter()})
+    load_moat_file(conn, moat_table({"ACME": "Narrow"}), NOW)
     result = value_company(build(conn), DECILES, load_policy(), TODAY)
     assert result.refusal is None
     assert "split-pending" in [f.code for f in result.flags]

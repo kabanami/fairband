@@ -1,6 +1,7 @@
 """``docs/method.md`` against the engine: the sections that name the engine's terms name all of
 them."""
 
+import re
 from pathlib import Path
 from typing import get_args
 
@@ -10,6 +11,7 @@ from fairband.engine.mature_growth import _fade
 from fairband.engine.overrides import OverrideTag, anchor_misfit
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
+from fairband.policy.moat_rule import CYCLICAL
 from fairband.refresh.fetch import FILINGS_WINDOW_DAYS, PAGE_ENDPOINTS
 from fairband.reports.check import FAILURES
 from fairband.store.guidance import METRICS
@@ -281,7 +283,8 @@ def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
     for gone in ("the ADR ratio 10", "whatever FMP's ADR flag", "ADSs to one share"):
         assert gone not in four, gone
     two = _section(2)
-    assert "| Moat score | GuruFocus `summary` |" in two and "depositary" not in two
+    # section 2 names GuruFocus's summary, unread since method 1.8, and no depositary ratio
+    assert "GuruFocus's `summary` call" in two and "depositary" not in two
     five = _section(5)
     assert "`adr_ratio` (unit `ratio`, an estimate under the method `counts-ratio`" in five
     assert "absent on every other row, an ADR whose counts agree among them included" in five
@@ -311,20 +314,17 @@ def test_the_adr_ratio_is_found_from_the_two_counts() -> None:
 
 
 def test_method_1_7_takes_no_gap() -> None:
-    """Spec 2026-11-19 7.2 to 7.4, method 1.7: the head names the method and policy v17; 4.1 has
+    """Spec 2026-11-19 7.2 to 7.4, method 1.7: the head names policy v17; 4.1 has
     the two new values with their sources and not the non-recurring flag's share, and v1 to v16
     stay while the engine loads v17; 5.11 reads reason 1 by the warning's test; 5.12 and 6.5 cite
     the street EPS on Mature Stable; 6.1 says the refusal carries the warning; section 8 has the
     spec's row for the warning, the twelve quality warnings with it in the place of ``large-nri``,
-    and neither removed code; 11 has the 1.7 row last. Spec 7.1, the gap taken out of the
+    and neither removed code; 11 has the 1.7 row before 1.8's. Spec 7.1, the gap taken out of the
     mechanical routes: 5.9 has the clean figures equal the reported ones but under an agent's
     gap; 6.1 takes E less an agent's gap alone; no route cites GuruFocus's EPS (5.12, 5a.14,
     6a.10); 13 has the Words table's entry; 14.2 and 14.4 make the whole gap the agent's and the
     engine's reading 0.0; and the 1.7 row says so."""
     text = METHOD.read_text(encoding="utf-8")
-    assert (
-        "| Method version | `fairband-mechanical/1.7` (`fairband.engine.METHOD_VERSION`) |" in text
-    )
     assert (
         "| Policy version | `fairband-policy-v17` (`src/fairband/policy/fairband-policy-v17.toml`) |"
     ) in text
@@ -381,9 +381,9 @@ def test_method_1_7_takes_no_gap() -> None:
     for gone in ("large-nri", "consensus-basis-unknown", "nri_flag_share"):
         assert gone not in outside_history, gone
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-1].startswith("| 1.7, policy v17 |")
+    assert rows[-2].startswith("| 1.7, policy v17 |")
     for words in ("`one-time-items`", "`large-nri`", "`consensus-basis-unknown`", "policy v17"):
-        assert words in rows[-1], words
+        assert words in rows[-2], words
     # spec 7.1: the mechanical routes take no gap
     clean = five[five.index("### 5.9") : five.index("### 5.10")]
     assert (
@@ -418,9 +418,9 @@ def test_method_1_7_takes_no_gap() -> None:
     ):
         assert words in reads, words
     for words in ("no non-recurring gap", "`gf_eps_ttm`", "drops (14.6)", "values move"):
-        assert words in rows[-1], words
+        assert words in rows[-2], words
     # the final review of plan 2, T9-c: CLS's 36 is the one override of any kind that drops
-    assert "PLTR's 20, lasting, stays, and no other override drops;" in rows[-1]
+    assert "PLTR's 20, lasting, stays, and no other override drops;" in rows[-2]
 
 
 def test_the_overview_marks_a_value_with_no_reviewed_value() -> None:
@@ -435,9 +435,10 @@ def test_the_overview_marks_a_value_with_no_reviewed_value() -> None:
 
 def test_the_method_reads_no_gurufocus_key_ratios() -> None:
     """Spec 2026-11-19 7.1: the ``keyratios`` call goes, and with it the rules written for its two
-    figures. Section 2 lists GuruFocus's ``summary`` alone; the split rule and the listed-share
-    basis (4.2), 7.1 and the currency's table (7.4) name no GuruFocus EPS, 7.4 bringing the street
-    actuals alone into the currency; 1.7's row names the call and its stored answers, unread."""
+    figures. Section 2 names GuruFocus's ``summary`` alone, unread since method 1.8; the split
+    rule and the listed-share basis (4.2), 7.1 and the currency's table (7.4) name no GuruFocus
+    EPS, 7.4 bringing the street actuals alone into the currency; 1.7's row names the call and its
+    stored answers, unread."""
     text = METHOD.read_text(encoding="utf-8")
     outside_history = text.replace(_section(11), "")
     for gone in (
@@ -449,13 +450,99 @@ def test_the_method_reads_no_gurufocus_key_ratios() -> None:
         "GuruFocus states its EPS",
     ):
         assert gone not in outside_history, gone
-    assert "| Moat score | GuruFocus `summary` | current; reused for 7 days |" in _section(2)
+    assert "GuruFocus's `summary` call, the moat score's until method 1.8, still runs" in _section(
+        2
+    )
     seven = _section(7)
     assert "Assembly brings the street actuals into the currency" in seven
     assert "the mean of the trailing periods' period-end rates" not in seven
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-1].startswith("| 1.7, policy v17 |")
+    assert rows[-2].startswith("| 1.7, policy v17 |")
     for words in ("`keyratios`", "`gf-ratio`", "unread", "`summary`"):
+        assert words in rows[-2], words
+
+
+def test_method_1_8_reads_the_moat_table() -> None:
+    """Spec 2026-11-19 8.5, 8.2 and 12, method 1.8: the head names the method; section 2 lists the
+    moat table and no GuruFocus row; 4.9 is spec 8.5's text; 4.9a states the rule as it ran, its
+    cyclical list the rule's 27 names; 5.1, 6b.1 and section 9 place the guard "no moat class";
+    5.12 has the input's three forms and no route cites the moat score; section 12 names the
+    founder's table as the source; 11 has the 1.8 row last, under policy v17."""
+    text = METHOD.read_text(encoding="utf-8")
+    assert (
+        "| Method version | `fairband-mechanical/1.8` (`fairband.engine.METHOD_VERSION`) |" in text
+    )
+    two = _section(2)
+    assert "GuruFocus `summary` |" not in two
+    assert "| Moat class | the packaged moat table `moat-classes-v1.toml`" in two
+    assert "the method reads none of them (4.9)" in two
+    four = _section(4)
+    nine = four[four.index("### 4.9 ") : four.index("### 4.9a")]
+    assert (
+        "The moat class is the company's row in the moat table (`moat_classes`): Wide, Narrow or "
+        "None. The table is Fairband's own."
+    ) in nine
+    assert (
+        'A company with no row is refused, "no moat class" (5.1): one that entered the universe '
+        "after the file was cut. The owner's class, an agent's verdict or the file's next version "
+        "lifts the refusal. The moat enters in three places:"
+    ) in nine
+    assert "Moat Score" not in nine
+    rule = four[four.index("### 4.9a") : four.index("### 4.10")]
+    for words in (
+        (
+            "The rule writes the first class of a company in the moat table (4.9). The engine does "
+            "not run it"
+        ),
+        "none with fewer than ten such years, or when either end is not above zero",
+        "a tie in revenue ranks by symbol, A first",
+        "It is steady with ten margins, none below 80% of their median.",
+        (
+            "A company on the cyclical list that meets rule 5 is Narrow; rule 3 comes first, so the "
+            "list never lifts a None."
+        ),
+        "Semiconductors are left out on purpose",
+        "Size is revenue, never market value",
+        "`Chemicals - Specialty` is not on the list",
+    ):
+        assert words in rule, words
+    listed = rule[rule.index("- Housing and construction:") : rule.index("Semiconductors")]
+    assert set(re.findall(r"`([^`]+)`", listed)) == CYCLICAL and len(CYCLICAL) == 27
+    assert "Oil & Gas Energy" not in rule
+    five = _section(5)
+    guards = five[five.index("### 5.1") : five.index("### 5.2")]
+    assert (
+        "The last guard before a route is the moat class (4.9): a company with no row in the moat "
+        'table is refused "no moat class". A Start-up row meets it right before its route (6b)'
+    ) in guards
+    assert "Every other row is refused without trailing figures, then meets the guard." in guards
+    inputs = five[five.index("### 5.12") : five.index("### 5.13")]
+    for row in (
+        (
+            "| the file's | RULE, kind rule | \"moat table fairband-moat-v1\", the file's version "
+            '| the entry\'s date | "Wide" |'
+        ),
+        (
+            '| the owner\'s | JUDGMENT, kind judgment | "owner" | the day of the write | "Wide", or '
+            '"Wide: <reason>" |'
+        ),
+        (
+            '| an agent\'s | JUDGMENT, kind judgment | "agent claude-opus-5-5", the principal and '
+            'the actor | the day of the write | "Wide: <reason>" |'
+        ),
+    ):
+        assert row in inputs, row
+    outside_history = text.replace(_section(11), "")
+    assert "moat score;" not in outside_history and "no moat score" not in outside_history
+    start_up = text[text.index("### 6b.1") : text.index("### 6b.2")]
+    assert 'a Start-up row with no row is refused "no moat class"' in start_up
+    assert "| no moat class | 4.9, 5.1 |" in _section(9)
+    sources = _section(12)
+    assert "the gate tests, the moat table |" not in sources
+    assert "`docs/gurufocus-removal.md` 6.4" in sources
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-1].startswith("| 1.8, policy v17 | 2026-11-21 | The moat table (spec 2026-11-19 8")
+    for words in ('"no moat class"', "`moat_score`", "`moat_classes`", "unread", "74 corrections"):
         assert words in rows[-1], words
 
 

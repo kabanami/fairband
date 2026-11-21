@@ -209,7 +209,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/1.7"
+    assert METHOD_VERSION == "fairband-mechanical/1.8"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -370,10 +370,14 @@ def test_mature_growth_inputs_cite_their_sources(
     r = value_company(inputs, deciles, policy, TODAY)
     by_name = {i.name: i for i in r.inputs}
     assert len(by_name) == len(r.inputs)
-    for name, key in {**sources, "price": "price", "moat_score": "moat_score"}.items():
+    for name, key in {**sources, "price": "price"}.items():
         assert by_name[name].provenance == mg_inputs.provenance[key]
         assert (by_name[name].tag, by_name[name].kind) == ("DATA", "observed")
     assert by_name["closes"].provenance == Provenance("unknown", None, None, None)
+    # the moat class is the moat table's file row, cited to the table (spec 2026-11-19 8.5)
+    moat = by_name["moat_class"]
+    assert (moat.tag, moat.kind, moat.provenance) == ("RULE", "rule", engine_companies.MOAT_FILE)
+    assert "moat_score" not in by_name
     rule = Provenance(f"policy {policy.version}", None, None, None)
     for name in (
         "required_return",
@@ -381,7 +385,6 @@ def test_mature_growth_inputs_cite_their_sources(
         "runway_years",
         "margin_of_safety",
         "belief",
-        "moat_class",
         "terminal_roic",
     ):
         assert (by_name[name].tag, by_name[name].kind, by_name[name].provenance) == (
@@ -1153,7 +1156,7 @@ def test_mature_stable_zeroes_the_charge_like_the_growth_route(
         replace(y, total_current_liabilities=3 * (y.total_current_assets or 0))
         for y in ms_inputs.capital_years
     )
-    inputs = replace(ms_inputs, capital_years=negative, moat_score=None)
+    inputs = replace(ms_inputs, capital_years=negative, moat_class="None")
     r = value_company(inputs, deciles, policy, TODAY)
     im = r.intermediates
     assert "roic-unavailable" not in codes(r) and im["roic"]["aggregate"] is None
@@ -1180,8 +1183,8 @@ def test_mature_stable_raises_the_return_floored_flag(
     poor = tuple(
         replace(y, operating_income=(y.operating_income or 0) / 10) for y in ms_inputs.capital_years
     )
-    for moat_score in (None, ms_inputs.moat_score):
-        inputs = replace(ms_inputs, capital_years=poor, moat_score=moat_score)
+    for moat in ("None", ms_inputs.moat_class):
+        inputs = replace(ms_inputs, capital_years=poor, moat_class=moat)
         r = value_company(inputs, deciles, policy, TODAY)
         im = r.intermediates
         assert im["runway_return"]["used"] == "floor" and "return-floored" in codes(r)
@@ -1408,8 +1411,9 @@ def test_the_refusal_carries_the_warning(
     """A one-time charge can take the trailing earnings below zero: MSCO with a net income of
     −$100 m, a GAAP EPS of −0.10 and a street EPS of 1.00, 1.10 apart, 1,100% of 0.10. The refusal
     "no positive trailing earnings" carries the warning and cites the two figures its test reads,
-    ``eps_ttm`` and ``street_ttm_eps``, after the inputs every result carries; without a street
-    figure it carries none and cites both still; under an agent's gap the warning is silent."""
+    ``eps_ttm`` and ``street_ttm_eps``, after the inputs every result carries and the moat class
+    (spec 2026-11-19 8.5); without a street figure it carries none and cites both still; under an
+    agent's gap the warning is silent."""
     assert ms_inputs.trailing is not None
     loss = replace(
         ms_inputs,
@@ -1423,7 +1427,8 @@ def test_the_refusal_carries_the_warning(
         "GAAP trailing EPS is −$0.10 and the analysts' is $1.00, apart by 1,100.0% of GAAP EPS, "
         "at or above 20.0%."
     )
-    assert [i.name for i in r.inputs] == [*BASE_INPUTS, "eps_ttm", "street_ttm_eps"]
+    cited = [*BASE_INPUTS, "moat_class", "eps_ttm", "street_ttm_eps"]
+    assert [i.name for i in r.inputs] == cited
     eps_ttm, street = r.inputs[-2:]
     assert (eps_ttm.value, eps_ttm.unit, eps_ttm.tag) == (-0.10, "USD a share", "DATA")
     assert eps_ttm.provenance == ms_inputs.provenance["statements"]
@@ -1432,7 +1437,7 @@ def test_the_refusal_carries_the_warning(
     silent = value_company(replace(loss, street_ttm_eps=None), deciles, policy, TODAY)
     assert_refused(silent, "no positive trailing earnings")
     assert codes(silent) == []
-    assert [i.name for i in silent.inputs] == [*BASE_INPUTS, "eps_ttm", "street_ttm_eps"]
+    assert [i.name for i in silent.inputs] == cited
     decided = value_company(loss, deciles, policy, TODAY, judged(("earnings.nri_gap", 0.0)))
     assert_refused(decided, "no positive trailing earnings")
     assert codes(decided) == []
@@ -1594,7 +1599,7 @@ def test_mature_stable_narrow_moat_charges_its_own_return_for_ten_years(
     # a Narrow moat: the terminal return is r and the runway 10 years, so the charge's return
     # fades from the three-year 18.25% to r in year 10; the value sits above EPV, which the
     # one-stage formula at r gave such a row before
-    narrow = replace(ms_inputs, moat_score=policy.moat_narrow_min)
+    narrow = replace(ms_inputs, moat_class="Narrow")
     r = value_company(narrow, deciles, policy, TODAY)
     im = r.intermediates
     assert im["moat"] == "Narrow" and im["runway"] == 10
@@ -2245,6 +2250,114 @@ def test_refuses_without_price(mg_inputs: CompanyInputs, deciles: Deciles, polic
         r = value_company(replace(mg_inputs, price=price), deciles, policy, TODAY)
         assert_refused(r, "no price")
         assert (r.price, r.price_date) == (None, None)
+
+
+def test_a_row_without_a_class_is_refused_after_the_data_guards(
+    ms_inputs: CompanyInputs, start_up_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-19 8.5: a company with no row in the moat table is refused "no moat class",
+    the last guard before a route: after "no price" and "no diluted share count", then after "no
+    trailing figures" on every phase but Start-up, and right before the Start-up route, which a
+    Start-up row without a class never reaches. A row refused there cites no moat class."""
+    no = replace(ms_inputs, moat_class=None)
+    refused = value_company(no, deciles, policy, TODAY)
+    assert_refused(refused, "no moat class")
+    assert refused.phase.phase == "Mature Stable"
+    assert "moat_class" not in [i.name for i in refused.inputs]
+    assert [i.name for i in refused.inputs] == BASE_INPUTS
+    assert value_company(replace(no, price=None), deciles, policy, TODAY).refusal == "no price"
+    no_shares = replace(no, shares_diluted=None)
+    assert value_company(no_shares, deciles, policy, TODAY).refusal == "no diluted share count"
+    no_trailing = replace(no, trailing=None)
+    assert value_company(no_trailing, deciles, policy, TODAY).refusal == "no trailing figures"
+    assert value_company(no, None, policy, TODAY).refusal == "no universe deciles yet"
+    unstated = replace(no, refusal="no financial statements")
+    assert value_company(unstated, deciles, policy, TODAY).refusal == "no financial statements"
+    start_up = replace(start_up_inputs, moat_class=None)
+    r = value_company(start_up, deciles, policy, TODAY)
+    assert_refused(r, "no moat class")
+    assert r.phase.phase == "Start-up" and "requirement" not in r.intermediates
+    for missing in (replace(start_up, trailing=None), start_up):
+        assert value_company(missing, deciles, policy, TODAY).refusal == "no moat class"
+    assert value_company(replace(start_up, price=None), deciles, policy, TODAY).refusal == (
+        "no price"
+    )
+
+
+def test_the_moat_input_names_its_source(
+    ms_inputs: CompanyInputs, start_up_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-19 8.5's table: every result past the guard cites the input ``moat_class``
+    right after the inputs every result carries, with no value, the unit ``class`` and its note
+    led by the class word, so a ref reads its word: the file's row RULE, cited to the table's
+    version as of the entry's date and entered when the row was written; the owner's and an
+    agent's JUDGMENT, cited to the writer as of the day of the write, the reason after the class.
+    A valued result and a route's refusal cite one; a result refused before the guard none."""
+    at = datetime(2026, 11, 21, 14, 30, tzinfo=UTC)
+    agent = "agent claude-opus-5-5"
+    judged_at = Provenance("owner", date(2026, 11, 21), None, at)
+    rows = (
+        (ms_inputs, "RULE", "rule", engine_companies.MOAT_FILE, "Wide"),
+        (
+            engine_companies.judged_moat(ms_inputs, "Narrow", "owner", at),
+            "JUDGMENT",
+            "judgment",
+            judged_at,
+            "Narrow",
+        ),
+        (
+            engine_companies.judged_moat(ms_inputs, "Wide", "owner", at, "pricing power"),
+            "JUDGMENT",
+            "judgment",
+            judged_at,
+            "Wide: pricing power",
+        ),
+        (
+            engine_companies.judged_moat(ms_inputs, "None", agent, at, "a commodity seller"),
+            "JUDGMENT",
+            "judgment",
+            replace(judged_at, source=agent),
+            "None: a commodity seller",
+        ),
+    )
+    assert ms_inputs.trailing is not None
+    loss = replace(ms_inputs.trailing, net_income=-100e6, eps_diluted=-0.10)
+    for inputs, tag, kind, provenance, note in rows:
+        valued = value_company(inputs, deciles, policy, TODAY)
+        refused = value_company(replace(inputs, trailing=loss), deciles, policy, TODAY)
+        assert valued.value is not None and refused.refusal == "no positive trailing earnings"
+        for r in (valued, refused):
+            names = [i.name for i in r.inputs]
+            assert names[:6] == [*BASE_INPUTS, "moat_class"] and names.count("moat_class") == 1
+            moat = r.inputs[5]
+            assert (moat.value, moat.unit, moat.tag, moat.kind) == (None, "class", tag, kind)
+            assert (moat.provenance, moat.note) == (provenance, note)
+            assert "moat_score" not in names
+        assert valued.intermediates["moat"] == note.split(":")[0]
+    start_up = value_company(start_up_inputs, deciles, policy, TODAY)
+    assert start_up.refusal == "Start-up: no value by design"
+    [moat] = [i for i in start_up.inputs if i.name == "moat_class"]
+    assert (moat.tag, moat.provenance, moat.note) == ("RULE", engine_companies.MOAT_FILE, "None")
+    unpriced = value_company(replace(ms_inputs, price=None), deciles, policy, TODAY)
+    assert unpriced.refusal == "no price"
+    assert "moat_class" not in [i.name for i in unpriced.inputs]
+
+
+def test_a_sensitivity_reading_still_varies_the_class(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-19 8.7: a route still reads ``moat.class`` through ``chosen``, for a
+    sensitivity reading alone. Under {"moat.class": "None"} the Wide row takes None's value and
+    levels, and cites the JUDGMENT entry ``moat.class`` in place of the table's ``moat_class``."""
+    wide = value_company(mg_inputs, deciles, policy, TODAY)
+    none = value_company(replace(mg_inputs, moat_class="None"), deciles, policy, TODAY)
+    read = value_company(mg_inputs, deciles, policy, TODAY, judged(("moat.class", "None")))
+    assert read.value == none.value and read.value != wide.value
+    assert (read.levels, read.intermediates["moat"]) == (none.levels, "None")
+    names = [i.name for i in read.inputs]
+    assert "moat_class" not in names
+    [entry] = [i for i in read.inputs if i.name == "moat.class"]
+    assert (entry.tag, entry.value, entry.note) == ("JUDGMENT", None, "None: because")
 
 
 def test_refusal_result_shape(policy: Policy) -> None:
@@ -3302,7 +3415,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.7"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.8"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH

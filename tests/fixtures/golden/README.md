@@ -204,6 +204,18 @@ on MGCO (a gap of 0.05) and 42.00 to 42.40 SEK on FXCO (0.40 SEK), and with it E
 no value on Mature Growth. HGCO, YGCO and DCCO found a gap of nil, so they lose the two inputs
 alone. No flag, refusal or other figure of any golden moves.
 
+All seven re-captured under 1.8 on 2026-11-21 for the moat table (spec 2026-11-19 8.5; method 4.9
+and 5.12): the engine reads each company's class from its row of the moat table, not from
+GuruFocus's Moat Score. Each fixture is valued on the file's row of the class its score gave,
+MGCO, MSCO and FXCO Wide (a score of 8) and HGCO, YGCO, DCCO and SUCO None (no score), so no
+value, level, designation, intermediate, flag or refusal of any golden moves. Two inputs change.
+The DATA input `moat_score`, cited to GuruFocus's summary, leaves every golden. The input
+`moat_class` is no longer the route's RULE entry cited to the policy: it stands right after the
+inputs every result carries (after `fx_rate` and `inflation_differential` on FXCO), still RULE,
+kind rule, with no value, the unit `class` and the class as its note, cited to the table, source
+`moat table fairband-moat-v1`, as of the entry's date, 2026-11-19, and entered when the refresh's
+stage wrote the row, 2026-11-21T09:00:00+00:00. Every other input keeps its place and its figures.
+
 Run from the repository root:
 
 ```

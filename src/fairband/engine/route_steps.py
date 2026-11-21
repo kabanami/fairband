@@ -1,9 +1,14 @@
 """The steps the routes share, below ``route`` and the route modules.
 
 A route reads the company through a ``Context``, built by ``route.value_company`` once the guards
-have passed: so with trailing figures, a positive price and a positive diluted share count. The
-Start-up route reads a ``StartUpContext``, the same with the trailing figures when there are any.
-A route returns ``Valued`` or ``Refused`` and ``route`` builds the result from it.
+have passed: so with trailing figures, a positive price, a positive diluted share count and a
+class in the moat table. The Start-up route reads a ``StartUpContext``, the same with the trailing
+figures when there are any. A route returns ``Valued`` or ``Refused`` and ``route`` builds the
+result from it.
+
+The moat class is the company's row of the moat table (spec 2026-11-19 8.5): every route reads it
+by ``table_moat``, through ``chosen`` but on Decline, and ``route`` cites it once on every result
+past its guard (``moat_input``); no route cites it itself.
 
 ``RoicTerms`` carries the returns of the charge to both routes (calibration spec 5.1 and 5.3): the
 runway return for the runway years, and the terminal return read from it. The ten-year aggregate
@@ -517,7 +522,6 @@ def common_inputs(i: CompanyInputs, t: TrailingFigures, roic: RoicTerms) -> tupl
         from_capital(i, "aggregate_roic", roic.result.aggregate),
         from_capital(i, "runway_return", roic.runway, runway_note(roic.runway_return)),
         data(i, "tax_rate_latest", i.tax_rate_latest, "ratio"),  # the newest ROIC year's rate
-        data(i, "moat_score", i.moat_score, "score"),
     )
 
 
@@ -606,14 +610,39 @@ def sheet_entry(i: CompanyInputs) -> dict[str, Any]:
 
 
 def common_rules(policy: Policy, moat: Moat, terminal: float) -> tuple[TaggedInput, ...]:
-    """The RULE inputs every route uses, with the route's terminal return."""
+    """The RULE inputs every route uses, with the route's moat and terminal return; the moat class
+    itself is ``route``'s entry (``moat_input``)."""
     return (
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
-        rule(policy, "moat_class", None, "class", moat),
         rule(policy, "margin_of_safety", policy.margin_of_safety[moat], "ratio", f"{moat} moat"),
         rule(policy, "terminal_roic", terminal, "ratio", f"{moat} moat"),
     )
+
+
+def table_moat(i: CompanyInputs) -> Moat:
+    """The company's class in the moat table, which every route reads (spec 2026-11-19 8.5).
+    ``route.value_company`` refuses a row without one before its route, so none here is a
+    programming error (``AssertionError``)."""
+    assert i.moat_class is not None, "no moat class: value_company refuses the row before a route"
+    return i.moat_class
+
+
+def moat_input(i: CompanyInputs) -> TaggedInput:
+    """The entry ``moat_class`` every result past the guard "no moat class" cites, after the
+    inputs every result carries (spec 2026-11-19 8.5): no value, the unit ``class``, cited to
+    ``provenance["moat_class"]`` (the source "unknown" without it) and noted by
+    ``notes["moat_class"]``, else by the class word, so its note leads with the word a ref reads.
+    The file's row is RULE, kind ``rule``; the owner's or an agent's JUDGMENT, kind ``judgment``
+    (``CompanyInputs.moat_judged``)."""
+    moat = table_moat(i)
+    provenance = i.provenance.get("moat_class", _UNKNOWN)
+    note = i.notes.get("moat_class") or moat
+    if i.moat_judged:
+        return TaggedInput(
+            "moat_class", None, "class", "JUDGMENT", "judgment", provenance, note=note
+        )
+    return TaggedInput("moat_class", None, "class", "RULE", "rule", provenance, note=note)
 
 
 def data(

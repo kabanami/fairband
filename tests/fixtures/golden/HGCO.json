@@ -127,6 +127,21 @@
   },
   {
    "estimate_method": null,
+   "kind": "rule",
+   "name": "moat_class",
+   "note": "None",
+   "provenance": {
+    "as_of": "2026-11-19",
+    "entered_at": "2026-11-21T09:00:00+00:00",
+    "observed_at": null,
+    "source": "moat table fairband-moat-v1"
+   },
+   "tag": "RULE",
+   "unit": "class",
+   "value": null
+  },
+  {
+   "estimate_method": null,
    "kind": "observed",
    "name": "market_cap",
    "note": null,
@@ -278,21 +293,6 @@
   {
    "estimate_method": null,
    "kind": "observed",
-   "name": "moat_score",
-   "note": null,
-   "provenance": {
-    "as_of": "2026-10-30",
-    "entered_at": null,
-    "observed_at": "2026-10-30T21:00:00+00:00",
-    "source": "GuruFocus summary"
-   },
-   "tag": "DATA",
-   "unit": "score",
-   "value": null
-  },
-  {
-   "estimate_method": null,
-   "kind": "observed",
    "name": "ntm_revenue",
    "note": null,
    "provenance": {
@@ -439,21 +439,6 @@
    "tag": "RULE",
    "unit": "ratio",
    "value": 0.03
-  },
-  {
-   "estimate_method": null,
-   "kind": "rule",
-   "name": "moat_class",
-   "note": "None",
-   "provenance": {
-    "as_of": null,
-    "entered_at": null,
-    "observed_at": null,
-    "source": "policy"
-   },
-   "tag": "RULE",
-   "unit": "class",
-   "value": null
   },
   {
    "estimate_method": null,

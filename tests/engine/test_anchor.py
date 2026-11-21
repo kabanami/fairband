@@ -15,7 +15,6 @@ from fairband.engine.anchor import (
     base_year,
     belief_from_sales,
     consecutive_periods,
-    moat_class,
     ntm_anchor,
     ntm_periods,
     ntm_quarters,
@@ -1009,11 +1008,3 @@ def test_sales_class_is_the_first_whose_upper_bound_holds_the_revenue(policy: Po
     assert sales_class(325.1, policy).label == "$325-700 Mn"
     assert sales_class(1e9, policy).label == ">$50,000 Mn"
     assert sales_class(10_000, policy) == policy.base_rates[7]
-
-
-def test_moat_class(policy: Policy) -> None:
-    assert moat_class(8, policy) == "Wide"
-    assert moat_class(7.9, policy) == "Narrow"
-    assert moat_class(4, policy) == "Narrow"
-    assert moat_class(3, policy) == "None"
-    assert moat_class(None, policy) == "None"

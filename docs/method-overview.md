@@ -8,7 +8,7 @@ it.
 The engine gives each company in the universe a value a share, or a stated reason for none. It is
 rule-based and holds no AI model. It reads vendor data stored at each refresh. The same inputs,
 versions and settings give the same result, bit for bit. This page describes method
-`fairband-mechanical/1.7` and policy `fairband-policy-v17`. (method 0, 2, 10)
+`fairband-mechanical/1.8` and policy `fairband-policy-v17`. (method 0, 2, 10)
 
 ## From data to a value
 
@@ -53,12 +53,14 @@ by the runway's end. (method 4.6 to 4.8)
 ## The main inputs
 
 - **Data.** FMP (Financial Modeling Prep) supplies statements, the analysts' consensus (their average forecast), prices,
-  peers and exchange rates. GuruFocus supplies the Moat Score.
-  Packaged tables give OECD tax rates and IMF inflation projections. (method 2, 4.1, 4.3)
-- **Moat class.** A Moat Score of 8 or more is Wide, 4 or more Narrow, else None. On the mature
-  routes, the runway is 5, 10 or 20 years, from None to Wide. The margin of safety is 45%, 35% or
-  25%, in the same order. A Wide moat lifts the terminal return, up to r plus 4 points.
-  (method 4.1, 4.7, 4.9)
+  peers and exchange rates. Packaged tables give OECD tax rates, IMF inflation projections and
+  Fairband's own moat classes. (method 2, 4.1, 4.3, 4.9)
+- **Moat class.** Fairband keeps its own table of moat classes, Wide, Narrow or None, one for each
+  company. A rule on ten years of returns drafted it, corrected by hand where the rule is wrong.
+  The owner or an agent may change a class, and the newest is in force. A company with no class
+  is refused. On the mature routes, the runway is 5, 10 or 20 years, from None to Wide. The margin
+  of safety is 45%, 35% or 25%, in the same order. A Wide moat lifts the terminal return, up to r
+  plus 4 points. (method 4.1, 4.7, 4.9, 4.9a)
 - **Policy.** By default r is 9% and terminal growth 3%. The belief is the Base Rate Book's median
   ten-year net income growth for companies of similar sales, plus 2 points. Many policy values are
   user settings; this page gives the defaults. (method 4.1, 5.4)

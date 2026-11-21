@@ -47,10 +47,17 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
   ``inflation_max``; the listed-share basis's ("share basis unclear: ..."). The three that name
   a code are marked ``currency_refused``, so the engine names the code on the result with no
   rate; the statements', the tax rate's and an unknown currency's are not;
-- the GuruFocus moat score, the next earnings date (``None`` when before ``today``) and the
-  closes of the latest price-history payload (none when it is absent or does not parse). The
-  engine reads no GuruFocus EPS (spec 2026-11-19 7.1): GuruFocus's key ratios that a fetch stored
-  before stay in the store, unread;
+- the next earnings date (``None`` when before ``today``) and the closes of the latest
+  price-history payload (none when it is absent or does not parse). Assembly reads nothing of
+  GuruFocus: no EPS (spec 2026-11-19 7.1), and no moat score since method 1.8; the key ratios and
+  the summaries a fetch stored stay in the store, unread;
+- the moat class (spec 2026-11-19 8.5): the company's row of the moat table, which the refresh's
+  stage ``moat`` loaded from the packaged file (``with_table_moat``, the last step), its class
+  and whether it is the owner's or an agent's (``moat_judged``), cited as ``moat_class``: the
+  file's row to ``moat table <version>`` as of the entry's date, the owner's to ``owner`` and an
+  agent's to ``agent <actor>`` as of the day of the write, each entered at the row's time, and
+  noted with the class, ``"Wide"``, or with the reason after it, ``"Wide: <reason>"``. With no
+  row the class is ``None``, which the engine refuses "no moat class", cited and noted nowhere;
 - the newest balance sheet (``newest_sheet``, spec 2026-11-13 12.2), a fiscal year's or a
   quarter's, the fiscal year's on a tie: ``sheet``, with its period, its label, whether it is a
   quarter's, the liquidation floor's two lines and the minority interest as presented, cited as
@@ -76,7 +83,7 @@ trailing figures and the share count) is ``inputs_statements``; its docstring st
 
 ``provenance`` holds an entry under each key the route cites (``route`` module docstring) whose
 input the store supplied; an input it did not supply has none and cites "unknown". The source names
-the vendor and its route (``"FMP quote"``, ``"GuruFocus summary"``) or the tax table; ``as_of`` is
+the vendor and its route (``"FMP quote"``, ``"FMP earnings"``) or the tax table; ``as_of`` is
 the row's date and ``observed_at`` and ``entered_at`` the row's, the newest of several rows.
 Nothing here raises on missing data: a missing piece is ``None``, a flag or a refusal. An unknown
 dataset name is a programming error and raises ``ValueError``.
@@ -85,7 +92,7 @@ dataset name is a programming error and raises ``ValueError``.
 import json
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from functools import cache
 
@@ -113,11 +120,12 @@ from fairband.refresh.inputs_statements import (
 from fairband.refresh.peers import peer_figures
 from fairband.refresh.rates import NO_RATE, FxSeries, Rate, rates_for
 from fairband.store.companies import CompanyRow, latest_company
+from fairband.store.moat import moat_row
 from fairband.store.observations import ObservationRow, answer_observations, observations_for
 from fairband.store.vendor import latest_response, response_payload
 from fairband.vendors.normalize_fmp import price_closes, value_as_date
 
-__all__ = ["build_inputs", "latest_price", "series_for"]
+__all__ = ["build_inputs", "latest_price", "series_for", "with_table_moat"]
 
 _OBSERVATIONS = frozenset(
     {
@@ -127,7 +135,6 @@ _OBSERVATIONS = frozenset(
         "earnings-date",
         "quote",
         "profile",
-        "gf-score",
         "split",
     }
 )
@@ -137,10 +144,11 @@ _ONE_ANSWER = frozenset({"estimate-annual", "estimate-quarter"})
 _QUOTE, _PROFILE, _SCREENER = "FMP quote", PROFILE_SOURCE, SCREENER_SOURCE
 _ESTIMATES, _EARNINGS = "FMP analyst-estimates", "FMP earnings"
 _CLOSES = "FMP historical-price-eod/full"
-_SUMMARY = "GuruFocus summary"
 _FX_HISTORY = "FMP historical-price-eod/light"
 _BALANCE_SHEET = "FMP balance-sheet-statement"
 _CURRENCY_UNKNOWN = "reporting currency unknown"
+_MOAT = "moat_class"  # the key of the moat class's citation and note
+_MOAT_TABLE = "moat table"  # a file row's source, before the table's version
 
 type _Cited[T] = tuple[T, Provenance | None]
 type _Closes = tuple[tuple[date, float], ...]
@@ -192,8 +200,6 @@ def build_inputs(
     annual = cite("estimates_annual", _annual_estimates(read("estimate-annual"), calendar))
     street = _street_actuals(read("street-actual"), stated)
     actuals = cite("street_ttm_eps", money.actuals(street, policy))
-    scores = read("gf-score")
-    moat = cite("moat_score", _value(_field(scores, "moat_score"), _SUMMARY))
     read_sheet = newest_sheet(conn, symbol)
     sheet = cite("balance_sheet", _sheet(read_sheet))
     sums = balance_sums({} if read_sheet is None else read_sheet.lines)
@@ -225,7 +231,7 @@ def build_inputs(
     figures = split.figures
     notes.update(split.notes)
     flags = flags + tuple(f for f in (split.flag, split.basis_flag) if f is not None)
-    return CompanyInputs(
+    found = CompanyInputs(
         symbol=symbol,
         name=company.name if company is not None and company.name else symbol,
         country=country,
@@ -242,7 +248,7 @@ def build_inputs(
         quarter_estimates=figures.quarter_estimates,
         annual_estimates=figures.annual_estimates,
         street_ttm_eps=figures.street_ttm_eps,
-        moat_score=moat,
+        moat_class=None,  # the table's, below
         next_earnings=cite("next_earnings", _next_earnings(read("earnings-date"), today)),
         closes=cite("closes", _closes(conn, symbol)),
         data_date=stated.data_date,
@@ -264,6 +270,33 @@ def build_inputs(
         fx_stale=money.rate is not None and money.rate.stale,
         currency_refused=money.refused(stated),
         stock_pay=stated.stock_pay,
+    )
+    return with_table_moat(conn, found)
+
+
+def with_table_moat(conn: sqlite3.Connection, inputs: CompanyInputs) -> CompanyInputs:
+    """``inputs`` on the company's row of the moat table (spec 2026-11-19 8.5; module docstring):
+    its class, whether it is judged, its citation and its note under ``moat_class``; with no row,
+    no class, citation or note. ``build_inputs`` ends with it, and a test's fake may call it."""
+    row = moat_row(conn, inputs.symbol)
+    provenance = {k: v for k, v in inputs.provenance.items() if k != _MOAT}
+    notes = {k: v for k, v in inputs.notes.items() if k != _MOAT}
+    if row is None:
+        return replace(
+            inputs, moat_class=None, moat_judged=False, provenance=provenance, notes=notes
+        )
+    if row.source == "file":
+        source = f"{_MOAT_TABLE} {row.file_version}"
+    else:
+        source = row.principal if row.actor is None else f"{row.principal} {row.actor}"
+    # a reason of spaces is none: the note is the class alone, with no ": " after it
+    note = f"{row.moat}: {row.reason}" if row.reason and row.reason.strip() else row.moat
+    return replace(
+        inputs,
+        moat_class=row.moat,
+        moat_judged=row.source != "file",
+        provenance=provenance | {_MOAT: Provenance(source, row.judged_on, None, row.at)},
+        notes=notes | {_MOAT: note},
     )
 
 

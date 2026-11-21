@@ -24,9 +24,9 @@ from fairband.store.db import connect
 from fairband.store.refreshes import RefreshRow, items, latest_refresh
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 
-# The classes the GuruFocus fixtures give, so the moat table agrees with the Moat Score the engine
-# reads: ACME's summary, a score of 7, Narrow, which the fixture universe's companies share; BOLT's,
-# no score, None.
+# The classes the GuruFocus fixtures' Moat Scores gave before method 1.8, so a value under the moat
+# table, which the engine reads, is the value the score gave: ACME's summary, a score of 7, Narrow,
+# which the fixture universe's companies share; BOLT's, no score, None.
 MOAT_CLASSES: dict[str, Moat] = {
     "ACME": "Narrow",
     "AXLE": "Narrow",

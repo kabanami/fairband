@@ -36,8 +36,7 @@ kept, and ``step_series_flag`` notes a step whose rate on net income and rate on
 The revenue steps on the same years are kept as found, for the charge, beside the steps read: a
 step whose landing year has fewer than ``analyst_min`` revenue analysts, or no count, is thin and
 not read (spec 2026-11-14 6.2), when it is above ``thin_revenue_step_max``. The belief for
-years 4 to N is the Base Rate Book median for the sales class plus the inflation addition; the moat
-class reads the GuruFocus Moat Score.
+years 4 to N is the Base Rate Book median for the sales class plus the inflation addition.
 """
 
 from collections import Counter
@@ -48,7 +47,7 @@ from itertools import pairwise
 from typing import Literal
 
 from fairband.engine.types import Flag
-from fairband.policy import BaseRateClass, Moat, Policy
+from fairband.policy import BaseRateClass, Policy
 
 SbcBasis = Literal["excludes-sbc", "includes-sbc", "unknown"]
 # An agent's ``earnings.sbc_basis`` as the anchor reads it (spec 2026-11-13 7.2).
@@ -637,17 +636,6 @@ def belief_from_sales(revenue_ttm_musd: float, policy: Policy) -> Belief:
     inflation addition."""
     c = sales_class(revenue_ttm_musd, policy)
     return Belief(rate=c.median + policy.inflation_addition, sales_class=c.label, median=c.median)
-
-
-def moat_class(score: float | None, policy: Policy) -> Moat:
-    """The moat class from the GuruFocus Moat Score; no score gives None."""
-    if score is None:
-        return "None"
-    if score >= policy.moat_wide_min:
-        return "Wide"
-    if score >= policy.moat_narrow_min:
-        return "Narrow"
-    return "None"
 
 
 def _revenue_scale(quarters: Sequence[QuarterEstimate], trailing_revenue: float | None) -> float:

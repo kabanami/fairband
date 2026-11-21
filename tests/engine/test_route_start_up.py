@@ -158,7 +158,7 @@ def test_the_route_is_always_the_refusal_with_figures(
     assert route_codes(r) == ["tax-loss-history-unknown"]
     # a Wide moat: the return on new capital at the target, 0.25 × 0.75 × 1.5 = 0.28125, capped at
     # 13%, as on the revenue-growth route; the terminal multiple rises and the price needs less
-    wide = value_company(replace(start_up_inputs, moat_score=9.0), deciles, policy, TODAY)
+    wide = value_company(replace(start_up_inputs, moat_class="Wide"), deciles, policy, TODAY)
     wide_req = requirement(wide)
     assert wide_req["terminal_roic"] == 0.13
     assert wide_req["revenue_y10"] == pytest.approx(1_514.51, abs=0.01)
@@ -168,7 +168,7 @@ def test_the_route_is_always_the_refusal_with_figures(
     assert input_named(wide, "moat_class").note == "Wide"
     # a Wide moat whose return on new capital is below r takes r
     thin = tuple(replace(p, sales_to_capital=0.4) for p in start_up_inputs.peers)
-    wide_thin = replace(start_up_inputs, moat_score=9.0, peers=thin)
+    wide_thin = replace(start_up_inputs, moat_class="Wide", peers=thin)
     assert requirement(value_company(wide_thin, deciles, policy, TODAY))["terminal_roic"] == 0.09
 
 
@@ -456,17 +456,18 @@ def test_the_flag_order_and_inputs(
         "cfo_ttm",
         "capex_ttm",
         "tax_rate_latest",
-        "moat_score",
         "target_margin",
         "sales_to_capital",
         "debt",
         "cash",
         "minority_interest",
     ]
+    # the moat class right after the inputs every result carries, the moat table's (spec
+    # 2026-11-19 8.5)
     assert [i.name for i in r.inputs if i.tag == "RULE"] == [
+        "moat_class",
         "required_return",
         "terminal_growth",
-        "moat_class",
         "terminal_roic",
         "peer_min",
         "peer_margin_min_years",
@@ -491,6 +492,8 @@ def test_the_flag_order_and_inputs(
         "None moat",
     )
     assert (rules["burn_cover_flag_years"].value, rules["peer_margin_min_years"].value) == (2, 5)
+    moat = rules.pop("moat_class")
+    assert (moat.note, moat.provenance) == ("None", start_up_inputs.provenance["moat_class"])
     assert all(i.provenance.source == f"policy {policy.version}" for i in rules.values())
     # the industry's peers: cited to the universe's industry, with the bound on their number
     r = value_company(flagged, deciles, policy, TODAY)

@@ -5,10 +5,12 @@ else assembly found, which the next run with deciles judges); the refusal assemb
 holds, in order, no financial statements, a missing statutory tax rate, the currency's refusals
 and the listed-share basis's (spec 2026-11-10 7.5); an unclassified company (the classifier's
 reason); no positive price; no positive diluted share count. The ADR flag refuses nothing.
-A Start-up row then takes its route (``route_start_up``, on a
-``StartUpContext`` whose trailing figures may be missing), always the refusal "Start-up: no value
-by design" with its route ``start-up``, its figures and its inputs. Every other row is refused
-without trailing figures; then the phase's route runs (``route_mature_growth``,
+The last guard is the moat class (spec 2026-11-19 8.5): a company with no row in the moat table
+(``CompanyInputs.moat_class`` ``None``) is refused ``NO_MOAT_CLASS``. A Start-up row meets it
+right before its route (``route_start_up``, on a ``StartUpContext`` whose trailing figures may be
+missing), always the refusal "Start-up: no value by design" with its route ``start-up``, its
+figures and its inputs. Every other row is refused without trailing figures, then meets the
+guard; then the phase's route runs (``route_mature_growth``,
 ``route_mature_stable``, ``route_decline``, and ``route_revenue_growth`` for High Growth and Young
 Growth, on the shared ``route_steps``, with the classifier's evidence on the ``Context``) and
 refuses on its own guards. Mature Growth: no trailing revenue, no statutory tax rate, the anchor's
@@ -36,7 +38,9 @@ result's value the sum, which the levels, the designation and the expected retur
 intermediates' ``value_per_share`` the route's own, and every solve on the price targeting the
 price less it, the business's share of the price (spec 2026-11-09 8). Every result, a refusal
 too, cites the JUDGMENT entries of the overrides last (``route_steps.judged_inputs``), in place of
-the route's own entries for the inputs they set.
+the route's own entries for the inputs they set. A route reads the moat class through ``chosen``
+too, for a sensitivity reading alone (spec 2026-11-19 8.7), whose ``moat.class`` stands in place
+of the table's ``moat_class`` entry.
 
 Every result of ``value_company`` cites the policy's version and its settings hash, and is valid
 until the next earnings date when that is after the data date, else for the policy's fallback days.
@@ -75,9 +79,14 @@ USD value with the rate of a row that carries one (``types.rated``).
 Tagged inputs. A DATA input cites ``CompanyInputs.provenance`` under one of these keys, which
 assembly provides: ``price``, ``market_cap``, ``shares_diluted``, ``statements``,
 ``balance_sheet`` (the newest balance sheet, as of its period end), ``estimates_quarter``,
-``estimates_annual``, ``street_ttm_eps``, ``moat_score``, ``next_earnings``, ``tax_rate_latest``,
-``closes``, and on a row in another currency ``fx_rate``;
+``estimates_annual``, ``street_ttm_eps``, ``next_earnings``, ``tax_rate_latest``, ``closes``,
+and on a row in another currency ``fx_rate``;
 the RULE input ``inflation_differential`` cites its key too, the inflation table, with its note.
+Every result past the guard "no moat class" cites ``moat_class`` right after the inputs every
+result carries (``route_steps.moat_input``): the company's row of the moat table, cited to its
+key and noted by assembly's note for it (the class word, and the reason after it on a row that
+holds one), RULE for the file's row and JUDGMENT for the owner's or an agent's
+(``CompanyInputs.moat_judged``); a result refused before the guard cites none.
 A missing key cites the source "unknown". A DATA input named in ``CompanyInputs.estimate_methods``
 is an estimate under that method (a tax rate carried forward, say), and so are ``aggregate_roic``
 and ``runway_return`` under the method ``estimate_methods`` names ``intangibles`` (D17: invested
@@ -221,6 +230,7 @@ from fairband.engine.route_steps import (
     business_price,
     data,
     judged_inputs,
+    moat_input,
     price_facts_for,
     rule,
 )
@@ -234,8 +244,12 @@ from fairband.engine.types import (
     money_of,
     rated,
 )
-from fairband.policy import Policy, in_currency
+from fairband.policy import Moat, Policy, in_currency
 
+# The refusal of a company the moat table holds no row for (spec 2026-11-19 8.5): one that entered
+# the universe after the file was cut. The owner's class, an agent's or the file's next version
+# lifts it.
+NO_MOAT_CLASS = "no moat class"
 _LONG_RUNWAY = "long-runway-high-growth"
 _VALUE_SPREAD = "value-spread"
 _BELOW_NET_CASH = "below-net-cash"
@@ -262,6 +276,10 @@ class CompanyInputs:
     ``stock_pay`` is the stock pay on file beside the trailing figure, the trailing periods at zero
     and the newest fiscal year above zero (``StockPayHistory``), ``None`` without statements; the
     Mature Growth route's ``stock-pay-missing`` note reads it.
+    ``moat_class`` is the company's class in the moat table, ``None`` where the table holds no row
+    for it (spec 2026-11-19 8.5), and ``moat_judged`` whether the row is the owner's or an agent's
+    rather than the file's; ``provenance`` and ``notes`` hold the row's citation and note under
+    ``moat_class``.
 
     A company in another currency (spec 2026-11-10 section 7): ``currency`` is the reporting
     currency, every money figure but ``price`` and ``market_cap`` (the quote's, in USD) and the
@@ -292,7 +310,7 @@ class CompanyInputs:
     quarter_estimates: tuple[QuarterEstimate, ...]
     annual_estimates: tuple[AnnualEstimate, ...]
     street_ttm_eps: float | None
-    moat_score: float | None
+    moat_class: Moat | None
     next_earnings: date | None
     closes: tuple[tuple[date, float], ...]
     data_date: date
@@ -314,6 +332,7 @@ class CompanyInputs:
     fx_stale: bool = False
     currency_refused: bool = False
     stock_pay: StockPayHistory | None = None
+    moat_judged: bool = False
 
 
 def value_company(
@@ -334,9 +353,9 @@ def value_company(
     phase = _phase(classify(inputs.series, deciles), judged)
     refresh_id = deciles.refresh_id
 
-    def refuse(outcome: str | Refused) -> ValuationResult:
+    def refuse(outcome: str | Refused, moat: TaggedInput | None = None) -> ValuationResult:
         found = Refused(outcome) if isinstance(outcome, str) else outcome
-        return _refuse(inputs, policy, today, found, phase, refresh_id, judged)
+        return _refuse(inputs, policy, today, found, phase, refresh_id, judged, moat)
 
     if inputs.refusal is not None:
         return refuse(inputs.refusal)
@@ -352,18 +371,22 @@ def value_company(
     local, rate = in_currency(policy, inputs.inflation_differential), inputs.fx_rate
     in_local = replace(inputs, price=price * rate, market_cap=_times(inputs.market_cap, rate))
     if phase.phase == "Start-up":
+        if inputs.moat_class is None:
+            return refuse(NO_MOAT_CLASS)
         start_up = StartUpContext(
             in_local, trailing, price * rate, shares, consensus, local, today, judged
         )
-        return replace(refuse(value_start_up(start_up)), route="start-up")
+        return replace(refuse(value_start_up(start_up), moat_input(inputs)), route="start-up")
     if trailing is None:
         return refuse("no trailing figures")
+    if inputs.moat_class is None:
+        return refuse(NO_MOAT_CLASS)
 
     c = Context(in_local, trailing, price * rate, shares, consensus, local, today, phase, judged)
     outcome = _route(c, phase.phase)
     if isinstance(outcome, Refused):
-        return refuse(outcome)
-    return _valued(inputs, phase, price, policy, refresh_id, outcome, judged)
+        return refuse(outcome, moat_input(inputs))
+    return _valued(inputs, phase, price, policy, refresh_id, outcome, judged, moat_input(inputs))
 
 
 def _shares(i: CompanyInputs, overrides: Overrides) -> tuple[float | None, float | None]:
@@ -623,10 +646,12 @@ def _valued(
     refresh_id: int | None,
     v: Valued,
     overrides: Overrides,
+    moat: TaggedInput,
 ) -> ValuationResult:
     """The valued result: the route's value a share and its levels translated to USD at the rate
     (a USD row's rate is 1), the levels the policy's on the USD value, the designation the USD
-    price against it (spec 2026-11-10 7.2)."""
+    price against it (spec 2026-11-10 7.2); its inputs the base inputs, then ``moat``, the moat
+    class's entry, then the route's."""
     value = v.value / i.fx_rate
     price_to_value, designation = designation_for(price, value, policy.designation_edges)
     return ValuationResult(
@@ -641,7 +666,7 @@ def _valued(
         data_date=i.data_date,
         valid_until=_valid_until(i, policy),
         phase=phase,
-        inputs=judged_inputs(_base_inputs(i, policy) + v.inputs, overrides, i.currency),
+        inputs=judged_inputs(_base_inputs(i, policy) + (moat,) + v.inputs, overrides, i.currency),
         intermediates=v.intermediates
         | _currency_entry(i, v.value)
         | _trailing_entry(i)
@@ -669,9 +694,11 @@ def _refuse(
     phase: PhaseEvidence | None,
     refresh_id: int | None,
     overrides: Overrides,
+    moat: TaggedInput | None = None,
 ) -> ValuationResult:
     """A refusal from ``value_company``: the company's price when it is one, its price facts
-    beside any intermediates the route computed, the base inputs and any the route cites with the
+    beside any intermediates the route computed, the base inputs, then ``moat``, the moat class's
+    entry on a refusal past its guard (none before it), then any the route cites, with the
     overrides' JUDGMENT entries, the flags so far and the validity window of every result."""
     price = i.price if i.price is not None and _positive(i.price) else None
     checks = () if phase is None else phase.checks
@@ -683,7 +710,11 @@ def _refuse(
         price=price,
         price_date=None if price is None else i.price_date,
         phase=phase,
-        inputs=judged_inputs(_base_inputs(i, policy) + found.inputs, overrides, i.currency),
+        inputs=judged_inputs(
+            _base_inputs(i, policy) + ((moat,) if moat is not None else ()) + found.inputs,
+            overrides,
+            i.currency,
+        ),
         flags=_unique(
             i.input_flags
             + _share_count(i, overrides, policy)

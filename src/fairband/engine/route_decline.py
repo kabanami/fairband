@@ -117,7 +117,7 @@ import statistics
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-from fairband.engine.anchor import TrailingFigures, base_fiscal_year, moat_class, ntm_window
+from fairband.engine.anchor import TrailingFigures, base_fiscal_year, ntm_window
 from fairband.engine.balance import BalanceYear, NewestSheet
 from fairband.engine.classifier import Series, operating_margin
 from fairband.engine.distress import FScore, Rating, ZScore, altman_z, ncav, piotroski_f, rate
@@ -169,6 +169,7 @@ from fairband.engine.route_steps import (
     sheet_entry,
     sheet_note,
     signed,
+    table_moat,
     trailing_flags,
 )
 from fairband.engine.runoff import (
@@ -265,7 +266,7 @@ def value_decline(c: Context) -> Valued | Refused:
     years = i.balance_years
     newest = years[-1] if years else None  # the newest fiscal year's, which Z″ reads
     lines = path.flags + bridge_flags(c) + present(_liabilities_flag(i.sheet))
-    moat = moat_class(i.moat_score, policy)
+    moat = table_moat(i)  # no override reads it here
     roic = RoicTerms.of(i.capital_years, moat, policy)
     s2c = _sales_to_capital(c, roic)
     if s2c is None:
@@ -392,7 +393,6 @@ def value_decline(c: Context) -> Valued | Refused:
         rule(policy, "z_distress", policy.z_distress, "score"),
         rule(policy, "z_safe", policy.z_safe, "score"),
         rule(policy, "f_score_low", policy.f_score_low, "score"),
-        rule(policy, "moat_class", None, "class", moat),
         rule(policy, "margin_of_safety", policy.margin_of_safety[moat], "ratio", f"{moat} moat"),
         *_peer_rules(c, used),
     )

@@ -16,6 +16,7 @@ from support.engine_companies import (
     annual,
     fiscal_years,
     half_yearly,
+    judged_moat,
     on_quarter_sheet,
     on_shifted_sheet,
     unshifted,
@@ -26,6 +27,7 @@ from support.engine_companies import (
 from fairband.engine.anchor import TrailingFigures
 from fairband.engine.balance import NewestSheet
 from fairband.engine.classifier import Deciles, Series
+from fairband.engine.levels import levels_for
 from fairband.engine.overrides import Override
 from fairband.engine.revenue_growth import PeerFigures, PeerSource
 from fairband.engine.review import review_company
@@ -933,7 +935,6 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         "buybacks_ttm",
         "equity_issued_ttm",
         "tax_rate_latest",
-        "moat_score",
         "ntm_revenue",
         "path_step_2",
         "path_step_3",
@@ -970,7 +971,10 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         cited = input_named(r, name)
         assert (cited.value, cited.note) == (figure, "the balance sheet of fiscal 2025"), name
         assert cited.provenance == decline_inputs.provenance["balance_sheet"], name
+    # the moat class right after the inputs every result carries, the moat table's (spec
+    # 2026-11-19 8.5), then the route's rules
     assert rules == [
+        "moat_class",
         "required_return",
         "runoff_years",
         "runoff_recovery",
@@ -980,7 +984,6 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         "z_distress",
         "z_safe",
         "f_score_low",
-        "moat_class",
         "margin_of_safety",
     ]
     for absent in ("aggregate_roic", "runway_return", "terminal_growth", "terminal_roic"):
@@ -1026,7 +1029,8 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         2.6,
         1,
     )
-    assert rows["moat_class"].note == "None"
+    moat = rows.pop("moat_class")
+    assert (moat.note, moat.provenance) == ("None", decline_inputs.provenance["moat_class"])
     assert all(i.provenance.source == f"policy {policy.version}" for i in rows.values())
     # no rating: the two rows say why and cite no figure
     no_debt = value_company(replace(decline_inputs, cash=250 * M), deciles, policy, TODAY)
@@ -1036,6 +1040,26 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
     )
     assert (rating.value, rating.note) == (None, "no rating: cash covers debt")
     assert (pi.value, pi.note) == (None, "no net debt: π is 0")
+
+
+def test_the_decline_route_reads_the_table_s_class(
+    decline_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-19 8.5: the Decline route takes the margin of safety of the company's class in
+    the moat table, an agent's among them. The run-off reads no moat, so a Wide row's value is the
+    None row's, and its levels take Wide's margin of safety."""
+    none = value_company(decline_inputs, deciles, policy, TODAY)
+    wide = value_company(replace(decline_inputs, moat_class="Wide"), deciles, policy, TODAY)
+    assert wide.value is not None and wide.value == none.value
+    assert wide.intermediates["moat"] == "Wide"
+    assert wide.levels == levels_for(wide.value, "Wide", policy) != none.levels
+    assert wide.levels.buy == pytest.approx(wide.value * (1 - policy.margin_of_safety["Wide"]))
+    safety = input_named(wide, "margin_of_safety")
+    assert (safety.value, safety.note) == (policy.margin_of_safety["Wide"], "Wide moat")
+    agent = judged_moat(decline_inputs, "Wide", "agent claude-opus-5-5", NOW, "a toll road")
+    judged = value_company(agent, deciles, policy, TODAY)
+    assert (judged.value, judged.levels) == (wide.value, wide.levels)
+    assert input_named(judged, "moat_class").tag == "JUDGMENT"
 
 
 def test_the_json_round_trip_and_the_price_refresh(

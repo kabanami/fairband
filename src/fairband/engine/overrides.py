@@ -60,6 +60,9 @@ consensus's steps as found, the Mature Growth charge's ``revenue_steps_found``, 
 step, which the charge's ``revenue_steps`` holds: none where the consensus gives no step, and on
 every other route; a result stored before the charge kept the steps found reads its
 ``revenue_steps``, which then held them as found (spec 2026-11-14 6.1).
+The moat class reads the intermediates' ``moat``, else (a Start-up row) the word leading the
+note of the ``moat_class`` input, whatever its tag: the moat table's file row, the owner's or an
+agent's (spec 2026-11-19 8.5).
 The engine finds no value outside the business either: a valued route writes
 ``outside_value_per_share`` only under an override, so a result without one reads 0.0 on every
 route but Start-up, which reads none.
@@ -612,7 +615,9 @@ def _reading(result: ValuationResult, tag: OverrideTag) -> Any:
             )
             return _at(found, 0 if tag == "revenue.step_2" else 1)
         case "moat.class":
-            return im.get("moat", _rule_note(result, "moat_class"))
+            # a Start-up row's intermediates hold no moat: the word leading the class's note, the
+            # file's RULE entry or the owner's or an agent's JUDGMENT (spec 2026-11-19 8.5)
+            return im.get("moat", _class_word(result))
         case "margin.target":
             return _first(
                 _at(im, "target_margin", "value"), _at(im, "requirement", "target_margin", "value")
@@ -692,10 +697,11 @@ def _cited(result: ValuationResult, name: str, tag: str) -> Any:
     return None
 
 
-def _rule_note(result: ValuationResult, name: str) -> str | None:
-    """The note of the RULE input ``name``: a Start-up row's moat class, which its intermediates
-    do not hold."""
-    return next((x.note for x in result.inputs if x.name == name and x.tag == "RULE"), None)
+def _class_word(result: ValuationResult) -> str | None:
+    """The word leading the note of the input ``moat_class``, whatever its tag: the moat table's
+    class, "Wide" of "Wide: <reason>"; ``None`` where the result cites none."""
+    note = next((x.note for x in result.inputs if x.name == "moat_class"), None)
+    return None if note is None else note.split(":", 1)[0].strip()
 
 
 def _first(*xs: Any) -> Any:

@@ -140,7 +140,6 @@ from fairband.engine.anchor import (
     consensus_value,
     few_analysts,
     growth_step,
-    moat_class,
     ntm_anchor,
     ntm_window,
     sales_class,
@@ -201,6 +200,7 @@ from fairband.engine.route_steps import (
     rule,
     sheet_entry,
     signed,
+    table_moat,
     trailing_flags,
 )
 from fairband.engine.types import Flag, Phase, Provenance, TaggedInput
@@ -274,7 +274,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
     if judged_hold:  # the agent's rate: the cap does not bind it
         path = replace(path, hold=chosen(c, "path.hold", path.hold))
         path_flags = tuple(f for f in path_flags if f.code != "consensus-above-base-rate")
-    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
+    moat = chosen(c, "moat.class", table_moat(i))
     roic = RoicTerms.of(i.capital_years, moat, policy, revenue=revenue_by_fiscal_year(i))
     s2c = _sales_to_capital(c, roic)
     outside = outside_value(c)

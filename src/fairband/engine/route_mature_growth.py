@@ -126,7 +126,6 @@ from fairband.engine.anchor import (
     base_fiscal_year,
     belief_from_sales,
     few_analysts,
-    moat_class,
     ntm_anchor,
     ntm_window,
     path_steps,
@@ -183,6 +182,7 @@ from fairband.engine.route_steps import (
     price_facts_for,
     revenue_by_fiscal_year,
     rule,
+    table_moat,
     trailing_flags,
 )
 from fairband.engine.types import Flag
@@ -233,7 +233,7 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     if isinstance(found, Refused):
         return found
     anchor, path, base_year, belief, revenue = found
-    moat = chosen(c, "moat.class", moat_class(i.moat_score, policy))
+    moat = chosen(c, "moat.class", table_moat(i))
     runway_return: float | None = chosen(c, "return.runway", None)
     roic = RoicTerms.of(
         i.capital_years,
