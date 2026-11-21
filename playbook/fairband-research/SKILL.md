@@ -976,6 +976,9 @@ founder's ruling of 2026-11-11, its mid-cycle margin the ten-year median since s
 - On Mature Stable the anchor is the trailing earnings. Where the `margin-flag` fired, the gap is
   only what the median misses, as above. Where it did not, use the same form on the trailing
   figures: the trailing earnings a share, and the trailing net income over the trailing revenue.
+  Where `earnings.nri_gap` takes the one-time items out, measure the gap on the trailing figures
+  less them: the trailing earnings a share less your figure, and the trailing net income less your
+  figure times the diluted count, over the trailing revenue, so no item is cut twice.
 
 How much of the gap to take:
 

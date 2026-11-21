@@ -1626,6 +1626,26 @@ def test_step_8_holds_the_one_time_items_step() -> None:
         assert words in step, words
 
 
+def test_the_cycle_gap_reads_the_trailing_figures_less_the_one_time_items() -> None:
+    """The review of plan 2's Task 8, as the controller ruled: on Mature Stable the engine takes
+    an agent's `earnings.nri_gap` off the trailing net income and the cycle gap off the result
+    (method 14.4), so where step 8 sets the gap the cycle formula reads the trailing figures less
+    it, or a one-time charge comes back twice; the formula itself does not change."""
+    skill = _read(SKILL)
+    start = skill.index("- On Mature Stable the anchor is the trailing earnings.")
+    bullet = _flat(skill[start:].split("\n\n", 1)[0].split("\n- ", 1)[0])
+    assert bullet.endswith(
+        "Where `earnings.nri_gap` takes the one-time items out, measure the gap on the trailing"
+        " figures less them: the trailing earnings a share less your figure, and the trailing net"
+        " income less your figure times the diluted count, over the trailing revenue, so no item"
+        " is cut twice."
+    ), bullet
+    assert (
+        "Where it did not, use the same form on the trailing figures: the trailing earnings a"
+        " share, and the trailing net income over the trailing revenue."
+    ) in bullet
+
+
 def test_the_ntm_one_time_item_advice_stays_with_no_flag() -> None:
     """Spec 2026-11-19 7.5: the entry of `consensus-basis-unknown` goes; its advice for Mature
     Growth, to read whether the NTM consensus carries a one-time item and take it out through
