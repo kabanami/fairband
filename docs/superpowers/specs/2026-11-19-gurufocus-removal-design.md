@@ -1146,4 +1146,48 @@ series built from several answers; the order of work inside a plan.
   branch's code. The moat control was driven in a browser in both themes on a scratch copy:
   every word reads as section 8.8 and the look as the approved sheets; a set takes about 0.2
   seconds there.
-
+- **2026-11-22, the founder: "Yes"**, to plan 3's five live steps, asked once with the list and
+  the figures of the acceptance: the backup; the server stopped and main merged and pushed; the
+  revalue that applies migration 010; the server started from main; this readout.
+- **2026-11-22, plan 3 live.** The backup is `fairband-before-method-1.8-2026-11-22.db`. It is
+  the only way back: the code before plan 3 refuses a database at schema 010. Main went to
+  88d4150 by a fast-forward and was pushed. Refresh 72, a revalue under method 1.8 and policy
+  v18, ran by the command line before the server started and applied migration 010; the server
+  runs on 8470 from main. The four conditions of section 10 hold on the live data. No snapshot
+  is refused "no moat class". The table holds 1,558 rows: 1,555 the file's at `fairband-moat-v1`
+  (161 Wide, 1,319 Narrow, 75 None) and an agent's row each for TTMI (None; Narrow before), NVO
+  (Narrow; Wide before) and RELX (Wide; Narrow before), each equal to its old override field by
+  field and with no snapshot. Overrides 31, 34 and 45 are dropped, "moved to the moat table"; 46
+  stay applied, 49 before, and the revalue dropped no other. Over the universe the classes are
+  162 Wide, 1,320 Narrow and 76 None, and over the 1,344 valued rows 161, 1,139 and 44; the
+  `moat_class` inputs of the 1,363 companies valued at refresh 68 read 161, 1,155 and 47. Every
+  valued snapshot's class is its table row's. The script's yearly read lists nothing. B-254,
+  B-260, B-261 and B-232 are closed; the limits met are B-273 to B-283. `moat_set` is new and
+  `company` answers `moatClass`, so every research session restarts its MCP process: a session
+  started before the merge cannot publish a report.
+- **2026-11-22, plan 3 live: what moved against refresh 71.** The counts are the acceptance's.
+  285 of the 1,488 companies that carry a class under both methods change class. Of the 1,344
+  values 165 move, 108 up and 57 down: 114 on Mature Growth, 49 on Mature Stable and 2 on a
+  revenue route; 54 go up and 12 down by 20% or more. 233 buy levels move, 145 up and 88 down:
+  the valued rows whose class changed, 68 of them with the value unchanged. No row crosses
+  between valued and refused, and no route or phase differs. 67 rows change designation. The
+  largest moves are P (92.86 to 145.45), BLSH, MANH, QLYS and WDFC up, and AUPH (25.20 to
+  17.31), WDAY, BIPC, FISV and MDLZ down. `value-spread` left 25 rows and came on 19;
+  `long-runway-high-growth` left 7 and came on 13. The three agents' classes now stand in the
+  mechanical value too: TTMI's goes from 103.92 to 94.35, NVO's from 63.15 to 50.37 and RELX's
+  from 19.73 to 22.20, and their reviews keep 55.08, 45.12 and 38.53. One review moves, CRM's,
+  from 213.35 to 175.15 (−17.91%): its mechanical value goes from 235.84 to 187.30 with the
+  file's Narrow in place of the Moat Score's Wide. The other 27 reviews keep their values, and
+  all 33 reports open.
+- **2026-11-22, plan 3 live: the page, and three points for the founder.** The page on the live
+  data, read without a write: KO shows WIDE MOAT and "Fairband's class, table version 1, judged
+  19 Nov 2026."; RELX, NVO and TTMI show the agent's chip, and their box opens with the reason
+  in an area of its own and the classes, the field and the buttons in view; CRM shows NARROW
+  MOAT; the screen's Moat column agrees with each stamp, and no company shows MOAT NOT SET. No
+  class was set on the live data, so the time of a write there is not measured. The cut of the
+  first file drafted no company, so the founder has no drafted entry to read beyond the log of
+  the decision document's 6.7. The newest judgment is in force, whoever made it (decision 6.4):
+  an agent's later verdict replaces a class the founder set, and the founder's later choice
+  replaces an agent's. RELX's stored reason, an agent's words of 2026-11-11, still names
+  GuruFocus's score. "Use Fairband's class" on TTMI, NVO or RELX changes no class, since the
+  file and the agent agree, but it ends the agent's ownership of the row.

@@ -18,6 +18,9 @@ each plan built, its acceptance and its readout). Plan 1 (sections 3 to 5; metho
 1.8, policy v18) is built: Fairband reads no GuruFocus data and makes no GuruFocus call. Where a
 section below says "None of it is started", it describes 2026-11-19.
 
+**Status, 2026-11-22:** live. Plan 3 runs on the live data since refresh 72 (method 1.8, policy
+v18, schema 010). Fairband needs one key, FMP's.
+
 The counts below come from the live data, refresh 68: 1,558 companies, 1,363 of them valued. They
 were read on 2026-11-19 without a write.
 
