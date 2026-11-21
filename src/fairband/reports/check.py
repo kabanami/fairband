@@ -6,14 +6,17 @@ full report and ten for a valuation review, which leaves out "The business" and 
 competition"; the stance, one of the policy's ``stance_words``; the required judgments, ``phase``,
 ``moat`` and ``belief`` on every report, ``roic`` where the route is Mature Growth or Mature
 Stable and ``target_margin`` where it is the revenue-growth route (High Growth, Young Growth) or
-Start-up; the headings, spec 13.1's in its order (``HEADINGS``); and, on a refused latest snapshot
-only, a secondary valuation on the snapshot the report would rest on, "the report needs a
-secondary valuation on snapshot <id>", which a company that can have none there (its current
-review values it, or the snapshot refused for a reason an agent cannot fix: no diluted share
-count, the reporting currency's or the share basis's, spec 2026-11-10 7.6) is spared. A valued
-snapshot needs none: the secondary valuation is the fallback where neither the route nor the
-review values the company, and the secondary route refuses one where either does (plan 3); the
-caller says which with ``secondary_on_snapshot`` (``store.secondary.no_secondary``).
+Start-up; the headings, spec 13.1's in its order (``HEADINGS``); the moat verdict on the snapshot,
+on every report: the company's row of the moat table an agent's whose snapshot is the one the
+report would rest on or one it reprices, "the report needs the moat verdict recorded on snapshot
+<id>: call moat_set", which the caller reads (``moat_on_snapshot``; spec 2026-11-19 8.7); and, on
+a refused latest snapshot only, a secondary valuation on the snapshot the report would rest on,
+"the report needs a secondary valuation on snapshot <id>", which a company that can have none
+there (its current review values it, or the snapshot refused for a reason an agent cannot fix: no
+diluted share count, the reporting currency's or the share basis's, spec 2026-11-10 7.6) is
+spared. A valued snapshot needs none: the secondary valuation is the fallback where neither the
+route nor the review values the company, and the secondary route refuses one where either does
+(plan 3); the caller says which with ``secondary_on_snapshot`` (``store.secondary.no_secondary``).
 
 The number check (``check_sections``) walks every part of every section and answers a finding for
 each failure, ``where`` the section and the part counted from 1 and the text at fault,
@@ -161,6 +164,7 @@ STRUCTURE = (
     "the stance word",
     "the required judgments",
     "the headings in the spec's order",
+    "the moat verdict on the snapshot",
     "a secondary valuation on a refused snapshot",
 )
 CHECKS = STRUCTURE + FAILURES
@@ -312,11 +316,15 @@ def structure_refusal(
     policy: Policy,
     secondary_on_snapshot: bool,
     snapshot_id: int,
+    *,
+    moat_on_snapshot: bool,
 ) -> str | None:
     """The sentence of the first structural check the submission fails (module docstring), in
     ``STRUCTURE``'s order; ``None`` when it passes them all. ``secondary_on_snapshot`` says
     whether the company's newest secondary valuation rests on ``snapshot_id``, the snapshot the
-    report would rest on, or one it reprices, or the company can have none there."""
+    report would rest on, or one it reprices, or the company can have none there;
+    ``moat_on_snapshot`` whether the company's row of the moat table is an agent's verdict
+    recorded on that snapshot or on one it reprices."""
     expected = headings(mode)
     if len(section_headings) != len(expected):
         count = len(section_headings)
@@ -334,6 +342,10 @@ def structure_refusal(
     for i, (got, want) in enumerate(zip(section_headings, expected, strict=True), 1):
         if got.strip() != want:
             return f"section {i} is headed {want!r}, not {got!r}"
+    if not moat_on_snapshot:
+        return (
+            f"the report needs the moat verdict recorded on snapshot {snapshot_id}: call moat_set"
+        )
     if not secondary_on_snapshot:
         return f"the report needs a secondary valuation on snapshot {snapshot_id}"
     return None

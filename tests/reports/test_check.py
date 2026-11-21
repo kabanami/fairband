@@ -448,7 +448,7 @@ def test_the_kill_cite_adds_no_failure_word() -> None:
         "a number with no reference",
         "a derived figure the engine has not emitted",
     )
-    assert len(CHECKS) == 11
+    assert len(CHECKS) == 12  # the moat verdict's check joined the structure (spec 2026-11-19 8.7)
 
 
 def test_a_derivation_rests_on_every_snapshot_of_its_operands(
@@ -842,10 +842,19 @@ def _refusal(
     judged: Sequence[str] = JUDGED,
     route: Route | None = "mature-growth",
     secondary_on_snapshot: bool = True,
+    moat_on_snapshot: bool = True,
 ) -> str | None:
     """The structural refusal of a submission on snapshot 412."""
     return structure_refusal(
-        mode, stance, section_headings, judged, route, policy, secondary_on_snapshot, 412
+        mode,
+        stance,
+        section_headings,
+        judged,
+        route,
+        policy,
+        secondary_on_snapshot,
+        412,
+        moat_on_snapshot=moat_on_snapshot,
     )
 
 
@@ -904,6 +913,7 @@ def test_the_twelve_and_ten_headings() -> None:
         "the stance word",
         "the required judgments",
         "the headings in the spec's order",
+        "the moat verdict on the snapshot",
         "a secondary valuation on a refused snapshot",
     )
     assert CHECKS == STRUCTURE + FAILURES
@@ -954,6 +964,26 @@ def test_a_report_needs_a_secondary_valuation_on_the_snapshot(policy: Policy) ->
     assert _refusal(policy, full, judged=JUDGED[:3], secondary_on_snapshot=False) == (
         "the report lacks the judgment roic"
     )
+
+
+def test_a_report_needs_the_moat_verdict_on_the_snapshot(policy: Policy) -> None:
+    """Spec 2026-11-19 8.7: the fifth structural check, on every report, valued snapshot or
+    refused: the agent's verdict on the moat recorded on the snapshot the report would rest on,
+    which the caller reads (``moat_on_snapshot``). Its sentence names that snapshot and the tool;
+    the four checks before it answer first, and it answers before the secondary valuation's."""
+    full, review = list(HEADINGS), list(headings("valuation review"))
+    unrecorded = "the report needs the moat verdict recorded on snapshot 412: call moat_set"
+    assert _refusal(policy, full, moat_on_snapshot=False) == unrecorded
+    assert _refusal(policy, review, "valuation review", moat_on_snapshot=False) == unrecorded
+    assert _refusal(policy, full, moat_on_snapshot=False, secondary_on_snapshot=False) == unrecorded
+    swapped = [full[0], full[2], full[1], *full[3:]]
+    assert _refusal(policy, swapped, moat_on_snapshot=False) == (
+        "section 2 is headed 'The business', not 'Industry and competition'"
+    )
+    assert _refusal(policy, full, judged=JUDGED[:3], moat_on_snapshot=False) == (
+        "the report lacks the judgment roic"
+    )
+    assert STRUCTURE.index("the moat verdict on the snapshot") == len(STRUCTURE) - 2
 
 
 # The refusals an agent cannot fix (spec 2026-11-10 7.6), as the engine words them, and the

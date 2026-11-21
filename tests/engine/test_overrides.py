@@ -24,6 +24,8 @@ from fairband.engine.overrides import (
     BRIDGE_ORDER,
     INPUT_OF,
     LABELS,
+    LOCKED,
+    MOAT_SET,
     TAGS,
     Lifetime,
     Override,
@@ -120,16 +122,40 @@ def test_a_range_includes_its_ends(policy: Policy) -> None:
 
 
 def test_check_refuses_a_word_outside_its_words(policy: Policy) -> None:
-    assert checked(policy, "moat.class", "Huge", "mature-growth") == (
+    # the moat class's words are a sensitivity reading's alone: an override of it is refused first
+    assert check_input("moat.class", "Huge", "mature-growth", policy) == (
         "refused-unit",
         "moat.class takes None, Narrow or Wide",
     )
-    assert checked(policy, "moat.class", 2.0, "mature-growth")[0] == "refused-unit"
+    assert check_input("moat.class", 2.0, "mature-growth", policy)[0] == "refused-unit"
+    assert checked(policy, "earnings.sbc_basis", "partly", "mature-growth") == (
+        "refused-unit",
+        "earnings.sbc_basis takes includes or excludes",
+    )
     assert checked(policy, "growth.belief", "high", "mature-growth") == (
         "refused-unit",
         "growth.belief takes −20% to 60%",
     )
     assert checked(policy, "phase", "Mature Growth", "start-up") == ("applied", "")
+
+
+def test_an_override_of_the_moat_is_refused_locked(policy: Policy) -> None:
+    """Spec 2026-11-19 8.7: the class is the moat table's, which an agent sets with ``moat_set``,
+    so ``check_override`` refuses the tag before its other rules, whatever the route, the value,
+    the evidence or the lifetime; ``check_input``, a sensitivity reading's rules, takes it as
+    before, since a reading may vary the class and changes no input."""
+    assert MOAT_SET == "moat.class is the moat table's: record the verdict with moat_set"
+    assert check_override(
+        "moat.class", "Wide", "mature-stable", policy, ["filing"], "lasting", None
+    ) == ("refused-locked", MOAT_SET)
+    assert check_input("moat.class", "Wide", "mature-stable", policy) == ("applied", "")
+    # first: before the route, the words, the evidence and the lifetime
+    assert checked(policy, "moat.class", "Huge", "decline", [], "period-tied") == (
+        "refused-locked",
+        MOAT_SET,
+    )
+    assert check_input("moat.class", "Narrow", "decline", policy)[0] == "refused-route"
+    assert "moat.class" in TAGS and "moat.class" not in LOCKED  # a tag still, a reading's axis
 
 
 def test_check_refuses_a_lasting_balance_correction(policy: Policy) -> None:

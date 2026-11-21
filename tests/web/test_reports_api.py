@@ -3,9 +3,11 @@
 Growth, refused for its target margin) and HGCO (High Growth), each with one snapshot and a
 secondary valuation on it (``secondaries``): on AAL's refused snapshot the fallback a report needs,
 on AAPL's and HGCO's valued ones a record made before plan 3 that a report there need not name;
-once a margin override values AAL (``_aal_review``), AAL's is such a record too. A clean
-submission publishes, completes the work item it names and stores its judgments, kill criteria and
-news items; a rejected one stores nothing but its ledger row."""
+once a margin override values AAL (``_aal_review``), AAL's is such a record too. Every test starts
+with an agent's moat verdict on each company's snapshot (``verdicts``), which a report needs there
+(spec 2026-11-19 8.7); a test that writes a later snapshot records one on it (``record_verdict``).
+A clean submission publishes, completes the work item it names and stores its judgments, kill
+criteria and news items; a rejected one stores nothing but its ledger row."""
 
 from contextlib import closing
 from dataclasses import replace
@@ -27,22 +29,25 @@ from support.reports import snapshot_id as _snapshot_id
 from support.reports import submit as _submit
 from support.vendor import FIXTURES, Vendor
 from support.web import HEADER, NOW, TODAY
+from support.web_app import record_verdict
 
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy
+from fairband.policy.moat import MoatTable
 from fairband.reports.check import HEADINGS, NO_REFERENCE, UNRESOLVED
 from fairband.reports.refs import day_words
 from fairband.store.db import connect
 from fairband.store.ledger import Writer
+from fairband.store.moat import file_moat, set_moat, set_snapshot
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh
 from fairband.store.reviews import insert_review
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 
-pytestmark = pytest.mark.usefixtures("secondaries")
+pytestmark = pytest.mark.usefixtures("secondaries", "verdicts")
 
 # AAL's route, the revenue-growth route's, asks for the target margin in place of the ROIC.
 REFUSED_JUDGMENTS = [
@@ -592,6 +597,68 @@ def test_a_judgment_s_text_holds_no_figure(client: TestClient) -> None:
     assert client.get("/api/companies/AAPL/reports").json() == {"reports": []}
 
 
+def test_a_report_needs_the_agent_s_verdict(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    moat_file: MoatTable,
+) -> None:
+    """Spec 2026-11-19 8.7: a report is refused, with nothing stored, unless the company's row of
+    the moat table is an agent's whose snapshot is the latest or one the latest reprices: not with
+    no row, the file's row, the owner's row on the snapshot, an agent's row moved by migration 010
+    (on no snapshot) or an agent's on an older snapshot. On the latest, or on the one a price
+    refresh repriced, it publishes."""
+    sid = _snapshot_id(client)
+    unrecorded = f"the report needs the moat verdict recorded on snapshot {sid}: call moat_set"
+    owner = Writer("owner", None, None)
+    agent = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    filing = {"kind": "filing", "ref": "10-K 2025", "note": None}
+
+    def refused(answer: str = unrecorded, snapshot_id: int = sid, **changes: Any) -> None:
+        r = _submit(client, _body(snapshot_id, **changes))
+        assert (r.status_code, r.json()) == (400, {"detail": answer})
+
+    with closing(connect(db_path)) as conn:
+        conn.execute("DELETE FROM moat_classes WHERE symbol = 'AAPL'")
+        conn.commit()
+    refused()  # no row
+    with closing(connect(db_path)) as conn:
+        file_moat(conn, "AAPL", moat_file, NOW)
+    refused()  # the file's
+    with closing(connect(db_path)) as conn:
+        set_moat(conn, "AAPL", "Wide", owner, "pricing power", None, NOW)
+        set_snapshot(conn, "AAPL", sid)
+    refused()  # the owner's, on the snapshot
+    with closing(connect(db_path)) as conn:
+        set_moat(conn, "AAPL", "Wide", agent, "the class stands", [filing], NOW)
+    refused()  # an agent's on no snapshot, as migration 010 moves an applied override
+    # the earlier checks answer first
+    refused("the report lacks the judgment roic", judgments=JUDGMENTS[:3])
+    assert client.get("/api/companies/AAPL/reports").json() == {"reports": []}
+    assert _ledger(client) == []  # a refusal before the number check is no ledger row
+
+    with closing(connect(db_path)) as conn:
+        set_snapshot(conn, "AAPL", sid)
+    assert _published(client, _body(sid))["snapshotId"] == sid  # on the latest
+    with closing(connect(db_path)) as conn:
+        cited = snapshot_row(conn, sid)
+        assert cited is not None and cited.value is not None
+        repriced = reprice(results["AAPL"], 160.0, date(2026, 11, 2), policy)
+        priced = insert_snapshot(conn, repriced, cited.refresh_id, clock=lambda: NOW)
+    assert _snapshot_id(client) == priced
+    assert _published(client, _body(sid))["snapshotId"] == sid  # the latest reprices it
+    with closing(connect(db_path)) as conn:
+        revalued = replace(results["AAPL"], value=cited.value + 1.0)
+        latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    plain = [{"heading": h, "parts": ["Plain words."]} for h in HEADINGS]
+    older = f"the report needs the moat verdict recorded on snapshot {latest}: call moat_set"
+    refused(older, latest, sections=plain)  # an agent's on an older snapshot
+    record_verdict(db_path, "AAPL", latest)
+    assert _published(client, _body(latest, sections=plain))["snapshotId"] == latest
+    assert len(client.get("/api/companies/AAPL/reports").json()["reports"]) == 3
+
+
 def test_a_secondary_on_an_older_snapshot_does_not_count(
     client: TestClient,
     db_path: Path,
@@ -614,6 +681,7 @@ def test_a_secondary_on_an_older_snapshot_does_not_count(
         revalued = replace(repriced, data_date=repriced.data_date + timedelta(days=1))
         latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
     assert _snapshot_id(client, "AAL") == latest
+    record_verdict(db_path, "AAL", latest, "None")
     detail = f"the report needs a secondary valuation on snapshot {latest}"
     for body in (_refused_body(latest), _refused_body(sid)):
         r = _submit(client, body, "AAL")
@@ -634,6 +702,7 @@ def test_a_valued_row_revalued_needs_no_secondary(
         assert cited is not None and cited.value is not None
         revalued = replace(results["AAPL"], value=cited.value + 1.0)
         latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    record_verdict(db_path, "AAPL", latest)
     sections = [{"heading": h, "parts": ["Plain words."]} for h in HEADINGS]
     report = _published(client, _body(latest, sections=sections))
     assert (report["snapshotId"], report["secondaryId"]) == (latest, None)
@@ -689,6 +758,7 @@ def test_a_refused_row_the_review_values_needs_no_secondary(
         assert cited is not None and cited.value is None
         revalued = replace(results["AAL"], data_date=results["AAL"].data_date + timedelta(days=1))
         latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    record_verdict(db_path, "AAL", latest, "None")
     review_id = _aal_review(db_path, policy, results, latest, 0.2)
     report = _published(client, _refused_body(latest), "AAL")
     assert (report["snapshotId"], report["reviewId"], report["secondaryId"]) == (
@@ -748,6 +818,7 @@ def test_a_refused_row_whose_review_refused_still_needs_a_secondary(
         assert cited is not None
         revalued = replace(results["AAL"], data_date=results["AAL"].data_date + timedelta(days=1))
         latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    record_verdict(db_path, "AAL", latest, "None")
     _aal_review(db_path, policy, results, latest, None)
     r = _submit(client, _refused_body(latest), "AAL")
     detail = f"the report needs a secondary valuation on snapshot {latest}"
@@ -826,6 +897,7 @@ def test_a_company_that_can_have_no_secondary_publishes_without_one(
         refresh = latest_refresh(conn)
         assert refresh is not None
         sid = insert_snapshot(conn, result, refresh.id, clock=lambda: NOW)
+    record_verdict(db_path, symbol, sid)
     sections = [{"heading": h, "parts": ["Plain words."]} for h in HEADINGS]
     body = _body(sid, sections=sections)
     report = _published(client, body, symbol)

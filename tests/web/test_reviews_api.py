@@ -30,14 +30,18 @@ from support.web import CREATED, HEADER, NOW, TODAY
 from fairband.engine import METHOD_VERSION
 from fairband.engine.anchor import sales_class
 from fairband.engine.classifier import Deciles
-from fairband.engine.overrides import TAGS, Override, current_reading
+from fairband.engine.overrides import TAGS, Override, OverrideTag, current_reading
+from fairband.engine.review import review_company
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.types import ValuationResult, result_from_json
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
 from fairband.store.db import connect
+from fairband.store.ledger import Writer
+from fairband.store.overrides import drop_override, insert_override, set_review
 from fairband.store.refreshes import create_refresh, finish_refresh, latest_deciles, save_deciles
+from fairband.store.reviews import insert_review
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
@@ -57,6 +61,8 @@ BELIEF_8 = {
     "lifetime": "lasting",
 }
 MOAT_NARROW = BELIEF_8 | {"tag": "moat.class", "new": "Narrow", "reason": "the patents lapse"}
+RUNWAY_20 = BELIEF_8 | {"tag": "return.runway", "new": 0.2, "reason": "the growth is bought"}
+MOAT_SET = "moat.class is the moat table's: record the verdict with moat_set"
 LOCKED_G = BELIEF_8 | {"tag": "terminal_growth", "new": 0.03}
 G_T_LOCKED = "g_T is a locked input: the terminal growth ceiling"
 OWNERS_REFUSAL = "an override is an agent's write"
@@ -198,6 +204,115 @@ def test_a_refused_override_is_stored_with_its_state(client: TestClient) -> None
     assert client.get("/api/companies/AAPL/reviews").json() == {"reviews": []}
 
 
+def test_the_override_route_stores_it_refused(client: TestClient) -> None:
+    """Spec 2026-11-19 8.7: an override of ``moat.class`` is refused before its other rules,
+    ``refused-locked`` with the sentence that points to ``moat_set``, whatever its value or its
+    evidence: stored with the engine's reading as its old value and its ledger row, it applies
+    nothing, replaces nothing and recomputes no review."""
+    applied = _post(client, BELIEF_8)
+    for body in (MOAT_NARROW, MOAT_NARROW | {"new": "Huge", "evidence": []}):
+        r = client.post("/api/companies/AAPL/overrides", json=body, headers=AGENT)
+        assert (r.status_code, r.json()["detail"]) == (400, MOAT_SET)
+        stored = r.json()["override"]
+        assert (stored["state"], stored["message"], stored["old"], stored["reviewId"]) == (
+            "refused-locked",
+            MOAT_SET,
+            "Wide",  # AAPL's class, the moat table's
+            None,
+        )
+    assert [(o["tag"], o["state"]) for o in _overrides(client)] == [
+        ("moat.class", "refused-locked"),
+        ("moat.class", "refused-locked"),
+        ("growth.belief", "applied"),
+    ]
+    latest = client.get("/api/companies/AAPL/reviews/latest").json()
+    assert (latest["id"], latest["overrideIds"]) == (
+        applied["review"]["id"],
+        [applied["override"]["id"]],
+    )
+    entries = client.get("/api/companies/AAPL/ledger").json()["entries"]
+    assert entries[0]["summary"] == f"moat.class refused-locked: {MOAT_SET}"
+
+
+def test_a_stored_bridge_with_a_moat_line_still_reads(
+    client: TestClient,
+    db_path: Path,
+    results: dict[str, ValuationResult],
+    stored_inputs: dict[str, CompanyInputs],
+    policy: Policy,
+) -> None:
+    """Spec 2026-11-19 8.7: a review written before the tag's refusal holds a ``moat.class`` line
+    beside a belief's, and migration 010 dropped the moat's override, "moved to the moat table",
+    while the belief stays applied. The reads still serve the line: the reviews' as stored, the
+    company detail's and the Research tab's with its label, its unit and its reason, and the
+    overrides' read the dropped override."""
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    mechanical = results["AAPL"]
+
+    def stored(conn: sqlite3.Connection, tag: OverrideTag, new: float | str, why: str) -> Override:
+        old = current_reading(mechanical, tag)
+        unit = TAGS[tag].unit
+        found = insert_override(
+            conn,
+            "AAPL",
+            tag,
+            old,
+            new,
+            unit,
+            why,
+            [TRANSCRIPT],
+            "lasting",
+            None,
+            None,
+            snapshot_id,
+            writer,
+            NOW,
+            "applied",
+            "",
+        )
+        return Override(found, tag, new, "agent", writer.actor, NOW, why)
+
+    with closing(connect(db_path)) as conn:
+        belief = stored(conn, "growth.belief", 0.08, "guidance raised")
+        narrow = stored(conn, "moat.class", "Narrow", "the patents lapse")
+        review = review_company(
+            stored_inputs["AAPL"], universe_deciles(), policy, TODAY, [belief, narrow], mechanical
+        )
+        review_id = insert_review(conn, review, "AAPL", snapshot_id, None, clock=lambda: NOW)
+        for override in (belief, narrow):
+            assert override.id is not None
+            set_review(conn, override.id, review_id)
+        assert narrow.id is not None
+        drop_override(conn, narrow.id, "moved to the moat table", NOW)
+    moat_line = review.bridge[1]
+    assert moat_line.delta is not None
+
+    latest = client.get("/api/companies/AAPL/reviews/latest").json()
+    assert (latest["id"], latest["value"]) == (review_id, review.result.value)
+    assert [line["tag"] for line in latest["bridge"]] == ["growth.belief", "moat.class"]
+    line = latest["bridge"][1]
+    assert (line["old"], line["new"], line["delta"]) == (
+        "Wide",
+        "Narrow",
+        pytest.approx(moat_line.delta),
+    )
+    [listed] = client.get("/api/companies/AAPL/reviews").json()["reviews"]
+    assert listed["bridge"] == latest["bridge"]
+    served = client.get("/api/companies/AAPL").json()["review"]["bridge"]
+    assert [(x["label"], x["unit"], x["reason"]) for x in served] == [
+        ("belief", "ratio", "guidance raised"),
+        ("moat", "class", "the patents lapse"),
+    ]
+    assert (served[1]["old"], served[1]["new"]) == ("Wide", "Narrow")
+    [drawn] = client.get("/api/companies/AAPL/page/research").json()["records"]["reviews"]
+    assert drawn["bridge"] == served
+    assert [(o["id"], o["state"], o["dropReason"]) for o in _overrides(client)] == [
+        (narrow.id, "dropped", "moved to the moat table"),
+        (belief.id, "applied", None),
+    ]
+
+
 @pytest.mark.parametrize(
     "body,state,message",
     [
@@ -333,7 +448,7 @@ def test_a_write_that_keeps_the_route_drops_nothing(client: TestClient) -> None:
     """On AAPL's Mature Growth route a post, a replacement, a phase override of the phase it has
     and the drop of it each leave the route as it was: every answer's ``dropped`` is empty."""
     assert _post(client, BELIEF_8)["dropped"] == []
-    assert _post(client, MOAT_NARROW)["dropped"] == []
+    assert _post(client, RUNWAY_20)["dropped"] == []
     assert _post(client, BELIEF_8 | {"new": 0.09})["dropped"] == []
     same = _post(client, PHASE_MATURE_GROWTH)
     assert same["dropped"] == []
@@ -358,10 +473,10 @@ def test_a_second_override_on_a_tag_replaces_the_first(client: TestClient) -> No
 
 def test_a_drop_recomputes_or_clears_the_review(client: TestClient) -> None:
     belief = _post(client, BELIEF_8)["override"]["id"]
-    moat = _post(client, MOAT_NARROW)["override"]["id"]
+    runway = _post(client, RUNWAY_20)["override"]["id"]
     both = client.get("/api/companies/AAPL/reviews/latest").json()
-    assert both["overrideIds"] == [belief, moat]
-    assert [line["tag"] for line in both["bridge"]] == ["growth.belief", "moat.class"]
+    assert both["overrideIds"] == [belief, runway]
+    assert [line["tag"] for line in both["bridge"]] == ["growth.belief", "return.runway"]
 
     r = _drop(client, belief)
     assert r.status_code == 200, r.text
@@ -370,8 +485,8 @@ def test_a_drop_recomputes_or_clears_the_review(client: TestClient) -> None:
         "dropped",
         "guidance withdrawn",
     )
-    assert body["review"]["overrideIds"] == [moat]
-    assert [line["tag"] for line in body["bridge"]] == ["moat.class"]
+    assert body["review"]["overrideIds"] == [runway]
+    assert [line["tag"] for line in body["bridge"]] == ["return.runway"]
     latest = client.get("/api/companies/AAPL/reviews/latest").json()
     assert latest["id"] == body["review"]["id"] and latest["value"] != both["value"]
 
@@ -383,11 +498,11 @@ def test_a_drop_recomputes_or_clears_the_review(client: TestClient) -> None:
     r = _drop(client, 99)
     assert (r.status_code, r.json()["detail"]) == (404, "no override 99")
 
-    body = _drop(client, moat).json()
+    body = _drop(client, runway).json()
     assert (body["override"]["state"], body["review"], body["bridge"]) == ("dropped", None, [])
     assert client.get("/api/companies/AAPL/reviews/latest").status_code == 404
     reviews = client.get("/api/companies/AAPL/reviews").json()["reviews"]
-    assert [r["overrideIds"] for r in reviews] == [[moat], [belief, moat], [belief]]
+    assert [r["overrideIds"] for r in reviews] == [[runway], [belief, runway], [belief]]
     assert all("result" not in r and r["bridge"] for r in reviews)
 
 
@@ -395,7 +510,7 @@ def test_settings_changed_refuses_an_override(client: TestClient) -> None:
     applied = _post(client, BELIEF_8)["override"]["id"]
     r = client.put("/api/settings", json={"changes": {"required_return": 0.1}}, headers=HEADER)
     assert r.status_code == 200
-    r = client.post("/api/companies/AAPL/overrides", json=MOAT_NARROW, headers=AGENT)
+    r = client.post("/api/companies/AAPL/overrides", json=RUNWAY_20, headers=AGENT)
     assert (r.status_code, r.json()) == (409, {"detail": "settings changed: run a revalue"})
     r = _drop(client, applied)
     assert (r.status_code, r.json()) == (409, {"detail": "settings changed: run a revalue"})
@@ -961,7 +1076,7 @@ def test_new_deciles_refuse_an_override_and_a_drop(
     them the classifier puts AAPL in Mature Stable, so no review is recomputed from the old
     snapshot until a revalue."""
     belief = _post(client, BELIEF_8)["override"]["id"]
-    moat = _post(client, MOAT_NARROW)["override"]["id"]
+    runway = _post(client, RUNWAY_20)["override"]["id"]
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
     reviews = client.get("/api/companies/AAPL/reviews").json()
     deciles = universe_deciles()
@@ -976,7 +1091,7 @@ def test_new_deciles_refuse_an_override_and_a_drop(
     r = _drop(client, belief)
     assert (r.status_code, r.json()) == (409, _moved(snapshot_id))
     assert [(o["id"], o["state"]) for o in _overrides(client)] == [
-        (moat, "applied"),
+        (runway, "applied"),
         (belief, "applied"),
     ]
     assert client.get("/api/companies/AAPL/reviews").json() == reviews

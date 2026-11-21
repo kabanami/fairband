@@ -82,11 +82,12 @@ are notes. (method 8)
 
 ## What a research agent can change
 
-An agent, an AI model the user connects, changes inputs only through overrides. Each sets one of
-twenty-five inputs, with a reason and evidence. The hurdle rate, terminal growth and reported
-figures are locked. The engine computes the reviewed value beside the mechanical one. Where neither
-exists, it can compute a secondary valuation from the agent's inputs. (method 14, 14.1 to 14.5,
-15)
+An agent, an AI model the user connects, changes the method's inputs through overrides. Each sets
+one of twenty-four inputs, with a reason and evidence. The moat class is not one: an agent records
+its verdict on the class, with its reasons, in each review, and the company is valued again. The
+hurdle rate, terminal growth and reported figures are locked. The engine computes the reviewed
+value beside the mechanical one. Where neither exists, it can compute a secondary valuation from
+the agent's inputs. (method 4.9, 14, 14.1 to 14.5, 15)
 
 ## Limits
 

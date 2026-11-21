@@ -49,13 +49,17 @@ ref, period?}``, from any writer. A judgment is a record and takes no other key:
 company's latest snapshot (404 "no snapshot for <symbol>" without one): the structural checks
 (``check.structure_refusal``), each a 400 with its sentence, the required judgments by the route
 of the company's current review when it rests on that snapshot, else the snapshot's (its phase's
-for a refused row), and, on a refused latest snapshot, the company's newest secondary valuation
-resting on that snapshot or one it reprices, else "the report needs a secondary valuation on
-snapshot <id>", unless the company can have none there (``store.secondary.no_secondary``): its
-current review rests on that snapshot or one it reprices and has a value, "the review values the
-company" (an override routed it: the secondary valuation is the fallback where neither the route
-nor the review values the company, plan 3), or the snapshot refused for a reason an agent cannot
-fix (``store.secondary.cannot_fix``: no diluted share count, the reporting currency's or the share
+for a refused row); the moat verdict, the company's row of the moat table an agent's whose
+snapshot is the latest or one the latest reprices (``refs.same_snapshot``), else "the report needs
+the moat verdict recorded on snapshot <id>: call moat_set", so a row with no snapshot (an
+override migration 010 moved), the file's and the owner's do not count (spec 2026-11-19 8.7);
+and, on a refused latest snapshot, the company's newest secondary valuation resting on that
+snapshot or one it reprices, else "the report needs a secondary valuation on snapshot <id>",
+unless the company can have none there (``store.secondary.no_secondary``): its current review
+rests on that snapshot or one it reprices and has a value, "the review values the company" (an
+override routed it: the secondary valuation is the fallback where neither the route nor the review
+values the company, plan 3), or the snapshot refused for a reason an agent cannot fix
+(``store.secondary.cannot_fix``: no diluted share count, the reporting currency's or the share
 basis's, spec 2026-11-10 7.6), the reason the refusal's own sentence; a valued latest snapshot
 needs none, the secondary route refusing one there (``no_secondary``'s first reason, "the route
 values the company"); a work item it names must be the company's (404 "no work
@@ -143,6 +147,7 @@ from fairband.store.companies import latest_company
 from fairband.store.db import transaction
 from fairband.store.inbox import Mode, WorkItem, complete_item, work_item
 from fairband.store.ledger import Writer, record
+from fairband.store.moat import moat_row
 from fairband.store.refreshes import latest_deciles
 from fairband.store.reports import (
     JudgmentKind,
@@ -388,6 +393,7 @@ def add_report_routes(
                 current,
                 secondary is not None or exempt,
                 latest.id,
+                moat_on_snapshot=_verdict_on(conn, symbol, latest.id),
             )
             if refusal is not None:
                 raise HTTPException(400, refusal)
@@ -557,6 +563,18 @@ def _open_item(conn: sqlite3.Connection, item_id: int | None, symbol: str) -> Wo
     if item.state not in ("pending", "claimed"):
         raise HTTPException(409, f"work item {item_id} is {item.state}")
     return item
+
+
+def _verdict_on(conn: sqlite3.Connection, symbol: str, latest_id: int) -> bool:
+    """Whether the company's row of the moat table is an agent's verdict recorded on the latest
+    snapshot, ``latest_id``, or on one it reprices (spec 2026-11-19 8.7)."""
+    row = moat_row(conn, symbol)
+    return (
+        row is not None
+        and row.source == "agent"
+        and row.snapshot_id is not None
+        and same_snapshot(conn, row.snapshot_id, latest_id)
+    )
 
 
 def _route(result: ValuationResult) -> Route | None:

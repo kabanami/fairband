@@ -1,7 +1,8 @@
 """The Research tab's read (the Research tab's design, 7.5 and 8.1), on the database of
 ``conftest.py``: AAPL valued on the Mature Growth route at a price of $150, AAL refused for its
 target margin and HGCO valued on the revenue growth route, each with one snapshot and a secondary
-valuation on it where a test asks for them (``secondaries``).
+valuation on it where a test asks for them (``secondaries``), and an agent's moat verdict on it
+where a test publishes a report (``verdicts``, spec 2026-11-19 8.7).
 
 ``report_call`` is read on the database's own rows, their figures changed (``dataclasses.replace``):
 a snapshot, a review and a secondary valuation; ``of_report`` on rows made here. The route is read
@@ -21,6 +22,7 @@ from support.page_payloads import QUOTE
 from support.reports import AGENT, body, published, snapshot_id
 from support.vendor import Vendor, passthrough_client
 from support.web import HEADER, NOW, TODAY
+from support.web_app import record_verdict
 
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
@@ -401,6 +403,7 @@ def _aal_review(db_path: Path, policy: Policy, results: dict[str, ValuationResul
         return insert_review(conn, review, "AAL", snapshot.id, None, clock=lambda: NOW)
 
 
+@pytest.mark.usefixtures("verdicts")  # a report needs it on its snapshot
 def test_the_latest_report_and_a_named_revision(client: TestClient) -> None:
     sid = snapshot_id(client)
     older = published(client, body(sid))
@@ -417,6 +420,7 @@ def test_the_latest_report_and_a_named_revision(client: TestClient) -> None:
     assert latest["reports"] == client.get("/api/companies/AAPL/reports").json()["reports"]
 
 
+@pytest.mark.usefixtures("verdicts")  # a report needs it on its snapshot
 def test_the_report_is_the_report_read_s_answer(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:
@@ -447,6 +451,7 @@ def test_the_report_is_the_report_read_s_answer(
     assert answer["ofReport"] == {"killCriteria": own, "newsItems": research["newsItems"]}
 
 
+@pytest.mark.usefixtures("verdicts")  # a report needs it on its snapshot
 def test_the_call_is_of_the_records_the_report_rests_on(
     client: TestClient,
     db_path: Path,
@@ -481,6 +486,7 @@ def test_the_call_is_of_the_records_the_report_rests_on(
     assert (reviewed["value"], reviewed["basis"]) == (review.value, "reviewed")
 
 
+@pytest.mark.usefixtures("verdicts")  # a report needs it on its snapshot
 def test_another_company_s_report_and_none(
     client: TestClient, db_path: Path, policy: Policy
 ) -> None:
@@ -490,6 +496,7 @@ def test_another_company_s_report_and_none(
         assert refresh is not None
         result = value_company(inputs, universe_deciles(), policy, TODAY)
         sid = insert_snapshot(conn, result, refresh.id, clock=lambda: NOW)
+    record_verdict(db_path, "MSFT", sid)
     report = published(client, body(sid, sections=PLAIN), "MSFT")
     r = client.get("/api/companies/AAPL/page/research", params={"report": report["id"]})
     detail = f"report {report['id']} is MSFT's, not AAPL's"
@@ -581,6 +588,7 @@ def test_a_review_s_bridge_lines_carry_their_label_and_unit(
     }
 
 
+@pytest.mark.usefixtures("verdicts")  # a report needs it on its snapshot
 def test_the_read_calls_no_vendor(
     tmp_path: Path, db_path: Path, policy: Policy, vendor: Vendor, passthrough: Passthrough
 ) -> None:

@@ -371,6 +371,20 @@ def test_the_citation_reference_names_the_six_failures() -> None:
         assert f"`{form}:" in text, form
 
 
+def test_the_citation_reference_names_the_moat_verdict_check() -> None:
+    """Spec 2026-11-19 8.7: the structural checks gain the moat verdict on the snapshot, after the
+    headings and before the secondary valuation's, as the check names it and orders it; the
+    reference quotes its sentence as the server words it and names `moat_set`."""
+    citations = _flat(_read(CITATIONS))
+    structure = citations.split("## Before the numbers: the structure", 1)[1]
+    moat, secondary = STRUCTURE[-2], STRUCTURE[-1]
+    assert moat == "the moat verdict on the snapshot"
+    assert structure.index("the headings, in order") < structure.index(moat)
+    assert structure.index(moat) < structure.index(secondary)
+    assert "the report needs the moat verdict recorded on snapshot <id>: call moat_set" in structure
+    assert "`moat_set`" in structure
+
+
 def test_the_template_example_passes_the_structural_checks_and_the_token_rule() -> None:
     example = _example(TEMPLATE.read_text(encoding="utf-8"))
     assert set(example) <= {argument.rstrip("?") for argument in _served()["report_submit"]}
@@ -386,6 +400,7 @@ def test_the_template_example_passes_the_structural_checks_and_the_token_rule() 
         load_policy(),
         secondary_on_snapshot=True,  # a valued snapshot needs none: the route values the company
         snapshot_id=412,
+        moat_on_snapshot=True,  # the agent recorded its moat verdict on the snapshot
     )
     assert refusal is None, refusal
     forms = set()

@@ -18,7 +18,7 @@ from support.payloads import split_rows, store_payloads
 from support.web import CREATED, HEADER, NOW
 
 from fairband.engine.classifier import Deciles
-from fairband.engine.overrides import Override, OverrideTag
+from fairband.engine.overrides import Override, OverrideTag, current_reading
 from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.types import Route, ValuationResult
 from fairband.policy import Policy
@@ -114,7 +114,7 @@ def _sensitivities(client: TestClient, symbol: str = "AAPL") -> list[dict[str, A
     return [e for e in entries if e["kind"] == "sensitivity"]
 
 
-@pytest.mark.usefixtures("secondaries")  # a report needs one on its snapshot
+@pytest.mark.usefixtures("secondaries", "verdicts")  # a report needs both on its snapshot
 def test_a_sensitivity_is_stored_and_cited(
     client: TestClient, stored_inputs: dict[str, CompanyInputs], policy: Policy
 ) -> None:
@@ -179,7 +179,7 @@ def test_a_sensitivity_is_stored_and_cited(
     assert f"### Sensitivity {found['id']}: the belief by the runway return" in text
 
 
-@pytest.mark.usefixtures("secondaries")
+@pytest.mark.usefixtures("secondaries", "verdicts")
 def test_a_refused_cell_is_null_and_cannot_be_cited(
     client: TestClient, stored_inputs: dict[str, CompanyInputs], policy: Policy
 ) -> None:
@@ -330,6 +330,40 @@ def test_an_unclassified_row_reads_an_input_only_with_a_phase(
     ]
 
 
+def test_a_grid_still_varies_the_moat(
+    client: TestClient,
+    results: dict[str, ValuationResult],
+    stored_inputs: dict[str, CompanyInputs],
+    policy: Policy,
+) -> None:
+    """Spec 2026-11-19 8.7: an override of ``moat.class`` is refused, but a reading may vary the
+    class on an axis, as the playbook's Mature Stable grid does (the runway return by the moat):
+    a reading changes no input. AAPL's pair in force is its runway return and the moat table's
+    Wide; no override is stored and no review is written."""
+    runway = current_reading(results["AAPL"], "return.runway")
+    assert isinstance(runway, float)
+    grid = {
+        "rowTag": "return.runway",
+        "rowValues": [0.2, runway],
+        "colTag": "moat.class",
+        "colValues": ["None", "Narrow", "Wide"],
+    }
+    r = client.post("/api/companies/AAPL/sensitivities", json=grid, headers=AGENT)
+    assert r.status_code == 201, r.text
+    found = r.json()
+    assert (found["reviewId"], found["current"]) == (None, [2, 3])
+    assert found["cells"] == [
+        [
+            _engine(stored_inputs["AAPL"], policy, {"return.runway": c, "moat.class": moat})
+            for moat in ("None", "Narrow", "Wide")
+        ]
+        for c in (0.2, runway)
+    ]
+    assert found["cells"][1][2] == pytest.approx(results["AAPL"].value)  # the value in force
+    assert client.get("/api/companies/AAPL/overrides").json()["overrides"] == []
+    assert client.get("/api/companies/AAPL/reviews").json() == {"reviews": []}
+
+
 def test_settings_changed_refuses_a_sensitivity(client: TestClient) -> None:
     r = client.put("/api/settings", json={"changes": {"required_return": 0.1}}, headers=HEADER)
     assert r.status_code == 200
@@ -366,7 +400,7 @@ def test_a_missing_company_or_record_is_404(client: TestClient) -> None:
     assert (r.status_code, r.json()) == (404, {"detail": "no sensitivity 99"})
 
 
-@pytest.mark.usefixtures("secondaries")
+@pytest.mark.usefixtures("secondaries", "verdicts")
 def test_a_reading_goes_stale_when_the_review_moves(client: TestClient) -> None:
     """A reading taken under no review, then an override on the same snapshot: the company's
     current review is a new one, so a cite of the reading is wrong snapshot, "the review moved";
@@ -374,14 +408,14 @@ def test_a_reading_goes_stale_when_the_review_moves(client: TestClient) -> None:
     sid = _snapshot_id(client)
     first = _post(client, GRID)
     assert first["reviewId"] is None
-    moat = {
-        "tag": "moat.class",
-        "new": "Narrow",
-        "reason": "the patents lapse",
+    runway = {
+        "tag": "return.runway",
+        "new": 0.3,
+        "reason": "the growth is bought",
         "evidence": [TRANSCRIPT],
         "lifetime": "lasting",
     }
-    r = client.post("/api/companies/AAPL/overrides", json=moat, headers=AGENT)
+    r = client.post("/api/companies/AAPL/overrides", json=runway, headers=AGENT)
     assert r.status_code == 201, r.text
     review_id = r.json()["review"]["id"]
     assert r.json()["review"]["snapshotId"] == sid  # the same snapshot
@@ -402,7 +436,7 @@ def test_a_reading_goes_stale_when_the_review_moves(client: TestClient) -> None:
     )
     second = _post(client, GRID)
     assert second["reviewId"] == review_id
-    belief = moat | {"tag": "growth.belief", "new": 0.08, "reason": "the cycle"}
+    belief = runway | {"tag": "growth.belief", "new": 0.08, "reason": "the cycle"}
     r = client.post("/api/companies/AAPL/overrides", json=belief, headers=AGENT)
     assert r.status_code == 201, r.text
     r = submitted(second)

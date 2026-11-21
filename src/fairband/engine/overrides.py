@@ -5,13 +5,16 @@ An override changes one tagged input. ``TAGS`` names the twenty-five inputs, the
 each, its unit and, for the three word inputs, its words; the numeric ranges are the policy's
 ``override_ranges``, the ends included but the lower end, 0, of the two NTM anchors, the runway
 return, the diluted share count and the committed shares, which each must be above
-(``TagSpec.low_open``).
+(``TagSpec.low_open``). One of them, ``moat.class``, is a sensitivity reading's axis alone: the
+class is the moat table's, which an agent sets with ``moat_set``, so no override changes it (spec
+2026-11-19 8.7), and an agent may change the other twenty-four.
 ``LABELS`` names each input's bridge line in a reader's words. ``check_override`` applies the
-rules in this order and answers with the first one broken: a locked input (``LOCKED``); a tag
-that is not an input; a route that does not read the tag; a value outside its words or its
-range, or a lasting override of a period-tied input, but the stock pay at 0, the one figure that
-holds from period to period, for a company that pays no stock (``TagSpec.lasting_value``, spec
-2026-11-13 7.3); no evidence, an NTM anchor (``earnings.ntm``, ``revenue.ntm``) without a
+rules in this order and answers with the first one broken: the moat class, refused
+``refused-locked`` with ``MOAT_SET`` whatever else the override holds; a locked input
+(``LOCKED``); a tag that is not an input; a route that does not read the tag; a value outside its
+words or its range, or a lasting override of a period-tied input, but the stock pay at 0, the one
+figure that holds from period to period, for a company that pays no stock
+(``TagSpec.lasting_value``, spec 2026-11-13 7.3); no evidence, an NTM anchor (``earnings.ntm``, ``revenue.ntm``) without a
 guidance record among its evidence, or a belief or held rate above the sales class's 90th
 percentile without a filing or a transcript (when the policy's
 ``override_primary_evidence_above_p90`` holds). The rule reads the evidence's kinds
@@ -20,9 +23,9 @@ year, an EPS or a net income record for the NTM EPS and a revenue record for the
 (``ANCHOR_METRICS``, ``anchor_misfit``), which the override route checks on the records before
 the rules, since it reads them. A passing override is ``("applied", "")``; a refused one names
 its state and a sentence the agent can act on.
-``check_input`` applies the first four alone, the fourth without the lifetime: the rules on the
-input and its value, which a sensitivity reading's values meet and no others, since a reading
-changes no input (``method.md`` 14.8).
+``check_input`` applies the four after the moat class's alone, the fourth without the lifetime:
+the rules on the input and its value, which a sensitivity reading's values meet and no others,
+since a reading changes no input (``method.md`` 14.8); so a reading may vary the moat class.
 
 A company in another currency (spec 2026-11-10 7.3): an input in ``USD`` or ``USD a share`` is
 read in the reporting currency, so its range's ends are the policy's × the rate (units of the
@@ -343,6 +346,10 @@ LOCKED: dict[str, str] = {
     **{name: f"{name} is reported data" for name in _REPORTED},
 }
 
+# The refusal of an override of the moat class, which the moat table holds and an agent's verdict
+# sets (spec 2026-11-19 8.7).
+MOAT_SET = "moat.class is the moat table's: record the verdict with moat_set"
+
 # Each route's name in a sentence: the route rule's refusal and the system's drop of an override the
 # row's route does not read (``refresh.reviews.OFF_ROUTE``).
 ROUTE_NAMES: dict[Route, str] = {
@@ -415,6 +422,8 @@ def check_override(
     order of the module's docstring, with its sentence. ``cap`` is the sales class's 90th
     percentile, ``None`` when the row has none; ``fx_rate`` and ``currency`` are the row's, which
     ``check_input`` reads a money range in."""
+    if tag == "moat.class":
+        return "refused-locked", MOAT_SET
     state, message = check_input(tag, value, route, policy, fx_rate=fx_rate, currency=currency)
     if state != "applied":
         return state, message

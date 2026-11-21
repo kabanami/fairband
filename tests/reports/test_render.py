@@ -344,6 +344,11 @@ def test_appendix_a_is_generated_from_the_records(
     assert [c["check"] for c in a["checks"]] == list(CHECKS)
     stance = next(c for c in a["checks"] if c["check"] == "the stance word")
     assert stance["rule"] == "one of buy, hold, trim, avoid"
+    moat = next(c for c in a["checks"] if c["check"] == "the moat verdict on the snapshot")
+    assert moat["rule"] == (
+        "the moat class in force is an agent's verdict, recorded with moat_set on the latest"
+        " snapshot or on one it reprices"
+    )
     assert a["versions"] == {
         "method": "fairband-mechanical/1.8",
         "policy": policy.version,
@@ -569,7 +574,7 @@ def test_appendix_a_without_a_review_or_a_secondary(
     a = appendix_a(conn, refused, policy)
     assert (a["secondary"], a["noSecondary"]) == (None, None)
     assert "### Secondary valuation\n\nNone.\n" in markdown(refused, a, [], [], {})
-    rule = next(c["rule"] for c in a["checks"] if c["check"] == CHECKS[4])
+    rule = next(c["rule"] for c in a["checks"] if c["check"] == CHECKS[5])
     assert rule == (
         "on a refused latest snapshot, the company's newest secondary valuation rests on it or on"
         " one it reprices; none where the route or the review values the company, or where the"

@@ -11,7 +11,10 @@ plan 3, which stays on file and fills nothing; a test module that submits report
 
 ``moat_file`` is the moat table the database loads and the app reads, in place of the packaged
 file (spec 2026-11-19 8.4, 8.6): each company on the class it is valued on (``MOAT_CLASSES``), AAPL
-Wide and the others None. A test module may give its own; the database and the app then share it."""
+Wide and the others None. A test module may give its own; the database and the app then share it.
+``verdicts`` records an agent's verdict on each company's class on its snapshot, the class it is
+valued on, which a report needs there (spec 2026-11-19 8.7); a test module that submits reports
+asks for it, and ``record_verdict`` records one on a snapshot a test writes."""
 
 from collections.abc import Callable, Iterator
 from contextlib import closing
@@ -33,7 +36,7 @@ from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import insert_companies
 from fairband.store.db import connect, migrate
 from fairband.store.ledger import Writer
-from fairband.store.moat import load_moat_file
+from fairband.store.moat import load_moat_file, set_moat, set_snapshot
 from fairband.store.refreshes import create_refresh, finish_refresh, set_stage
 from fairband.store.secondary import insert_secondary
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
@@ -59,6 +62,8 @@ from support.web import (
 
 # The moat table's class of each company, the one it is valued on (``engine_companies.MOAT_FILE``).
 MOAT_CLASSES: dict[str, Moat] = {"AAPL": "Wide", "AAL": "None", "HGCO": "None"}
+# The agent whose moat verdicts ``verdicts`` and ``record_verdict`` record.
+_AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 
 
 @pytest.fixture
@@ -146,6 +151,28 @@ def secondaries(db_path: Path, policy: Policy) -> dict[str, int]:
                 CREATED,
             )
     return found
+
+
+def record_verdict(db_path: Path, symbol: str, snapshot_id: int, moat: Moat = "Wide") -> None:
+    """An agent's verdict on the company's class, ``moat``, recorded on snapshot ``snapshot_id`` as
+    ``moat_set`` records it, without the write's revalue: the row the report's check reads (spec
+    2026-11-19 8.7). A test keeps the class the snapshot is valued on, so the table and the
+    snapshot agree."""
+    filing = {"kind": "filing", "ref": "10-K 2025", "note": None}
+    with closing(connect(db_path)) as conn:
+        set_moat(conn, symbol, moat, _AGENT, "the class stands", [filing], CREATED)
+        set_snapshot(conn, symbol, snapshot_id)
+
+
+@pytest.fixture
+def verdicts(db_path: Path) -> None:
+    """An agent's verdict on each company's class, the one it is valued on (``MOAT_CLASSES``),
+    recorded on its snapshot, as a report there needs (``record_verdict``)."""
+    for symbol, moat in MOAT_CLASSES.items():
+        with closing(connect(db_path)) as conn:
+            snapshot = latest_snapshot(conn, symbol)
+        assert snapshot is not None
+        record_verdict(db_path, symbol, snapshot.id, moat)
 
 
 @pytest.fixture

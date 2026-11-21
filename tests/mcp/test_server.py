@@ -658,7 +658,7 @@ def test_a_refusal_is_the_api_s_sentence(api: FairbandClient) -> None:
     }
 
 
-@pytest.mark.usefixtures("secondaries")  # a report needs one on its snapshot
+@pytest.mark.usefixtures("secondaries", "verdicts")  # a report needs both on its snapshot
 def test_report_submit_passes_the_sections_through(api: FairbandClient, client: TestClient) -> None:
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
     server = build_server(api)
@@ -768,7 +768,7 @@ def test_multiples_history_answers_the_last_point_of_each_month_unless_daily() -
     assert (answered["pe"], answered["peNote"]) == (None, "no FMP key")
 
 
-@pytest.mark.usefixtures("secondaries")
+@pytest.mark.usefixtures("secondaries", "verdicts")
 def test_a_rejected_report_carries_its_findings(api: FairbandClient, client: TestClient) -> None:
     snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
     server = build_server(api)

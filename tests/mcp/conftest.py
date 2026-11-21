@@ -1,6 +1,6 @@
 """The MCP tests' fixtures: the web tests' app over their database, shared from
-``support.web_app`` (AAPL, AAL and HGCO, each with one snapshot, and a secondary valuation on it
-for the tests that submit a report); the MCP server's client of that app, not yet identified; and
+``support.web_app`` (AAPL, AAL and HGCO, each with one snapshot, and a secondary valuation and an
+agent's moat verdict on it for the tests that submit a report); the MCP server's client of that app, not yet identified; and
 a client of a port on 127.0.0.1 that nothing listens on."""
 
 import socket
@@ -17,6 +17,7 @@ from support.web_app import (  # noqa: F401
     policy,
     results,
     secondaries,
+    verdicts,
 )
 
 from fairband.mcp.client import FairbandClient

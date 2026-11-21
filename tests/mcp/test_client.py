@@ -139,7 +139,7 @@ def test_a_refusal_carries_the_detail(api: FairbandClient) -> None:
     assert caught.value.extra == {}
 
 
-@pytest.mark.usefixtures("secondaries")  # a report needs one on its snapshot
+@pytest.mark.usefixtures("secondaries", "verdicts")  # a report needs both on its snapshot
 def test_a_refusal_with_no_sentence_is_named_from_its_answer(api: FairbandClient) -> None:
     """The report route rejects with its findings and no ``detail``: the sentence is the ledger's,
     the findings beside it."""

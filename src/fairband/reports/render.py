@@ -303,6 +303,10 @@ _RULES: dict[str, str] = {
     "the headings in the spec's order": (
         "the twelve headings in order, sections 2 and 3 left out of a valuation review"
     ),
+    "the moat verdict on the snapshot": (
+        "the moat class in force is an agent's verdict, recorded with moat_set on the latest"
+        " snapshot or on one it reprices"
+    ),
     "a secondary valuation on a refused snapshot": (
         "on a refused latest snapshot, the company's newest secondary valuation rests on it or on"
         " one it reprices; none where the route or the review values the company, or where the"
