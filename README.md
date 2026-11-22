@@ -139,18 +139,11 @@ tagged with that identity. See [tools.md](playbook/fairband-research/reference/t
 full tool reference and [playbook/fairband-research](playbook/fairband-research/) for the
 step-by-step research playbook.
 
-## Smaller things worth knowing
+## Valuation methodology
 
-- Every number in an agent's report carries a reference to stored data, and Fairband checks the
-  references when the report is submitted.
-- An agent's change to an input keeps its reason and its writer.
-- A report states the tests that would prove its thesis wrong, and it expires: for a company on a
-  watchlist, Fairband posts a new review when the report's validity window ends.
-- A company that reports in another currency is valued in that currency, and an ADR's figures a
-  share are per ADS.
-- A report downloads as Markdown.
-- The exact rules are in [docs/method.md](docs/method.md), and the page has a Methodology view
-  with worked examples.
+See [docs/method-overview.md](docs/method-overview.md) for a short overview, or
+[docs/method.md](docs/method.md) for the full valuation rules. The web UI also includes a
+**Methodology** view with worked examples.
 
 ## Status
 
