@@ -9,7 +9,7 @@ import re
 from typing import Any
 
 import pytest
-from support.page import NODE, STATIC, elements, node, text
+from support.page import NODE, STATIC, classed, elements, node, text
 from support.web import _static_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -205,10 +205,27 @@ def test_a_done_item_links_to_its_report_on_the_research_tab(
     encoded; named by its revision, or Open where the server sends none."""
     done = _item("done") | {"symbol": symbol, "reportId": 9, "reportRevision": revision}
     tree = node("inbox.row", [done], INBOX)
-    [link] = [e for e in elements(tree) if e.get("type") == "a" and e["props"]["href"] != "#"]
+    [link] = [
+        e
+        for e in elements(tree)
+        if e.get("type") == "a" and "app-inbox__symbol" not in e["props"]["className"]
+    ]
     assert link["props"]["href"] == href == node("researchHref", [symbol, 9])
     assert text(link) == words
     assert link["props"]["aria-label"] == f"{name} for {symbol}"
+
+
+@pytest.mark.parametrize(("symbol", "href"), [("AAPL", "#company/AAPL"), ("A&B", "#company/A%26B")])
+def test_the_ticker_links_to_the_company_page(symbol: str, href: str) -> None:
+    """Spec 2026-11-22, 11: an item's ticker is a plain link to the company page, the address
+    companyHref gives, with no click of its own; the row has no click."""
+    tree = node("inbox.row", [_item() | {"symbol": symbol}], INBOX)
+    [link] = classed(tree, "app-inbox__symbol")
+    assert link["type"] == "a"
+    assert link["props"]["href"] == href
+    js = _static_file("inbox.js")
+    assert "P.openRow" not in js
+    assert "h('tr', { 'data-item': item.id }," in js  # the row has no handler
 
 
 def test_the_button_posts_the_items_launch_as_the_drawers_does() -> None:

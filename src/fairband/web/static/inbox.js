@@ -1,18 +1,20 @@
 /* The Inbox view (spec 2026-11-06 Tier 2, 18.5), loaded after watchlists.js: the work items as
-   the server lists them, newest first, in one table. A row: the company's symbol, a link that
-   opens its drawer on the Screen view as a watchlist's row does; the mode; the state word, a
-   declined item's reason under it as written; the date and time it was posted, in the reader's
-   time; who posted it, a compact PrincipalChip: the owner, an agent by its model identifier, or
-   the system for the item it posts when a watched company's window ends; the agent that claimed
-   it, likewise; the requester's note as written; for a done item, a link to the report it was
-   completed with on the company page's Research tab (FairbandPage.researchHref, the Research
-   tab's design, 7.1), named by its revision ("revision 2", its accessible name "Open revision 2
-   of the report for QCOM"), or Open when the server sends none; and for a
-   pending or claimed item, Decline, which opens the reason line under the row: the reason field
-   and Decline again, the owner's decline, and Cancel. A refused decline's sentence, the
-   server's, stands on a line under its row. The view reads the inbox as it opens and after every
-   write, each read running the expiry rule on the server, and hands each read to the header, so
-   its count matches the table; while it shows, the header's own reads redraw the table too.
+   the server lists them, newest first, in one table. A row: the company's symbol, a plain link
+   to the company page (FairbandPage.companyHref; spec 2026-11-22, 11), as the ticker is on the
+   Screen and on a watchlist, with no click of its own, so the browser's own ways of opening a
+   link work, and the row has no click either; the mode; the state word, a declined item's reason
+   under it as written; the date and time it was posted, in the reader's time; who posted it, a
+   compact PrincipalChip: the owner, an agent by its model identifier, or the system for the item
+   it posts when a watched company's window ends; the agent that claimed it, likewise; the
+   requester's note as written; for a done item, a link to the report it was completed with on
+   the company page's Research tab (FairbandPage.researchHref, the Research tab's design, 7.1),
+   named by its revision ("revision 2", its accessible name "Open revision 2 of the report for
+   QCOM"), or Open when the server sends none; and for a pending or claimed item, Decline, which
+   opens the reason line under the row: the reason field and Decline again, the owner's decline,
+   and Cancel. A refused decline's sentence, the server's, stands on a line under its row. The
+   view reads the inbox as it opens and after every write, each read running the expiry rule on
+   the server, and hands each read to the header, so its count matches the table; while it
+   shows, the header's own reads redraw the table too.
 
    A pending item's launch (B-210; spec 2026-11-16 agent launch, 10): where launching is set up,
    its row has Open Claude Code before Decline, which posts the item's launch as the drawer's
@@ -207,8 +209,8 @@
     return h(React.Fragment, { key: item.id },
       h('tr', { 'data-item': item.id },
         h('td', null, h('a', {
-          className: 'ticker app-link app-inbox__symbol', href: '#',
-          onClick: function (event) { event.preventDefault(); P.openRow(item.symbol); }
+          className: 'ticker app-link app-inbox__symbol',
+          href: P.companyHref({ ticker: item.symbol })
         }, item.symbol)),
         h('td', { className: 'body' }, item.mode),
         h('td', { className: 'body app-inbox__wrap' }, item.state,

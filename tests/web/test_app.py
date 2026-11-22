@@ -1604,8 +1604,8 @@ def test_the_watchlist_requests_research(client: TestClient) -> None:
 def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
     """Spec 2026-11-06 Tier 2, 18.5: the Inbox view, its own script after watchlists.js, is one
     table of the work items as the server lists them, newest first, under the heads Symbol, Mode,
-    State, Posted, By, Claimed by, Note and Report: the symbol a link that opens the company's
-    drawer on the Screen as a watchlist's row does; the state word, with a declined item's reason
+    State, Posted, By, Claimed by, Note and Report: the symbol a link to the company page (spec
+    2026-11-22, 11); the state word, with a declined item's reason
     under it as written; the posted date and time in the reader's time; who posted it, a compact
     PrincipalChip (the owner, an agent by its model identifier, or the system for an expiry item),
     and the agent that claimed it likewise; the note as written; the report a done item was
@@ -1626,7 +1626,7 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
         row,
         "var open = OPEN.indexOf(item.state) !== -1;",
         "var declining = open && state.declining === item.id;",
-        "onClick: function (event) { event.preventDefault(); P.openRow(item.symbol); }",
+        "href: P.companyHref({ ticker: item.symbol })",
         "h('td', { className: 'body' }, item.mode),",
         "h('td', { className: 'body app-inbox__wrap' }, item.state,",
         "item.state === 'declined' && item.reason",
