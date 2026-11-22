@@ -1,14 +1,17 @@
-/* The Watchlists view (spec 2026-11-04 9.6), loaded after controls.js. Above the lists, the New
-   watchlist field and Create. Each list is a section: its name, its count and the day it was
-   made, Request research (spec 2026-11-06 Tier 2, 18.6), Rename and Delete; under them the Add a
-   company field, which matches the screen's rows as FIND does and lists up to eight, then the
-   list's companies as a ScreenTable of the screen's rows under the screen's columns. A company's
-   mark opens the screen's popup, so a company leaves a list when its box there is unchecked; its
-   ticker, a link, opens its company page (spec 2026-11-16 company page, 12); its mechanical value
-   carries the screen's hover and warnings mark (spec 2026-11-19 7.5); the rest of a row opens the
-   drawer on the Screen view. Every write goes through FairbandPage.api; after it the
-   rows and the lists load again, the screen's marks follow, and the view draws again with
-   them. */
+/* The watchlist page's head (spec 2026-11-22 7.3 and 7.4), loaded after controls.js. The page
+   shows one list: the Screen's own table and drawer (app.js) draw its companies in the Screen's
+   panel under this one, with a FIND, filters and a sort of their own, and this script draws the
+   head above them and names the list they draw (FairbandPage.selectList). The head is one row
+   that wraps: a selector of the lists by name, the default list's entry marked, the list's count
+   and the day it was made, Set as default (Default on the default list, where a second press
+   clears it), Rename and Delete, then the New watchlist field and Create; under it the Add a
+   company field, which matches the screen's rows as FIND does and lists up to eight. The page
+   opens on the list the address names (#watchlists/<id>, FairbandPage.listId), else the
+   default, which the browser keeps, else the first by name; the address follows the list shown,
+   replaced, so the browser's Back does not step through the lists. With no list, the head is
+   the New watchlist field, Create and a sentence. Every write goes through FairbandPage.api;
+   after it the rows and the lists load again, the screen's marks follow, and the head draws
+   again with them. */
 (function () {
   'use strict';
 
@@ -17,10 +20,12 @@
   var P = FairbandPage;
   /* A symbol as the server takes one; a text no row matches is added as typed when it is one. */
   var SYMBOL = /^[A-Za-z0-9.-]{1,10}$/;
-  /* A refused write's first words, by its method, unless the write names its own. */
+  /* A refused write's first words, by its method. */
   var REFUSED = {
     POST: 'Not created', PATCH: 'Not renamed', DELETE: 'Not deleted', PUT: 'Not added'
   };
+  /* Where the browser keeps the default list's id (spec 2026-11-22 7.3). */
+  var DEFAULT_KEY = 'fairband.watchlist.default';
   /* A refused write's sentence, with the server's reason; null for a write it took. */
   var refusal = P.refusal;
 
@@ -29,36 +34,108 @@
   var state = {
     name: '', /* the New watchlist field */
     adding: {}, /* each list's Add a company field, by list id */
-    renaming: null, /* { id, name } while a list's name is a field */
+    renaming: null, /* { id, name } while the selector is the list's name field */
     deleting: null, /* { id, name, count } while Delete's dialog is open */
-    pending: null, /* { method, id, head? }: the write in flight; no other starts until it ends */
+    pending: null, /* { method, id }: the write in flight; no other starts until it ends */
     errors: {}, /* a refused write's sentence, by list id, or under 'new' for Create */
-    requested: {}, /* a Request research run's counts, { posted, open }, by list id */
+    selected: null, /* the id of the list the page shows; null before the lists arrive, or none */
+    next: null, /* the id of a list just created, shown once the lists hold it */
+    defaultId: readDefault(), /* the default list's id, or null for none */
     focus: null /* a selector in the view that takes focus once the view has drawn */
   };
+
+  /* ---------------------------------------------------------------- the default */
+
+  /* The default list's id as the browser keeps it, read once as the page loads; a stored value
+     that is no whole number, and a browser with no storage, read as none. */
+  function readDefault() {
+    try {
+      var stored = window.localStorage.getItem(DEFAULT_KEY);
+      return /^\d+$/.test(String(stored)) ? Number(stored) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* The default list: `id`, kept in the browser, or none, its key removed. Without storage the
+     default holds until the page reloads (spec 2026-11-22 7.3). */
+  function setDefault(id) {
+    state.defaultId = id;
+    try {
+      if (id == null) window.localStorage.removeItem(DEFAULT_KEY);
+      else window.localStorage.setItem(DEFAULT_KEY, String(id));
+    } catch (e) { /* no storage: the default lasts until the page reloads */ }
+  }
+
+  /* ------------------------------------------------------------- the list shown */
+
+  /* The list the page opens on (spec 2026-11-22 7.3): the one `addressId` names, else the one
+     `defaultId` names, else the first, the lists coming by name; an id that names no list counts
+     as none. Null with no list. */
+  function opens(lists, addressId, defaultId) {
+    var ids = lists.map(function (w) { return w.id; });
+    if (ids.indexOf(addressId) !== -1) return addressId;
+    if (ids.indexOf(defaultId) !== -1) return defaultId;
+    return lists.length ? lists[0].id : null;
+  }
+
+  /* The list `id` shows, or none: the address names it, replaced as a change of the company
+     page's tab is, and the table draws it. */
+  function select(id) {
+    state.selected = id;
+    P.listId = id;
+    history.replaceState(null, '', '#watchlists' + (id == null ? '' : '/' + id));
+    P.selectList(id);
+  }
+
+  /* After each draw of the screen while the page shows (P.onRender), and as it opens: once the
+     lists are in, the list shown is the one selected while the lists hold it, a list just created
+     once they hold it, else the one the page opens on (opens); the address and the table follow
+     it where either differs. An address the page did not write (controls.js keeps it as the
+     hash changes, P.listId) forgets the selection first: the table's turn to the list draws, and
+     so runs this, before the view's loader forgets it, and a selection kept from the last visit
+     would otherwise outrank the address. Before the lists arrive nothing is chosen and no address
+     written, so a reload at #watchlists/<id> waits for them. The table draws again as it
+     follows, which calls this again; that call finds nothing to change, so the loop ends
+     there. */
+  function follow() {
+    if (panel.hidden) return;
+    var lists = P.watchlists();
+    if (lists) {
+      var ids = lists.map(function (w) { return w.id; });
+      if (P.listId !== state.selected) state.selected = null;
+      var want = state.selected;
+      if (state.next != null && ids.indexOf(state.next) !== -1) {
+        want = state.next;
+        state.next = null;
+      } else if (ids.indexOf(want) === -1) {
+        want = opens(lists, P.listId, state.defaultId);
+      }
+      if (want !== state.selected || want !== P.listId) select(want);
+    }
+    render();
+  }
 
   /* ------------------------------------------------------------------ the writes */
 
   /* One write at a time, so a second press never makes a second write; Delete's dialog reads
-     confirming meanwhile. A write clears the sentences of the writes before it, Request
-     research's counts among them, and a refused write's own sentence stands where the write was
-     made, led by the write's own head when it names one (read as the write ends, so a run of
-     posts names the company it stopped at). Then the write's own last step runs, given the
-     sentence (null when the server took it) and the answer's body; the rows and the lists load
-     again, so the screen's marks follow; and the view draws. */
+     confirming meanwhile. A write clears the sentences of the writes before it, and a refused
+     write's own sentence stands under the head, led by the write's first words. Then the write's
+     own last step runs, given the sentence (null when the server took it) and the answer's body;
+     the rows and the lists load again, so the screen's marks follow; and the view draws. */
   function write(made, call, after) {
     if (state.pending) return;
     var where = made.id == null ? 'new' : made.id;
+    var head = REFUSED[made.method];
     state.pending = made;
     state.errors = {};
-    state.requested = {};
     render();
     var answer = null;
     call().then(function (r) {
       answer = r.body;
-      return refusal(made.head || REFUSED[made.method], r);
+      return refusal(head, r);
     }).catch(function (err) {
-      return (made.head || REFUSED[made.method]) + ': ' + err.message + '.';
+      return head + ': ' + err.message + '.';
     }).then(function (error) {
       state.pending = null;
       if (error) state.errors[where] = error;
@@ -68,7 +145,8 @@
     }).then(render);
   }
 
-  /* Create: the new list's Add a company field takes focus, ready for its first company. */
+  /* Create: the page shows the new list once the lists hold it (follow), and its Add a company
+     field takes focus then, ready for its first company. */
   function create() {
     var name = state.name.trim();
     if (!name) return;
@@ -77,7 +155,8 @@
     }, function (error, list) {
       if (error) return;
       state.name = '';
-      state.focus = inList(list.id, '.app-wl__q');
+      state.next = list.id;
+      state.focus = '.app-wl__q';
     });
   }
 
@@ -97,28 +176,31 @@
     });
   }
 
+  /* The name's field closes, the selector back in its place, and focus goes back to Rename. */
   function stopRenaming(id) {
     state.renaming = null;
     delete state.errors[id];
-    state.focus = inList(id, '.app-wl__rename');
+    state.focus = '.app-wl__rename';
     render();
   }
 
-  /* Confirm in Delete's dialog: the dialog closes as the write ends, taken or refused. */
+  /* Confirm in Delete's dialog: the dialog closes as the write ends, taken or refused. A list
+     deleted leaves the page on the default list, or the first by name (follow), and, when it was
+     the default, the default goes with it. */
   function drop(d) {
     write({ method: 'DELETE', id: d.id }, function () {
       return P.api.del('/api/watchlists/' + d.id);
     }, function (error) {
       state.deleting = null;
-      state.focus = error ? inList(d.id, '.app-wl__delete') : '#app-wl-new';
+      state.focus = error ? '.app-wl__delete' : '#app-wl-new';
+      if (!error && d.id === state.defaultId) setDefault(null);
     });
   }
 
   function cancelDelete() {
     if (!state.deleting) return;
-    var id = state.deleting.id;
     state.deleting = null;
-    state.focus = inList(id, '.app-wl__delete');
+    state.focus = '.app-wl__delete';
     render();
   }
 
@@ -128,39 +210,7 @@
       return P.api.put('/api/watchlists/' + id + '/symbols/' + encodeURIComponent(symbol));
     }, function (error) {
       if (!error) state.adding[id] = '';
-      state.focus = inList(id, '.app-wl__q');
-    });
-  }
-
-  /* Request research (spec 2026-11-06 Tier 2, 18.6): a valuation review posted for each company
-     on the list in turn, one post at a time, as the owner. A 201 counts as posted, and a 409, an
-     item already open for the company, as already open; any other answer, a 400 or a 5xx, stops
-     the run, and its sentence, the server's, stands under the head, led by the company it stopped
-     at. The meta line counts as the run goes; the header's Inbox count follows on its next read.
-     As it ends, the drawer, if it shows a company on the list, reads it again, so its Request
-     research follows, and focus goes back to the button. */
-  function requestResearch(list) {
-    var tally = { posted: 0, open: 0 };
-    var made = { method: 'POST', id: list.id, head: 'Not posted' };
-    write(made, function () {
-      state.requested[list.id] = tally;
-      return list.symbols.reduce(function (run, entry) {
-        return run.then(function (last) {
-          if (last && !last.ok) return last;
-          made.head = 'Not posted for ' + entry.symbol;
-          return P.api.post('/api/inbox', { symbol: entry.symbol, mode: 'valuation review' })
-            .then(function (r) {
-              if (r.status === 409) tally.open++;
-              else if (r.ok) tally.posted++;
-              else return r;
-              render();
-              return { ok: true };
-            });
-        });
-      }, Promise.resolve({ ok: true }));
-    }, function () {
-      list.symbols.forEach(function (entry) { P.reloadDetail(entry.symbol); });
-      state.focus = inList(list.id, '.app-wl__request');
+      state.focus = '.app-wl__q';
     });
   }
 
@@ -182,12 +232,12 @@
     return ranked[0].concat(ranked[1], ranked[2]);
   }
 
-  /* The field under a list's head, its matches under it as buttons: the first eight not on the
-     list already. A match's button adds it. Enter adds only a company the reader chose: the row
-     whose ticker the text spells, ignoring case, unless it is on the list already; else the one
-     match shown; else, when no row matches, the text upper-cased if it is a symbol. Enter never
-     adds the first of several. A line under the field says why Enter adds nothing, or what it
-     adds when no match shows. */
+  /* The field under the head, its matches under it as buttons: the first eight not on the list
+     already. A match's button adds it. Enter adds only a company the reader chose: the row whose
+     ticker the text spells, ignoring case, unless it is on the list already; else the one match
+     shown; else, when no row matches, the text upper-cased if it is a symbol. Enter never adds
+     the first of several. A line under the field says why Enter adds nothing, or what it adds
+     when no match shows. */
   function addField(list) {
     var text = state.adding[list.id] || '';
     var on = {};
@@ -246,43 +296,20 @@
 
   /* ------------------------------------------------------------------ the view */
 
-  /* A selector for an element of a list's section. */
-  function inList(id, selector) { return '[data-list="' + id + '"] ' + selector; }
-
-  /* A list's rows: the screen's loaded rows joined by symbol, in the list's order, each watched;
-     a symbol with no row (it left the universe, or has no snapshot yet) is its ticker alone, an
-     em dash in every other cell. */
-  function rowsOf(list, bySymbol) {
-    return list.symbols.map(function (entry) {
-      var symbol = entry.symbol;
-      var row = bySymbol[symbol];
-      return row ? Object.assign({}, row, { watched: true })
-        : { ticker: symbol, name: null, price: null, mechanical: null, reviewed: null,
-          phase: null, fairLow: null, fairHigh: null, watched: true };
-    });
-  }
-
   function count(n) {
     return Number(n).toLocaleString('en-US') + (n === 1 ? ' company' : ' companies');
   }
 
-  /* What a Request research run came to, or has come to so far, for the meta line after the day
-     the list was made: posted 3 requests · 2 already open; null before a run. */
-  function requested(tally) {
-    if (!tally) return null;
-    return 'posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +
-      (tally.open ? ' · ' + tally.open + ' already open' : '');
-  }
-
-  /* The list's head: its name, or the name's field while renaming, Enter saving and Escape
-     cancelling; its count and the day it was made, in the reader's time, then what a Request
-     research run came to; Request research, disabled for a list with no company and while a write
-     is in flight, Rename and Delete. */
-  function head(list) {
+  /* The head of `list`, one of `lists`, `defaultId` the default's: the selector, the lists in
+     their order, the default's entry ending (default), or while renaming the name's field in its
+     place, Enter saving and Escape cancelling; the list's count and the day it was made, in the
+     reader's time; Set as default, which reads Default, pressed, on the default list, where a
+     press clears the default; Rename and Delete. A choice in the selector shows that list. */
+  function head(list, lists, defaultId) {
     var renaming = state.renaming && state.renaming.id === list.id;
     var made = P.localIso(list.createdAt);
-    var outcome = requested(state.requested[list.id]);
-    var title = renaming ? h('form', {
+    var isDefault = list.id === defaultId;
+    var name = renaming ? h('form', {
       className: 'app-wl__rename-form',
       onSubmit: function (event) { event.preventDefault(); rename(list); }
     },
@@ -296,18 +323,29 @@
         onKeyDown: function (event) {
           if (event.key === 'Escape') stopRenaming(list.id);
         }
-      })) : h('h2', { className: 'title app-wl__title' }, list.name);
+      })) : h('select', {
+        className: 'control app-select app-wl__pick', 'aria-label': 'Watchlist',
+        value: String(list.id),
+        onChange: function (event) {
+          select(Number(event.target.value));
+          render();
+        }
+      }, lists.map(function (w) {
+        return h('option', { key: w.id, value: String(w.id) },
+          w.name + (w.id === defaultId ? ' (default)' : ''));
+      }));
     return h('div', { className: 'app-wl__head' },
-      title,
+      name,
       h('p', { className: 'caption app-wl__meta' }, count(list.count), ' · created ',
-        h('time', { dateTime: made, title: made }, F.formatDate(made.slice(0, 10))),
-        outcome ? ' · ' + outcome : null),
+        h('time', { dateTime: made, title: made }, F.formatDate(made.slice(0, 10)))),
       h('div', { className: 'app-wl__actions' },
         h(F.Button, {
-          size: 'sm', className: 'app-wl__request',
-          disabled: list.count === 0 || state.pending !== null,
-          onClick: function () { requestResearch(list); }
-        }, 'Request research'),
+          size: 'sm', className: 'app-wl__default', 'aria-pressed': isDefault ? 'true' : 'false',
+          onClick: function () {
+            setDefault(isDefault ? null : list.id);
+            render();
+          }
+        }, isDefault ? 'Default' : 'Set as default'),
         h(F.Button, {
           size: 'sm', className: 'app-wl__rename',
           onClick: function () {
@@ -323,32 +361,6 @@
             render();
           }
         }, 'Delete')));
-  }
-
-  /* A list's section. Its table waits for the screen's rows; a list with no company says so. */
-  function section(list, bySymbol) {
-    var error = state.errors[list.id];
-    var table = null;
-    if (list.count === 0) {
-      table = h('p', { className: 'caption app-muted app-wl__none' },
-        'No companies on this list yet.');
-    } else if (bySymbol) {
-      table = h('div', { className: 'app-wl__table' }, h(F.ScreenTable, {
-        rows: rowsOf(list, bySymbol),
-        columns: P.columns(),
-        chooser: false, dense: true,
-        onOpen: function (row) { P.openRow(row.ticker); },
-        onWatch: P.watch,
-        companyHref: P.companyHref,
-        mechanicalNote: P.SCREEN_NOTE,
-        watchlists: P.watchlists() || []
-      }));
-    }
-    return h('section', { key: list.id, className: 'app-wl', 'data-list': list.id },
-      head(list),
-      error ? h('p', { className: 'caption app-wl__error' }, error) : null,
-      addField(list),
-      table);
   }
 
   /* Delete's dialog, over the page: the payload is the list's name and its count. Its one
@@ -374,49 +386,56 @@
       }));
   }
 
+  /* The head's row, the selected list's head then New watchlist and Create; a refused write's
+     sentence under it; then the list's Add a company, or, with no list, the sentence that says
+     how to make one. Nothing of the list draws before the lists arrive. */
   function View() {
-    /* Focus moves where the last change asked, once the view has drawn. */
+    /* Focus moves where the last change asked, once the view has drawn it; after Create, once
+       the new list shows. */
     React.useEffect(function () {
-      if (!state.focus) return;
+      if (!state.focus || state.next != null) return;
       var el = panel.querySelector(state.focus);
       state.focus = null;
       if (el) el.focus();
     });
     var lists = P.watchlists();
-    var rows = P.rows();
-    var bySymbol = null;
-    if (rows) {
-      bySymbol = {};
-      rows.forEach(function (r) { bySymbol[r.ticker] = r; });
-    }
-    var error = state.errors.new;
+    var list = (lists || []).filter(function (w) { return w.id === state.selected; })[0];
+    var error = state.errors.new || (list ? state.errors[list.id] : null);
     return h('div', { className: 'app-lists' },
-      h('form', {
-        className: 'app-lists__new',
-        onSubmit: function (event) { event.preventDefault(); create(); }
-      },
-        h('input', {
-          id: 'app-wl-new', type: 'text', className: 'control app-field',
-          placeholder: 'New watchlist', 'aria-label': 'New watchlist', maxLength: 60,
-          value: state.name,
-          onChange: function (event) {
-            state.name = event.target.value;
-            render();
-          }
-        }),
-        h(F.Button, { type: 'submit', disabled: !state.name.trim() }, 'Create')),
+      h('div', { className: 'app-lists__row' },
+        list ? head(list, lists, state.defaultId) : null,
+        h('form', {
+          className: 'app-lists__new',
+          onSubmit: function (event) { event.preventDefault(); create(); }
+        },
+          h('input', {
+            id: 'app-wl-new', type: 'text', className: 'control app-field',
+            placeholder: 'New watchlist', 'aria-label': 'New watchlist', maxLength: 60,
+            value: state.name,
+            onChange: function (event) {
+              state.name = event.target.value;
+              render();
+            }
+          }),
+          h(F.Button, { type: 'submit', size: 'sm', disabled: !state.name.trim() }, 'Create'))),
       error ? h('p', { className: 'caption app-wl__error' }, error) : null,
       lists && lists.length === 0 ? h('p', { className: 'body app-note app-lists__empty' },
         'No watchlists yet. Create one here, or press the mark beside a ticker on the screen.')
         : null,
-      (lists || []).map(function (list) { return section(list, bySymbol); }),
+      list ? addField(list) : null,
       state.deleting ? dialog(state.deleting) : null);
   }
 
   function render() { root.render(h(View)); }
 
-  /* The view draws as it opens, and again after each draw of the screen while it is open, so it
-     follows the rows and the lists as they load and as the popup changes them. */
-  P.onShow.watchlists = render;
-  P.onRender = function () { if (!panel.hidden) render(); };
+  /* The page opens on the list its address names, or the default: the selection is forgotten,
+     so the header's Watchlists link, #watchlists, opens the default. After each draw of the
+     screen while it shows it follows the lists as they load and as the popup changes them. The
+     opening list and the head are here for the tests. */
+  P.onShow.watchlists = function () {
+    state.selected = null;
+    follow();
+  };
+  P.onRender = follow;
+  P.lists = { opens: opens, head: head };
 })();

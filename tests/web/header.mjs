@@ -2,9 +2,11 @@
 // log of 2026-11-17), for tests/web/test_header.py: the bundle, app.js, finder.js and controls.js
 // are loaded in the page's order, with a stub React, a stub ReactDOM whose roots keep what they
 // last drew, the few browser objects the scripts touch (each view's panel one object whose
-// `hidden` controls.js sets, the hash, the history the views replace) and a fetch of the driver's
-// own, answered only when a step answers it. The reads the scripts start as they load stay in
-// flight, so a step can answer the first read of the refresh's state.
+// `hidden` controls.js sets, a query that finds no element, as app.js asks for the table's
+// scroller when the Watchlists view turns the table to its list, the hash, the history the views
+// replace) and a fetch of the driver's own, answered only when a step answers it. The reads the
+// scripts start as they load stay in flight, so a step can answer the first read of the
+// refresh's state.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "view", "section"}            a header view, a link or a hash opens `view`
@@ -56,6 +58,7 @@ const document = {
   getElementById(id) {
     return panels[id] || (panels[id] = { id, hidden: false, classList: { toggle() {} } });
   },
+  querySelector() { return null; },
   addEventListener() {},
 };
 const location = { hash: '', pathname: '/' };

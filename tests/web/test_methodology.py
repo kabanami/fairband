@@ -611,7 +611,9 @@ def test_the_agents_section_reads(client: TestClient) -> None:
             " pay in the company's figures."
         ),
         "once its guided year has passed",
-        "a valuation review for each company on the list with no open item",
+        # research is asked for one company at a time; a list has no Request research (spec
+        # 2026-11-22 8)
+        "Request research in the drawer posts one.",
         # spec 11 and 13.3, plan 3: the secondary valuation is the fallback only, refused where
         # the route or the review values the company, and no second value weighs on the stance
         # there; a refused row with a valued review weighs the price against the review's levels

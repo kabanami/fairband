@@ -1,9 +1,10 @@
 /* The page's header, its status line and the group view, loaded after app.js and finder.js. The
    header is the design system's AppHeader: the six views (Screen, Groups, Watchlists,
    Methodology, Settings, Inbox), then in its right slot the finder (finder.js) on every view but
-   the Screen, the refresh controls and the engine stamp; the URL hash names the open view. Inbox
-   carries the count of the open work items, read every thirty seconds while the page is shown
-   (spec 2026-11-06 Tier 2, 18.5). Under the header, the status line: the running refresh's one
+   the Screen, the refresh controls and the engine stamp; the URL hash names the open view, and
+   on the Watchlists view its list, whose table is the Screen's, shown under the list's head
+   (spec 2026-11-22 7.3). Inbox carries the count of the open work items, read every thirty
+   seconds while the page is shown (spec 2026-11-06 Tier 2, 18.5). Under the header, the status line: the running refresh's one
    run bar (the design system's RunProgress), or how the last one ended in one line, its
    calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the company page draws the
    run bar and a notice alone, not the last refresh's line or Details ▾ (the company page's
@@ -231,24 +232,46 @@
      P.company for its script; without a symbol it is the Screen, and another symbol, tab or id
      while it is open runs its loader again; a change of tab or of id replaces the hash as a change
      of view does, so the browser's Back never steps through the tabs (the company page's design,
-     7.1; the Research tab's design, 7.1). A
-     view shown closes the watchlist popup and the Notes box (FairbandPage.closePopups), which no
-     press closes when the browser's Back or Forward moves the hash. */
+     7.1; the Research tab's design, 7.1). The watchlist page takes a list's id (keepList), kept
+     in P.listId for its script, #watchlists/<id>; another id, or none, while it is open runs its
+     loader again, which opens the list the id names, else the default or the first by name
+     (watchlists.js; spec 2026-11-22 7.3). Its table and drawer are the Screen's (spec 2026-11-22
+     6, approach A), so the Screen's panel shows under the page's own head there too, and the
+     table is told which of the two views it draws (P.onList) once the panels show, since it reads
+     the Screen's place from the scroller as it turns to the list and a hidden scroller reads
+     none; no other view tells it, so it keeps its mode while hidden.
+     A view shown closes the watchlist popup and the Notes box (FairbandPage.closePopups), which
+     no press closes when the browser's Back or Forward moves the hash. */
   function show(tab, section, id, report) {
     if (VIEWS.indexOf(tab) === -1 || (tab === 'company' && !section)) tab = 'screen';
     var opened = state.tab !== tab;
     P.section = tab === 'methodology' && section ? section : null;
     var moved = tab === 'company' && keepCompany(section, id, report);
+    var listed = tab === 'watchlists' && keepList(section);
     history.replaceState(null, '', tab === 'screen' ? location.pathname
-      : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : ''));
-    if (!opened && !P.section && !moved) return;
+      : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : '') +
+        (tab === 'watchlists' && P.listId != null ? '/' + P.listId : ''));
+    if (!opened && !P.section && !moved && !listed) return;
     state.tab = tab;
     state.detailsOpen = false; /* a view opened with no press, by Back or Forward, shuts it too */
     P.closePopups();
-    VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });
+    VIEWS.forEach(function (id) {
+      panels[id].hidden = id !== tab && !(id === 'screen' && tab === 'watchlists');
+    });
+    if (tab === 'screen' || tab === 'watchlists') P.onList(tab === 'watchlists');
     if (tab === 'groups') loadGroups();
     if (P.onShow[tab]) P.onShow[tab]();
     render();
+  }
+
+  /* The list a hash names, kept in P.listId: the whole number its word spells, else null, the
+     default list or the first by name (watchlists.js). True when it is not the id already
+     kept. */
+  function keepList(word) {
+    var id = /^\d+$/.test(String(word)) ? Number(word) : null;
+    var kept = P.listId;
+    P.listId = id;
+    return kept !== id;
   }
 
   /* The company a hash names, kept in P.company: the symbol decoded, as the links encode it, and
@@ -285,18 +308,19 @@
       (id == null ? '' : '/' + id);
   }
 
-  /* The view a hash names, on load and when a link changes it: #watchlists, #methodology,
-     #settings, #methodology/<section-id>, the Methodology view at that section; #company/<symbol>,
-     the company page's Overview, #company/<symbol>/financials, its Financials tab,
-     #company/<symbol>/estimates, its Estimates tab, #company/<symbol>/investor-relations, its
-     Investor relations tab, #company/<symbol>/investor-relations/2026Q4 on that call and
+  /* The view a hash names, on load and when a link changes it: #watchlists, the watchlist page
+     on the default list, or the first by name, #watchlists/<id>, on the list with that id,
+     #methodology, #settings, #methodology/<section-id>, the Methodology view at that section;
+     #company/<symbol>, the company page's Overview, #company/<symbol>/financials, its Financials
+     tab, #company/<symbol>/estimates, its Estimates tab, #company/<symbol>/investor-relations,
+     its Investor relations tab, #company/<symbol>/investor-relations/2026Q4 on that call and
      #company/<symbol>/investor-relations/filings on its Filings view, a word the tab cannot read
      put right to the tab alone, #company/<symbol>/research, its Research tab on the latest report,
-     or #company/<symbol>/research/<id>, on that report. The report page's
-     addresses, which a link or a bookmark may still name, #report/<symbol> and
-     #report/<symbol>/<id>, open the Research tab on the same report, the company's latest where
-     no id is given, the hash replaced by the tab's; #report with no symbol is the Screen, as show
-     has it (the Research tab's design, 7.1). */
+     or #company/<symbol>/research/<id>, on that report. The report page's addresses, which a link
+     or a bookmark may still name, #report/<symbol> and #report/<symbol>/<id>, open the Research
+     tab on the same report, the company's latest where no id is given, the hash replaced by the
+     tab's; #report with no symbol is the Screen, as show has it (the Research tab's design,
+     7.1). */
   function fromHash() {
     var parts = location.hash.slice(1).split('/');
     if (parts[0] === 'report') show('company', parts[1], 'research', parts[2]);
@@ -566,7 +590,8 @@
      onShow[tab]() runs each time that view opens; section is the Methodology section a hash
      named; company is the company, the tab and the id the company page shows,
      { symbol, tab, id }, the id null but on a report of the Research tab and on a word of the
-     Investor relations tab; running() is true
+     Investor relations tab; listId is the list's id the address names, a number or null, which
+     the watchlist page sets too as the reader chooses a list; running() is true
      while a refresh runs; followRefresh() follows a refresh another view started (the Settings
      view's revalue) as the header follows its own: the run bar while it runs, the rows loaded
      again when it ends; countInbox(items) hands the header the Inbox view's own read, so its
@@ -574,6 +599,7 @@
      calls. */
   P.show = show;
   P.onShow = {};
+  P.listId = null;
   P.section = null;
   P.company = null;
   P.running = function () { return state.running !== null; };

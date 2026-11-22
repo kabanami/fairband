@@ -2,7 +2,8 @@
 // bundle and app.js are loaded as tests/web/page.mjs loads them, with a stub React, a stub ReactDOM
 // whose roots keep what they last drew, and a fetch of the driver's own, answered only when a step
 // answers it, so the steps say exactly when a write or a read lands; the reads the screen and the
-// lists start as app.js loads are dropped, and a read no step names is never answered.
+// lists start as app.js loads stay unanswered, the screen's until a drawer step answers it, and a
+// read no step names is never answered.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "open", "detail"}             the company page's control is pressed, drawn on `detail`
@@ -17,9 +18,9 @@
 //   {"do": "read", "url", "body"}        the oldest read in flight of `url` answers 200 with
 //                                        `body`; with none in flight, nothing happens
 //   {"do": "notes"}                      a Notes control is pressed (openNotes)
-//   {"do": "drawer", "symbol"}           the screen's row of `symbol` opens its drawer
-//                                        (FairbandPage.openRow); the view switch is controls.js's,
-//                                        which is not loaded, and does nothing here
+//   {"do": "drawer", "symbol"}           the screen's newest read in flight lands with the row of
+//                                        `symbol` alone, and the row opens its drawer as a click
+//                                        on it does (the table's onOpen)
 // After each step and the work it sets off, the trace on stdout gains what the step fetched (each
 // request's method, path and JSON body), the times `after` has run and the control has taken
 // focus back, whether a Notes box is drawn, the moat box drawn, null for none: the text of its
@@ -74,7 +75,11 @@ const fetch = (url, init) => new Promise((resolve) => {
 // The first request in flight that `test` holds, answered `status` with `body`, and no longer in
 // flight; nothing where none is.
 function settle(test, status, body) {
-  const found = inFlight.find(test);
+  answer(inFlight.find(test), status, body);
+}
+
+// The request `found` answered `status` with `body`, and no longer in flight; nothing for none.
+function answer(found, status, body) {
   if (!found) return;
   inFlight.splice(inFlight.indexOf(found), 1);
   found.resolve({
@@ -92,8 +97,7 @@ new Function('window', 'React', bundle)(window, React);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app)(
   window, React, ReactDOM, window.Fairband, document, fetch);
 const P = window.FairbandPage;
-inFlight = []; fetched = []; // the screen's and the lists' own reads, unanswered
-P.show = () => {};
+fetched = []; // the screen's and the lists' own reads, unanswered, are no step's
 
 let afters = 0;
 let focused = 0;
@@ -195,7 +199,11 @@ for (const step of steps) {
   } else if (step.do === 'notes') {
     P.notesControl('BF.B', 0, null).props.onClick({ currentTarget: notesAnchor });
   } else if (step.do === 'drawer') {
-    P.openRow(step.symbol);
+    const screens = inFlight.filter((f) => f.method === 'GET' && f.url.startsWith('/api/screen'));
+    answer(screens[screens.length - 1], 200, { rows: [{ ticker: step.symbol }] });
+    await new Promise((done) => later(done, 0));
+    const [table] = [...elements(roots[0].drawn)].filter((e) => e.type && e.type.name === 'Screen');
+    table.props.onOpen({ ticker: step.symbol });
   }
   await new Promise((done) => later(done, 0));
   trace.push(seen());

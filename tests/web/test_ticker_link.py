@@ -1,10 +1,10 @@
 """The ticker in the screen's table (spec 2026-11-16 company page, 12): in the Ticker cell of the
-screen's table and of a watchlist's, the ticker's text is a link to the company page,
-``#company/<symbol>``, the symbol encoded. A click on it, or Enter on it, stops at the link, so the
-row does not open the drawer and the browser follows the address; the watchlist mark keeps its own
-click. The link is ScreenTable's ``companyHref``, a ``fairband:`` patch of the vendored bundle, and
-without it the cell is drawn as it was. It reads as the ticker does, takes an underline on hover
-and the focus ring on focus.
+screen's table, on the Screen and on the watchlist page, the ticker's text is a link to the company
+page, ``#company/<symbol>``, the symbol encoded. A click on it, or Enter on it, stops at the link,
+so the row does not open the drawer and the browser follows the address; the watchlist mark keeps
+its own click. The link is ScreenTable's ``companyHref``, a ``fairband:`` patch of the vendored
+bundle, and without it the cell is drawn as it was. It reads as the ticker does, takes an underline
+on hover and the focus ring on focus.
 
 And the report's charts (13): no Tables button, no state for one and no ``tableView`` handed to a
 chart; the vendored components keep the prop, unset.
@@ -71,7 +71,7 @@ def _table(rows: list[dict[str, Any]], linked: bool) -> Any:
     props: dict[str, Any] = {
         "rows": rows,
         "chooser": False,
-        "onOpen": {"$page": "openRow"},
+        "onOpen": {"$page": "find"},
         "onWatch": {"$page": "watch"},
     }
     if linked:
@@ -188,14 +188,15 @@ def test_the_link_stops_its_click_and_its_enter() -> None:
 
 
 def test_the_screen_and_the_watchlists_pass_the_prop() -> None:
-    """The screen's table and each watchlist's hand ScreenTable the one address the page keeps,
-    FairbandPage.companyHref: the company page of the row's ticker, encoded."""
+    """The screen's table, which draws the watchlist page's list too (spec 2026-11-22 7.1), hands
+    ScreenTable the one address the page keeps, FairbandPage.companyHref: the company page of the
+    row's ticker, encoded."""
     app = _static_file("app.js")
     assert "return '#company/' + encodeURIComponent(row.ticker);" in _function(app, "companyHref")
     shared = app[app.index("window.FairbandPage = {") :]
     assert "companyHref: companyHref," in shared[: shared.index("};")]
     assert "companyHref: companyHref," in _function(app, "render")
-    assert "companyHref: P.companyHref," in _function(_static_file("watchlists.js"), "section")
+    assert "F.ScreenTable" not in _static_file("watchlists.js")  # the list's table is the screen's
 
 
 def test_the_link_reads_as_the_ticker() -> None:

@@ -14,14 +14,17 @@
   /* The header runs edge to edge and does not stick: its hairline rule is the separation. What
      is under it keeps the page's margins. The table and the drawer each scroll in their own
      column, so the table's header stays put and the drawer stays beside whichever row opened
-     it. Each other view scrolls as one panel. */
+     it. Each other view scrolls as one panel, but the watchlist page: its head is a panel of its
+     own height, and the Screen's panel, which holds the table and the drawer, fills the rest
+     under it (spec 2026-11-22). */
   .app-page { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; }
   #header { flex: none; }
   #controls { padding: var(--space-2) var(--space-6) 0; }
-  #screen, #groups, #watchlists, #methodology, #settings, #inbox {
+  #screen, #groups, #methodology, #settings, #inbox {
     flex: 1; min-height: 0; padding: 0 var(--space-6) var(--space-4);
   }
-  #groups, #watchlists, #methodology, #settings, #inbox { overflow: auto; }
+  #groups, #methodology, #settings, #inbox { overflow: auto; }
+  #watchlists { flex: none; padding: var(--space-2) var(--space-6); }
 
   /* The header's finder (finder.js), first in the header's right slot on every view but the
      Screen: a field in the look of the Screen's own, 220px wide, that alone gives way, down to
@@ -166,16 +169,19 @@
   .app-watch__name::placeholder { color: var(--ink-faint); }
   .app-watch__name:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .app-watch__error { margin: var(--space-2) 0 0; color: var(--caution); }
-  /* The Watchlists view (spec 2026-11-04 9.6): the New watchlist field and Create above the
-     lists; each list a section on the raised surface, its head the name, the count and the date,
-     Rename and Delete; under it the Add a company field, its matches a column of buttons under
-     it, then the list's table, which scrolls sideways on its own. No bar stands above a list's
-     table, so its header cells keep the table's top; a company with no row has no name, and its
+  /* The watchlist page's head (spec 2026-11-22 7.3 and 7.4), above the Screen's table and drawer,
+     which draw the list: one row that wraps in a narrow window, the selector, the list's count and
+     the day it was made, Set as default, Rename and Delete, then the New watchlist field and
+     Create at the row's end; a refused write's sentence under it, then the Add a company field,
+     its matches a column of buttons under it. With no list, the row is New watchlist and Create,
+     and the sentence under it says how to make one. A company with no row has no name, and its
      Company cell shows an em dash as every other empty cell does. Delete's dialog stands over
      the page. */
-  .app-lists { padding: var(--space-2) 0 var(--space-4); }
-  .app-lists__new { display: flex; align-items: center; gap: var(--space-2); }
-  .app-lists__empty { margin-top: var(--space-4); }
+  .app-lists__row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-6);
+  }
+  .app-lists__new { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+  .app-lists__empty { margin-top: var(--space-2); }
   .app-field {
     width: 16rem; max-width: 100%; box-sizing: border-box; padding: var(--space-1) var(--space-2);
     color: var(--ink); background: var(--surface-sunken); border: 1px solid var(--border);
@@ -183,20 +189,14 @@
   }
   .app-field::placeholder { color: var(--ink-faint); }
   .app-field:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-  .app-lists__new .app-field { padding: var(--space-2) var(--space-3); }
-  .app-wl {
-    margin-top: var(--space-4); padding: var(--space-3) var(--space-4) var(--space-4);
-    background: var(--surface-raised); border: 1px solid var(--hairline);
-    border-radius: var(--radius-lg);
-  }
   .app-wl__head {
     display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
   }
-  .app-wl__title { margin: 0; overflow-wrap: anywhere; }
+  .app-wl__pick { max-width: 20rem; margin-left: 0; }
   .app-wl__meta { margin: 0; color: var(--ink-muted); }
-  .app-wl__actions { display: flex; gap: var(--space-2); margin-left: auto; }
+  .app-wl__actions { display: flex; gap: var(--space-2); }
   .app-wl__error { margin: var(--space-2) 0 0; color: var(--caution); }
-  .app-wl__add { margin-top: var(--space-3); }
+  .app-wl__add { margin-top: var(--space-2); }
   .app-wl__matches {
     list-style: none; width: 24rem; max-width: 100%; margin: var(--space-1) 0 0; padding: 0;
   }
@@ -210,10 +210,8 @@
   .app-wl__matchname {
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .app-wl__hint, .app-wl__none { margin: var(--space-2) 0 0; }
-  .app-wl__table { margin-top: var(--space-3); overflow-x: auto; }
-  #watchlists .fb-screen { --bar-height: 0px; }
-  #watchlists .fb-screen__name:empty::before { content: '—'; color: var(--ink-faint); }
+  .app-wl__hint { margin: var(--space-2) 0 0; }
+  #screen .fb-screen__name:empty::before { content: '—'; color: var(--ink-faint); }
   .app-dialog {
     position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-start;
     justify-content: center; padding: 15vh var(--space-4) var(--space-4);
@@ -1607,9 +1605,9 @@
 <main class="app-page">
   <div id="header"></div>
   <div id="controls"></div>
+  <section id="watchlists" hidden></section>
   <section id="screen"></section>
   <section id="groups" hidden></section>
-  <section id="watchlists" hidden></section>
   <section id="methodology" hidden></section>
   <section id="settings" hidden></section>
   <section id="inbox" hidden></section>

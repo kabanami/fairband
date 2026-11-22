@@ -42,9 +42,9 @@
      owner may decline (spec 2026-11-06 Tier 2, 8 and 18.5). */
   var OPEN_STATES = ['pending', 'claimed'];
   /* The note on a mechanical value (spec 2026-11-19 7.5), which the value's hover ends with: the
-     screen's, the Mechanical column's head and its values in the screen's table and in each
-     watchlist's, where the company is not open; and the open company's, in the drawer and on the
-     company page, where Request research is at hand. */
+     screen's, the Mechanical column's head and its values in the table, on the Screen and on the
+     watchlist page, where the company is not open; and the open company's, in the drawer and on
+     the company page, where Request research is at hand. */
   var SCREEN_NOTE = 'Preliminary estimate only. To ask an agent for a reviewed valuation, open ' +
     'the company and click Request research.';
   var OPEN_NOTE = 'Preliminary estimate only. To ask an agent for a reviewed valuation, click ' +
@@ -130,9 +130,9 @@
     render();
   }
 
-  /* A symbol's row from another view (the Methodology page's examples, a watchlist): the symbol
-     in the Screen's own FIND, the Screen's filters cleared so nothing hides its row, and the
-     Screen view open; the watchlist page's FIND and filters stay as they are. */
+  /* A symbol's row from another view (the Methodology page's examples): the symbol in the
+     Screen's own FIND, the Screen's filters cleared so nothing hides its row, and the Screen view
+     open; the watchlist page's FIND and filters stay as they are. */
   function find(symbol) {
     state.query = symbol;
     state.filters = F.EMPTY_FILTERS;
@@ -216,14 +216,13 @@
      in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
      where it is handed one (the company page's Watchlists ▾); closePopups, which closes the popup,
      the Notes box and the moat box as controls.js shows a view; companyHref, the address a ticker
-     links to, which a watchlist's table hands ScreenTable as the screen's does (the company page's
-     design, 12); SCREEN_NOTE, the note on a mechanical value, which a watchlist's table hands
-     ScreenTable as the screen's does, and OPEN_NOTE, the open company's (spec 2026-11-19 7.5);
+     links to, which the header's finder and the Inbox view's ticker link to as the table's does
+     (the company page's design, 12); SCREEN_NOTE, the note on a mechanical value, which the
+     table hands ScreenTable, and OPEN_NOTE, the open company's (spec 2026-11-19 7.5);
      researchHref, the address of a report, on the company page's Research tab (the Research tab's
-     design, 7.1); the loaded rows (null until they load), the chosen columns, openRow,
-     which opens a row's drawer, reloadDetail, which reads the drawer's company again after
-     another view's write about it (the Inbox view's decline and a watchlist's Request research,
-     spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the
+     design, 7.1); the loaded rows (null until they load), the chosen columns, reloadDetail, which
+     reads the drawer's company again after another view's write about it (the Inbox view's
+     decline, spec 2026-11-06 Tier 2, 18.5), and reloadDrawer, which reads whichever company the
      drawer shows again when a run ends; onList, which turns the one table to the watchlist page's
      list as that view shows and back to the screen as the Screen shows, and selectList, by which
      the page's head names the list it draws (spec 2026-11-22 7.1). controls.js adds show,
@@ -273,7 +272,7 @@
     SCREEN_NOTE: SCREEN_NOTE, OPEN_NOTE: OPEN_NOTE,
     rows: function () { return state.rows; },
     columns: function () { return state.columns; },
-    openRow: openRow, reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
+    reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
     meter: meter, gapText: gapText, levelRows: levelRows, bandBasis: bandBasis,
     inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     inputValue: inputValue,
@@ -357,9 +356,10 @@
     return r.enteredAt ? Object.assign(row, { enteredAt: localIso(r.enteredAt) }) : row;
   }
 
-  /* The address a row's ticker links to in the screen's table and in a watchlist's
-     (ScreenTable's companyHref): the company's page, the symbol encoded as the drawer's Company
-     page encodes it (spec 2026-11-16 company page, 12). */
+  /* The address a ticker links to (spec 2026-11-16 company page, 12): in the table, on the Screen
+     and on the watchlist page (ScreenTable's companyHref), in the header's finder (finder.js) and
+     in the Inbox view's rows (inbox.js); the company's page, the symbol encoded as the drawer's
+     Company page encodes it. */
   function companyHref(row) {
     return '#company/' + encodeURIComponent(row.ticker);
   }
@@ -416,13 +416,6 @@
       });
   }
 
-  /* A row from another view (a watchlist's): its drawer opens as a click on the row opens it, and
-     the Screen view shows, since the drawer stands beside the screen's table. */
-  function openRow(symbol) {
-    open({ ticker: symbol });
-    window.FairbandPage.show('screen');
-  }
-
   /* The drawer closes, and its company's request no longer follows its launch. */
   function close() {
     latestDetail++;
@@ -432,7 +425,8 @@
   }
 
   /* Escape closes the drawer, unless a menu is open: then Escape closes the menu first. Only while
-     the Screen shows it: in another view the drawer is hidden, and Escape belongs to that view. */
+     its panel shows, on the Screen and on the watchlist page: in another view the drawer is
+     hidden, and Escape belongs to that view. */
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape' && state.drawer && !mount.hidden &&
         !document.querySelector('.fb-menu')) close();
@@ -520,7 +514,7 @@
      `symbols`, in the rows' order, the server's, each watched; then, by ticker, one for each
      symbol with no row (it left the universe, or has no snapshot yet), its ticker alone and an
      em dash in every other cell. Such a row matches FIND by its ticker and no filter (narrow), and
-     stands after the rows that have the sorted field. */
+     stands after the rows that have data, by ticker, whatever the sort. */
   function listRows(rows, symbols) {
     var found = {};
     var kept = rows.filter(function (r) {
@@ -536,9 +530,9 @@
   }
 
   /* The rows the list is drawn from: its own read (loadList) where its sort differs from the
-     Screen's and that read is in; else the Screen's rows, which, while the list's first read in
-     another order is out, stand in the old order as a new sort on the Screen leaves them until
-     its read lands. */
+     Screen's and a read is in; else the Screen's rows. While a read in a new order is out, the
+     rows stand in the old order, as a new sort on the Screen leaves them until its read lands:
+     the Screen's own on the list's first read in another order, the earlier read's after that. */
   function listSource() {
     var list = state.list;
     return !sameSort(list.sort, state.sort) && list.rows ? list.rows : state.rows;
@@ -587,8 +581,8 @@
 
   /* ------------------------------------------------------- the watchlist popup */
 
-  /* The popup has a root of its own at the end of the page, so it opens over whichever view's
-     table holds the mark (the Watchlists view's too) and over the drawer. */
+  /* The popup has a root of its own at the end of the page, so it opens over the table, on the
+     Screen and on the watchlist page, over the company page's head and over the drawer. */
   var watchMount = document.body.appendChild(document.createElement('div'));
   var watchRoot = ReactDOM.createRoot(watchMount);
   var latestLists = 0;
@@ -832,12 +826,13 @@
      scroller at `top`, the list's top or the place the Screen's was left at (onList). The root
      draws after render returns, so onList cannot set the place itself; the effect runs with the
      new rows in the document. The Screen's place is used once, so a later mount of its table
-     (after a failed load) starts at the top. */
+     (after a failed load) starts at the top: the table mounted for the Screen (`list` false)
+     clears it, whichever view shows by the time its effect runs. */
   function Screen(props) {
     React.useEffect(function () {
       var scroller = document.querySelector('.app-main');
       if (scroller) scroller.scrollTop = props.top || 0;
-      if (!state.onList) state.screenTop = 0;
+      if (!props.list) state.screenTop = 0;
       var bar = document.querySelector('.fb-screen__bar');
       if (!bar || typeof ResizeObserver === 'undefined') return undefined;
       var main = bar.closest('.app-main');
@@ -899,6 +894,7 @@
       var rows = narrow(all, view.query, view.filters);
       main = h(Screen, {
         key: state.onList ? 'list' : 'screen',
+        list: state.onList,
         listFilter: state.onList ? false : undefined,
         top: state.onList ? 0 : state.screenTop,
         rows: d ? rows.map(function (r) {
@@ -1205,11 +1201,12 @@
 
   /* Request research's menu (spec 18.2), in the bundle's menu style as Details ▾ draws it: the
      mode, a radio each, the note line, where launching is set up the box Open Claude Code (spec
-     2026-11-16 agent launch, 10), then Post. It opens under its button from the button's left
-     edge, focus on the chosen mode; Post, or Enter in the note line, sends it. A press or focus
-     outside the button and its menu closes it, as the screen's menus close, and so does Escape,
-     which hands focus back to the button; the listeners last as long as the menu, and the
-     drawer's own Escape, registered first, sees the menu open and waits. */
+     2026-11-16 agent launch, 10), then Post. It opens under its button, from the button's right
+     edge on the company page's head and, in the drawer, from the right edge of the row of
+     buttons it stands in (index.html), focus on the chosen mode; Post, or Enter in the note line,
+     sends it. A press or focus outside the button and its menu closes it, as the screen's menus
+     close, and so does Escape, which hands focus back to the button; the listeners last as long
+     as the menu, and the drawer's own Escape, registered first, sees the menu open and waits. */
   function RequestMenu(props) {
     var ask = props.ask;
     var redraw = props.redraw;

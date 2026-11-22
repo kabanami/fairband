@@ -1179,8 +1179,10 @@ def test_page_opens_the_view_the_hash_names() -> None:
     keeps the section for its script to scroll to; a hash naming no view is the Screen. Each view
     loads through FairbandPage.onShow as it opens, every panel but the Methodology view's fades
     while a refresh runs, and FairbandPage.find puts a symbol in FIND with the filters cleared and
-    opens the Screen. The company page's hash is tests/web/test_company_page.py's, and the report
-    page's old addresses test_a_report_s_old_address_opens_the_research_tab's."""
+    opens the Screen. The company page's hash is tests/web/test_company_page.py's, the report
+    page's old addresses test_a_report_s_old_address_opens_the_research_tab's, and the watchlist
+    page's list, #watchlists/<id>, under whose head the Screen's panel shows,
+    tests/web/test_watchlist_page.py's."""
     js = _static_file("controls.js")
     assert (
         "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox',"
@@ -1194,9 +1196,10 @@ def test_page_opens_the_view_the_hash_names() -> None:
     assert "P.section = tab === 'methodology' && section ? section : null;" in show
     assert "history.replaceState(null, '', tab === 'screen' ? location.pathname" in show
     assert (
-        ": '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : ''));"
+        ": '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : '') +"
     ) in show
-    assert "VIEWS.forEach(function (id) { panels[id].hidden = id !== tab; });" in show
+    assert "(tab === 'watchlists' && P.listId != null ? '/' + P.listId : ''));" in show
+    assert "panels[id].hidden = id !== tab && !(id === 'screen' && tab === 'watchlists');" in show
     assert "if (P.onShow[tab]) P.onShow[tab]();" in show
     assert "var parts = location.hash.slice(1).split('/');" in js
     assert "else show(parts[0], parts[1], parts[2], parts[3]);" in js
@@ -1234,8 +1237,10 @@ def test_index_scrolls_the_new_panels_and_the_header_wraps_at_phone_width() -> N
     under the lockup and the header grows by it, so the page never scrolls sideways (spec
     2026-11-04 6; 2026-11-06 Tier 2, 18.5)."""
     page = _static_file("index.html")
-    assert "#screen, #groups, #watchlists, #methodology, #settings, #inbox {" in page
-    assert "#groups, #watchlists, #methodology, #settings, #inbox { overflow: auto; }" in page
+    assert "#screen, #groups, #methodology, #settings, #inbox {" in page
+    assert "#groups, #methodology, #settings, #inbox { overflow: auto; }" in page
+    # the watchlist page's head, its own height, over the Screen's panel (spec 2026-11-22)
+    assert "#watchlists { flex: none; padding: var(--space-2) var(--space-6); }" in page
     css = _component_file("bundle.css")
     patch = css[css.index("/* fairband: below 980px, where the one-line header") :]
     comment = patch[: patch.index("*/")]
@@ -1460,31 +1465,26 @@ def test_watchlists_view_creates_renames_deletes_and_adds() -> None:
     assert "P.api.post('/api/watchlists', { name: name })" in js
     assert "method: 'PATCH'" in js and "method: 'DELETE'" in js
     assert "h(F.ConfirmDialog, {" in js  # Delete confirms with the name and the count
-    assert "chooser: false, dense: true" in js  # each list is a ScreenTable of the screen's rows
     assert "placeholder: 'Add a company'" in js and ".slice(0, 8)" in js
     html = _static_file("index.html")
     assert '<script src="/static/watchlists.js"></script>' in html
 
 
 def test_watchlists_view_draws_the_screen_rows_and_a_symbol_without_one() -> None:
-    """Spec 2026-11-04 9.6: a list's rows are the screen's loaded rows joined by symbol, in the
-    list's order, each watched, under the screen's columns; a symbol with no row (it left the
-    universe, or has no snapshot) stays, its ticker alone with an em dash in every other cell. A
-    row opens the drawer and its mark the screen's popup. The view draws as it opens and again
-    whenever the screen draws, so it follows the rows and the lists as they load. Its writes go
-    through FairbandPage.api, which gains PATCH and DELETE beside POST and PUT."""
+    """Spec 2026-11-04 9.6, as the watchlist page keeps it (spec 2026-11-22 7.1): a list's rows are
+    the screen's loaded rows, each watched, and a symbol with no row (it left the universe, or has
+    no snapshot) stays, its ticker alone with an em dash in every other cell; the Screen's own
+    table draws them (app.js, listRows; tests/web/test_watchlist_page.py). The head follows each
+    draw of the screen, so it follows the rows and the lists as they load. Its writes go through
+    FairbandPage.api, which gains PATCH and DELETE beside POST and PUT."""
     js = _static_file("watchlists.js")
     assert (
         "{ ticker: symbol, name: null, price: null, mechanical: null, reviewed: null, "
         "phase: null, fairLow: null, fairHigh: null, watched: true }"
-    ) in " ".join(js.split())
+    ) in " ".join(_static_file("app.js").split())
     for text in (
-        "Object.assign({}, row, { watched: true })",
-        "columns: P.columns(),",
-        "onOpen: function (row) { P.openRow(row.ticker); },",
-        "onWatch: P.watch,",
-        "P.onShow.watchlists = render;",
-        "P.onRender = function () { if (!panel.hidden) render(); };",
+        "P.onShow.watchlists = function () {\n    state.selected = null;\n    follow();\n  };",
+        "P.onRender = follow;",
         "title: 'Delete ' + d.name,",
         "payload: { name: d.name, companies: d.count },",
         "/^[A-Za-z0-9.-]{1,10}$/",
@@ -1500,17 +1500,13 @@ def test_watchlists_view_draws_the_screen_rows_and_a_symbol_without_one() -> Non
         "del: function (url) { return send('DELETE', url); }",
         "rows: function () { return state.rows; },",
         "columns: function () { return state.columns; },",
-        "openRow: openRow",
         "if (page.onRender) page.onRender();",
     ):
         assert text in app, text
-    open_row = app[app.index("function openRow(symbol) {") :]
-    open_row = open_row[: open_row.index("\n  }\n")]
-    assert "open({ ticker: symbol });" in open_row
-    assert "window.FairbandPage.show('screen');" in open_row
-    # the lists' tables keep their header cells at the top: no bar stands above them
     page = _static_file("index.html")
-    assert "#watchlists .fb-screen { --bar-height: 0px; }" in page
+    assert "#screen .fb-screen__name:empty::before { content: '—'; color: var(--ink-faint); }" in (
+        page
+    )
 
 
 def test_watchlists_view_enter_adds_only_a_chosen_company() -> None:
@@ -1531,77 +1527,6 @@ def test_watchlists_view_enter_adds_only_a_chosen_company() -> None:
     ):
         assert text in js, text
     assert "add(list.id, shown[0].ticker)" not in js
-
-
-def test_the_watchlist_requests_research(client: TestClient) -> None:
-    """Spec 2026-11-06 Tier 2, 18.6: each list's head has Request research beside Rename and
-    Delete, disabled for a list with no company. It posts a valuation review for each company on
-    the list in turn, one post at a time, as the owner: a 201 counts as posted and a 409, an item
-    already open for the company, as already open; any other answer, a 400 or a 5xx, stops the run,
-    its sentence, the server's, under the head with the company it stopped at. The list's meta
-    line says what the run came to as it goes, "… · posted 3 requests · 2 already open", until the
-    next write. As it ends, the drawer reads its company again if it is one on the list, the lists
-    load again, and the header's count follows on its next read."""
-    js = _static_file("watchlists.js")
-    head = _function(js, "head")
-    _in_order(head, "'Request research')", "'Rename')", "'Delete')")
-    assert "disabled: list.count === 0 || state.pending !== null," in head
-    assert "onClick: function () { requestResearch(list); }" in head
-    assert "outcome ? ' · ' + outcome : null" in head
-    run = _function(js, "requestResearch")
-    _in_order(
-        run,
-        "state.requested[list.id] = tally;",
-        "return list.symbols.reduce(function (run, entry) {",
-        "return run.then(function (last) {",
-        "if (last && !last.ok) return last;",
-        "made.head = 'Not posted for ' + entry.symbol;",
-        "P.api.post('/api/inbox', { symbol: entry.symbol, mode: 'valuation review' })",
-        "if (r.status === 409) tally.open++;",
-        "else if (r.ok) tally.posted++;",
-        "else return r;",
-        "render();",
-        "}, Promise.resolve({ ok: true }));",
-        "list.symbols.forEach(function (entry) { P.reloadDetail(entry.symbol); });",
-        "state.focus = inList(list.id, '.app-wl__request');",
-    )
-    words = _function(js, "requested")
-    _in_order(
-        words,
-        "if (!tally) return null;",
-        "return 'posted ' + tally.posted + (tally.posted === 1 ? ' request' : ' requests') +",
-        "(tally.open ? ' · ' + tally.open + ' already open' : '');",
-    )
-    write = _function(js, "write")
-    _in_order(
-        write,
-        "state.errors = {};",
-        "state.requested = {};",
-        "return refusal(made.head || REFUSED[made.method], r);",
-        "return (made.head || REFUSED[made.method]) + ': ' + err.message + '.';",
-    )
-    # a 5xx's plain-text body is none, so the refusal names the status rather than a parse error
-    send = _function(_static_file("app.js"), "send")
-    assert "return response.json().catch(function () { return null; }).then(function (json) {" in (
-        send
-    )
-    # the server's answers the run counts: a post for each company, 409 where one is open
-    core = client.post("/api/watchlists", json={"name": "Core"}, headers=HEADER).json()
-    for symbol in ("AAPL", "AAL", "HGCO"):
-        client.put(f"/api/watchlists/{core['id']}/symbols/{symbol}", headers=HEADER)
-    client.post("/api/inbox", json={"symbol": "AAL", "mode": "full report"}, headers=HEADER)
-    [listed] = client.get("/api/watchlists").json()
-    answers = {
-        s["symbol"]: client.post(
-            "/api/inbox", json={"symbol": s["symbol"], "mode": "valuation review"}, headers=HEADER
-        ).status_code
-        for s in listed["symbols"]
-    }
-    assert answers == {"AAPL": 201, "AAL": 409, "HGCO": 201}
-    r = client.post(
-        "/api/inbox", json={"symbol": "a b", "mode": "valuation review"}, headers=HEADER
-    )
-    assert (r.status_code, r.json()) == (400, {"detail": "'a b' is not a symbol"})
 
 
 def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
@@ -3623,8 +3548,9 @@ def test_bundle_draws_the_watchlist_column() -> None:
 
 
 def test_the_screen_and_the_watchlists_hand_the_table_the_note() -> None:
-    """Spec 2026-11-19 7.5 and 9: the screen's table and each watchlist's hand ScreenTable the
-    screen's note, which the page holds beside the open company's. The mark's rule stands beside
+    """Spec 2026-11-19 7.5 and 9: the screen's table, which draws the watchlist page's list too
+    (spec 2026-11-22 7.1), hands ScreenTable the screen's note, which the page holds beside the
+    open company's. The mark's rule stands beside
     the Mechanical cell's: form A of the look, the bullet of the mono face enlarged, in the
     value's ink, so it sets no colour; the drawer and the company page load the same file. The
     hover, the mark and the note's prop are `// fairband:` patches that index.d.ts declares
@@ -3633,7 +3559,7 @@ def test_the_screen_and_the_watchlists_hand_the_table_the_note() -> None:
     assert "mechanicalNote: SCREEN_NOTE," in _function(app, "render")
     shared = app[app.index("window.FairbandPage = {") :]
     assert "SCREEN_NOTE: SCREEN_NOTE, OPEN_NOTE: OPEN_NOTE," in shared[: shared.index("};")]
-    assert "mechanicalNote: P.SCREEN_NOTE," in _function(_static_file("watchlists.js"), "section")
+    assert "F.ScreenTable" not in _static_file("watchlists.js")  # the list's table is the screen's
     css = _component_file("bundle.css")
     rule = (
         ".fb-warnmark { font-family: var(--font-mono); font-size: 22px; line-height: 0;"

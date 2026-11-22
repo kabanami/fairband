@@ -3,7 +3,7 @@
 from typing import Any
 
 import pytest
-from support.page import NODE, STATIC, node
+from support.page import NODE, STATIC, elements, node, text
 from support.web import _component_file, _static_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -30,6 +30,33 @@ GONE = {
     "fairHigh": None,
     "watched": True,
 }
+LISTS = [
+    {
+        "id": 4,
+        "name": "Core",
+        "createdAt": "2026-11-20T10:00:00+00:00",
+        "count": 2,
+        "symbols": [
+            {"symbol": "AAPL", "addedAt": "2026-11-20T10:00:00+00:00"},
+            {"symbol": "MSFT", "addedAt": "2026-11-20T10:00:00+00:00"},
+        ],
+    },
+    {"id": 2, "name": "Mag7", "createdAt": "2026-11-22T10:00:00+00:00", "count": 0, "symbols": []},
+]
+
+
+def _function(script: str, name: str) -> str:
+    """The text of the script's ``function <name>(``, to its closing brace."""
+    start = script.index(f"  function {name}(")
+    return script[start : script.index("\n  }\n", start)]
+
+
+def _buttons(tree: Any) -> list[dict[str, Any]]:
+    """The design system's Buttons in a helper's tree, in order. The harness draws no component in
+    a helper's tree, so a Button stays the element it was given, with no ``type`` (JSON drops its
+    function) and its own props, ``size`` among them, as ``tests/web/test_inbox_launch.py`` reads
+    one."""
+    return [e for e in elements(tree) if "type" not in e and "size" in e["props"]]
 
 
 def _row(ticker: str, **more: Any) -> dict[str, Any]:
@@ -90,4 +117,126 @@ def test_a_failed_read_of_the_list_leaves_the_screen_its_table() -> None:
     # the Screen's own failed load still shows on both views, the list's on the list alone
     assert render.index("if (state.error) {") < render.index(
         "} else if (state.onList && state.list.error) {\n      main = note(state.list.error);"
+    )
+
+
+@pytest.mark.parametrize(
+    ("lists", "address", "default", "opened"),
+    [
+        (LISTS, 2, 4, 2),  # the address first
+        (LISTS, 999, 2, 2),  # an address that names no list: the default
+        (LISTS, None, 999, 4),  # a default that names no list: the first by name
+        (LISTS, None, None, 4),
+        ([], 2, 4, None),
+    ],
+)
+def test_the_list_the_page_opens_on(
+    lists: list[dict[str, Any]], address: int | None, default: int | None, opened: int | None
+) -> None:
+    assert node("lists.opens", [lists, address, default], WATCHLISTS) == opened
+
+
+def test_the_head_has_the_selector_and_the_default_and_no_request_research() -> None:
+    tree = node("lists.head", [LISTS[0], LISTS, 4], WATCHLISTS)
+    [pick] = [e for e in elements(tree) if e.get("type") == "select"]
+    assert pick["props"]["value"] == "4"
+    options = [e for e in elements(pick) if e.get("type") == "option"]
+    assert [text(o) for o in options] == ["Core (default)", "Mag7"]
+    buttons = _buttons(tree)
+    assert [text(b) for b in buttons] == ["Default", "Rename", "Delete"]
+    assert buttons[0]["props"]["aria-pressed"] == "true"
+    other = node("lists.head", [LISTS[1], LISTS, 4], WATCHLISTS)
+    [first] = _buttons(other)[:1]
+    assert text(first) == "Set as default" and first["props"]["aria-pressed"] == "false"
+    js = _static_file("watchlists.js")
+    for gone in (
+        "Request research",
+        "requestResearch",
+        "state.requested",
+        "P.openRow",
+        "F.ScreenTable",
+    ):
+        assert gone not in js, gone
+
+
+def test_the_head_follows_the_lists() -> None:
+    js = _static_file("watchlists.js")
+    follow = js[js.index("  function follow() {") :]
+    follow = follow[: follow.index("\n  }\n")]
+    for pin in (
+        "if (panel.hidden) return;",
+        "var lists = P.watchlists();",
+        "if (lists) {",  # no list is chosen, and no address written, before the lists arrive
+        "want = opens(lists, P.listId, state.defaultId);",
+        "if (want !== state.selected || want !== P.listId) select(want);",
+    ):
+        assert pin in follow, pin
+    assert "'fairband.watchlist.default'" in js
+    assert "history.replaceState(null, '', '#watchlists' + (id == null ? '' : '/' + id));" in js
+
+
+def test_delete_clears_a_default_it_removes() -> None:
+    js = _static_file("watchlists.js")
+    drop = js[js.index("  function drop(d) {") :]
+    assert (
+        "if (!error && d.id === state.defaultId) setDefault(null);" in drop[: drop.index("\n  }\n")]
+    )
+
+
+def test_show_reads_the_lists_id() -> None:
+    js = _static_file("controls.js")
+    for pin in (
+        "var id = /^\\d+$/.test(String(word)) ? Number(word) : null;",
+        "var listed = tab === 'watchlists' && keepList(section);",
+        "panels[id].hidden = id !== tab && !(id === 'screen' && tab === 'watchlists');",
+        "if (tab === 'screen' || tab === 'watchlists') P.onList(tab === 'watchlists');",
+        "P.listId = null;",
+    ):
+        assert pin in js, pin
+
+
+def test_the_old_view_is_gone() -> None:
+    assert "function openRow(" not in _static_file("app.js")
+    page = _static_file("index.html")
+    assert "#watchlists .fb-screen { --bar-height: 0px; }" not in page
+    assert "#groups, #methodology, #settings, #inbox { overflow: auto; }" in page
+    assert "On a watchlist, it posts" not in _static_file("methodology.html")
+
+
+def test_the_head_stands_above_the_table_and_a_row_with_no_name_shows_a_dash() -> None:
+    """The head's panel, its own height, stands above the Screen's, which holds the table and the
+    drawer under it on the watchlist page; a company with no row has no name, and its Company
+    cell shows an em dash as every other empty cell does."""
+    page = _static_file("index.html")
+    assert "#watchlists { flex: none; padding: var(--space-2) var(--space-6); }" in page
+    assert page.index('<section id="watchlists" hidden></section>') < page.index(
+        '<section id="screen"></section>'
+    )
+    assert "#screen .fb-screen__name:empty::before { content: '—'; color: var(--ink-faint); }" in (
+        page
+    )
+    assert "#watchlists .fb-screen__name" not in page and ".app-wl__table" not in page
+
+
+def test_a_steady_view_draws_nothing_more_and_the_screen_s_place_is_used_once() -> None:
+    """The head names its list on every draw (P.onRender), so an unchanged list and an unchanged
+    view each return before they draw; the Screen's kept place is cleared as the table mounted for
+    the Screen takes it, whatever view the page shows by the time the effect runs."""
+    app = _static_file("app.js")
+    assert "if (id === list.id) return;" in _function(app, "selectList")
+    assert "if (on === state.onList) return;" in _function(app, "onList")
+    assert "if (!props.list) state.screenTop = 0;" in _function(app, "Screen")
+    assert "if (!state.onList) state.screenTop = 0;" not in app
+    assert "list: state.onList," in _function(app, "render")
+
+
+def test_an_address_the_page_did_not_write_decides_the_list() -> None:
+    """Showing the page turns the table to the list (P.onList), whose draw runs follow before the
+    view's loader forgets the selection, with the list of the last visit still selected. A
+    selection the address no longer names is forgotten there first, so the header's link,
+    #watchlists, opens the default, not the list last shown, and #watchlists/<id> opens its
+    list."""
+    follow = _function(_static_file("watchlists.js"), "follow")
+    assert follow.index("if (P.listId !== state.selected) state.selected = null;") < follow.index(
+        "var want = state.selected;"
     )
