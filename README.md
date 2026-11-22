@@ -77,43 +77,44 @@ stored data), and inline charts.
 
 ## Quickstart
 
-You need Python 3.13 or later, [uv](https://docs.astral.sh/uv/) and a Financial Modeling Prep
-key. I run Fairband on Linux under WSL, on FMP's Ultimate plan. Other systems and smaller plans
-are untested.
+Requirements: Python 3.13+, [uv](https://docs.astral.sh/uv/), and a Financial Modeling Prep API
+key. I run Fairband on Linux under WSL with FMP's Ultimate plan; other systems and lower FMP
+tiers haven't been tested.
 
-1. **Install.**
+1. Clone the repo and install dependencies:
 
-   ```
+   ```bash
    git clone https://github.com/kabanami/fairband.git
    cd fairband
    uv sync
    ```
 
-2. **Add your key** in `~/.config/fairband/keys.toml`. Never commit this file.
+2. Add your FMP API key to `~/.config/fairband/keys.toml` (outside the repo):
 
    ```toml
    [keys]
-   fmp = "your FMP key"
+   fmp = "your-fmp-key"
    ```
 
-3. **Start the server**, then open http://127.0.0.1:8470.
+3. Start the server, then open http://127.0.0.1:8470:
 
-   ```
+   ```bash
    uv run fairband serve
    ```
 
-4. **Press Refresh all.** The first refresh reads every company of the universe from FMP, so it
-   takes a while, and the database in `~/.local/share/fairband` grows to several gigabytes.
+4. Click **Refresh all** in the UI. The first refresh pulls data for every company from FMP, so
+   it takes a while and the database in `~/.local/share/fairband` will grow to several gigabytes.
 
-5. **Connect Claude Code.** `<repo>` is the absolute path of this directory.
+5. Register the MCP server and link the research playbook in Claude Code (replace `<repo>` with
+   the absolute path to your clone):
 
-   ```
+   ```bash
    claude mcp add --scope user fairband -- uv run --directory <repo> fairband mcp
    ln -s <repo>/playbook/fairband-research ~/.claude/skills/fairband-research
    ```
 
-[Agents](docs/agents.md) has the rest: the other hosts, the agent's identity, and how the page
-opens Claude Code for you.
+See [docs/agents.md](docs/agents.md) for configuring automatic terminal launching from the UI,
+agent identity, and connecting other MCP hosts.
 
 ## The MCP tools
 
