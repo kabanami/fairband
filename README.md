@@ -1,13 +1,13 @@
 # Fairband
 
-Fairband is a local equity research workbench for you and your AI agents. It values companies,
-and your own agents read and write to the workbench through its MCP server, up to full research
-reports.
+Fairband is a local equity research workbench that pairs a rule-based valuation engine with an MCP
+server for your AI agents. It pulls market data from Financial Modeling Prep using your API key,
+runs mechanical valuations, and gives you a single web interface to screen companies, inspect
+financials, track watchlists, and read research. Your agent connects over MCP to read that same
+data, challenge the model's assumptions where needed, and write full research reports back into
+the workbench. It currently only supports Claude Code.
 
 ![A research report in the Research tab of a company page](docs/images/research-report.png)
-
-It runs on your own machine, with your own data key. It is currently designed for Claude Code,
-with Codex coming soon.
 
 ## How the parts fit
 
