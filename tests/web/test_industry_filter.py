@@ -159,6 +159,10 @@ def test_the_menu_has_an_industry_section_after_the_sector_s() -> None:
 
 def test_the_page_hands_the_table_the_industries_and_keeps_the_listed_filters() -> None:
     script = (BUNDLE.parent.parent.parent / "app.js").read_text(encoding="utf-8")
-    assert "industries: industriesOf(state.rows, state.filters.sector)," in script
-    assert "state.filters = listedFilters(filters, state.rows || []);" in script
+    # the rows and the filters of the view that shows: the Screen's, or the watchlist page's list
+    assert "industries: industriesOf(all, view.filters.sector)," in script
+    assert (
+        "shown().filters = listedFilters(filters, (state.onList ? listed() : state.rows) || []);"
+        in script
+    )
     assert "within(filters.industry, r.industry) &&" in script

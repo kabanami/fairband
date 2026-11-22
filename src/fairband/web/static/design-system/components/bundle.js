@@ -1599,6 +1599,10 @@
     // fairband: the user's watchlists, [{ id, name }], for the menu and the chip (spec 2026-11-04
     // 9.4).
     var lists = p.watchlists || [];
+    // fairband: the lists the Filters menu offers; with `listFilter: false` none, so the menu
+    // draws no WATCHLISTS section, as the watchlist page's table, whose list the page's selector
+    // chooses (spec 2026-11-22 7.1). The chips and the Watchlists column still read `lists`.
+    var menuLists = p.listFilter === false ? [] : lists;
     var chips = summarise(p.filters, lists);
     var narrowed = anyFilter(p.filters, p.query);
 
@@ -1751,11 +1755,12 @@
                   }) : h('span', { className: 'fb-menu__hint caption' },
                     'Choose a sector to list its industries.')) : null,
                 // fairband: the user's lists by name, after SECTOR; a row on any chosen list
-                // matches. Without a list there is no section (spec 2026-11-04 9.4).
-                lists.length ? h('hr') : null,
-                lists.length ? h('div', { className: 'fb-menu__sec' },
+                // matches. Without a list there is no section (spec 2026-11-04 9.4), nor with
+                // `listFilter: false` (menuLists).
+                menuLists.length ? h('hr') : null,
+                menuLists.length ? h('div', { className: 'fb-menu__sec' },
                   h('span', { className: 'fb-menu__h label' }, 'WATCHLISTS'),
-                  lists.map(function (w) {
+                  menuLists.map(function (w) {
                     return checkRow('w' + w.id, listOf(filters, 'watchlist').indexOf(w.id) !== -1,
                       function () { toggleIn('watchlist', w.id); },
                       h('span', null, w.name));

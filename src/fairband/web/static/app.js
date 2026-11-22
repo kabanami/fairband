@@ -15,9 +15,11 @@
    company page's design, 11.1); the company page's head draws it too. The drawer's head and the
    company page's stamp the company's moat class, with the chip of the owner's or an agent's
    class; the company page's head draws the control that opens the moat box, where the owner sets
-   a class or returns to Fairband's (spec 2026-11-19 8.8). The header, the status line and the
-   group view are controls.js, loaded after this script; it reaches the screen through
-   window.FairbandPage. */
+   a class or returns to Fairband's (spec 2026-11-19 8.8). The same table and drawer draw the
+   watchlist page's one list (spec 2026-11-22 7.1 and 7.2), with a FIND, filters and a sort of
+   its own: controls.js says which of the two views shows (onList), watchlists.js which list
+   (selectList). The header, the status line and the group view are controls.js, loaded after
+   this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
 
@@ -59,6 +61,12 @@
        with the whole screen (screen-controls spec 4.4). */
     query: '',
     filters: F.EMPTY_FILTERS,
+    onList: false, /* the table draws the watchlist page's list, not the screen (onList) */
+    /* The watchlist page's own FIND, filters and sort, and the list it shows (spec 2026-11-22,
+       7.1); rows holds the screen's rows in this sort where it differs from the Screen's. */
+    list: { id: null, query: '', filters: F.EMPTY_FILTERS,
+            sort: { column: 'ticker', direction: 'asc' }, rows: null },
+    screenTop: 0, /* where the Screen's scroller stood when the list took the table */
     drawer: null, /* { symbol, body, loading, error } while open */
     watchlists: null, /* the reader's lists, by name, once loaded: [{ id, name, symbols, … }] */
     watchlistsError: null,
@@ -71,6 +79,7 @@
                   is open */
   };
   var latest = 0;
+  var latestList = 0;
   var latestDetail = 0;
 
   function loadColumns() {
@@ -104,18 +113,25 @@
     render();
   }
 
+  /* The view the table draws, whose FIND, filters and sort the table's controls write: the
+     watchlist page's own (state.list) while it shows, else the Screen's, held on state itself. */
+  function shown() { return state.onList ? state.list : state; }
+
   function setQuery(query) {
-    state.query = query;
+    shown().query = query;
     render();
   }
 
+  /* The filters of the view that shows, keeping the industries its menu still lists, which it
+     reads from that view's rows: the selected list's or the Screen's. */
   function setFilters(filters) {
-    state.filters = listedFilters(filters, state.rows || []);
+    shown().filters = listedFilters(filters, (state.onList ? listed() : state.rows) || []);
     render();
   }
 
   /* A symbol's row from another view (the Methodology page's examples, a watchlist): the symbol
-     in FIND, the filters cleared so nothing hides its row, and the Screen view open. */
+     in the Screen's own FIND, the Screen's filters cleared so nothing hides its row, and the
+     Screen view open; the watchlist page's FIND and filters stay as they are. */
   function find(symbol) {
     state.query = symbol;
     state.filters = F.EMPTY_FILTERS;
@@ -207,16 +223,18 @@
      which opens a row's drawer, reloadDetail, which reads the drawer's company again after
      another view's write about it (the Inbox view's decline and a watchlist's Request research,
      spec 2026-11-06 Tier 2, 18.5 and 18.6), and reloadDrawer, which reads whichever company the
-     drawer shows again when a run ends. controls.js adds show, onShow, section, running and
-     countInbox, the Inbox view onInbox, and agents.js adds agents, the Settings view's Agents
-     section; a view drawn from the rows or the lists sets onRender, which runs after each draw of
-     the screen, so it draws again as they load and change (the company page's runs the
-     Watchlists view's, set before it, then its own). A report's parts after its sections
-     (report_parts.js, 18.4) draw with this script's parts: the inputs table, a table of figures
-     by year, an input's figure in its unit, the secondary valuation's rows and path, the guidance
-     table, the phase evidence, pairs, a date, a total in a currency, an exchange rate and a
-     count; the line that says what the figures are in (currencyLine) is the drawer's and the
-     Research tab's, the same line in both. The company page
+     drawer shows again when a run ends; onList, which turns the one table to the watchlist page's
+     list as that view shows and back to the screen as the Screen shows, and selectList, by which
+     the page's head names the list it draws (spec 2026-11-22 7.1). controls.js adds show,
+     onShow, section, running and countInbox, the Inbox view onInbox, and agents.js adds agents,
+     the Settings view's Agents section; a view drawn from the rows or the lists sets onRender,
+     which runs after each draw of the screen, so it draws again as they load and change (the
+     company page's runs the Watchlists view's, set before it, then its own). A report's parts
+     after its sections (report_parts.js, 18.4) draw with this script's parts: the inputs table,
+     a table of figures by year, an input's figure in its unit, the secondary valuation's rows and
+     path, the guidance table, the phase evidence, pairs, a date, a total in a currency, an
+     exchange rate and a count; the line that says what the figures are in (currencyLine) is the
+     drawer's and the Research tab's, the same line in both. The company page
      (company.js; the company page's design, 7) draws its head with the logo, the phase
      numbers, the moat stamp (moatStamp), the chip of whose class it is (moatChip) and the control
      that opens the moat box (moatControl, spec 2026-11-19 8.8), the Notes control as the drawer's
@@ -237,15 +255,16 @@
      Screen's field finds (finds). The drawer with its bar (drawer), its parts (sections), the
      Notes box (notesBox), the moat box (moatBox), the open item's line (launchLine), an input's
      value (inputValue), a figure a share in a currency (money), a logo's ground (logoGround), the
-     screen's narrowing (narrow), the industries its menu lists (industriesOf) and the filters it
-     keeps (listedFilters) are here for the tests, which read them in node (tests/web/page.mjs and
-     tests/web/moat.mjs). */
+     screen's narrowing (narrow), the industries its menu lists (industriesOf), the filters it
+     keeps (listedFilters) and a list's rows (listRows) are here for the tests, which read them in
+     node (tests/web/page.mjs and tests/web/moat.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
     find: find, finds: finds,
     narrow: narrow, industriesOf: industriesOf, listedFilters: listedFilters,
+    listRows: listRows, onList: onList, selectList: selectList,
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
     watch: watch, closePopups: closePopups,
@@ -270,11 +289,11 @@
     drawer: drawer, sections: sections
   };
 
+  /* The screen's rows in the Screen's sort; only the newest read lands. The list follows every
+     reload (loadList). */
   function load() {
     var request = ++latest;
-    var sort = state.sort;
-    var key = SORT_KEYS[sort.column] || sort.column;
-    getJson('/api/screen?sort=' + encodeURIComponent(key) + '&dir=' + sort.direction)
+    getJson(screenPath(state.sort))
       .then(function (body) {
         if (request !== latest) return;
         state.rows = body.rows.map(localRow);
@@ -283,9 +302,46 @@
       })
       .catch(function (err) {
         if (request !== latest) return;
-        state.error = 'The screen did not load: ' + err.message + '. Reload the page to try again.';
+        state.error = screenFailed(err);
         render();
       });
+    loadList();
+  }
+
+  /* The watchlist page's rows in the list's own sort (spec 2026-11-22 7.1), read only while that
+     page shows and its sort differs from the Screen's; while the two agree the list is drawn from
+     the Screen's rows (listSource) and nothing is read. The newest read lands in list.rows, and
+     a failed read says so in the sentence a failed load of the Screen's writes. */
+  function loadList() {
+    var list = state.list;
+    if (!state.onList || sameSort(list.sort, state.sort)) return;
+    var request = ++latestList;
+    getJson(screenPath(list.sort))
+      .then(function (body) {
+        if (request !== latestList) return;
+        list.rows = body.rows.map(localRow);
+        render();
+      })
+      .catch(function (err) {
+        if (request !== latestList) return;
+        state.error = screenFailed(err);
+        render();
+      });
+  }
+
+  /* The screen's address in `sort`'s order: a column that draws a row key under another name
+     asks by that key (SORT_KEYS). */
+  function screenPath(sort) {
+    var key = SORT_KEYS[sort.column] || sort.column;
+    return '/api/screen?sort=' + encodeURIComponent(key) + '&dir=' + sort.direction;
+  }
+
+  /* Whether two sorts are the same order: the same column the same way. */
+  function sameSort(a, b) { return a.column === b.column && a.direction === b.direction; }
+
+  /* The sentence of a read of the screen that failed, the Screen's or the list's. */
+  function screenFailed(err) {
+    return 'The screen did not load: ' + err.message + '. Reload the page to try again.';
   }
 
   /* A row with its entered time in the reader's offset, so the Entered cell shows the local date
@@ -314,12 +370,16 @@
   }
 
   /* A header click, or Enter or Space on a focused header: the sorted column turns its
-     direction; another column sorts ascending. */
+     direction; another column sorts ascending. The sort is the view's that shows (shown()): the
+     Screen's reads the screen again in its order (load), the list's reads its own rows only
+     where it then differs from the Screen's (loadList). */
   function sortBy(column) {
-    var turn = state.sort.column === column && state.sort.direction === 'asc';
-    state.sort = { column: column, direction: turn ? 'desc' : 'asc' };
+    var view = shown();
+    var turn = view.sort.column === column && view.sort.direction === 'asc';
+    view.sort = { column: column, direction: turn ? 'desc' : 'asc' };
     render();
-    load();
+    if (state.onList) loadList();
+    else load();
   }
 
   /* A row click, or Enter or Space on a focused row. The previous company stays in the drawer,
@@ -449,6 +509,77 @@
   }
 
   function note(text) { return h('p', { className: 'body app-note' }, text); }
+
+  /* ------------------------------------------------------- the watchlist page's list */
+
+  /* A list's rows (spec 2026-11-22 7.1): those of `rows`, the screen's, whose ticker is in
+     `symbols`, in the rows' order, the server's, each watched; then, by ticker, one for each
+     symbol with no row (it left the universe, or has no snapshot yet), its ticker alone and an
+     em dash in every other cell. Such a row matches FIND by its ticker and no filter (narrow), and
+     stands after the rows that have the sorted field. */
+  function listRows(rows, symbols) {
+    var found = {};
+    var kept = rows.filter(function (r) {
+      if (symbols.indexOf(r.ticker) === -1) return false;
+      found[r.ticker] = true;
+      return true;
+    }).map(function (r) { return Object.assign({}, r, { watched: true }); });
+    var missing = symbols.filter(function (symbol) { return !found[symbol]; }).sort();
+    return kept.concat(missing.map(function (symbol) {
+      return { ticker: symbol, name: null, price: null, mechanical: null, reviewed: null,
+               phase: null, fairLow: null, fairHigh: null, watched: true };
+    }));
+  }
+
+  /* The rows the list is drawn from: its own read (loadList) where its sort differs from the
+     Screen's and that read is in; else the Screen's rows, which, while the list's first read in
+     another order is out, stand in the old order as a new sort on the Screen leaves them until
+     its read lands. */
+  function listSource() {
+    var list = state.list;
+    return !sameSort(list.sort, state.sort) && list.rows ? list.rows : state.rows;
+  }
+
+  /* The selected list's rows (listRows), before FIND and the filters narrow them; null while the
+     lists or the rows are not loaded, or no list the lists hold is selected. */
+  function listed() {
+    var id = state.list.id;
+    var source = listSource();
+    var chosen = (state.watchlists || []).filter(function (w) { return w.id === id; })[0];
+    if (!chosen || !source) return null;
+    return listRows(source, chosen.symbols.map(function (s) { return s.symbol; }));
+  }
+
+  /* The watchlist page shows (on) or the Screen does (controls.js, as it shows either view): the
+     one table draws the selected list or the screen. Turning to the list keeps the place the
+     Screen's scroller stood at, which the Screen's table takes back as it mounts again (Screen,
+     top), and reads the list's rows where its sort needs a read of its own (loadList). No change,
+     no work. */
+  function onList(on) {
+    if (on === state.onList) return;
+    state.onList = on;
+    if (on) {
+      var main = document.querySelector('.app-main');
+      state.screenTop = main ? main.scrollTop : 0; /* none before the first draw lands */
+      loadList();
+    }
+    render();
+  }
+
+  /* The list the watchlist page draws, by its id, or null for none (watchlists.js, its head).
+     Another list clears the list's FIND and filters, keeps its sort and starts its table at the
+     top; the id already selected changes nothing and draws nothing, since the head names its list
+     again on every draw (onRender). */
+  function selectList(id) {
+    var list = state.list;
+    if (id === list.id) return;
+    list.id = id;
+    list.query = '';
+    list.filters = F.EMPTY_FILTERS;
+    var main = document.querySelector('.app-main');
+    if (main && state.onList) main.scrollTop = 0; /* the Screen's place is the Screen's */
+    render();
+  }
 
   /* ------------------------------------------------------- the watchlist popup */
 
@@ -692,9 +823,17 @@
      observer asks again. The observer lives as long as the table; without ResizeObserver the
      header takes the bar's one-line height and the bar the screen's width. The Groups view hides
      the screen, whose scroller then measures 0 wide: the observer keeps the last measures, and
-     takes new ones when the screen shows again. */
+     takes new ones when the screen shows again. The Screen and the watchlist page share the
+     scroller, and the table mounts afresh as the view changes (its key): mounted, it puts the
+     scroller at `top`, the list's top or the place the Screen's was left at (onList). The root
+     draws after render returns, so onList cannot set the place itself; the effect runs with the
+     new rows in the document. The Screen's place is used once, so a later mount of its table
+     (after a failed load) starts at the top. */
   function Screen(props) {
     React.useEffect(function () {
+      var scroller = document.querySelector('.app-main');
+      if (scroller) scroller.scrollTop = props.top || 0;
+      if (!state.onList) state.screenTop = 0;
       var bar = document.querySelector('.fb-screen__bar');
       if (!bar || typeof ResizeObserver === 'undefined') return undefined;
       var main = bar.closest('.app-main');
@@ -729,31 +868,45 @@
     document.getElementById('fb-q').focus();
   }
 
+  /* The table, Top and the drawer, which draw alike on the two views. The table is the view's
+     that shows (shown()), on `all`, its rows before its FIND and filters narrow them: on the
+     Screen the screen's, on the watchlist page the selected list's (listed), whose Filters menu
+     has no WATCHLISTS section, since the page's selector chooses the list (spec 2026-11-22 7.1).
+     The list draws nothing while the lists or the rows are out or no list is selected. A failed
+     read of the screen shows its sentence on both views. The key mounts the table afresh as the
+     view changes, which puts it at its place in the one scroller (Screen): the list at its top,
+     the Screen where the list found it. */
   function render() {
     var d = state.drawer;
+    var view = shown();
+    var all = state.onList ? listed() : state.rows;
     var main = null;
     if (state.error) {
       main = note(state.error);
-    } else if (state.rows && state.rows.length === 0) {
-      main = note('No snapshots yet. Run a refresh.');
-    } else if (state.rows) {
+    } else if (all && all.length === 0) {
+      main = state.onList ? note('No companies on this list yet.')
+        : note('No snapshots yet. Run a refresh.');
+    } else if (all) {
       /* A narrowing that leaves no row still draws the table: its bar says 0 of the total and
          offers Clear. The drawer stays open when its row is narrowed away. */
-      var rows = narrow(state.rows, state.query, state.filters);
+      var rows = narrow(all, view.query, view.filters);
       main = h(Screen, {
+        key: state.onList ? 'list' : 'screen',
+        listFilter: state.onList ? false : undefined,
+        top: state.onList ? 0 : state.screenTop,
         rows: d ? rows.map(function (r) {
           return r.ticker === d.symbol ? Object.assign({}, r, { selected: true }) : r;
         }) : rows,
-        total: state.rows.length,
-        query: state.query,
+        total: all.length,
+        query: view.query,
         onQueryChange: setQuery,
-        filters: state.filters,
+        filters: view.filters,
         onFiltersChange: setFilters,
-        sectors: sectorsOf(state.rows),
-        industries: industriesOf(state.rows, state.filters.sector),
+        sectors: sectorsOf(all),
+        industries: industriesOf(all, view.filters.sector),
         columns: state.columns,
         onColumnsChange: setColumns,
-        sort: state.sort,
+        sort: view.sort,
         onSort: sortBy,
         onOpen: open,
         onWatch: watch,

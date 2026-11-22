@@ -1361,15 +1361,18 @@ def test_page_hands_the_design_system_local_time() -> None:
 def test_app_js_find_and_filters() -> None:
     script = _static_file("app.js")
     for prop in (
-        "query: state.query",
+        "query: view.query",
         "onQueryChange:",
-        "filters: state.filters",
+        "filters: view.filters",
         "onFiltersChange:",
-        "sectors: sectorsOf(state.rows)",
-        "total: state.rows.length",
+        "sectors: sectorsOf(all)",
+        "total: all.length",
     ):
         assert prop in script, prop
-    assert "var rows = narrow(state.rows, state.query, state.filters);" in script
+    # the view that shows, the Screen's FIND and filters on the Screen's loaded rows, or the
+    # watchlist page's on its list's (tests/web/test_watchlist_page.py)
+    assert "var all = state.onList ? listed() : state.rows;" in script
+    assert "var rows = narrow(all, view.query, view.filters);" in script
     # the screen's script draws no footnote of its own: ReportReader numbers a cite from the
     # footnotes its caller hands it (spec 2026-11-06 Tier 2, 13.1)
     assert "'sup'" not in script and "[^" not in script

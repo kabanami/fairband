@@ -663,6 +663,12 @@ export interface ScreenTableProps {
    */
   watchlists?: { id: number; name: string }[];
   /**
+   * fairband: `false` leaves the WATCHLISTS section, and the rule before it, out of the Filters
+   * menu, as on the watchlist page, whose selector chooses the list (spec 2026-11-22 7.1); the
+   * watchlist chip and the Watchlists column still read `watchlists`.
+   */
+  listFilter?: boolean;
+  /**
    * fairband: the note on a mechanical value (spec 2026-11-19 7.5). Given it, the Mechanical
    * column's head has the note as its title, and a Mechanical cell with a value has
    * `warningsHover(row.warnings || [], note)` as its title, the `WarningMark` before the figure
