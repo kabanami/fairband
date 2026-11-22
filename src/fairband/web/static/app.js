@@ -220,44 +220,43 @@
      (the company page's design, 12); SCREEN_NOTE, the note on a mechanical value, which the
      table hands ScreenTable, and OPEN_NOTE, the open company's (spec 2026-11-19 7.5);
      researchHref, the address of a report, on the company page's Research tab (the Research tab's
-     design, 7.1); the loaded rows (null until they load), the chosen columns, reloadDetail, which
-     reads the drawer's company again after another view's write about it (the Inbox view's
-     decline, spec 2026-11-06 Tier 2, 18.5), and reloadDrawer, which reads whichever company the
-     drawer shows again when a run ends; onList, which turns the one table to the watchlist page's
-     list as that view shows and back to the screen as the Screen shows, and selectList, by which
-     the page's head names the list it draws (spec 2026-11-22 7.1). controls.js adds show,
-     onShow, section, running and countInbox, the Inbox view onInbox, and agents.js adds agents,
-     the Settings view's Agents section; a view drawn from the rows or the lists sets onRender,
-     which runs after each draw of the screen, so it draws again as they load and change (the
-     company page's runs the Watchlists view's, set before it, then its own). A report's parts
-     after its sections (report_parts.js, 18.4) draw with this script's parts: the inputs table,
-     a table of figures by year, an input's figure in its unit, the secondary valuation's rows and
-     path, the guidance table, the phase evidence, pairs, a date, a total in a currency, an
-     exchange rate and a count; the line that says what the figures are in (currencyLine) is the
-     drawer's and the Research tab's, the same line in both. The company page
-     (company.js; the company page's design, 7) draws its head with the logo, the phase
-     numbers, the moat stamp (moatStamp), the chip of whose class it is (moatChip) and the control
-     that opens the moat box (moatControl, spec 2026-11-19 8.8), the Notes control as the drawer's
-     bar draws it (notesControl, 11.1) and Request research with a request of its own (asking),
-     whose following of a launch the page stops as it starts to read another company (stopLaunch)
-     and starts as its read lands (followItem), opens the watchlists popup under its head's button
-     (watch) on the company's row or, the lists loaded, on the company alone (rows, watchlists),
-     and says when it turns to another company (notesShown), so a note drafted on another goes;
-     its Fairband value block (company_overview.js, 8.2) draws the meter, the four levels under it
-     in the screen's words (levelRows), the basis chip of the band they draw (bandBasis) and the
-     local day of its report (localIso); its Research tab (company_research.js, the Research tab's
-     design) numbers a report's cites by its references (footnotes), its value card (7.5) writes
-     the meter's gap as every meter does (gapText), and its Records (company_research_records.js,
-     7.10) a guidance record's figures and a store word as the guidance table writes them
-     (guided, words). The Inbox view's row (inbox.js, B-210) keeps a request for each pending
-     item too, posts its launch (openLaunch) and draws the line's words (launchWords) from the
-     item the line is drawn from (lineItem). The header's finder (finder.js) finds the rows the
-     Screen's field finds (finds). The drawer with its bar (drawer), its parts (sections), the
-     Notes box (notesBox), the moat box (moatBox), the open item's line (launchLine), an input's
-     value (inputValue), a figure a share in a currency (money), a logo's ground (logoGround), the
-     screen's narrowing (narrow), the industries its menu lists (industriesOf), the filters it
-     keeps (listedFilters) and a list's rows (listRows) are here for the tests, which read them in
-     node (tests/web/page.mjs and tests/web/moat.mjs). */
+     design, 7.1); the loaded rows (null until they load), reloadDetail, which reads the drawer's
+     company again after another view's write about it (the Inbox view's decline, spec 2026-11-06
+     Tier 2, 18.5), and reloadDrawer, which reads whichever company the drawer shows again when a
+     run ends; onList, which turns the one table to the watchlist page's list as that view shows and
+     back to the screen as the Screen shows, and selectList, by which the page's head names the list
+     it draws (spec 2026-11-22 7.1). controls.js adds show, onShow, section, running and countInbox,
+     the Inbox view onInbox, and agents.js adds agents, the Settings view's Agents section; a view
+     drawn from the rows or the lists sets onRender, which runs after each draw of the screen, so it
+     draws again as they load and change (the company page's runs the Watchlists view's, set before
+     it, then its own). A report's parts after its sections (report_parts.js, 18.4) draw with this
+     script's parts: the inputs table, a table of figures by year, an input's figure in its unit,
+     the secondary valuation's rows and path, the guidance table, the phase evidence, pairs, a date,
+     a total in a currency, an exchange rate and a count; the line that says what the figures are in
+     (currencyLine) is the drawer's and the Research tab's, the same line in both. The company page
+     (company.js; the company page's design, 7) draws its head with the logo, the phase numbers, the
+     moat stamp (moatStamp), the chip of whose class it is (moatChip) and the control that opens the
+     moat box (moatControl, spec 2026-11-19 8.8), the Notes control as the drawer's bar draws it
+     (notesControl, 11.1) and Request research with a request of its own (asking), whose following
+     of a launch the page stops as it starts to read another company (stopLaunch) and starts as its
+     read lands (followItem), opens the watchlists popup under its head's button (watch) on the
+     company's row or, the lists loaded, on the company alone (rows, watchlists), and says when it
+     turns to another company (notesShown), so a note drafted on another goes; its Fairband value
+     block (company_overview.js, 8.2) draws the meter, the four levels under it in the screen's
+     words (levelRows), the basis chip of the band they draw (bandBasis) and the local day of its
+     report (localIso); its Research tab (company_research.js, the Research tab's design) numbers a
+     report's cites by its references (footnotes), its value card (7.5) writes the meter's gap as
+     every meter does (gapText), and its Records (company_research_records.js, 7.10) a guidance
+     record's figures and a store word as the guidance table writes them (guided, words). The Inbox
+     view's row (inbox.js, B-210) keeps a request for each pending item too, posts its launch
+     (openLaunch) and draws the line's words (launchWords) from the item the line is drawn from
+     (lineItem). The header's finder (finder.js) finds the rows the Screen's field finds (finds).
+     The drawer with its bar (drawer), its parts (sections), the Notes box (notesBox), the moat box
+     (moatBox), the open item's line (launchLine), an input's value (inputValue), a figure a share
+     in a currency (money), a logo's ground (logoGround), the screen's narrowing (narrow), the
+     industries its menu lists (industriesOf), the filters it keeps (listedFilters) and a list's
+     rows (listRows) are here for the tests, which read them in node (tests/web/page.mjs and
+     tests/web/moat.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
@@ -271,7 +270,6 @@
     companyHref: companyHref, researchHref: researchHref,
     SCREEN_NOTE: SCREEN_NOTE, OPEN_NOTE: OPEN_NOTE,
     rows: function () { return state.rows; },
-    columns: function () { return state.columns; },
     reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
     meter: meter, gapText: gapText, levelRows: levelRows, bandBasis: bandBasis,
     inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
@@ -426,8 +424,12 @@
 
   /* Escape closes the drawer, unless a menu is open: then Escape closes the menu first. Only while
      its panel shows, on the Screen and on the watchlist page: in another view the drawer is
-     hidden, and Escape belongs to that view. */
+     hidden, and Escape belongs to that view. An Escape a control has acted on, which says so by
+     preventDefault, is that control's alone, so Escape closes the innermost thing: on the
+     watchlist page the Rename field, Delete's dialog, Add a company's text (watchlists.js) and
+     the header's finder's open list (finder.js); a second Escape closes the drawer. */
   document.addEventListener('keydown', function (event) {
+    if (event.defaultPrevented) return;
     if (event.key === 'Escape' && state.drawer && !mount.hidden &&
         !document.querySelector('.fb-menu')) close();
   });

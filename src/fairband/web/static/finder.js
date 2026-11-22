@@ -6,9 +6,10 @@
    eight at most: the ticker that is the text, then the tickers that start with it, the names
    that start with it and the names that hold it, the larger company first within each. The
    arrow keys move the mark, turning round at the ends; Enter opens the marked company, the first
-   when no key moved the mark; Escape empties the field; a blur closes the list and keeps the
-   text. A pick sets the hash to the address the ticker's link names (companyHref), so the
-   browser's Back returns to the view left, and empties the field, which keeps the focus. With
+   when no key moved the mark; Escape empties the field. A key the open list takes is the finder's
+   alone, as its preventDefault says, and an open drawer stays (app.js). A blur closes the list and
+   keeps the text. A pick sets the hash to the address the ticker's link names (companyHref), so
+   the browser's Back returns to the view left, and empties the field, which keeps the focus. With
    nothing found, and while the rows are not in, the list says so in one row. The matching, the
    keys' steps and the list are pure functions on FairbandPage.finder for the tests, which read
    them in node; view keeps the text, the mark and whether the list is open. */

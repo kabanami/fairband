@@ -173,14 +173,15 @@
      which draw the list: one row that wraps in a narrow window, the selector, the list's count and
      the day it was made, Set as default, Rename and Delete, then the New watchlist field and
      Create at the row's end; a refused write's sentence under it, then the Add a company field,
-     its matches a column of buttons under it. With no list, the row is New watchlist and Create,
-     and the sentence under it says how to make one. A company with no row has no name, and its
-     Company cell shows an em dash as every other empty cell does. Delete's dialog stands over
-     the page. */
+     its matches a column of buttons under it. With no list, the row is New watchlist and Create
+     at its start, and the sentence under it says how to make one. A company with no row has no
+     name, and its Company cell shows an em dash as every other empty cell does. Delete's dialog
+     stands over the page. */
   .app-lists__row {
     display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-6);
   }
-  .app-lists__new { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+  .app-lists__new { display: flex; align-items: center; gap: var(--space-2); }
+  .app-wl__head ~ .app-lists__new { margin-left: auto; }
   .app-lists__empty { margin-top: var(--space-2); }
   .app-field {
     width: 16rem; max-width: 100%; box-sizing: border-box; padding: var(--space-1) var(--space-2);

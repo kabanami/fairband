@@ -4,12 +4,12 @@
    the Screen, the refresh controls and the engine stamp; the URL hash names the open view, and
    on the Watchlists view its list, whose table is the Screen's, shown under the list's head
    (spec 2026-11-22 7.3). Inbox carries the count of the open work items, read every thirty
-   seconds while the page is shown (spec 2026-11-06 Tier 2, 18.5). Under the header, the status line: the running refresh's one
-   run bar (the design system's RunProgress), or how the last one ended in one line, its
-   calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the company page draws the
-   run bar and a notice alone, not the last refresh's line or Details ▾ (the company page's
-   design, the decision log of 2026-11-17). While a refresh runs, the page asks
-   /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were, the
+   seconds while the page is shown (spec 2026-11-06 Tier 2, 18.5). Under the header, the status
+   line: the running refresh's one run bar (the design system's RunProgress), or how the last one
+   ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the
+   company page draws the run bar and a notice alone, not the last refresh's line or Details ▾
+   (the company page's design, the decision log of 2026-11-17). While a refresh runs, the page
+   asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were, the
    stamp is gone and the tables keep their old figures at ink-faint; when it ends, the rows (and
    the groups or the company page, when that view is open) load again. The group view is one
    plain table from /api/groups (spec 6.3), with no chart. The company page (company.js) is a

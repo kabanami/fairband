@@ -1644,8 +1644,10 @@
     function count() {
       if (p.total == null) return h('span', { className: 'fb-screen__count caption' }, p.footnote);
       if (!narrowed) {
+        // fairband: one company reads "1 company", as the watchlist page's head counts a list of
+        // one (spec 2026-11-22 7.1).
         return h('span', { className: 'fb-screen__count caption' },
-          h('b', null, fmtCount(p.total)), ' companies');
+          h('b', null, fmtCount(p.total)), p.total === 1 ? ' company' : ' companies');
       }
       return h('span', { className: 'fb-screen__count caption' },
         h('b', null, fmtCount(rows.length)), ' of ', h('b', null, fmtCount(p.total)),

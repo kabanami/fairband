@@ -126,16 +126,16 @@
   function write(made, call, after) {
     if (state.pending) return;
     var where = made.id == null ? 'new' : made.id;
-    var head = REFUSED[made.method];
+    var words = REFUSED[made.method];
     state.pending = made;
     state.errors = {};
     render();
     var answer = null;
     call().then(function (r) {
       answer = r.body;
-      return refusal(head, r);
+      return refusal(words, r);
     }).catch(function (err) {
-      return head + ': ' + err.message + '.';
+      return words + ': ' + err.message + '.';
     }).then(function (error) {
       state.pending = null;
       if (error) state.errors[where] = error;
@@ -237,7 +237,8 @@
      ticker the text spells, ignoring case, unless it is on the list already; else the one match
      shown; else, when no row matches, the text upper-cased if it is a symbol. Enter never adds
      the first of several. A line under the field says why Enter adds nothing, or what it adds
-     when no match shows. */
+     when no match shows. Escape empties a field that holds text and is the field's alone, so an
+     open drawer stays (app.js); in an empty field it closes the drawer. */
   function addField(list) {
     var text = state.adding[list.id] || '';
     var on = {};
@@ -279,7 +280,9 @@
           'aria-label': 'Add a company to ' + list.name, maxLength: 60, value: text,
           onChange: function (event) { set(event.target.value); },
           onKeyDown: function (event) {
-            if (event.key === 'Escape' && text) set('');
+            if (event.key !== 'Escape' || !text) return;
+            event.preventDefault();
+            set('');
           }
         })),
       shown.length ? h('ul', { className: 'app-wl__matches' }, shown.map(function (r) {
@@ -302,9 +305,10 @@
 
   /* The head of `list`, one of `lists`, `defaultId` the default's: the selector, the lists in
      their order, the default's entry ending (default), or while renaming the name's field in its
-     place, Enter saving and Escape cancelling; the list's count and the day it was made, in the
-     reader's time; Set as default, which reads Default, pressed, on the default list, where a
-     press clears the default; Rename and Delete. A choice in the selector shows that list. */
+     place, Enter saving and Escape cancelling, an Escape that is the field's alone, so an open
+     drawer stays (app.js); the list's count and the day it was made, in the reader's time; Set
+     as default, which reads Default, pressed, on the default list, where a press clears the
+     default; Rename and Delete. A choice in the selector shows that list. */
   function head(list, lists, defaultId) {
     var renaming = state.renaming && state.renaming.id === list.id;
     var made = P.localIso(list.createdAt);
@@ -321,7 +325,9 @@
           render();
         },
         onKeyDown: function (event) {
-          if (event.key === 'Escape') stopRenaming(list.id);
+          if (event.key !== 'Escape') return;
+          event.preventDefault();
+          stopRenaming(list.id);
         }
       })) : h('select', {
         className: 'control app-select app-wl__pick', 'aria-label': 'Watchlist',
@@ -365,7 +371,8 @@
 
   /* Delete's dialog, over the page: the payload is the list's name and its count. Its one
      affirmative button, Confirm, deletes, so it is the danger one; there is no revision to bind
-     to and no Reject. Escape, a press beside it and Cancel close it. */
+     to and no Reject. Escape, a press beside it and Cancel close it. Escape is the dialog's
+     alone, while it confirms too, so an open drawer under it stays (app.js). */
   function dialog(d) {
     return h('div', {
       className: 'app-dialog',
@@ -373,7 +380,9 @@
         if (event.target === event.currentTarget && !state.pending) cancelDelete();
       },
       onKeyDown: function (event) {
-        if (event.key === 'Escape' && !state.pending) cancelDelete();
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        if (!state.pending) cancelDelete();
       }
     },
       h(F.ConfirmDialog, {

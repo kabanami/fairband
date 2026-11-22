@@ -226,6 +226,9 @@ def test_the_ticker_links_to_the_company_page(symbol: str, href: str) -> None:
     js = _static_file("inbox.js")
     assert "P.openRow" not in js
     assert "h('tr', { 'data-item': item.id }," in js  # the row has no handler
+    # JSON drops a function, so the drawn link cannot show a click: the script's text does
+    ticker = js[js.index("'ticker app-link app-inbox__symbol'") :]
+    assert "onClick" not in ticker[: ticker.index("item.symbol)),")]
 
 
 def test_the_button_posts_the_items_launch_as_the_drawers_does() -> None:

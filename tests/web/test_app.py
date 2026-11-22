@@ -1499,7 +1499,6 @@ def test_watchlists_view_draws_the_screen_rows_and_a_symbol_without_one() -> Non
         "patch: function (url, body) { return send('PATCH', url, body); },",
         "del: function (url) { return send('DELETE', url); }",
         "rows: function () { return state.rows; },",
-        "columns: function () { return state.columns; },",
         "if (page.onRender) page.onRender();",
     ):
         assert text in app, text
@@ -1533,16 +1532,16 @@ def test_the_inbox_view_columns_are_pinned(client: TestClient) -> None:
     """Spec 2026-11-06 Tier 2, 18.5: the Inbox view, its own script after watchlists.js, is one
     table of the work items as the server lists them, newest first, under the heads Symbol, Mode,
     State, Posted, By, Claimed by, Note and Report: the symbol a link to the company page (spec
-    2026-11-22, 11); the state word, with a declined item's reason
-    under it as written; the posted date and time in the reader's time; who posted it, a compact
-    PrincipalChip (the owner, an agent by its model identifier, or the system for an expiry item),
-    and the agent that claimed it likewise; the note as written; the report a done item was
-    completed with, as a link to its page named by its revision (plan 4). A pending or claimed
-    item has Decline, which opens the reason line under the row (spec 18.5's "reason line"): the
-    field, Decline, which sends the owner's decline, and Cancel; a refused decline's sentence, the
-    server's, stands on a line under the row. The read runs as the view opens and after every
-    write, and the drawer, if it shows the company, reads it again. "No work items." when there
-    are none. Every field of an item the view reads is one the server sends."""
+    2026-11-22, 11); the state word, with a declined item's reason under it as written; the posted
+    date and time in the reader's time; who posted it, a compact PrincipalChip (the owner, an agent
+    by its model identifier, or the system for an expiry item), and the agent that claimed it
+    likewise; the note as written; the report a done item was completed with, as a link to its page
+    named by its revision (plan 4). A pending or claimed item has Decline, which opens the reason
+    line under the row (spec 18.5's "reason line"): the field, Decline, which sends the owner's
+    decline, and Cancel; a refused decline's sentence, the server's, stands on a line under the
+    row. The read runs as the view opens and after every write, and the drawer, if it shows the
+    company, reads it again. "No work items." when there are none. Every field of an item the view
+    reads is one the server sends."""
     js = _static_file("inbox.js")
     assert (
         "var HEADS = ['Symbol', 'Mode', 'State', 'Posted', 'By', 'Claimed by', 'Note', 'Report'];"
@@ -1930,12 +1929,17 @@ def test_figure_tables_scroll_by_keyboard_with_the_year_in_view() -> None:
 
 def test_app_js_escape_closes_an_open_menu_before_the_drawer() -> None:
     """Escape closes an open menu before the drawer, and closes the drawer only while the Screen
-    shows it: in another view the drawer is hidden, and Escape belongs to that view's field."""
+    shows it: in another view the drawer is hidden, and Escape belongs to that view's field. An
+    Escape a control has acted on, which says so by preventDefault, is that control's alone: the
+    drawer stays (the final review of 2026-11-22; tests/web/test_watchlist_page.py)."""
     script = _static_file("app.js")
     assert "var mount = document.getElementById('screen');" in script
     assert (
-        "if (event.key === 'Escape' && state.drawer && !mount.hidden &&\n"
-        "        !document.querySelector('.fb-menu')) close();"
+        "  document.addEventListener('keydown', function (event) {\n"
+        "    if (event.defaultPrevented) return;\n"
+        "    if (event.key === 'Escape' && state.drawer && !mount.hidden &&\n"
+        "        !document.querySelector('.fb-menu')) close();\n"
+        "  });"
     ) in script
 
 
@@ -3550,11 +3554,10 @@ def test_bundle_draws_the_watchlist_column() -> None:
 def test_the_screen_and_the_watchlists_hand_the_table_the_note() -> None:
     """Spec 2026-11-19 7.5 and 9: the screen's table, which draws the watchlist page's list too
     (spec 2026-11-22 7.1), hands ScreenTable the screen's note, which the page holds beside the
-    open company's. The mark's rule stands beside
-    the Mechanical cell's: form A of the look, the bullet of the mono face enlarged, in the
-    value's ink, so it sets no colour; the drawer and the company page load the same file. The
-    hover, the mark and the note's prop are `// fairband:` patches that index.d.ts declares
-    (``tests/web/test_warning_mark.py`` draws them)."""
+    open company's. The mark's rule stands beside the Mechanical cell's: form A of the look, the
+    bullet of the mono face enlarged, in the value's ink, so it sets no colour; the drawer and the
+    company page load the same file. The hover, the mark and the note's prop are `// fairband:`
+    patches that index.d.ts declares (``tests/web/test_warning_mark.py`` draws them)."""
     app = _static_file("app.js")
     assert "mechanicalNote: SCREEN_NOTE," in _function(app, "render")
     shared = app[app.index("window.FairbandPage = {") :]
