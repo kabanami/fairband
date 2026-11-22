@@ -37,26 +37,31 @@ Fairband is made up of four parts:
   from FMP through the server, and save notes, findings, moat classes, updated valuations, and
   full reports.
 
-## The pages
+## Screenshots
 
-**The screen.** Every company in one table, with its phase, its fair value and how its price
-compares.
+### Screener
+Every company in one table, showing lifecycle phase, fair value band, mechanical and reviewed
+valuations, and where the price sits relative to value.
 
-![The screen: one row a company](docs/images/screen.png)
+![Screener table with one row per company](docs/images/screen.png)
 
-**A company's overview.** What the company does, its fair value, its price and its key
-statistics.
+### Company overview
+Company profile, mechanical and reviewed valuations (buy, fair, and trim levels), your agent's
+stance, price and volume chart, and key statistics.
 
-![A company's Overview tab](docs/images/company-overview.png)
+![Company Overview tab](docs/images/company-overview.png)
 
-**A company's financials.** The income statement, the balance sheet, the cash flow, the segments
-and the ratios, by year or by quarter.
+### Financials
+Annual and quarterly income statement, balance sheet, cash flow, segments, and ratios, with
+clickable rows you can plot on the chart above.
 
-![A company's Financials tab](docs/images/company-financials.png)
+![Company Financials tab](docs/images/company-financials.png)
 
-**A company's research.** The report your agent wrote, with its charts.
+### Research reports
+Agent-written reports with a section outline, cited numbers (underlined figures link back to
+stored data), and inline charts.
 
-![The financial section of a research report, with its charts](docs/images/research-charts.png)
+![Financial section of a research report with charts](docs/images/research-charts.png)
 
 ## How a research report gets made
 
