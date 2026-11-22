@@ -182,6 +182,17 @@ def test_the_company_page_button_s_address() -> None:
         assert declaration in rule, declaration
 
 
+def test_request_research_s_box_stands_from_the_row_of_buttons() -> None:
+    """Request research's box stands from the right edge of the row of buttons, under the row,
+    not from its own button (the watchlist page's design, 10). The two buttons fill the row, so
+    when the drawer scrolls, its scrollbar wraps them and Request research drops to the row's
+    left. A box from that button's right edge would then stand past the drawer's left edge,
+    which clips it."""
+    assert "position: relative;" in _rule(".app-drawer__actions {")
+    assert _rule(".app-drawer__actions .app-request {") == "position: static;"
+    assert "left: auto; right: 0;" in _rule(".app-request .fb-menu {")
+
+
 def test_request_research_keeps_its_open_item_s_line() -> None:
     """An open item disables the button and draws its line under the two buttons."""
     item = {"id": 12, "state": "pending", "mode": "full report", "claimedBy": None, "launch": None}
