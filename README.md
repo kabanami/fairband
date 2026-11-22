@@ -9,40 +9,33 @@ the workbench. It currently only supports Claude Code.
 
 ![A research report in the Research tab of a company page](docs/images/research-report.png)
 
-## How the parts fit
+## Architecture
 
 ```mermaid
 flowchart LR
-    you(["You"]) -- "read, ask, decide" --> pages["Fairband web interface"]
-    agent(["Your agent: Claude Code"]) -- "55 tools" --> mcp["MCP server"]
+    you(["You"]) --> pages["Fairband web interface"]
+    agent(["Your agent (Claude Code)"]) -- "55 MCP tools" --> mcp["MCP server"]
     pages --> server["Fairband server and valuation engine"]
     mcp --> server
-    server -. "starts a research session" .-> agent
+    server -. "starts research session" .-> agent
     server <--> db[("SQLite database on your disk")]
-    server -- "your key" --> fmp["Financial Modeling Prep"]
+    server -- "your FMP key" --> fmp["Financial Modeling Prep"]
 ```
 
-**You bring**
+Fairband is made up of four parts:
 
-- **An agent.** Claude Code today. It connects to the MCP server and follows a playbook that is
-  in this repository.
-- **A data key.** For Financial Modeling Prep (statements, estimates, prices, filings,
-  transcripts and news). It stays in a file outside the repository.
-- **Your judgment.** You set the policy on the Settings page, you ask for the research, and you
-  decide what to do with it.
-
-**Fairband gives**
-
-- **A valuation engine.** It is rule-based and holds no AI model. It sorts each company into one
-  of six phases, values it by that phase's rules, and refuses to value it where the rules do not
-  apply. See [a short overview of the method](docs/method-overview.md).
-- **A store.** One SQLite database on your disk, with every vendor answer, every valuation and
-  every record an agent writes.
-- **Pages.** A screen of all companies; a page for each company with its overview, financials,
-  estimates, investor relations and research; and pages for groups, watchlists, the method, the
-  settings and the agents' inbox.
-- **An MCP server.** 55 tools through which an agent reads the store, asks FMP for more, and
-  writes notes, findings, the moat class, changes to inputs and reports.
+- **Valuation engine:** Deterministic and rule-based. It sorts each company into one of six
+  lifecycle phases, pairs it with a moat class (Wide, Narrow, or None), and values it under that
+  phase's rules. See [docs/method-overview.md](docs/method-overview.md) for a short overview of
+  the method.
+- **SQLite database:** A single database file on your disk storing raw FMP data, valuation
+  snapshots, and everything you or your agent writes.
+- **Web interface:** A screener across all companies, a page for each company (overview,
+  financials, estimates, investor relations, and research), plus pages for watchlists,
+  methodology, settings, and the agent inbox.
+- **MCP server:** Exposes 55 tools so your agent can query stored data, request additional data
+  from FMP through the server, and save notes, findings, moat classes, updated valuations, and
+  full reports.
 
 ## The pages
 
