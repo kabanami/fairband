@@ -116,25 +116,28 @@ tiers haven't been tested.
 See [docs/agents.md](docs/agents.md) for configuring automatic terminal launching from the UI,
 agent identity, and connecting other MCP hosts.
 
-## The MCP tools
+## MCP server and tools
 
-The server is `fairband mcp`, a stdio server that the agent's host starts. It calls the Fairband
-server on 127.0.0.1 and holds no database and no key. Its 55 tools are of three kinds:
+`fairband mcp` runs as a stdio MCP server spawned by your agent host. It's a thin client over
+the local HTTP API (`127.0.0.1:8470`), so it doesn't access the database or your FMP key
+directly.
 
-- **26 read the store:** the screen, a company's valuation, its statements, quarters, estimates,
-  prices, multiples and peers, the research on file, the policy and the method.
-- **9 read a vendor:** transcripts, news, segments, insider trades, filings and more, all from
-  FMP. The server fetches each with its own key and stores the answer, so a report can refer to
-  it. A company's list of earnings calls and its filings of the past year may be answered from
-  the copy a refresh stored.
-- **20 write:** the agent's identity, the work inbox, notes, findings, guidance records, the moat
-  class, changes to inputs, a secondary valuation, reports, kill criteria and refreshes.
+The 55 tools fall into three groups:
 
-An agent's first call is `identify`, with the model it runs as. Fairband records every write
-under that name. The full list is in
-[the playbook's tools reference](playbook/fairband-research/reference/tools.md), and the playbook
-itself, a skill that takes an agent through a report step by step, is in
-[playbook/fairband-research](playbook/fairband-research/).
+- **Stored data reads (26):** Query the screener, valuations, financial statements, quarterly
+  figures, estimates, price history, multiples, peers, existing research, policy settings, and
+  methodology docs.
+- **Vendor reads (9):** Fetch transcripts, news, segments, insider trades, and filings from FMP
+  through the local server. The data is saved to SQLite so reports can cite it, and anything
+  already cached by a recent refresh is reused when available.
+- **Writes (20):** Register agent identity, manage inbox work items, save notes, findings,
+  guidance, moat classes, updated valuations, kill criteria, and full reports, or trigger
+  refreshes.
+
+Before making any writes, an agent has to call `identify` with its model name; every write is
+tagged with that identity. See [tools.md](playbook/fairband-research/reference/tools.md) for the
+full tool reference and [playbook/fairband-research](playbook/fairband-research/) for the
+step-by-step research playbook.
 
 ## How it was built
 
