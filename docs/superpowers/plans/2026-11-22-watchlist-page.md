@@ -55,9 +55,10 @@ numbers below are its.
 3. **The lists arrive after the view opens**, as on a reload at `#watchlists/3`. The page waits
    for them and keeps the address; it does not turn to the default first (Task 4,
    `test_the_head_follows_the_lists`; Task 5, check 3).
-4. **A deleted default.** SQLite may give a new list a deleted list's id, so a stored default
-   could name a list the reader never chose. Delete of the default list clears the stored
-   default (Task 4, `test_delete_clears_a_default_it_removes`).
+4. **A deleted default.** A stored default that names a deleted list is ignored, and the store
+   never gives a deleted list's id again (`watchlists.id` is `AUTOINCREMENT`), so it can name no
+   other list. Delete of the default list still clears the stored default, so nothing stale
+   stays in the browser (Task 4, `test_delete_clears_a_default_it_removes`).
 5. **No storage**, as in a private window: the page loads and works, and the default lasts until
    the page reloads (Task 4: the node tests load `watchlists.js` with no `localStorage`).
 
@@ -75,6 +76,11 @@ numbers below are its.
 - Consumes: the bundle's `.fb-menu { position: absolute; right: 0; … }`.
 - Produces: one rule for both places that draw `.app-request`, the drawer and the company page's
   head: `.app-request .fb-menu { left: auto; right: 0; }`.
+- Amended in the build (the review of 18ad8ba): that rule alone cut the box off at the drawer's
+  left edge whenever the drawer had a scrollbar, since its two buttons then wrap. In the drawer
+  the box is fixed to the row of buttons, not to the button:
+  `.app-drawer__actions { position: relative; }` and
+  `.app-drawer__actions .app-request { position: static; }` (commit f893d26).
 
 - [ ] **Step 1: Change the two pins so they fail**
 
@@ -551,8 +557,10 @@ Message: `Show one watchlist on its page with a selector and a default, open its
    `#watchlists` opens it after a reload; after Delete of the default, the first list by name.
 4. Create, Rename, Delete and Add a company work on the selected list, and Create shows the new
    list.
-5. The head has no Request research. The drawer's box lies wholly inside the window at 1280,
-   1600 and 1920 px, on the Screen and on the watchlist page.
+5. The head has no Request research. The drawer's box lies wholly inside the window and the
+   drawer at 1280, 1600 and 1920 px, on the Screen and on the watchlist page, and also with
+   scrollbars shown in a window 600 px high, where the drawer scrolls and its buttons wrap
+   (Chromium hides scrollbars unless launched with `ignoreDefaultArgs: ['--hide-scrollbars']`).
 6. A ticker in the Inbox opens the company page; a click on the row's Mode cell changes nothing.
 7. The Screen's Filters menu still has its WATCHLISTS section; the list's menu has none.
 8. The Screen, scrolled to 5,000 px, is at 5,000 px after a visit to Watchlists and back.
