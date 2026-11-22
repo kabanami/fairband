@@ -72,3 +72,22 @@ def test_the_table_draws_a_list_with_its_own_find_filters_and_sort() -> None:
     find = find[: find.index("\n  }\n")]
     assert "state.query = symbol;" in find and "state.filters = F.EMPTY_FILTERS;" in find
     assert "p.listFilter === false ? [] : lists" in _component_file("bundle.js")
+
+
+def test_a_failed_read_of_the_list_leaves_the_screen_its_table() -> None:
+    app = _static_file("app.js")
+    load_list = app[app.index("  function loadList() {") :]
+    load_list = load_list[: load_list.index("\n  }\n")]
+    assert "state.error" not in load_list  # the Screen keeps its table
+    assert (
+        "list.error = 'The list did not load: ' + err.message + '. Reload the page to try again.';"
+        in load_list
+    )
+    # a read of the list that lands clears it, and so do equal sorts, which need no read
+    assert load_list.count("list.error = null;") == 2
+    render = app[app.index("  function render() {") :]
+    render = render[: render.index("\n  }\n")]
+    # the Screen's own failed load still shows on both views, the list's on the list alone
+    assert render.index("if (state.error) {") < render.index(
+        "} else if (state.onList && state.list.error) {\n      main = note(state.list.error);"
+    )

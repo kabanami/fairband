@@ -63,9 +63,10 @@
     filters: F.EMPTY_FILTERS,
     onList: false, /* the table draws the watchlist page's list, not the screen (onList) */
     /* The watchlist page's own FIND, filters and sort, and the list it shows (spec 2026-11-22,
-       7.1); rows holds the screen's rows in this sort where it differs from the Screen's. */
+       7.1); rows holds the screen's rows in this sort where it differs from the Screen's, and
+       error the sentence of a read of them that failed, which the list alone shows. */
     list: { id: null, query: '', filters: F.EMPTY_FILTERS,
-            sort: { column: 'ticker', direction: 'asc' }, rows: null },
+            sort: { column: 'ticker', direction: 'asc' }, rows: null, error: null },
     screenTop: 0, /* where the Screen's scroller stood when the list took the table */
     drawer: null, /* { symbol, body, loading, error } while open */
     watchlists: null, /* the reader's lists, by name, once loaded: [{ id, name, symbols, … }] */
@@ -302,29 +303,37 @@
       })
       .catch(function (err) {
         if (request !== latest) return;
-        state.error = screenFailed(err);
+        state.error = 'The screen did not load: ' + err.message + '. Reload the page to try again.';
         render();
       });
     loadList();
   }
 
   /* The watchlist page's rows in the list's own sort (spec 2026-11-22 7.1), read only while that
-     page shows and its sort differs from the Screen's; while the two agree the list is drawn from
-     the Screen's rows (listSource) and nothing is read. The newest read lands in list.rows, and
-     a failed read says so in the sentence a failed load of the Screen's writes. */
+     page shows and its sort differs from the Screen's. While the two agree the list is drawn from
+     the Screen's rows (listSource): nothing is read, a read still out is dropped and a failed
+     one's sentence goes. The newest read lands in list.rows; a failed one's sentence stands in
+     list.error, which the list shows in its table's place and the Screen never does, until a
+     later read lands (onList reads again as the page shows again). */
   function loadList() {
     var list = state.list;
-    if (!state.onList || sameSort(list.sort, state.sort)) return;
+    if (sameSort(list.sort, state.sort)) {
+      latestList++;
+      list.error = null;
+      return;
+    }
+    if (!state.onList) return;
     var request = ++latestList;
     getJson(screenPath(list.sort))
       .then(function (body) {
         if (request !== latestList) return;
         list.rows = body.rows.map(localRow);
+        list.error = null;
         render();
       })
       .catch(function (err) {
         if (request !== latestList) return;
-        state.error = screenFailed(err);
+        list.error = 'The list did not load: ' + err.message + '. Reload the page to try again.';
         render();
       });
   }
@@ -338,11 +347,6 @@
 
   /* Whether two sorts are the same order: the same column the same way. */
   function sameSort(a, b) { return a.column === b.column && a.direction === b.direction; }
-
-  /* The sentence of a read of the screen that failed, the Screen's or the list's. */
-  function screenFailed(err) {
-    return 'The screen did not load: ' + err.message + '. Reload the page to try again.';
-  }
 
   /* A row with its entered time in the reader's offset, so the Entered cell shows the local date
      (the local-offset ISO in datetime), and its report's time likewise, so the coverage mark's
@@ -873,9 +877,10 @@
      Screen the screen's, on the watchlist page the selected list's (listed), whose Filters menu
      has no WATCHLISTS section, since the page's selector chooses the list (spec 2026-11-22 7.1).
      The list draws nothing while the lists or the rows are out or no list is selected. A failed
-     read of the screen shows its sentence on both views. The key mounts the table afresh as the
-     view changes, which puts it at its place in the one scroller (Screen): the list at its top,
-     the Screen where the list found it. */
+     load of the Screen's rows shows its sentence on both views; a failed read of the list's own,
+     on the list alone (loadList). The key mounts the table afresh as the view changes, which puts
+     it at its place in the one scroller (Screen): the list at its top, the Screen where the list
+     found it. */
   function render() {
     var d = state.drawer;
     var view = shown();
@@ -883,6 +888,8 @@
     var main = null;
     if (state.error) {
       main = note(state.error);
+    } else if (state.onList && state.list.error) {
+      main = note(state.list.error);
     } else if (all && all.length === 0) {
       main = state.onList ? note('No companies on this list yet.')
         : note('No snapshots yet. Run a refresh.');
