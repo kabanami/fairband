@@ -2082,7 +2082,8 @@ def test_the_drawers_order_is_pinned() -> None:
     )
     page = _static_file("index.html")
     assert ".app-stance" not in page and ".app-disclosure" not in page
-    assert ".app-request .fb-menu { left: 0; right: auto; }" in page
+    assert ".app-request .fb-menu { left: auto; right: 0; }" in page
+    assert ".app-company__actions .app-request .fb-menu" not in page
     assert ".app-request__error { margin: var(--space-2) 0 0; color: var(--caution); }" in page
 
 

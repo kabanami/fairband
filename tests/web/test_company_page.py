@@ -288,7 +288,7 @@ def test_the_menus_of_the_head_open_inside_the_page() -> None:
     """Request research's menu opens from its button's right edge, the button standing at the
     page's right; its error and the open item's line take a line of their own under the
     buttons."""
-    assert "left: auto; right: 0;" in _rule(".app-company__actions .app-request .fb-menu {")
+    assert "left: auto; right: 0;" in _rule(".app-request .fb-menu {")
     assert "flex-basis: 100%;" in _rule(".app-company__actions > p {")
 
 
