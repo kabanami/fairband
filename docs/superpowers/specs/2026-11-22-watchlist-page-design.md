@@ -109,8 +109,8 @@ that answer.
   value's hover and mark, Top.
 - Its rows are the selected list's companies: the Screen's rows for the list's symbols, and a
   symbol with no row as its ticker alone with an em dash in every other cell, as today
-  (`rowsOf`). Such a row matches FIND by its ticker and no filter, and sorts after the rows that
-  have the sorted field (*my call*).
+  (`rowsOf`). Such a row matches FIND by its ticker and no filter, and stands after the rows
+  that have data, by ticker, whatever the sort (*my call*).
 - The bar's count is of the list: "7 companies", or "3 of 7" when narrowed.
 - The page keeps its own FIND text, filters and sort, apart from the Screen's (*my call*, said to
   the founder and approved). The sort is the server's, read from `/api/screen` with the sort's key
