@@ -50,8 +50,8 @@ from fairband.store.snapshots import SnapshotRow
 from fairband.web.warning_words import is_marked, warning_words
 
 NOT_YET_VALUED = "not yet valued"
-GROUP_BY = ("sector", "phase", "cap")
-NONE = "none"  # the group of the rows with no sector, or no cap band
+GROUP_BY = ("sector", "industry", "phase", "cap")
+NONE = "none"  # the group of the rows with no sector, no industry or no cap band
 _PHASE_NAMES = {number: name for name, number in PHASE_NUMBER.items()}
 
 # The design system's ScreenRow keys.
@@ -74,6 +74,7 @@ SCREEN_ROW_KEYS = (
 # The extra columns, each one row key.
 EXTRA_KEYS = (
     "sector",
+    "industry",
     "capBand",
     "marketCap",
     "moat",
@@ -285,8 +286,8 @@ def screen_row(
     *,
     mark_min: int,
 ) -> dict[str, Any]:
-    """The snapshot as a screen row; the name, sector, cap band and market cap come from
-    ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
+    """The snapshot as a screen row; the name, sector, industry, cap band and market cap come
+    from ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
     from ``aging_fraction`` of the window; ``watchlists`` are the ids of the lists the company is
     on; ``agents`` are its agents' fields (``agent_fields``, else ``NO_AGENT_FIELDS``), whose
     ``levels``, when set, stand in the row's ``LEVEL_KEYS`` for the snapshot's; ``mechanical``
@@ -340,6 +341,7 @@ def screen_row(
             snapshot.data_date, snapshot.valid_until, today, aging_fraction
         ),
         "sector": None if company is None else company.sector,
+        "industry": None if company is None else company.industry,
         "capBand": None if company is None else company.cap_band,
         "marketCap": None if market_cap is None else float(market_cap),
         "moat": None if snapshot.value is None else im.get("moat"),
@@ -418,8 +420,8 @@ def _piotroski_f(im: dict[str, Any]) -> str | None:
 
 
 def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str, Any]:
-    """The row of an admitted company with no snapshot yet: its name, sector, cap band and
-    market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
+    """The row of an admitted company with no snapshot yet: its name, sector, industry, cap band
+    and market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
     warning and no mark, no agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a
     snapshot; ``levels`` is no row key, and ``flags`` stands for the row's flags, not in them) and
     ``None`` elsewhere."""
@@ -431,6 +433,7 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
         "name": company.name,
         "freshness": "current",
         "sector": company.sector,
+        "industry": company.industry,
         "capBand": company.cap_band,
         "marketCap": None if market_cap is None else float(market_cap),
         "refusal": NOT_YET_VALUED,
@@ -465,12 +468,12 @@ def group_rows(
     rows: Sequence[dict[str, Any]], by: str, edges: tuple[float, float, float, float]
 ) -> list[dict[str, Any]]:
     """The rows grouped by ``by`` (``GROUP_BY``), ordered by group name. A group's name is the
-    sector, the engine's phase name (``unclassified`` without a phase) or the cap band; ``none``
-    for a row without a sector or a cap band. Each group gives its row count, the rows with a
-    value (``valued``), the median of price ÷ value over the valued rows with a positive price,
-    and the share of the valued rows whose price ÷ value is below the second designation edge
-    (``edges[1]``: the ``below`` and ``well-below`` bands); ``None`` for the last two when they
-    cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
+    sector, the industry (the level under the sector), the engine's phase name (``unclassified``
+    without a phase) or the cap band; ``none`` for a row without a sector, an industry or a cap
+    band. Each group gives its row count, the rows with a value (``valued``), the median of
+    price ÷ value over the valued rows with a positive price, and the share of the valued rows
+    whose price ÷ value is below the second designation edge (``edges[1]``: the ``below`` and
+    ``well-below`` bands); ``None`` for the last two when they cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
     named: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         named.setdefault(_group_name(row, by), []).append(row)
@@ -481,7 +484,7 @@ def _group_name(row: dict[str, Any], by: str) -> str:
     if by == "phase":
         phase = row["phase"]
         return UNCLASSIFIED if phase is None else _PHASE_NAMES[phase]
-    name = row["sector"] if by == "sector" else row["capBand"]
+    name = row["capBand"] if by == "cap" else row[by]
     return NONE if name is None else str(name)
 
 

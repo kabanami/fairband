@@ -110,7 +110,7 @@
   }
 
   function setFilters(filters) {
-    state.filters = filters;
+    state.filters = listedFilters(filters, state.rows || []);
     render();
   }
 
@@ -236,13 +236,16 @@
      item the line is drawn from (lineItem). The header's finder (finder.js) finds the rows the
      Screen's field finds (finds). The drawer with its bar (drawer), its parts (sections), the
      Notes box (notesBox), the moat box (moatBox), the open item's line (launchLine), an input's
-     value (inputValue), a figure a share in a currency (money) and a logo's ground (logoGround)
-     are here for the tests, which read them in node (tests/web/page.mjs and tests/web/moat.mjs). */
+     value (inputValue), a figure a share in a currency (money), a logo's ground (logoGround), the
+     screen's narrowing (narrow), the industries its menu lists (industriesOf) and the filters it
+     keeps (listedFilters) are here for the tests, which read them in node (tests/web/page.mjs and
+     tests/web/moat.mjs). */
   window.FairbandPage = {
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
     find: find, finds: finds,
+    narrow: narrow, industriesOf: industriesOf, listedFilters: listedFilters,
     watchlists: function () { return state.watchlists; },
     reloadWatchlists: reloadWatchlists,
     watch: watch, closePopups: closePopups,
@@ -409,6 +412,7 @@
         within(filters.phase, r.phase) &&
         within(filters.cap, (r.capBand || '').toLowerCase()) &&
         within(filters.sector, r.sector) &&
+        within(filters.industry, r.industry) &&
         within(filters.watchlist, r.watchlists || []) &&
         (!filters.reviewedOnly || r.reviewed != null) &&
         (!filters.hideExpired || r.freshness !== 'expired');
@@ -421,6 +425,27 @@
     var seen = {};
     rows.forEach(function (r) { if (r.sector != null) seen[r.sector] = true; });
     return Object.keys(seen).sort();
+  }
+
+  /* The menu's industries (B-32; the founder, 2026-11-22): the names found on the loaded rows of
+     the chosen sectors, sorted; none before a sector is chosen, since every sector's together are
+     over a hundred, too many for a menu. */
+  function industriesOf(rows, sectors) {
+    var seen = {};
+    rows.forEach(function (r) {
+      if (r.industry != null && sectors.indexOf(r.sector) !== -1) seen[r.industry] = true;
+    });
+    return Object.keys(seen).sort();
+  }
+
+  /* The filters with the chosen industries the menu still lists: a sector unticked takes its
+     chosen industries along, so none narrows the rows from out of sight. Filters that lose none
+     come back as they are. */
+  function listedFilters(filters, rows) {
+    var names = industriesOf(rows, filters.sector);
+    var kept = filters.industry.filter(function (name) { return names.indexOf(name) !== -1; });
+    return kept.length === filters.industry.length ? filters
+      : Object.assign({}, filters, { industry: kept });
   }
 
   function note(text) { return h('p', { className: 'body app-note' }, text); }
@@ -725,6 +750,7 @@
         filters: state.filters,
         onFiltersChange: setFilters,
         sectors: sectorsOf(state.rows),
+        industries: industriesOf(state.rows, state.filters.sector),
         columns: state.columns,
         onColumnsChange: setColumns,
         sort: state.sort,

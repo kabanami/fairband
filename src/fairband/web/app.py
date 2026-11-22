@@ -369,9 +369,9 @@ def create_app(
 
     @app.get("/api/groups")
     def groups(by: str) -> dict[str, Any]:
-        """The screen's rows grouped by sector, phase or cap band (``group_rows``)."""
+        """The screen's rows grouped by sector, industry, phase or cap band (``group_rows``)."""
         if by not in GROUP_BY:
-            raise HTTPException(400, f"by must be sector, phase or cap, not {by}")
+            raise HTTPException(400, f"by must be sector, industry, phase or cap, not {by}")
         rows, _, read_under = screen_rows(clock().date())
         return {"by": by, "groups": group_rows(rows, by, read_under.designation_edges)}
 

@@ -495,6 +495,8 @@ export interface ScreenRow {
   cap?: CapSize;
   /** One of SECTORS. A fact about the company, not a judgement. fairband: `null` when unknown. */
   sector?: string | null;
+  /** fairband: the industry, the level under the sector; `null` when unknown (B-32). */
+  industry?: string | null;
   /**
    * fairband: the extra columns (spec 6.3). Fractions (`impliedGrowth`, `expectedReturn`, the
    * changes, `drawdown`) render as percentages; dates are ISO. `null` renders an em dash.
@@ -602,6 +604,8 @@ export interface ScreenFilters {
   cap: CapSize[];
   /** Sector names, as they appear in SECTORS. */
   sector: string[];
+  /** fairband: industry names, as `industries` lists them; a row without one matches none. */
+  industry: string[];
   /** Hide companies whose reviewed value is null. */
   reviewedOnly: boolean;
   /** Hide companies whose value is past its validity window. */
@@ -677,6 +681,12 @@ export interface ScreenTableProps {
   onFiltersChange?: (filters: ScreenFilters) => void;
   /** Overrides the eleven GICS sectors in the menu. There is rarely a reason. */
   sectors?: string[];
+  /**
+   * fairband: the industries the menu's INDUSTRY section lists, those of the chosen sectors as
+   * the caller finds them; an empty list draws one line that asks for a sector, and without the
+   * prop there is no section (B-32).
+   */
+  industries?: string[];
   /** Size of the unfiltered universe. With it the bar says `41 of 4,112`
       and offers Clear; without it the bar falls back to `footnote`. */
   total?: number;

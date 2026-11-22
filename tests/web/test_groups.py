@@ -283,11 +283,53 @@ def test_groups_null_when_no_values(
         assert groups(c, "phase") == []
 
 
+def test_groups_by_industry(
+    tmp_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """The industry, the level under the sector, groups as the sector does (B-32): by its name,
+    ``none`` for a row the universe gives no industry."""
+    db_path = tmp_path / "data" / "fairband.db"
+    listed = [
+        replace(company("AAPL", 1, "Technology", "mega"), industry="Consumer Electronics"),
+        company("BBB", 1, "Technology", "mid"),
+        company("CCC", 1, "Technology", "mid"),
+        replace(company("NEWC", 1, "Industrials", None), industry=None),
+    ]
+    seed(db_path, policy, listed, [results[symbol] for symbol in ("AAPL", "BBB", "CCC")])
+    software = statistics.median(ratio(results, symbol) for symbol in ("BBB", "CCC"))
+    with make_client(tmp_path, db_path, policy) as c:
+        assert groups(c, "industry") == [
+            {
+                "name": "Consumer Electronics",
+                "count": 1,
+                "valued": 1,
+                "medianPriceToValue": pytest.approx(ratio(results, "AAPL")),
+                "shareBelowValue": 0.0,
+            },
+            {
+                "name": "Software - Application",
+                "count": 2,
+                "valued": 2,
+                "medianPriceToValue": pytest.approx(software),
+                "shareBelowValue": 0.5,
+            },
+            {"name": "none", "count": 1, **EMPTY},
+        ]
+
+
+def test_the_groups_page_offers_the_industry() -> None:
+    script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
+    assert (
+        "var BY = { sector: 'Sector', industry: 'Industry', phase: 'Phase', cap: 'Cap band' };"
+        in script
+    )
+
+
 def test_groups_unknown_by_400(client: TestClient) -> None:
-    response = client.get("/api/groups?by=industry")
+    response = client.get("/api/groups?by=country")
     assert (response.status_code, response.json()) == (
         400,
-        {"detail": "by must be sector, phase or cap, not industry"},
+        {"detail": "by must be sector, industry, phase or cap, not country"},
     )
     response = client.get("/api/groups")
     assert (response.status_code, response.json()) == (400, {"detail": "by: Field required"})

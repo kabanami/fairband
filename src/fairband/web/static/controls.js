@@ -30,7 +30,7 @@
   var POLL_MS = 2000;
   var INBOX_MS = 30000;
   var OPEN = P.OPEN_STATES;
-  var BY = { sector: 'Sector', phase: 'Phase', cap: 'Cap band' };
+  var BY = { sector: 'Sector', industry: 'Industry', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
   var UNCLASSIFIED = 'unclassified'; /* the calibration's name for a company without a phase */
   /* The refusals the refresh writes for a company it failed, by the text they start with. */

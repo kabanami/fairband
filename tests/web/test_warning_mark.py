@@ -240,6 +240,7 @@ def test_the_removed_columns_are_no_column_keys() -> None:
         "phase": [],
         "cap": [],
         "sector": [],
+        "industry": [],
         "watchlist": [],
         "reviewedOnly": False,
         "hideExpired": False,

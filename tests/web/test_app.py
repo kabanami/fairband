@@ -109,6 +109,7 @@ DESIGN_COLUMNS = [
 ]
 EXTRA_COLUMNS = [
     "sector",
+    "industry",
     "capBand",
     "marketCap",
     "moat",
@@ -233,6 +234,7 @@ def test_screen_rows_and_default_sort(
         "enteredAt": "2026-10-31T22:15:00+00:00",
         "freshness": "current",
         "sector": "Technology",
+        "industry": "Software - Application",
         "capBand": "mega",
         "marketCap": 150_000_000_000.0,
         "moat": "Wide",
@@ -473,6 +475,7 @@ def test_screen_placeholder_row_not_yet_valued(
         "overrides": 0,
         "freshness": "current",
         "sector": "Technology",
+        "industry": "Software - Application",
         "capBand": "mid",
         "marketCap": 3_000_000_000.0,
         "refusal": "not yet valued",
@@ -3459,6 +3462,7 @@ def test_the_spread_names_the_hurdle_as_the_export_does() -> None:
 # The columns the repository's bundle adds to ScreenTable, each a row key, with its head.
 EXTRA_COLUMN_HEADS = {
     "sector": "Sector",
+    "industry": "Industry",
     "capBand": "Cap",
     "marketCap": "Market cap",
     "moat": "Moat",
@@ -3532,14 +3536,11 @@ def test_bundle_filter_menu_has_a_price_vs_value_section() -> None:
     """Spec 7.3: PRICE VS VALUE stands where STANCE stood, its five words in band order, each a
     checkbox as PHASE's are; the chip names the chosen words in band order."""
     bundle = _component_file("bundle.js")
-    groups = "['designation', 'stance', 'phase', 'cap', 'sector', 'watchlist']"
+    groups = "['designation', 'stance', 'phase', 'cap', 'sector', 'industry', 'watchlist']"
     assert f"var FILTER_GROUPS = {groups};" in bundle
-    assert "var EMPTY_FILTERS = { designation: [], stance: [], phase: [], cap: [], sector: []," in (
-        bundle
-    )
-    assert "p.onFiltersChange({ designation: [], stance: [], phase: [], cap: [], sector: []," in (
-        bundle
-    )
+    assert "var EMPTY_FILTERS = { designation: [], stance: [], phase: [], cap: []," in bundle
+    assert "p.onFiltersChange({ designation: [], stance: [], phase: [], cap: []," in bundle
+    assert bundle.count("sector: [], industry: [],") == 2  # the group follows the sector's
     assert "h('span', { className: 'fb-menu__h label' }, 'PRICE VS VALUE')," in bundle
     assert "Object.keys(DESIGNATION).map(function (k) {" in bundle
     assert "return checkRow(k, listOf(filters, 'designation').indexOf(k) !== -1," in bundle

@@ -1141,12 +1141,15 @@
   // flag has gone with the Flags and the Warnings columns (spec 2026-11-19 7.5).
   // fairband: the agent's stance group follows the designation; the reviewed flag's menu row reads
   // "Has a review" (spec 2026-11-06 Tier 2, 18.1).
-  var FILTER_GROUPS = ['designation', 'stance', 'phase', 'cap', 'sector', 'watchlist'];
+  // fairband: the industry group, the names of the level under the sector, follows the sector
+  // (B-32; the founder, 2026-11-22).
+  var FILTER_GROUPS = ['designation', 'stance', 'phase', 'cap', 'sector', 'industry', 'watchlist'];
   var FILTER_FLAGS = ['reviewedOnly', 'hideExpired'];
   var FLAG_WORDS = { reviewedOnly: 'Reviewed only', hideExpired: 'Hide expired' };
   var FLAG_ROWS = { reviewedOnly: 'Has a review' };
 
-  var EMPTY_FILTERS = { designation: [], stance: [], phase: [], cap: [], sector: [],
+  var EMPTY_FILTERS = { designation: [], stance: [], phase: [], cap: [],
+                        sector: [], industry: [],
                         watchlist: [], reviewedOnly: false, hideExpired: false };
 
   function listOf(f, key) { return (f && f[key]) || []; }
@@ -1194,6 +1197,13 @@
       out.push({ key: 'sector', word: f.sector.length > 2
         ? f.sector.length + ' sectors'
         : f.sector.join(' + ') });
+    }
+    // fairband: one or two chosen industries by name, more than two by their count, as the
+    // sectors read (B-32).
+    if (listOf(f, 'industry').length) {
+      out.push({ key: 'industry', word: f.industry.length > 2
+        ? f.industry.length + ' industries'
+        : f.industry.join(' + ') });
     }
     // fairband: one or two chosen lists by name, more than two by their count (spec 2026-11-04
     // 9.4); a list whose name is not at hand yet reads in the count.
@@ -1390,6 +1400,8 @@
       } },
     // fairband: the extra columns of spec 6.3, each a plain figure, word or date from the row.
     { key: 'sector', head: 'Sector', cell: function (r) { return wordCell(r.sector); } },
+    // fairband: the industry, the level under the sector (B-32).
+    { key: 'industry', head: 'Industry', cell: function (r) { return wordCell(r.industry); } },
     { key: 'capBand', head: 'Cap', cell: function (r) { return wordCell(r.capBand); } },
     { key: 'marketCap', head: 'Market cap', num: true,
       cell: function (r) { return figureCell(billions(r.marketCap)); } },
@@ -1581,6 +1593,9 @@
 
     var filters = p.filters || EMPTY_FILTERS;
     var sectors = p.sectors || SECTORS;
+    // fairband: the industries the menu lists, names, those of the chosen sectors as the caller
+    // finds them; a table handed none draws no INDUSTRY section (B-32).
+    var industries = p.industries || [];
     // fairband: the user's watchlists, [{ id, name }], for the menu and the chip (spec 2026-11-04
     // 9.4).
     var lists = p.watchlists || [];
@@ -1609,7 +1624,9 @@
         // fairband: the designation group leads, as in EMPTY_FILTERS; the watchlist group clears
         // with the rest (spec 2026-11-04 9.4), the stance group too (spec 2026-11-06 Tier 2,
         // 18.1).
-        p.onFiltersChange({ designation: [], stance: [], phase: [], cap: [], sector: [],
+        // fairband: the industry group clears with the rest (B-32).
+        p.onFiltersChange({ designation: [], stance: [], phase: [], cap: [],
+                            sector: [], industry: [],
                             watchlist: [], reviewedOnly: false, hideExpired: false });
       }
     }
@@ -1720,6 +1737,19 @@
                       function () { toggleIn('sector', name); },
                       h('span', null, name));
                   })),
+                // fairband: INDUSTRY, after SECTOR: a checkbox for each industry the caller
+                // hands, those of the chosen sectors, since every sector's together are over a
+                // hundred; while it hands none, one line that asks for a sector (B-32; the
+                // founder, 2026-11-22).
+                p.industries ? h('hr') : null,
+                p.industries ? h('div', { className: 'fb-menu__sec' },
+                  h('span', { className: 'fb-menu__h label' }, 'INDUSTRY'),
+                  industries.length ? industries.map(function (name) {
+                    return checkRow(name, listOf(filters, 'industry').indexOf(name) !== -1,
+                      function () { toggleIn('industry', name); },
+                      h('span', null, name));
+                  }) : h('span', { className: 'fb-menu__hint caption' },
+                    'Choose a sector to list its industries.')) : null,
                 // fairband: the user's lists by name, after SECTOR; a row on any chosen list
                 // matches. Without a list there is no section (spec 2026-11-04 9.4).
                 lists.length ? h('hr') : null,
