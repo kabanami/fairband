@@ -147,21 +147,22 @@ See [docs/method-overview.md](docs/method-overview.md) for a short overview, or
 
 ## Status
 
-Fairband is a personal project. I share it as it is, with no promise of support. Issues are
-welcome. For a change, please open an issue before a pull request.
+Fairband is a personal project shared as-is, with no guarantee of support. Issues are welcome; if
+you want to submit a pull request, please open an issue first.
 
-It is young, its method still changes, and it has no track record. Nothing in this repository is
-investment advice.
+The project is still early and the valuation rules change regularly. Nothing in this repository
+is investment advice.
 
-No market data comes with the repository. The screenshots show Fairband running on my own data
-subscriptions; to run it you need your own key and must follow your vendor's terms.
+No market data is included in this repository. The screenshots were taken using my own FMP
+subscription; to run Fairband yourself, you'll need your own API key and must follow your data
+vendor's terms.
 
-## Licence
+## License
 
-[Apache License 2.0](LICENSE), with the notices of the bundled software and fonts in
-[NOTICE](NOTICE). The licence does not grant the use of the name Fairband or of its mark (its
-section 6).
+Licensed under the [Apache License 2.0](LICENSE). Third-party software and font notices are in
+[NOTICE](NOTICE). Per Section 6 of the license, this does not grant rights to use the Fairband
+name or logo.
 
 ## Author
 
-Khalid Abanami, on [LinkedIn](https://www.linkedin.com/in/khalid-abanami-a034108/).
+Khalid Abanami ([LinkedIn](https://www.linkedin.com/in/khalid-abanami-a034108/))
