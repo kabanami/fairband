@@ -5,8 +5,8 @@ founder decided that a row opens the drawer on the watchlist page, that the page
 Screen does, that it shows one list chosen by a selector with a default the user sets, that a
 list has no Request research of its own, that the drawer's Request research box must stay
 inside the window, and that the Inbox's ticker opens the company page. Every other choice below is Claude's, marked *my call* where it is more than a
-reading of those requests, and can be overturned as any other. Not built. The work takes the
-backlog's next free number, B-285 on 2026-11-22.
+reading of those requests, and can be overturned as any other. Built on 2026-11-22 as backlog
+item B-285; the decision log's last lines say where the build differs from this text.
 
 No valuation moves. Nothing here touches the engine, the classifier, the universe rule or a
 policy value, so `docs/method.md` does not change, and neither do the method version, the policy
@@ -183,6 +183,10 @@ window's right edge. The company page's head already stands its box from the but
 right edge too, so it lies inside the drawer's width. The builder checks every place that draws
 `.app-request` before it changes the shared rule.
 
+As built: the right edge alone was not enough. A scrollbar in the drawer makes its two buttons
+wrap, and the box, fixed to the button, then passed the drawer's left edge. The drawer's box is
+fixed to the row of buttons instead, and both places share one rule for the right edge.
+
 ## 11. The Inbox's ticker
 
 Today an item's ticker in the Inbox is a link with a click of its own, which opens the company's
@@ -257,3 +261,10 @@ Then the founder's own look before the merge.
   FIND, filters and sort, the Columns choice shared, the default kept in the browser and the list
   named in the address. He asked whether the Screen's and the drawer's code would be reused; the
   answer was yes, with no second copy.
+- 2026-11-22, the build (Claude): built as planned, with these differences. The drawer's box is
+  fixed to its row of buttons (10, as built). A symbol with no row stands last by ticker
+  whatever the sort (7.1). A failed read of a list's rows shows its sentence on the watchlist
+  page alone, and the Screen keeps its table. Escape in the name's field, in Delete's dialog, in
+  Add a company and in the header's finder closes that alone and leaves the drawer open. The
+  bar counts one company in the singular. Accepted on a scratch database in a headless browser,
+  49 of 49 checks, in both themes; the leftovers are backlog item B-286.
