@@ -139,22 +139,6 @@ tagged with that identity. See [tools.md](playbook/fairband-research/reference/t
 full tool reference and [playbook/fairband-research](playbook/fairband-research/) for the
 step-by-step research playbook.
 
-## How it was built
-
-- The first commit is from 31 October 2026. Eighteen days later the repository held more than
-  660 commits and 4,580 tests.
-- Each larger feature has a written design and a plan, was built task by task with a review of
-  each task, and had a review of the whole branch before its merge. The 19 designs are in
-  [docs/superpowers/specs](docs/superpowers/specs/) and the 28 plans in
-  [docs/superpowers/plans](docs/superpowers/plans/).
-- Nearly every design ends with a decision log: what was ruled, by whom, and what went wrong on
-  the way.
-- [CLAUDE.md](CLAUDE.md) holds the standing instructions the agents work under, and
-  [docs/backlog.md](docs/backlog.md) the work not started.
-
-These numbers describe speed, not correctness. The method changed many times in those weeks, and
-the values moved with it.
-
 ## Smaller things worth knowing
 
 - Every number in an agent's report carries a reference to stored data, and Fairband checks the
