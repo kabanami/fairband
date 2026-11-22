@@ -73,7 +73,7 @@ from fairband.store.refreshes import create_refresh, finish_refresh
 from fairband.store.reviews import insert_review
 from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
-from fairband.web.rows import EXTRA_KEYS, ROW_KEYS
+from fairband.web.rows import COLUMNS, EXTRA_KEYS, ROW_KEYS
 
 # The design system's ScreenRow keys.
 DESIGN_ROW_KEYS = [
@@ -117,7 +117,6 @@ EXTRA_COLUMNS = [
     "expectedReturn",
     "epv",
     "peReported",
-    "peClean",
     "peForward",
     "high52w",
     "low52w",
@@ -242,7 +241,6 @@ def test_screen_rows_and_default_sort(
         "expectedReturn": im["expected_return"]["total"],
         "epv": im["epv"],
         "peReported": im["multiples"]["pe_reported"],
-        "peClean": im["multiples"]["pe_clean"],
         "peForward": im["multiples"]["pe_forward"],
         "high52w": facts["high_52w"],
         "low52w": facts["low_52w"],
@@ -282,7 +280,7 @@ def test_screen_rows_and_default_sort(
     assert aal["refusal"] == refused.refusal == "no target margin: 0 mature peers"
     for key in ("fairLow", "fairHigh", "fairValue", "buyLevel", "trimLevel", "mechanical"):
         assert aal[key] is None, key
-    for key in ("impliedGrowth", "expectedReturn", "epv", "peClean", "route"):
+    for key in ("impliedGrowth", "expectedReturn", "epv", "route"):
         assert aal[key] is None, key
     assert (aal["priceToValue"], aal["designation"]) == (None, None)
     # refused for its target margin, it keeps the moat class the margin the price needs reads,
@@ -332,7 +330,7 @@ def test_sort_unknown_key_400(client: TestClient) -> None:
     assert response.status_code == 400
     assert response.json() == {"detail": "unknown sort column: fair_value"}
     assert client.get("/api/screen?sort=band").status_code == 400  # a column, not a row key
-    for gone in ("stance", "stance3", "stance5"):
+    for gone in ("stance", "stance3", "stance5", "peClean"):
         assert client.get(f"/api/screen?sort={gone}").status_code == 400, gone
     assert client.get("/api/screen?sort=covered").status_code == 400  # the mark's, not a column
     response = client.get("/api/screen?sort=ticker&dir=down")
@@ -3403,7 +3401,6 @@ EXTRA_COLUMN_HEADS = {
     "expectedReturn": "Expected return",
     "epv": "EPV",
     "peReported": "P/E",
-    "peClean": "Clean P/E",
     "peForward": "Forward P/E",
     "high52w": "52w high",
     "low52w": "52w low",
@@ -3427,6 +3424,23 @@ def test_bundle_has_extra_columns() -> None:
     assert set(EXTRA_COLUMN_HEADS) <= set(EXTRA_KEYS)  # the API sends each one
     for key, head in EXTRA_COLUMN_HEADS.items():
         assert f"{{ key: '{key}', head: '{head}'," in bundle, key
+
+
+def test_the_screen_has_no_clean_pe_column(client: TestClient) -> None:
+    """The founder, 2026-11-22: the screen's Clean P/E column goes. Since method 1.7 the engine
+    finds no one-time items, so the column held the P/E again on every row (B-268, point 1). The
+    row sends no `peClean`, the table has no such column and no saved list can name one. The
+    engine's own `pe_clean` stays, which a report cites from a review that set the one-time
+    items."""
+    row = client.get("/api/screen").json()["rows"][0]
+    assert "peReported" in row and "peForward" in row
+    assert "peClean" not in row
+    assert "peClean" not in ROW_KEYS and "peClean" not in COLUMNS
+    bundle = _component_file("bundle.js")
+    assert "key: 'peClean'" not in bundle and "'Clean P/E'" not in bundle
+    assert "{ key: 'peReported', head: 'P/E', num: true," in bundle
+    assert "{ key: 'peForward', head: 'Forward P/E', num: true," in bundle
+    assert "peClean" not in _component_file("index.d.ts")
 
 
 def test_bundle_default_columns_end_with_designation() -> None:

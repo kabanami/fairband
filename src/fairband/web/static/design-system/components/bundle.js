@@ -1412,10 +1412,11 @@
       cell: function (r) { return figureCell(percent(r.expectedReturn)); } },
     { key: 'epv', head: 'EPV', num: true,
       cell: function (r) { return figureCell(money(r.epv)); } },
+    // fairband: no column for the P/E on earnings without one-time items. The engine finds no
+    // such items since method 1.7, so the column held the P/E again on every row (the founder,
+    // 2026-11-22).
     { key: 'peReported', head: 'P/E', num: true,
       cell: function (r) { return figureCell(multiple(r.peReported)); } },
-    { key: 'peClean', head: 'Clean P/E', num: true,
-      cell: function (r) { return figureCell(multiple(r.peClean)); } },
     { key: 'peForward', head: 'Forward P/E', num: true,
       cell: function (r) { return figureCell(multiple(r.peForward)); } },
     { key: 'high52w', head: '52w high', num: true,

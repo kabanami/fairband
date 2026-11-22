@@ -334,13 +334,32 @@ GUIDED_STOCK_PAY = (
     "Under an applied `earnings.ntm` the note does not show, and neither stock-pay input is needed"
 )
 # The playbook's words of method 1.7, copied from the Words table of the GuruFocus removal's plan
-# 2 (spec 2026-11-19 7.5): step 5 on the one-time items, and the clean P/E's gloss.
+# 2 (spec 2026-11-19 7.5): step 5 on the one-time items. The words on the trailing P/E are the
+# founder's of 2026-11-22: the earlier sentence, "the P/E on earnings less them is the same",
+# confused a reader, and a report now names a second P/E only where it has one.
 STEP_5_ONE_TIME = (
     "Name the one-time items: the mechanical value keeps them, and step 8 takes them out."
 )
-CLEAN_PE_GLOSS = (
-    "the clean P/E (the price over the trailing earnings a share less the one-time items you set"
-    " through `earnings.nri_gap`; it differs from the reported P/E under your gap alone)"
+TRAILING_PE_WORDS = (
+    "The trailing P/E is the price over the earnings as reported.",
+    (
+        "Where you set `earnings.nri_gap`, give a second trailing P/E beside it, on the earnings"
+        " with your one-time items removed: the review's,"
+        " `review:<id>/intermediates/multiples/pe_clean`. Say in one sentence which items you"
+        " removed."
+    ),
+    (
+        'Where you set none, give the one trailing P/E and write: "No one-time items were removed'
+        ' from these earnings." Name no second P/E there, and do not say that two figures are'
+        " equal."
+    ),
+)
+# The sentences the founder found confusing, which no report is told to write any more.
+CONFUSING_PE_WORDS = (
+    "so the P/E on earnings less them is the same",
+    "the two are equal",
+    "it differs from the reported P/E under your gap alone",
+    "takes no one-time items out of",
 )
 # The two codes method 1.7 removes (spec 2026-11-19 7.2), which the playbook names no more.
 REMOVED_CODES = ("large-nri", "consensus-basis-unknown")
@@ -2393,8 +2412,9 @@ def test_step_5_reads_a_margin_s_change_in_points_and_the_cells_no_consensus_fil
 def test_the_template_s_words_state_what_each_figure_is() -> None:
     """Spec 2026-11-15 10 (B-138): the forward P/E, the price over the NTM EPS (method 5.9), sits
     beside the belief and does not rest on it; the Driver column names the inputs by terms whose
-    phrases the register gives; the clean P/E is glossed in words a reader follows (5.9), since
-    method 1.7 the review's under the agent's gap and the reported one without it; section
+    phrases the register gives; the trailing P/E is said in words a reader follows (5.9): one
+    figure on the earnings as reported, and a second, the review's, only where the agent removed
+    one-time items; section
     9 gives the price's date where step 3's refresh did not refresh the company; the Dickinson
     stage is a second reading of the life cycle, not a stage (3.7)."""
     template = _flat(_read(TEMPLATE))
@@ -2419,21 +2439,13 @@ def test_the_template_s_words_state_what_each_figure_is() -> None:
     for name in named:
         assert name in rows, name
     assert "the method's earnings" not in template
-    # the clean P/E under method 1.7 (spec 2026-11-19 7.1, 7.5): a snapshot's equals the reported
-    # one, so the clean figure is the review's under the agent's gap, and with no gap the report
-    # gives the reported P/E and says so (the controller's ruling on Task 8, Q1)
-    assert CLEAN_PE_GLOSS in template
-    for words in (
-        (
-            "Where you set `earnings.nri_gap`, the clean P/E is the review's,"
-            " `review:<id>/intermediates/multiples/pe_clean`: give the two side by side."
-        ),
-        (
-            "Where you set none the two are equal: give the reported P/E, and say that no one-time"
-            " items were taken out of the earnings."
-        ),
-    ):
+    # the trailing P/E under method 1.7 (spec 2026-11-19 7.1, 7.5): a snapshot's clean P/E equals
+    # its reported one, so a second figure is the review's under the agent's one-time items, and
+    # with none the report gives one P/E and one plain sentence (the founder, 2026-11-22)
+    for words in TRAILING_PE_WORDS:
         assert words in template, words
+    for words in CONFUSING_PE_WORDS:
+        assert words not in template, words
     assert "the price over the trailing earnings a share without one-time items" not in template
     # the final review of plan 2, Task 8's minor 4: a snapshot's clean P/E is its reported one
     # since method 1.7, so the template cites the snapshot's reported and forward P/E alone
@@ -2449,8 +2461,8 @@ def test_the_template_s_words_state_what_each_figure_is() -> None:
     assert "snapshot:412/intermediates/multiples/pe_reported" in refs
     assert not any(ref.endswith("/multiples/pe_clean") for ref in refs), refs
     assert (
-        " on reported earnings. This report takes no one-time items out of the earnings, so the P/E"
-        " on earnings less them is the same."
+        " on the earnings as reported. No one-time items were removed from these earnings. Over the"
+        " past ten years the trailing P/E averaged "
     ) in _written(prices["parts"])
     assert "on earnings without one-time items" not in template
     nine = template.split("### Section 9", 1)[1].split("### The charts", 1)[0]

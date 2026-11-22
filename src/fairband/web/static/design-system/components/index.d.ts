@@ -508,7 +508,6 @@ export interface ScreenRow {
   expectedReturn?: number | null;
   epv?: number | null;
   peReported?: number | null;
-  peClean?: number | null;
   peForward?: number | null;
   high52w?: number | null;
   low52w?: number | null;

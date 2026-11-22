@@ -1200,3 +1200,11 @@ series built from several answers; the order of work inside a plan.
   revalue that names its companies, which such a write records; the page reads `shown`. A
   revalue of named companies that did not end done keeps its line, and so does a scoped refresh
   (B-280).
+- 2026-11-22, the founder, on the reports of that day and on the screen: "remove the clean P/E
+  column, and fix the wording because it is very confusing. It should be clear and simple". 7.1
+  kept the screen's clean P/E column, and since method 1.7 it held the P/E again on every row;
+  the template's sentence for a report with no one-time items, "… so the P/E on earnings less
+  them is the same", stood in ten reports. The column and the row's `peClean` go. A report
+  gives one trailing P/E and writes "No one-time items were removed from these earnings.", and
+  a second P/E only where the agent set `earnings.nri_gap`. The engine's `pe_clean` stays
+  (B-287; B-268's first point closes; B-288 holds what is still missing on Mature Growth).
