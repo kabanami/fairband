@@ -63,16 +63,17 @@ stored data), and inline charts.
 
 ![Financial section of a research report with charts](docs/images/research-charts.png)
 
-## How a research report gets made
+## Research workflow
 
-1. You press **Request research** on a company's page. Fairband posts a work item, and it can
-   open a terminal window in which Claude Code starts on that item.
-2. The agent claims the item and follows the playbook. It reads the company through the tools:
-   the valuation, the statements, the estimates, the filings, the last earnings call, the news.
-3. Where it disagrees with an input the engine set by rule, it changes that input and gives its
-   reason. Fairband then shows a reviewed value beside the mechanical value.
-4. The agent submits the report. Fairband checks it and stores it.
-5. You read it in the company's Research tab, with the date until which it stays valid.
+1. Click **Request research** on a company page. Fairband creates a work item in the inbox and can
+   automatically open a terminal running Claude Code on it.
+2. The agent claims the work item and follows the research playbook, pulling the mechanical
+   valuation, financials, estimates, filings, recent earnings call transcript, and news over MCP.
+3. If the agent disagrees with any of the engine's inputs (or the moat class), it updates them with
+   a written explanation and supporting evidence. Fairband recalculates and shows the reviewed
+   valuation alongside the mechanical one.
+4. The agent submits the report; Fairband validates its citations and saves it.
+5. The report appears in the company's **Research** tab along with its expiration date.
 
 ## Quickstart
 
