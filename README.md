@@ -53,7 +53,7 @@ stance, price and volume chart, and key statistics.
 
 ### Financials
 Annual and quarterly income statement, balance sheet, cash flow, segments, and ratios, with
-clickable rows you can plot on the chart above.
+clickable rows you can plot on the chart.
 
 ![Company Financials tab](docs/images/company-financials.png)
 
