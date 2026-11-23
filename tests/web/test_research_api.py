@@ -242,7 +242,18 @@ def test_the_detail_carries_the_review_with_its_bridge(
         "flags": [
             {"code": f.code, "word": f.word, "sentence": f.sentence} for f in review.result.flags
         ],
+        # the state of the review the company holds (spec 2026-11-23 held reviewed value, 5.3)
+        "held": {
+            "state": found["held"]["state"],
+            "earlyAt": None,
+            "reasons": [],
+            "reading": None,
+            "readingRefusal": None,
+            "readingLine": None,
+            "validUntil": review.result.valid_until.isoformat(),
+        },
     }
+    assert found["held"]["state"] in ("current", "aging", "expired")
     assert found["flags"]  # a review with flags, so the record's list is not empty by default
     assert line.delta is not None and abs(mechanical + line.delta - value) < 1e-6
     # no record of the others

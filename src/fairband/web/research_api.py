@@ -82,14 +82,20 @@ from fairband.store.moat import moat_row
 from fairband.store.overrides import OverrideRow, overrides_for
 from fairband.store.reports import ReportRow, latest_judgments, latest_report
 from fairband.store.research import findings_for, kill_criteria_for, news_items_for, notes_for
-from fairband.store.reviews import ReviewRow, latest_review
+from fairband.store.reviews import HeldRow, ReviewRow, held_row, latest_review
 from fairband.store.secondary import SecondaryRow, latest_secondary
 from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_rows
 from fairband.web.agents_api import criterion_json, finding_json, record_json
 from fairband.web.guidance_api import guidance_json
 from fairband.web.launch_api import launch_json
 from fairband.web.reviews_api import secondary_json
-from fairband.web.rows import counts_on, record_standing, rested_on, window_ended
+from fairband.web.rows import (
+    counts_on,
+    held_block,
+    record_standing,
+    rested_on,
+    window_ended,
+)
 
 LEDGER_ROWS = 20  # the company's newest ledger rows the research read answers
 # Each input's bridge label and unit by its tag as a stored bridge line names it.
@@ -128,6 +134,8 @@ def agent_records(
                 snapshot.price,
                 policy,
                 table_moat,
+                held_row(conn, symbol),
+                today,
             )
         ),
         "priceNeeds": _price_needs(snapshot, counted, policy, table_moat),
@@ -213,9 +221,14 @@ def _price_needs(
     draws: the counted ``review``'s when it has a value, read from the review's own result at
     its word at the latest snapshot's price, else the snapshot's; each with the required return
     its own result read, so a row charged at r in every year gives that reason. Each word is the
-    one the row shows, read on ``policy`` (``rows.record_standing``)."""
+    one the row shows, read on ``policy`` (``rows.record_standing``). ``None`` for a held review
+    whose copy took the plain move (``refresh.held``; its result holds ``held_as_made``): its
+    figures that follow the price are as made, solved at an older price, and no sentence of the
+    mechanical value stands in for the reviewed one."""
     if review is not None and review.value is not None:
         reviewed = review.result
+        if "held_as_made" in reviewed.intermediates:
+            return None
         moat = moat_of(reviewed) or table_moat
         _, _, word = _served(record_standing(review.value, moat, snapshot.price, policy, review))
         return price_needs(reviewed.route, reviewed.intermediates, word, _required_return(reviewed))
@@ -248,10 +261,14 @@ def _review(
     price: float | None,
     policy: Policy,
     table_moat: Moat | None,
+    held: HeldRow | None,
+    today: date,
 ) -> dict[str, Any]:
     """The review, its levels and its designation at ``price``, the latest snapshot's, on
     ``policy`` and its own moat class (``rows.record_standing``, which the screen's row reads
-    too, so the drawer and the row say one word), and its flags when it has a value."""
+    too, so the drawer and the row say one word), its flags when it has a value, and ``held``,
+    the state of the review the company holds on ``today`` (``rows.held_block``, from ``held``,
+    the company's stored facts)."""
     moat = moat_of(review.result) or table_moat
     levels, ratio, word = _served(record_standing(review.value, moat, price, policy, review))
     flags = None if review.value is None else [asdict(f) for f in review.result.flags]
@@ -266,6 +283,7 @@ def _review(
         "overrideCount": len(review.override_ids),
         "mechanical": review.mechanical_value,
         "flags": flags,
+        "held": held_block(review, held, policy, today),
     }
 
 

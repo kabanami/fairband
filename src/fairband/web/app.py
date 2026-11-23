@@ -137,7 +137,7 @@ from fairband.store.refreshes import (
 )
 from fairband.store.reports import latest_reports
 from fairband.store.research import notes_for
-from fairband.store.reviews import latest_reviews
+from fairband.store.reviews import held_rows, latest_reviews
 from fairband.store.secondary import latest_secondaries
 from fairband.store.settings import read_overlay
 from fairband.store.snapshots import (
@@ -328,9 +328,16 @@ def create_app(
             rest_on = {i for s, found in records.items() for i in rested_on(snapshots[s], *found)}
             cited = snapshot_rows(conn, rest_on)
             classes = moat_classes(conn) if records else {}
+            holds = held_rows(conn) if reviews else {}
         agents = {
             symbol: agent_fields(
-                snapshots[symbol], *found, cited, today, read_under, classes.get(symbol)
+                snapshots[symbol],
+                *found,
+                cited,
+                today,
+                read_under,
+                classes.get(symbol),
+                holds.get(symbol),
             )
             for symbol, found in records.items()
         }

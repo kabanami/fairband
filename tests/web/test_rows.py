@@ -16,7 +16,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,7 @@ from support.engine_companies import (
 from support.web import HEADER, HOST, NOW, TODAY, _settings
 
 from fairband.engine.flags import flag_count
-from fairband.engine.levels import moat_of, standing_for
+from fairband.engine.levels import moat_of, standing_for, validity_state
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
@@ -44,7 +44,14 @@ from fairband.store.ledger import OWNER, Writer
 from fairband.store.moat import moat_row
 from fairband.store.overrides import drop_override, insert_override
 from fairband.store.reports import insert_report
-from fairband.store.reviews import ReviewRow, clear_held, insert_review, latest_review
+from fairband.store.reviews import (
+    ReviewRow,
+    clear_held,
+    held_row,
+    insert_review,
+    latest_review,
+    set_held_state,
+)
 from fairband.store.secondary import SecondaryRow, insert_secondary, secondary_row
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
@@ -339,6 +346,78 @@ def test_a_cleared_review_leaves_no_reviewed_value(
     with closing(connect(db_path)) as conn:
         clear_held(conn, "AAPL")
     assert _agents(_rows(client)["AAPL"]) == NO_AGENT
+
+
+def test_a_held_row_reads_expired_early_and_keeps_its_number(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: a reviewed row's freshness is its held
+    review's state. With a reason stored it reads expired, with ``expiredEarly``, so the filter
+    that hides expired rows hides it, and it keeps its number. The detail's review gives the
+    state, the day, the sentences and the reading; with no reason the state is the window's."""
+    _, value = _review(db_path, policy, results)
+    row = _rows(client)["AAPL"]
+    assert (row["reviewed"], row["expiredEarly"]) == (value, False)
+    block = client.get("/api/companies/AAPL").json()["review"]["held"]
+    assert (block["state"], block["reasons"], block["earlyAt"]) == (row["freshness"], [], None)
+    with closing(connect(db_path)) as conn:
+        held = held_row(conn, "AAPL")
+        assert held is not None
+        facts = replace(
+            held,
+            newer_period=date(2026, 12, 26),
+            reading_value=value * 2,
+            early_at=date(2026, 11, 14),
+        )
+        set_held_state(conn, facts)
+    row = _rows(client)["AAPL"]
+    assert (row["reviewed"], row["freshness"], row["expiredEarly"]) == (value, "expired", True)
+    assert client.get("/api/companies/AAPL").json()["review"]["held"] == {
+        "state": "expired-early",
+        "earlyAt": "2026-11-14",
+        "reasons": [
+            "The company has reported a newer period (to 26 Dec 2026).",
+            f"Computed again on today's data, the review gives ${value * 2:,.2f} (+100%).",
+        ],
+        "reading": value * 2,
+        "readingRefusal": None,
+        "readingLine": None,
+        "validUntil": row["validUntil"],
+    }
+
+
+def test_a_reviewed_row_s_window_is_its_held_review_s(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 5.2 and 5.7: the row's "valid until" is the window of the snapshot the review was
+    made on, which its copies keep, whatever the latest snapshot's window is; a row no review
+    fills keeps the snapshot's window and state, and is never expired early."""
+    _review(db_path, policy, results)
+    with closing(connect(db_path)) as conn:
+        review = latest_review(conn, "AAPL")
+        assert review is not None
+        ended = (NOW.date() - timedelta(days=1)).isoformat()
+        conn.execute(
+            "UPDATE reviews SET result = json_set(result, '$.valid_until', ?) WHERE id = ?",
+            (ended, review.id),
+        )
+        conn.commit()
+    rows = _rows(client)
+    snapshot = _newest(db_path, "AAPL")
+    assert snapshot.valid_until.isoformat() != ended
+    held = rows["AAPL"]
+    assert (held["validUntil"], held["freshness"], held["expiredEarly"]) == (
+        ended,
+        "expired",
+        False,
+    )
+    plain = rows["HGCO"]
+    other = _newest(db_path, "HGCO")
+    assert plain["reviewed"] is None and plain["expiredEarly"] is False
+    assert plain["validUntil"] == other.valid_until.isoformat()
+    assert plain["freshness"] == validity_state(
+        other.data_date, other.valid_until, NOW.date(), policy.aging_fraction
+    )
 
 
 def test_a_secondary_stands_in_where_the_route_refuses(

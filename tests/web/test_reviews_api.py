@@ -201,7 +201,7 @@ def test_a_refused_override_is_stored_with_its_state(client: TestClient) -> None
     ]
     r = client.get("/api/companies/AAPL/reviews/latest")
     assert (r.status_code, r.json()) == (404, {"detail": "no review for AAPL"})
-    assert client.get("/api/companies/AAPL/reviews").json() == {"reviews": []}
+    assert client.get("/api/companies/AAPL/reviews").json() == {"held": None, "reviews": []}
 
 
 def test_the_override_route_stores_it_refused(client: TestClient) -> None:
@@ -261,7 +261,7 @@ def test_an_unclassified_row_refuses_the_moat_before_its_route(
         ("growth.belief", "refused-route"),
         ("moat.class", "refused-locked"),
     ]
-    assert client.get("/api/companies/UNCL/reviews").json() == {"reviews": []}
+    assert client.get("/api/companies/UNCL/reviews").json() == {"held": None, "reviews": []}
     reading = {
         "rowTag": "moat.class",
         "rowValues": ["Narrow", "Wide"],
@@ -510,6 +510,26 @@ def test_a_second_override_on_a_tag_replaces_the_first(client: TestClient) -> No
     assert listed[1]["droppedAt"] == NOW.isoformat()
     latest = client.get("/api/companies/AAPL/reviews/latest").json()
     assert latest["overrideIds"] == [second["id"]] and latest["bridge"][0]["new"] == 0.09
+
+
+def test_the_reviews_list_gives_the_held_state_and_each_kind(client: TestClient) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.8: the list an agent reads gives the state of the
+    review the company holds beside its reviews, each with its kind; a company that holds none
+    has no state."""
+    assert client.get("/api/companies/AAPL/reviews").json() == {"held": None, "reviews": []}
+    review = _post(client, BELIEF_8)["review"]
+    body = client.get("/api/companies/AAPL/reviews").json()
+    assert [(r["id"], r["kind"], r["madeId"]) for r in body["reviews"]] == [
+        (review["id"], "made", None)
+    ]
+    held = body["held"]
+    assert (held["state"], held["reasons"], held["earlyAt"], held["reading"]) == (
+        "current",
+        [],
+        None,
+        None,
+    )
+    assert held["reviewId"] == review["id"] and held["readAgainAt"] is None
 
 
 def test_a_drop_recomputes_or_clears_the_review(client: TestClient) -> None:
@@ -1120,7 +1140,7 @@ def test_an_override_on_a_store_that_moved_is_refused(
     r = client.post("/api/companies/HGCO/overrides", json=target, headers=AGENT)
     assert (r.status_code, r.json()) == (409, _moved(snapshot_id))
     assert _overrides(client, "HGCO") == []
-    assert client.get("/api/companies/HGCO/reviews").json() == {"reviews": []}
+    assert client.get("/api/companies/HGCO/reviews").json() == {"held": None, "reviews": []}
     assert client.get("/api/companies/HGCO/ledger").json()["entries"] == ledger
 
 

@@ -248,6 +248,7 @@ from fairband.store.refreshes import latest_deciles
 from fairband.store.reviews import (
     ReviewRow,
     clear_held,
+    held_row,
     latest_review,
     review_log,
     reviews_for,
@@ -268,6 +269,7 @@ from fairband.store.secondary import (
 )
 from fairband.store.snapshots import SnapshotRow, latest_snapshot
 from fairband.web.agents_api import WriterOf, gist, record_json
+from fairband.web.rows import held_block
 from fairband.web.settings_api import effective
 
 AGENTS_WRITE = "an override is an agent's write"
@@ -416,6 +418,10 @@ def review_json(review: ReviewRow, *, with_result: bool = True) -> dict[str, Any
     else:
         del plain["result"]
     return plain
+
+
+def _stamp(at: datetime | None) -> str | None:
+    return None if at is None else at.isoformat()
 
 
 def bridge_json(review: ReviewRow) -> list[dict[str, Any]]:
@@ -578,9 +584,23 @@ def add_review_routes(
 
     @app.get("/api/companies/{symbol}/reviews")
     def reviews(symbol: str) -> dict[str, Any]:
+        """Every review of the company, newest first, each with its kind, and ``held``: the
+        state of the review it holds (``rows.held_block``; spec 2026-11-23 held reviewed value,
+        5.8) with the made review's id, when it was made and when a refresh first read it
+        again; ``None`` for a company that holds none."""
+        company = exchange_symbol(symbol)
         with closing(conn_factory()) as conn:
-            found = reviews_for(conn, exchange_symbol(symbol))
-        return {"reviews": [review_json(r, with_result=False) for r in found]}
+            found = reviews_for(conn, company)
+            facts = held_row(conn, company)
+            current = None if facts is None else latest_review(conn, company)
+            state = None
+            if facts is not None and current is not None:
+                state = held_block(current, facts, effective(conn, policy), clock().date()) | {
+                    "reviewId": facts.review_id,
+                    "madeAt": facts.made_at.isoformat(),
+                    "readAgainAt": _stamp(facts.read_again_at),
+                }
+        return {"held": state, "reviews": [review_json(r, with_result=False) for r in found]}
 
     @app.get("/api/companies/{symbol}/reviews/latest")
     def latest(symbol: str) -> dict[str, Any]:

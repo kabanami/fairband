@@ -26,6 +26,14 @@ keeps the snapshot's. A row with no agent's record has ``NO_AGENT_FIELDS``. The 
 computed from records already read: the snapshots the records rest on (``rested_on``) are read
 once for all the rows.
 
+A row a review fills reads the state of the review the company holds (spec 2026-11-23 held
+reviewed value, 5.3 and 5.7; ``held_block``, ``engine.held``): ``freshness`` is current, aging or
+expired by the held review's own window, the window of the snapshot it was made on, and
+``validUntil`` is that window's end. While a reason holds the value is expired early: ``freshness``
+reads ``expired``, so the filter that hides expired rows hides it, and the field ``expiredEarly``
+is true, which no column draws and nothing sorts by, so it is no row key. The row keeps its
+number. A row no review fills reads its snapshot's window and is never expired early.
+
 Every row also has the mark's two fields (spec 2026-11-19 7.5), which no column draws and nothing
 sorts by, so neither is a row key: ``warnings``, the plain words of the snapshot's quality warnings
 in the order of its flags (``warning_words``), never a review's, and ``marked``, whether the
@@ -43,6 +51,7 @@ from typing import Any
 
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
+from fairband.engine.held import held_state
 from fairband.engine.levels import Standing, moat_of, standing_for, validity_state
 from fairband.engine.types import PHASE_NUMBER, Levels, money_of, result_to_json
 from fairband.policy import Moat, Policy
@@ -51,7 +60,7 @@ from fairband.reports.refs import same_snapshot_rows
 from fairband.store.companies import CompanyRow
 from fairband.store.refreshes import RefreshRow
 from fairband.store.reports import ReportRow
-from fairband.store.reviews import ReviewRow
+from fairband.store.reviews import HeldRow, ReviewRow
 from fairband.store.secondary import SecondaryRow
 from fairband.store.snapshots import SnapshotRow
 from fairband.web.warning_words import is_marked, warning_words
@@ -149,6 +158,7 @@ NO_AGENT_FIELDS: Mapping[str, Any] = {
     "covered": None,
     "levels": None,
     "flags": None,
+    "held": None,
 }
 # The row keys the record that fills ``reviewed`` sets in place of the snapshot's (spec 2026-11-06
 # Tier 2, 18.1, plan 3): its band, levels, price ÷ value and designation.
@@ -235,6 +245,7 @@ def agent_fields(
     today: date,
     policy: Policy,
     table_moat: Moat | None,
+    held: HeldRow | None = None,
 ) -> dict[str, Any]:
     """The agents' fields of the row of the company's latest ``snapshot`` (spec 2026-11-06 Tier 2,
     18.1), from its current review, its newest secondary valuation and its latest published
@@ -255,7 +266,9 @@ def agent_fields(
     fills keeps the snapshot's (spec 2026-11-13 8a). ``agentStance`` is the report's word and
     ``covered`` its time, its actor (its principal where it names none, an owner's report) and
     whether the window of the snapshot it rests on ended before ``today`` (``window_ended``); both
-    ``None`` without a report."""
+    ``None`` without a report. ``held`` is the state of the review that fills ``reviewed``, on
+    ``today`` and on ``policy`` (``held_block``), from ``held``, the company's row of the held
+    reviews; ``None`` where no review fills the row."""
     fields = dict(NO_AGENT_FIELDS)
     if review is not None and review.value is not None and counts_on(snapshot, cited, review):
         fields |= {
@@ -265,6 +278,7 @@ def agent_fields(
                 review.value, moat_of(review.result) or table_moat, review, snapshot.price, policy
             ),
             "flags": review.result.flags,
+            "held": held_block(review, held, policy, today),
         }
     elif (
         snapshot.value is None
@@ -285,6 +299,43 @@ def agent_fields(
             "expired": window_ended(snapshot, cited, report, today),
         }
     return fields
+
+
+def held_block(
+    review: ReviewRow, held: HeldRow | None, policy: Policy, today: date
+) -> dict[str, Any]:
+    """The state of ``review``, the review the company holds on its newest snapshot, as the API
+    serves it (spec 2026-11-23 held reviewed value, 5.3; ``engine.held.held_state``): ``state``
+    (``current``, ``aging``, ``expired`` or ``expired-early``), ``earlyAt``, the day a refresh
+    first found a reason, ``reasons``, their sentences, ``reading`` and ``readingRefusal``, the
+    newest good reading, ``readingLine``, the reading's sentence when it is no reason, and
+    ``validUntil``, the end of the review's own window. It is read on ``today`` and on
+    ``policy``'s fair band and aging fraction, from ``held``, the company's stored facts, which
+    count only when they are this review's."""
+    facts = held if held is not None and held.review_id == review.held_id else None
+    result = review.result
+    state = held_state(
+        value=review.value,
+        valid_from=result.data_date,
+        valid_until=result.valid_until,
+        newer_period=None if facts is None else facts.newer_period,
+        dropped=() if facts is None else facts.dropped,
+        reading_value=None if facts is None else facts.reading_value,
+        reading_refusal=None if facts is None else facts.reading_refusal,
+        early_at=None if facts is None else facts.early_at,
+        band=policy.fair_band,
+        today=today,
+        aging_fraction=policy.aging_fraction,
+    )
+    return {
+        "state": state.state,
+        "earlyAt": _iso(state.early_at),
+        "reasons": list(state.reasons),
+        "reading": state.reading,
+        "readingRefusal": state.reading_refusal,
+        "readingLine": state.reading_line,
+        "validUntil": result.valid_until.isoformat(),
+    }
 
 
 def _record_levels(
@@ -451,6 +502,11 @@ def screen_row(
     }
     if agents["levels"] is not None:
         row |= agents["levels"]
+    held = agents.get("held")
+    row["expiredEarly"] = held is not None and held["state"] == "expired-early"
+    if held is not None:  # the row reads the state and the window of the review it shows
+        row["freshness"] = "expired" if row["expiredEarly"] else held["state"]
+        row["validUntil"] = held["validUntil"]
     return row
 
 
@@ -490,10 +546,11 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
     """The row of an admitted company with no snapshot yet: its name, sector, industry, cap band
     and market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
     warning and no mark, no agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a
-    snapshot; ``levels`` is no row key, and ``flags`` stands for the row's flags, not in them) and
-    ``None`` elsewhere."""
+    snapshot; ``levels`` and ``held`` are no row keys, and ``flags`` stands for the row's flags,
+    not in them), no early expiry and ``None`` elsewhere."""
     row: dict[str, Any] = dict.fromkeys(ROW_KEYS)
-    row |= {key: value for key, value in NO_AGENT_FIELDS.items() if key not in ("levels", "flags")}
+    aside = ("levels", "flags", "held")
+    row |= {key: value for key, value in NO_AGENT_FIELDS.items() if key not in aside}
     market_cap = company.market_cap
     row |= {
         "ticker": company.symbol,
@@ -508,6 +565,7 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
         "flagCount": 0,
         "warnings": [],
         "marked": False,
+        "expiredEarly": False,
     }
     return row
 

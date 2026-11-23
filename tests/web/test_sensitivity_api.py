@@ -162,7 +162,7 @@ def test_a_sensitivity_is_stored_and_cited(
     )
     assert entry["summary"] == "growth.belief by return.runway, a grid of two rows and two columns"
     assert client.get("/api/companies/AAPL/overrides").json() == {"overrides": []}  # a reading
-    assert client.get("/api/companies/AAPL/reviews").json() == {"reviews": []}
+    assert client.get("/api/companies/AAPL/reviews").json() == {"held": None, "reviews": []}
 
     cell = cells[0][1]  # row 1, column 2: the belief at 5% and the runway return at 20%
     assert cell is not None
@@ -361,7 +361,7 @@ def test_a_grid_still_varies_the_moat(
     ]
     assert found["cells"][1][2] == pytest.approx(results["AAPL"].value)  # the value in force
     assert client.get("/api/companies/AAPL/overrides").json()["overrides"] == []
-    assert client.get("/api/companies/AAPL/reviews").json() == {"reviews": []}
+    assert client.get("/api/companies/AAPL/reviews").json() == {"held": None, "reviews": []}
 
 
 def test_settings_changed_refuses_a_sensitivity(client: TestClient) -> None:

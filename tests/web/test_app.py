@@ -272,6 +272,7 @@ def test_screen_rows_and_default_sort(
         "covered": None,
         "warnings": ["value sensitive to its inputs"],
         "marked": False,  # one warning, under three
+        "expiredEarly": False,  # no review fills the row (spec 2026-11-23 held reviewed value)
     }
 
     refused = results["AAL"]
@@ -300,9 +301,10 @@ def test_screen_sort_nulls_last(client: TestClient) -> None:
     assert _tickers(client, "?sort=marketCap&dir=desc") == ["AAPL", "HGCO", "AAL"]
     assert _tickers(client, "?sort=ticker&dir=desc") == ["HGCO", "AAPL", "AAL"]
     assert _tickers(client, "?sort=marketCap") == ["AAL", "HGCO", "AAPL"]  # ascending by default
-    # every row key sorts but the coverage mark's record and the warning mark's two fields, which
-    # no column draws
-    assert set(_screen(client)["rows"][0]) == {*ROW_KEYS, "covered", "warnings", "marked"}
+    # every row key sorts but the coverage mark's record, the warning mark's two fields and
+    # the held review's early expiry, which no column draws
+    fields = {"covered", "warnings", "marked", "expiredEarly"}
+    assert set(_screen(client)["rows"][0]) == {*ROW_KEYS, *fields}
     for key in ROW_KEYS:
         for direction in ("asc", "desc"):
             assert len(_tickers(client, f"?sort={key}&dir={direction}")) == 3, key
@@ -490,7 +492,8 @@ def test_screen_placeholder_row_not_yet_valued(
 ) -> None:
     _universe(db_path, policy, ("NEWC", "New Co", 3_000_000_000, True))
     [row] = _screen(client)["rows"]
-    assert set(row) == {*DESIGN_ROW_KEYS, *EXTRA_COLUMNS, "covered", "warnings", "marked"}
+    fields = {"covered", "warnings", "marked", "expiredEarly"}
+    assert set(row) == {*DESIGN_ROW_KEYS, *EXTRA_COLUMNS, *fields}
     assert {key: value for key, value in row.items() if value is not None} == {
         "ticker": "NEWC",
         "name": "New Co",
@@ -505,6 +508,7 @@ def test_screen_placeholder_row_not_yet_valued(
         "flagCount": 0,
         "warnings": [],
         "marked": False,
+        "expiredEarly": False,
     }
 
 

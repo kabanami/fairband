@@ -820,6 +820,35 @@ def test_a_review_is_made_held_and_read_again() -> None:
     assert REVIEW_METHOD == "fairband-review/2"
 
 
+def test_a_held_value_s_state_and_its_sentences() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
+    sentences, says which stay and which can end, and what the row and the detail carry; 4.10
+    says a reviewed row reads its held review's window and state."""
+    reviews = _section(14)
+    held = reviews[reviews.index("### 14.6") : reviews.index("### 14.7")]
+    for words in (
+        "expired early while one of three reasons holds",
+        '"The company has reported a newer period (to 26 Dec 2026)."',
+        (
+            '"Override 36 (non-recurring gap) no longer applies: the input the override '
+            'corrected changed."'
+        ),
+        '"Computed again on today\'s data, the review gives $229.25 (+204%)."',
+        '"Computed again, the review gives no value: <the refusal>."',
+        "it follows a changed band at once",
+        "with the field `expiredEarly`",
+        "What the price needs (4.11) is not served for a review whose copy took the plain move",
+    ):
+        assert words in held, words
+    four = _section(4)
+    levels = four[four.index("### 4.10") : four.index("### 4.11")]
+    assert (
+        "A row a review fills reads the window and the state of the review the company holds"
+        in levels
+    )
+    assert "is expired early while a reason of 14.6 holds" in levels
+
+
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:
     """Spec 2026-11-19 6.2: the counts cannot say which way a depositary's ratio runs, so 7.4's line
     under the drawer's head names no ratio, the Research tab's being the same line; 16.2 and 16.6

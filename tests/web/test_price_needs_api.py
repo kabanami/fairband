@@ -166,6 +166,32 @@ def test_a_reviewed_row_reads_the_review_s_figures(
     assert needs.endswith("The route holds 8.0%.")
 
 
+def test_a_review_kept_as_made_has_no_sentence(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.2, and the plan's decision 2: a held copy that took
+    the plain move keeps the figures that follow the price as made, so what the price needs is
+    not served for it. No sentence solved at an older price is shown, and none of the mechanical
+    value stands in for the reviewed one."""
+    mechanical = results["AAPL"]
+    old = mechanical.intermediates["belief"]["rate"]
+    review = _review(db_path, policy, _aapl(), mechanical, "growth.belief", old, 0.08)
+    assert _detail(client, "AAPL")["priceNeeds"] is not None
+    with closing(connect(db_path)) as conn:
+        conn.execute(
+            "UPDATE reviews SET result = json_set(result, '$.intermediates.held_as_made',"
+            " json(?)) WHERE symbol = 'AAPL'",
+            ('{"why": "method", "since": "2026-10-30"}',),
+        )
+        conn.commit()
+    body = _detail(client, "AAPL")
+    assert body["priceNeeds"] is None
+    assert (body["review"]["value"], body["review"]["designation"]) == (
+        review.result.value,
+        "well-above",
+    )
+
+
 def test_a_review_within_reach_of_the_price_has_no_sentence(
     client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
