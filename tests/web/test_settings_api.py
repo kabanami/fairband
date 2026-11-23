@@ -370,8 +370,11 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "setting": True,
         "changed": False,
     }
-    edges = body["values"]["designation_edges"]
-    assert edges["value"] == [1 - 0.30, 0.90, 1.10, 1.35] and edges["setting"] is False
+    # the edges are each row's own, by its moat class (spec 2026-11-23 thresholds, 5.2): the
+    # page cites the margin of safety, the fair band and the trim multiple, no one set of edges
+    assert "designation_edges" not in body["values"]
+    assert body["values"]["fair_band"]["value"] == [0.90, 1.10]
+    assert body["values"]["trim_multiple"]["value"] == 1.35
     assert body["values"]["wide_terminal_roic_cap"]["value"] == 0.13
     # the cap on the return without goodwill is a setting since 2026-11-15 (method 4.6, B-170)
     cap = body["values"]["return_without_goodwill_cap"]
@@ -424,7 +427,6 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
     for gone in ("moat_wide_min", "moat_narrow_min", "refresh.gf_reuse_days"):
         assert gone not in body["values"], gone
     assert set(body["values"]) == {s.name for s in SETTINGS} | set(read_only) | {
-        "designation_edges",
         "wide_terminal_roic_cap",
     }
     assert "base_rates" not in body["values"] and "synthetic_rating" not in body["values"]
@@ -441,7 +443,7 @@ def test_policy_route_follows_the_settings(client: TestClient) -> None:
     assert body["values"]["required_return"]["changed"] is True
     cap = body["values"]["wide_terminal_roic_cap"]  # r + the spread
     assert cap["value"] == 0.1 + 0.04 and cap["changed"] is True
-    assert body["values"]["designation_edges"]["changed"] is False
+    assert body["values"]["fair_band"]["changed"] is False
 
 
 def test_deciles_route(client: TestClient, db_path: Path) -> None:

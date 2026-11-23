@@ -31,8 +31,10 @@ def test_the_ratio_is_the_plain_division() -> None:
     assert designation_for(150.0, 133.37, EDGES) == (150.0 / 133.37, "near")
 
 
-def test_the_policy_holds_the_edges() -> None:
-    assert load_policy().designation_edges == pytest.approx((0.70, 0.90, 1.10, 1.35))
+def test_the_policy_has_one_way_to_the_edges() -> None:
+    """Spec 2026-11-23 thresholds, 5.2: the edges are a row's own, by its moat class
+    (``Policy.edges_for``); the policy holds no one set of edges for every row."""
+    assert not hasattr(load_policy(), "designation_edges")
 
 
 @pytest.mark.parametrize(

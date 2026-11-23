@@ -4,12 +4,13 @@
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
-to v17 files stay in the package byte for byte, because the snapshots valued under them cite their
+to v18 files stay in the package byte for byte, because the snapshots valued under them cite their
 hashes.
 
 The designation edges and the Wide moat's terminal return cap are derived, not read (spec
-2026-11-04 8.3): ``Policy.designation_edges`` and ``Policy.wide_terminal_roic_cap`` are
-properties. The file's values are the defaults the user's settings overlay
+2026-11-04 8.3): ``Policy.edges_for`` gives the edges of a row of a moat class, the first its
+own buy level over its value (spec 2026-11-23 thresholds, 5.2), and
+``Policy.wide_terminal_roic_cap`` is a property. The file's values are the defaults the user's settings overlay
 (``fairband.policy.settings``); ``load_policy`` checks every setting's range as the overlay does,
 so a file outside them fails at load with the setting's name.
 
@@ -195,12 +196,6 @@ class Policy:
     refresh: RefreshPolicy
     raw: dict[str, Any]
     settings_hash: str
-
-    @property
-    def designation_edges(self) -> tuple[float, float, float, float]:
-        """e1 to e4: 1 − the Narrow margin of safety, the fair band's ends, the trim multiple."""
-        low, high = self.fair_band
-        return (1 - self.margin_of_safety["Narrow"], low, high, self.trim_multiple)
 
     def edges_for(self, moat: Moat) -> tuple[float, float, float, float]:
         """e1 to e4 of a row of class ``moat``: 1 − its margin of safety, the fair band's low and

@@ -301,7 +301,7 @@ def test_the_packaged_policy_keeps_the_earlier_versions_values() -> None:
     }
     assert policy.refresh.fmp_calls_per_minute == 2850
     assert policy.refresh.rate_limit_hold_s == 60
-    assert policy.designation_edges == pytest.approx((0.70, 0.90, 1.10, 1.35))
+    assert policy.edges_for("Narrow") == pytest.approx((0.70, 0.90, 1.10, 1.35))
     assert (policy.runoff_years, policy.runoff_recovery, policy.distress_sale_fraction) == (
         10,
         0.6,
@@ -401,7 +401,9 @@ def test_a_malformed_distress_table_is_refused(
 
 def test_derives_the_edges_and_the_wide_cap() -> None:
     p = load_policy()
-    assert p.designation_edges == pytest.approx((0.70, 0.90, 1.10, 1.35))
+    assert p.edges_for("Narrow") == pytest.approx((0.70, 0.90, 1.10, 1.35))
+    assert p.edges_for("Wide")[0] == pytest.approx(0.80)
+    assert p.edges_for("None")[0] == pytest.approx(0.60)
     assert p.wide_terminal_roic_cap == 0.13
     assert p.wide_terminal_roic_spread == 0.04 and p.repricing_horizon_years == 3
     assert p.settings_hash == EMPTY_SETTINGS_HASH

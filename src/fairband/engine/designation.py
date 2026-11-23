@@ -1,11 +1,12 @@
 """The designation (spec 7.1): where the price stands against the value at belief, in five bands.
 
-The ratio is price ÷ value as a plain float division, and the band compares it with the policy's
-``designation_edges`` [e1, e2, e3, e4] as floats: below e1 ``well-below``; from e1, below e2
-``below``; from e2 to e3, ends included, ``near``; above e3, below e4 ``above``; at or above e4
-``well-above``. As doubles, 85 ÷ 100 and 150 ÷ 100 equal the edge literals 0.85 and 1.5, so spec
-13.3's prices on an edge read the band the table gives them. The word is a fact about the price,
-never an action.
+The ratio is price ÷ value as a plain float division, and the band compares it with the edges of
+the row's moat class, the policy's ``edges_for(moat)`` [e1, e2, e3, e4], as floats: below e1
+``well-below``; from e1, below e2 ``below``; from e2 to e3, ends included, ``near``; above e3,
+below e4 ``above``; at or above e4 ``well-above``. e1 is the row's own buy level over its value
+(spec 2026-11-23 thresholds, 5.2), so the five words match the row's four levels. As doubles,
+90 ÷ 100 and 135 ÷ 100 equal the edge literals 0.9 and 1.35, so a price on an edge reads the band
+the table gives it. The word is a fact about the price, never an action.
 """
 
 from fairband.engine.types import Designation

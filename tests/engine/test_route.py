@@ -196,7 +196,7 @@ def test_mature_growth_end_to_end(
     assert r.price is not None
     assert r.levels == levels_for(r.value, r.intermediates["moat"], policy)
     assert (r.price_to_value, r.designation) == designation_for(
-        r.price, r.value, policy.designation_edges
+        r.price, r.value, policy.edges_for(r.intermediates["moat"])
     )
     assert not hasattr(r, "stance5") and not hasattr(r, "stance3")
     assert {i.name for i in r.inputs} >= {
@@ -1161,7 +1161,7 @@ def test_mature_stable_end_to_end(
     assert er["income"] == pytest.approx((1_500e6 + 500e6) / 40_000e6)
     assert r.levels == levels_for(r.value, "Wide", policy)
     assert (r.price_to_value, r.designation) == designation_for(
-        40.0, r.value, policy.designation_edges
+        40.0, r.value, policy.edges_for("Wide")
     )
     by_name = {i.name: i for i in r.inputs}
     assert {"net_income_ttm", "aggregate_roic", "terminal_roic", "moat_class", "belief"} <= set(
@@ -2493,7 +2493,7 @@ def test_value_outside_adds_to_the_value_and_targets_the_business_price(
     assert outside.value == pytest.approx(plain.value + 12.0)
     assert outside.levels == levels_for(outside.value, outside.intermediates["moat"], policy)
     assert (outside.price_to_value, outside.designation) == designation_for(
-        plain.price, outside.value, policy.designation_edges
+        plain.price, outside.value, policy.edges_for(outside.intermediates["moat"])
     )
     im = outside.intermediates
     assert im["outside_value_per_share"] == 12.0

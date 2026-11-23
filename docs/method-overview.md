@@ -22,9 +22,11 @@ versions and settings give the same result, bit for bit. This page describes met
    required return r, also called the hurdle rate. Most routes end with a terminal value, which
    grows at terminal growth forever. (method 4.8, 5a.7, 6b, 14.2)
 4. **Levels.** The buy level is the value less a margin of safety. The fair band is 0.90 to 1.10
-   times the value, and the trim level 1.35 times. (method 4.10)
-5. **Designation.** The price divided by the value falls in one of five bands, from Well below to
-   Well above. The word describes the price, never an action. (method 4.10)
+   times the value, and the trim level 1.35 times. The three are settings that move no value: a
+   change of one shows on every row at once, with no revalue. (method 4.1, 4.10)
+5. **Designation.** The price stands in one of five bands against the row's own levels: Well
+   below under its buy level, Below up to the fair band, Near inside it, Above up to the trim
+   level, Well above from there. The word describes the price, never an action. (method 4.10)
 
 ## The phases and their routes
 

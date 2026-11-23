@@ -248,7 +248,7 @@ def test_share_below_value_reads_the_second_edge(tmp_path: Path, policy: Policy)
     low = reprice(replace(valued, symbol="LOW"), 0.85 * valued.value, TODAY, policy)
     high = reprice(replace(valued, symbol="HIGH"), 0.95 * valued.value, TODAY, policy)
     assert (low.designation, high.designation) == ("below", "near")
-    assert policy.designation_edges[1] == 0.90
+    assert policy.fair_band[0] == 0.90
     db_path = tmp_path / "data" / "fairband.db"
     listed = [company("LOW", 1, "Technology", "mid"), company("HIGH", 1, "Technology", "mid")]
     seed(db_path, policy, listed, [low, high])

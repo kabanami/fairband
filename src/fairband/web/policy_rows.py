@@ -14,8 +14,8 @@ bound, spec 2026-11-10 9), the three
 stock-pay thresholds and the share-count band (spec 2026-11-13 7.1 and 8), the sheet-shift
 multiple (spec 2026-11-13 12.5), the size above which a thin revenue step is not read (spec
 2026-11-14 6.2) and the count of warnings from which a mechanical value is marked (spec
-2026-11-19 7.4), and the two the policy derives (the designation edges and the Wide moat's
-terminal return cap). The policy's tables (the
+2026-11-19 7.4), and the one the policy derives (the Wide moat's terminal return cap). The
+policy's tables (the
 base rates, the ratings, the default probabilities, the patterns, the industries) are never
 served, and nothing in the policy is a key.
 """
@@ -47,15 +47,11 @@ READ_ONLY: dict[str, str] = {
     "thin_revenue_step_max": "fraction",
     "warning_mark_min": "count",
 }
-# The derived values, with their unit and the source line the file no longer holds.
+# The derived value, with its unit and the source line the file no longer holds. The designation
+# edges are no value of the policy's any more: each row's are its own, by its moat class
+# (``Policy.edges_for``; spec 2026-11-23 thresholds, 5.2), and the page cites the margin of
+# safety, the fair band and the trim multiple they come from.
 DERIVED: dict[str, tuple[str, str]] = {
-    "designation_edges": (
-        "times",
-        (
-            "derived (spec 2026-11-04 8.3): 1 − the Narrow margin of safety, the fair band's low "
-            "and high, the trim multiple; stocks method v1.7 Step 10"
-        ),
-    ),
     "wide_terminal_roic_cap": (
         "fraction",
         "derived (spec 2026-11-04 8.3): r + the Wide-moat terminal spread; design.md 6.6",

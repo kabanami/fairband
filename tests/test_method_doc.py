@@ -711,6 +711,46 @@ def test_method_1_9_gives_the_first_edge_by_moat_class() -> None:
     assert "The first edge is the company's own buy level" in page
 
 
+def test_the_levels_and_the_word_follow_the_settings_in_force() -> None:
+    """Spec 2026-11-23 thresholds, 5.3 and 5.4: 4.1 keeps the three thresholds out of the settings
+    hash, 4.10 says every reader reads the levels and the word on the settings in force and that
+    a published report's card keeps its record's stored levels, section 10 says a change of a
+    threshold needs no revalue, 14.5 reads a reviewed row's levels the same way, and the
+    Methodology page says a change shows at once and re-reads its examples under 1.9."""
+    four = _section(4)
+    assert (
+        "Nor do the three thresholds, `margin_of_safety`, `fair_band` and `trim_multiple`, though "
+        "they are valuation settings (spec 2026-11-23 thresholds, 5.3)"
+    ) in four
+    assert "the fair band's low must be above 1 − the Wide margin of safety" in four
+    levels = four[four.index("### 4.10") : four.index("### 4.11")]
+    for words in (
+        "every reader reads them again on the settings in force",
+        "from the record's stored value and its moat class",
+        "A published report's value card is a record",
+    ):
+        assert words in levels, words
+    assert "The levels are computed once at valuation and shown as figures" not in levels
+    ten = _section(10)
+    assert (
+        "A change of the margin of safety, the fair band or the trim multiple needs no revalue "
+        "(spec 2026-11-23 thresholds, 5.3)"
+    ) in ten
+    reviews = _section(14)
+    assert (
+        "its fair band and its buy and trim levels read on the settings in force (4.10)" in reviews
+    )
+    assert "the designation read at the latest snapshot's price on the edges of the" in reviews
+    assert "on the effective policy's edges" not in reviews
+    html = resources.files("fairband.web").joinpath("static", "methodology.html").read_text("utf-8")
+    page = " ".join(html.split())
+    assert (
+        "A change of the margin of safety, the fair band or the trim multiple shows on every row "
+        "at once. None of the three moves a value."
+    ) in page
+    assert "Method 1.9 (23 Nov 2026" in page and "so the figures stand under 1.9" in page
+
+
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:
     """Spec 2026-11-19 6.2: the counts cannot say which way a depositary's ratio runs, so 7.4's line
     under the drawer's head names no ratio, the Research tab's being the same line; 16.2 and 16.6

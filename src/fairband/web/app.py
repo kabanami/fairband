@@ -41,13 +41,16 @@ admit has no row. The latest universe is the newest that admitted a company
 Before any universe exists, every company with a snapshot has its row. The group view groups the
 same rows. Each row carries the ids of the watchlists the company is on, and the agents' fields
 (``rows.agent_fields``) from the companies' current reviews, newest secondary valuations and latest
-published reports and the snapshots those rest on: four reads at most for all the rows, whatever
+published reports and the snapshots those rest on, with the moat table's classes where a company
+has such a record (``store.moat.moat_classes``): five reads at most for all the rows, whatever
 their number, the fields computed for the companies that have a row.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
-the rows' freshness and of the company detail, the designation edges of the groups, of the word a
-row reads at its reviewed value (``rows.agent_fields``) and of the drawer. A stored setting
+the rows' freshness and of the company detail, and the margin of safety, the fair band and the
+trim multiple, on which every row's levels, price ÷ value and word are read, a mechanical row's
+too (``rows.record_standing``; spec 2026-11-23 thresholds, 5.3), with the groups' share below
+value and the drawer's edges. A stored setting
 the policy refuses makes those routes answer 409 naming it, until it is reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a

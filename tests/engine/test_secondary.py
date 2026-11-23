@@ -209,7 +209,7 @@ def test_the_drivers_worked_numbers(policy: Policy) -> None:  # spec 20.4
     assert v.value_per_share == pytest.approx(39.888938, abs=1e-4)
     assert v.levels == levels_for(v.value_per_share, "Narrow", policy)
     assert (v.price_to_value, v.designation) == designation_for(
-        30.0, v.value_per_share, policy.designation_edges
+        30.0, v.value_per_share, policy.edges_for("Narrow")
     )
     assert v.grid is not None
     assert v.grid.cells[1][1] == v.value_per_share  # the same arithmetic, bit for bit

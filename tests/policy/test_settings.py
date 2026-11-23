@@ -201,7 +201,7 @@ def test_apply_overlay_changes_the_value_and_the_derived_edges() -> None:
         {"required_return": 0.1, "fair_band": [0.85, 1.2], "universe.cap_floor_usd": 5e9},
     )
     assert p.required_return == 0.1 and p.wide_terminal_roic_cap == pytest.approx(0.14)
-    assert p.designation_edges == pytest.approx((0.70, 0.85, 1.2, 1.35))
+    assert p.edges_for("Narrow") == pytest.approx((0.70, 0.85, 1.2, 1.35))
     assert p.universe.cap_floor_usd == 5e9
     # the band enters no hash (spec 2026-11-23 thresholds, 5.3): the hash is the hurdle rate's
     assert p.version == "fairband-policy-v19" and p.settings_hash == settings_hash(
@@ -252,7 +252,7 @@ def test_apply_overlay_converts_as_the_loader_does() -> None:
     )
     assert p.runway_years == {"None": 6, "Narrow": 12, "Wide": 25}
     assert p.margin_of_safety == {"None": 0.5, "Narrow": 0.3, "Wide": 0.2}
-    assert p.designation_edges[0] == pytest.approx(0.7)
+    assert (p.edges_for("Narrow")[0], p.edges_for("Wide")[0]) == pytest.approx((0.7, 0.8))
     assert p.roic_sensitivity == (0.2, 0.1)
     assert p.burn_cover_flag_years == 1.0 and isinstance(p.burn_cover_flag_years, float)
     assert p.universe.cap_bands == ((3e11, "Mega"), (2e10, "Large"), (2e9, "Mid"))
