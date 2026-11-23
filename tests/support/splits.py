@@ -18,7 +18,7 @@ from fairband.refresh.reviews import follow_snapshot
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import create_refresh, current_refresh, finish_refresh
-from fairband.store.reviews import ReviewRow, latest_review
+from fairband.store.reviews import ReviewRow, reviews_for
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from support.engine_companies import as_live, mature_growth_inputs, universe_deciles
 from support.payloads import split_rows, store_payloads
@@ -105,15 +105,18 @@ def follow_mgco(
     conn: sqlite3.Connection, policy: Policy, price_date: date, data_date: date
 ) -> ReviewRow:
     """MGCO's next snapshot, quoted on ``price_date``, its statements fetched on ``data_date``,
-    written by a revalue and followed: its review."""
+    written by a revalue and followed: the review the follow computed on it over the applied
+    overrides, a made review where MGCO held none and a reading where it holds one (spec
+    2026-11-23 held reviewed value, 5.4)."""
     deciles = universe_deciles()
     inputs = mgco_on(price_date, data_date)
     result = value_company(inputs, deciles, policy, TODAY)
     refresh_id = under(conn, policy, "revalue")
     snapshot_id = insert_snapshot(conn, result, refresh_id, clock=lambda: AT)
-    review_id = follow_snapshot(
+    follow_snapshot(
         conn, inputs, result, snapshot_id, deciles, policy, TODAY, refresh_id, lambda: AT
     )
-    review = latest_review(conn, "MGCO")
-    assert review is not None and review.id == review_id
+    [review] = [
+        r for r in reviews_for(conn, "MGCO") if r.snapshot_id == snapshot_id and r.kind != "held"
+    ]
     return review

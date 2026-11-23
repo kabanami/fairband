@@ -956,7 +956,7 @@ def test_a_reviewed_result_round_trips_as_json(policy: Policy, deciles: Deciles)
     review = review_company(
         inputs, deciles, policy, TODAY, [OVERRIDE("moat.class", "Narrow")], mechanical
     )
-    assert REVIEW_METHOD == "fairband-review/1"
+    assert REVIEW_METHOD == "fairband-review/2"
     assert result_from_json(result_to_json(review.result)) == review.result
 
 

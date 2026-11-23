@@ -353,7 +353,7 @@ def test_appendix_a_is_generated_from_the_records(
         "method": "fairband-mechanical/1.9",
         "policy": policy.version,
         "settingsHash": policy.settings_hash,
-        "review": "fairband-review/1",
+        "review": "fairband-review/2",
         "secondary": "fairband-secondary/2",
     }
     assert a["classifier"]["phase"] == "Mature Growth" and a["classifier"]["checks"] == []

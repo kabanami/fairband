@@ -123,7 +123,7 @@ def add_moat_routes(
         the write; then the company's revalue under the effective policy; the snapshot it wrote."""
         current = effective(conn, policy)
         record(conn, writer, at, "moat", symbol, None, None, snapshot_id=latest.id, summary=summary)
-        return revalue_company(conn, symbol, current, tax, moat, clock)
+        return revalue_company(conn, symbol, current, tax, moat, clock, made=True)
 
     def answer(conn: sqlite3.Connection, symbol: str, snapshot_id: int) -> dict[str, Any]:
         written = snapshot_row(conn, snapshot_id)

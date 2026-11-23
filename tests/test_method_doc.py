@@ -10,6 +10,7 @@ import pytest
 
 from fairband.engine.mature_growth import _fade
 from fairband.engine.overrides import OverrideTag, anchor_misfit
+from fairband.engine.review import REVIEW_METHOD
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
 from fairband.policy.moat_rule import CYCLICAL
@@ -697,7 +698,7 @@ def test_method_1_9_gives_the_first_edge_by_moat_class() -> None:
     assert (policy.edges_for("Narrow")[0], policy.edges_for("None")[0]) == pytest.approx((0.7, 0.6))
     assert "g_T, the margin of safety, the terminal return" not in text
     assert "`f_score_low`, the margin of safety, and" not in text
-    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.9, policy v19 |")]
     assert rows[-1].startswith("| 1.9, policy v19 | 2026-11-23 | The row's own first edge (spec")
     for words in (
         "0.80 for a Wide row, 0.70 for a Narrow row and 0.60 for a None row at the defaults",
@@ -780,6 +781,43 @@ def test_a_price_refresh_stores_the_levels_of_the_settings_in_force() -> None:
     ) in ten
     assert "the value, the levels and the validity window stay" not in ten
     assert "the next price refresh stores them on each repriced snapshot and review" in ten
+
+
+def test_a_review_is_made_held_and_read_again() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.1 to 5.5 and 5.11: 14.6 says a review is made by a
+    deliberate act, held, and read again by a refresh; what a carried copy keeps and what moves;
+    the plain move; and the facts a refresh stores. Section 10 says each refresh carries the held
+    review. 14.7's log tells the kinds apart, the review method is ``fairband-review/2``, and the
+    versions table has its row."""
+    reviews = _section(14)
+    held = reviews[reviews.index("### 14.6") : reviews.index("### 14.7")]
+    for words in (
+        "### 14.6 A review is made, held and read again",
+        "A review a refresh writes is a reading and never the held review",
+        "an agent adds, replaces or drops an override",
+        "writes the moat class",
+        "the held review is carried onto each new snapshot",
+        "the price refresh's own three tests",
+        "takes the plain move",
+        "`held_as_made`",
+        "changes neither the held value nor the facts stored for it",
+        "the last good reading stands",
+        "a state no write of the API makes",
+    ):
+        assert words in held, words
+    assert "A review follows its company's snapshots." not in reviews
+    made = reviews[reviews.index("### 14.5") : reviews.index("### 14.6")]
+    assert "`fairband-review/2`" in made and "`fairband-review/1`" not in made
+    log = reviews[reviews.index("### 14.7") : reviews.index("### 14.8")]
+    assert "its kind, `made`, `held` or `reading`" in log
+    ten = _section(10)
+    assert "The review the company holds is carried onto the repriced snapshot (14.6)" in ten
+    assert "The company's current review reprices with its snapshot" not in ten
+    assert "reads each held review again (14.6)" in ten
+    [row] = [x for x in _section(11).splitlines() if x.startswith("| 1.9, `fairband-review/2`")]
+    assert row.startswith("| 1.9, `fairband-review/2`, policy v19 | 2026-11-23 | The held")
+    assert "No mechanical value moves" in row
+    assert REVIEW_METHOD == "fairband-review/2"
 
 
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:

@@ -264,7 +264,8 @@ GLOSSARY: dict[str, str] = {
     "Review": (
         "The engine's valuation of a company under its applied overrides: the reviewed value, its"
         " levels and designation on the same edges, and the bridge from the mechanical value, one"
-        " line per override. It follows the company's snapshots and cites `fairband-review/1`"
+        " line per override. A deliberate act makes it, the company holds it until the next one,"
+        " and a refresh reads it again beside it; it cites `fairband-review/2`"
     ),
     "Finding": (
         "A dated fact an agent records with its source (a filing, a transcript, a URL, a vendor "

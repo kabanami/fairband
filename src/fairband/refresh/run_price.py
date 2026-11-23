@@ -79,8 +79,8 @@ from fairband.engine.route import reprice
 from fairband.engine.types import money_of, rated
 from fairband.policy import Policy
 from fairband.refresh.fetch import unusable
+from fairband.refresh.held import carry_held
 from fairband.refresh.rates import FX_QUOTE, foreign_currencies, pair_of
-from fairband.refresh.reviews import reprice_review
 from fairband.store.companies import latest_companies
 from fairband.store.db import transaction
 from fairband.store.multiples import log_snapshot
@@ -364,21 +364,8 @@ class PriceRefresh:
                     with transaction(self._conn):
                         snapshot_id = insert_snapshot(self._conn, new, self._id, clock=self._clock)
                         log_snapshot(self._conn, new, snapshot_id, self._id, self._clock())
-                        reprice_review(
-                            self._conn,
-                            symbol,
-                            snapshot_id,
-                            quote.price,
-                            quote.as_of,
-                            self._policy,
-                            self._id,
-                            self._clock,
-                            observed_at=quote.observed_at,
-                            entered_at=quote.entered_at,
-                            repriced=snapshots[symbol].id,
-                            fx_rate=rate,
-                            fx_date=rate_date,
-                            fx_observed_at=rate_seen,
+                        carry_held(
+                            self._conn, symbol, snapshot_id, self._policy, self._id, self._clock
                         )
                         upsert_item(self._conn, self._id, symbol, "repriced", None, self._clock())
                 except Exception as exc:  # noqa: BLE001 - a symbol's failure is its own

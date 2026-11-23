@@ -49,13 +49,19 @@ from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.types import TaggedInput, ValuationResult
 from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
-from fairband.refresh import reviews
+from fairband.refresh import held, reviews
 from fairband.refresh.reviews import follow_snapshot
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import SYSTEM, Writer, entries
 from fairband.store.overrides import drop_override, insert_override, override_row
 from fairband.store.refreshes import create_refresh
-from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
+from fairband.store.reviews import (
+    ReviewRow,
+    latest_review,
+    review_log,
+    review_row,
+    reviews_for,
+)
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
@@ -119,6 +125,23 @@ def _override(
             "applied",
             "",
         )
+
+
+def _reading(conn: sqlite3.Connection, symbol: str) -> ReviewRow | None:
+    """The company's newest reading: what its review gives on the latest snapshot a refresh
+    valued, over the overrides still applied (spec 2026-11-23 held reviewed value, 5.4)."""
+    return next((r for r in reviews_for(conn, symbol) if r.kind == "reading"), None)
+
+
+def _no_reading(conn: sqlite3.Connection, review_id: int | None) -> bool:
+    """Whether the follow that answered ``review_id`` dropped the last override: it computed no
+    reading, and the review on its snapshot is the held one, carried (spec 2026-11-23 held
+    reviewed value, 5.1 and 5.4)."""
+    row = None if review_id is None else review_row(conn, review_id)
+    if row is None or row.kind != "held":
+        return False
+    on_it = [r for r in reviews_for(conn, row.symbol) if r.snapshot_id == row.snapshot_id]
+    return [r.kind for r in on_it] == ["held"]
 
 
 def _quotes(prices: dict[str, float]) -> bytes:
@@ -242,7 +265,10 @@ def test_a_price_refresh_at_a_new_rate_moves_the_review_s_bridge_with_it(env_val
     assert after is not None and after.snapshot_id == snapshot.id
     assert snapshot.result.intermediates["fx_rate"] == after.result.intermediates["fx_rate"] == 10.0
     assert snapshot.value is not None and after.value is not None
-    assert after.mechanical_value == snapshot.value != before.mechanical_value
+    # the mechanical value of the day the review was made, at the new rate: the repriced
+    # snapshot's here, which the same valuation gives
+    assert after.mechanical_value == pytest.approx(snapshot.value)
+    assert after.mechanical_value != before.mechanical_value
     [was], [line] = before.bridge, after.bridge
     assert (line["old"], line["new"]) == (was["old"], was["new"])  # the readings stay
     assert line["delta"] == pytest.approx(was["delta"] * 10.52 / 10.0)
@@ -280,7 +306,10 @@ def test_a_failed_review_at_a_new_rate_shows_the_repriced_snapshot_s_value(
     assert after is not None and after.snapshot_id == snapshot.id
     assert snapshot.result.intermediates["fx_rate"] == 10.0
     assert after.refusal == before.refusal and after.bridge == ()
-    assert after.mechanical_value == snapshot.value != before.mechanical_value
+    # a refusing review holds no value: its copy takes the new price alone, and keeps the
+    # mechanical value of the day it was made (spec 2026-11-23 held reviewed value, 5.2)
+    assert (after.kind, after.mechanical_value) == ("held", before.mechanical_value)
+    assert after.result.price == 40.0 and snapshot.value != before.mechanical_value
 
 
 def test_a_revalue_drops_an_override_the_row_s_route_does_not_read(env_valued: Env) -> None:
@@ -448,7 +477,7 @@ def test_a_period_tied_override_follows_its_line(conn: sqlite3.Connection, polic
     assert found is not None and (found.id, found.override_ids) == (review_id, (cash,))
     assert found.value is not None and found.mechanical_value is not None
     assert found.bridge[0]["delta"] == pytest.approx(found.value - found.mechanical_value)
-    assert follow(replace(inputs, cash=None)) is None
+    assert _no_reading(conn, follow(replace(inputs, cash=None)))
     dropped = override_row(conn, cash)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
     assert [(e.principal, e.kind) for e in entries(conn, "HGCO")] == [
@@ -510,7 +539,7 @@ def test_a_period_tied_stock_pay_follows_the_figure_the_anchor_read(
     assert review is not None and review.override_ids == (pay,)
     assert review.result.intermediates["sbc_ttm"] == 500e6
     assert inputs.trailing is not None
-    assert follow(replace(inputs, trailing=replace(inputs.trailing, sbc=450e6))) is None
+    assert _no_reading(conn, follow(replace(inputs, trailing=replace(inputs.trailing, sbc=450e6))))
     dropped = override_row(conn, pay)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
 
@@ -583,7 +612,7 @@ def test_a_lasting_nil_stock_pay_holds_until_the_store_holds_one(
     assert follow(stock_pay(later, None)) is not None  # a period lacks the line
     kept = override_row(conn, pay)
     assert kept is not None and kept.state == "applied"
-    assert follow(stock_pay(later, 50e6)) is None
+    assert _no_reading(conn, follow(stock_pay(later, 50e6)))
     dropped = override_row(conn, pay)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", ON_FILE)
 
@@ -593,7 +622,7 @@ def test_a_lasting_nil_stock_pay_holds_until_the_store_holds_one(
     result = value_company(refused, deciles, policy, HGCO_TODAY)
     assert result.refusal == "no diluted share count"
     assert "sbc_ttm" not in result.intermediates
-    assert follow(refused) is None
+    assert _no_reading(conn, follow(refused))
     dropped = override_row(conn, again)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", ON_FILE)
     assert [(e.principal, e.kind, e.ref_id, e.summary) for e in entries(conn, "MGCO")] == [
@@ -615,7 +644,7 @@ def test_a_period_tied_override_drops_when_a_newer_period_is_on_file(
     )
     corrected = override_row(conn, cash)
     assert corrected is not None and reading == corrected.corrected_value == 3_000e6
-    assert follow(later) is None
+    assert _no_reading(conn, follow(later))
     dropped = override_row(conn, cash)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
     [entry] = entries(conn, "HGCO")
@@ -644,7 +673,7 @@ def test_a_period_tied_cash_correction_follows_the_newest_sheet(
     review = latest_review(conn, "HGCO")
     assert review is not None and review.override_ids == (cash,)
     assert review.result.intermediates["balance_sheet"]["label"] == "fiscal 2026 Q3"
-    assert follow(replace(later, cash=3_200e6)) is None
+    assert _no_reading(conn, follow(replace(later, cash=3_200e6)))
     dropped = override_row(conn, cash)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
 
@@ -666,7 +695,7 @@ def test_a_period_tied_minority_interest_follows_the_sheet_s_line(
     review = latest_review(conn, "HGCO")
     assert review is not None and review.override_ids == (minority,)
     assert review.result.intermediates["minority_interest"] == 1_120e6
-    assert follow(with_minority(inputs, 150e6)) is None
+    assert _no_reading(conn, follow(with_minority(inputs, 150e6)))
     dropped = override_row(conn, minority)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
     [entry] = entries(conn, "HGCO")
@@ -745,7 +774,7 @@ def test_period_tied_committed_shares_hold_until_a_newer_period_is_on_file(
     assert review is not None and review.override_ids == (committed,)
     assert review.result.intermediates["shares"] == 1_060e6
     assert review.value == pytest.approx(first.value * 1_000 / 1_060)
-    assert follow(_a_quarter_on(inputs)) is None
+    assert _no_reading(conn, follow(_a_quarter_on(inputs)))
     dropped = override_row(conn, committed)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
 
@@ -808,7 +837,7 @@ def test_a_period_tied_one_time_item_holds_until_a_newer_period_is_on_file(
     assert review.value == pytest.approx(first.value * 5.31 / 5.90)
     held = override_row(conn, one_time)
     assert held is not None and held.state == "applied"
-    assert follow(_a_quarter_on(inputs)) is None
+    assert _no_reading(conn, follow(_a_quarter_on(inputs)))
     dropped = override_row(conn, one_time)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
 
@@ -896,7 +925,7 @@ def test_a_period_tied_revenue_step_holds_while_the_consensus_step_stands(
     held = override_row(conn, step)
     assert held is not None and held.state == "applied"
     moved = (*rows[:2], replace(rows[2], revenue=30_250e6))
-    assert follow(replace(inputs, annual_estimates=moved)) is None
+    assert _no_reading(conn, follow(replace(inputs, annual_estimates=moved)))
     dropped = override_row(conn, step)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
 
@@ -918,7 +947,7 @@ def test_a_period_tied_revenue_step_with_no_consensus_step_drops_at_a_newer_peri
     assert review.result.intermediates["charge"]["revenue_step_source"] == ["agent", "none"]
     held = override_row(conn, step)
     assert held is not None and (held.state, held.corrected_value) == ("applied", None)
-    assert follow(_a_quarter_on(inputs)) is None
+    assert _no_reading(conn, follow(_a_quarter_on(inputs)))
     dropped = override_row(conn, step)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
 
@@ -1193,7 +1222,7 @@ def test_an_override_on_a_snapshot_from_before_1_3_is_judged_by_its_share_count_
     assert follow(inputs) is not None
     kept = override_row(conn, cash)
     assert kept is not None and kept.state == "applied"
-    assert follow(_a_quarter_on(inputs)) is None
+    assert _no_reading(conn, follow(_a_quarter_on(inputs)))
     dropped = override_row(conn, cash)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", NEWER)
 
@@ -1213,7 +1242,7 @@ def test_an_override_on_a_snapshot_from_before_1_3_with_no_period_follows_its_re
     assert follow(later) is not None
     kept = override_row(conn, cash)
     assert kept is not None and kept.state == "applied"
-    assert follow(replace(later, cash=None)) is None
+    assert _no_reading(conn, follow(replace(later, cash=None)))
     dropped = override_row(conn, cash)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", CHANGED)
 
@@ -1293,7 +1322,7 @@ def test_a_lasting_ntm_override_drops_when_its_guided_year_passes(
         )
         for q in inputs.quarter_estimates
     )
-    assert follow(replace(inputs, quarter_estimates=a_year_on)) is None
+    assert _no_reading(conn, follow(replace(inputs, quarter_estimates=a_year_on)))
     dropped = override_row(conn, anchor)
     assert dropped is not None and (dropped.state, dropped.drop_reason) == ("dropped", PASSED)
     [entry] = entries(conn, "MGCO")
@@ -1421,7 +1450,7 @@ def test_a_phase_override_dropped_at_a_follow_takes_what_only_its_route_read(
     assert review is not None and review.override_ids == (phase, target, outside)
     assert review.result.phase.phase == "High Growth"
     assert _follow_inputs(conn, policy, _a_quarter_on(inputs)) is not None
-    review = latest_review(conn, "MGCO")
+    review = _reading(conn, "MGCO")  # the held review stays; the reading runs over the rest
     assert review is not None and review.override_ids == (outside,)
     assert review.result.phase.phase == "Mature Growth"
     assert review.mechanical_value is not None
@@ -1462,13 +1491,15 @@ def test_an_unclassified_row_has_no_route_and_keeps_every_override(
     assert entries(conn, "MGCO") == []
 
 
-def test_a_failed_company_s_review_is_its_refusal_and_reprices_as_one(env_valued: Env) -> None:
-    """ACME's fetch fails two days on: its refusal snapshot gets the refusal as its review, so the
-    review follows the snapshot, and the price refresh reprices that refusal, not the older
-    review."""
+def test_a_failed_company_with_no_held_review_gets_the_refusal_as_its_review(
+    env_valued: Env,
+) -> None:
+    """ACME has an applied override and holds no review, a state no write of the API makes, when
+    its fetch fails: its refusal snapshot gets the refusal as its review, which ACME then holds,
+    and the price refresh carries that refusal. (A company that holds a review keeps it through a
+    failed fetch: ``test_held.py``.)"""
     env = env_valued
     belief = _override(env, "ACME", "growth.belief", 0.08)
-    revalue = env.refresh().run("revalue")
     env.clock.now += timedelta(days=2)
     env.router.fail_symbols.add("ACME")
     scoped = env.run(["ACME"])
@@ -1477,7 +1508,7 @@ def test_a_failed_company_s_review_is_its_refusal_and_reprices_as_one(env_valued
     assert failed.refusal.startswith("data fetch failed")
     with closing(env.connect()) as conn:
         review = latest_review(conn, "ACME")
-    assert review is not None and review.snapshot_id == failed.id
+    assert review is not None and (review.snapshot_id, review.kind) == (failed.id, "made")
     assert (review.value, review.mechanical_value, review.refusal) == (None, None, failed.refusal)
     assert (review.bridge, review.override_ids, review.refresh_id) == ((), (belief,), scoped)
 
@@ -1489,22 +1520,21 @@ def test_a_failed_company_s_review_is_its_refusal_and_reprices_as_one(env_valued
     with closing(env.connect()) as conn:
         after = latest_review(conn, "ACME")
         log = review_log(conn, "ACME")
-    assert after is not None and after.snapshot_id == repriced.id
+    assert after is not None and (after.snapshot_id, after.kind) == (repriced.id, "held")
     assert (after.value, after.refusal, after.result.price) == (None, failed.refusal, 20.0)
     assert after.result.valid_until == review.result.valid_until
-    assert [(r.refresh_id, r.mechanical_value, r.reviewed_value, r.price) for r in log[:2]] == [
+    assert [(r.refresh_id, r.mechanical_value, r.reviewed_value, r.price) for r in log] == [
         (price, None, None, 20.0),
         (scoped, None, None, failed.price),
     ]
-    assert log[2].refresh_id == revalue and None not in (
-        log[2].mechanical_value,
-        log[2].reviewed_value,
-    )
 
 
-def test_a_review_on_another_snapshot_is_not_repriced(env_valued: Env) -> None:
+def test_a_review_on_an_earlier_snapshot_is_carried_onto_the_repriced_one(
+    env_valued: Env,
+) -> None:
     """A snapshot written after the review, with none of its own: the price refresh reprices the
-    snapshot and leaves the review where it is."""
+    snapshot and carries the held review onto it all the same (spec 2026-11-23 held reviewed
+    value, 5.2), so the row still shows it."""
     env = env_valued
     _override(env, "ACME", "growth.belief", 0.08)
     revalue = env.refresh().run("revalue")
@@ -1513,10 +1543,14 @@ def test_a_review_on_another_snapshot_is_not_repriced(env_valued: Env) -> None:
         insert_snapshot(conn, env.snapshot("ACME").result, revalue, clock=env.clock)
     env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0})
     env.refresh().run("price")
-    assert env.snapshot("ACME").price == 20.0
+    snapshot = env.snapshot("ACME")
+    assert snapshot.price == 20.0
     with closing(env.connect()) as conn:
-        assert before is not None and latest_review(conn, "ACME") == before
-        assert len(review_log(conn, "ACME")) == 1
+        after = latest_review(conn, "ACME")
+        assert before is not None and after is not None
+        assert (after.kind, after.made_id, after.snapshot_id) == ("held", before.id, snapshot.id)
+        assert (after.value, after.bridge) == (before.value, before.bridge)
+        assert len(review_log(conn, "ACME")) == 2
 
 
 def test_a_review_that_raises_leaves_the_snapshot_and_is_a_refusal(
@@ -1553,17 +1587,23 @@ def test_a_review_that_raises_leaves_the_snapshot_and_is_a_refusal(
     assert f"ACME: {refusal}" in caplog.messages
 
 
-def test_a_reprice_that_raises_leaves_the_snapshot_and_is_a_refusal(
+def test_a_rebuild_that_raises_leaves_the_snapshot_and_takes_the_plain_move(
     env_valued: Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The rebuild of the held copy's figures that follow the price raises: the snapshot stands,
+    and the copy keeps the held value with every other figure as made, at the new price (spec
+    2026-11-23 held reviewed value, 5.2; ``refresh.held``). No refusal takes the review's place."""
     env = env_valued
     _override(env, "ACME", "growth.belief", 0.08)
     env.refresh().run("revalue")
+    with closing(env.connect()) as conn:
+        made = latest_review(conn, "ACME")
+    assert made is not None
 
     def falls_over(*args: object, **kwargs: object) -> None:
         raise ValueError("no price")
 
-    monkeypatch.setattr(reviews, "reprice", falls_over)
+    monkeypatch.setattr(held, "reprice", falls_over)
     env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0})
     refresh_id = env.refresh().run("price")
     snapshot = env.snapshot("ACME")
@@ -1572,8 +1612,8 @@ def test_a_reprice_that_raises_leaves_the_snapshot_and_is_a_refusal(
     with closing(env.connect()) as conn:
         review = latest_review(conn, "ACME")
     assert review is not None and review.snapshot_id == snapshot.id
-    assert (review.refusal, review.mechanical_value, review.bridge) == (
-        f"{FAILED}: ValueError: no price",
-        snapshot.value,
-        (),
-    )
+    assert (review.kind, review.refusal, review.value) == ("held", None, made.value)
+    assert (review.mechanical_value, review.bridge) == (made.mechanical_value, made.bridge)
+    assert review.result.price == 20.0 and made.value is not None
+    assert review.price_to_value == pytest.approx(20.0 / made.value)
+    assert review.result.intermediates["held_as_made"]["why"] == "failed"

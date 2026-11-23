@@ -42,14 +42,14 @@ from fairband.refresh.inputs import with_table_moat
 from fairband.store.db import connect
 from fairband.store.ledger import LedgerRow, Writer, entries
 from fairband.store.moat import MoatRow, moat_row
-from fairband.store.overrides import insert_override
+from fairband.store.overrides import drop_override, insert_override
 from fairband.store.refreshes import (
     create_refresh,
     current_refresh,
     latest_refresh,
     save_deciles,
 )
-from fairband.store.reviews import latest_review
+from fairband.store.reviews import held_row, latest_review, reviews_for
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshot
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
 
@@ -394,6 +394,46 @@ def test_a_review_follows_the_new_snapshot(client: TestClient, db_path: Path) ->
         review = latest_review(conn, "AAPL")
     assert review is not None
     assert (review.snapshot_id, review.override_ids) == (body["snapshot"]["id"], (belief,))
+
+
+def test_a_moat_write_makes_the_review(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.1: a moat class's write is a deliberate act. A
+    company that holds a review holds, after the write, the review of the write's revalue: a made
+    review on the new snapshot with an empty state, and no reading or copy beside it, as a
+    refresh would write. A write that finds no override applied leaves the company with no
+    review: a person's act left none."""
+    snapshot = _latest(db_path)
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    with closing(connect(db_path)) as conn:
+        belief = insert_override(
+            conn,
+            "AAPL",
+            "growth.belief",
+            *(current_reading(snapshot.result, "growth.belief"), 0.08, "ratio", "guidance raised"),
+            *([FILING], "lasting", None, None, snapshot.id, writer, NOW, "applied", ""),
+        )
+    _put(client, {"class": "Wide"})
+    with closing(connect(db_path)) as conn:
+        first = latest_review(conn, "AAPL")
+    assert first is not None and first.kind == "made"
+    body = _put(client, {"class": "Narrow"})
+    with closing(connect(db_path)) as conn:
+        second, held = latest_review(conn, "AAPL"), held_row(conn, "AAPL")
+        kinds = [r.kind for r in reviews_for(conn, "AAPL")]
+    assert second is not None and held is not None
+    assert (second.kind, second.snapshot_id, second.override_ids) == (
+        "made",
+        body["snapshot"]["id"],
+        (belief,),
+    )
+    assert (held.review_id, held.read_again_at, held.reading_value) == (second.id, None, None)
+    assert kinds == ["made", "made"] and second.id != first.id
+    with closing(connect(db_path)) as conn:
+        drop_override(conn, belief, "guidance withdrawn", NOW)
+    _put(client, {"class": "Wide"})
+    with closing(connect(db_path)) as conn:
+        assert latest_review(conn, "AAPL") is None and held_row(conn, "AAPL") is None
+        assert len(reviews_for(conn, "AAPL")) == 2  # the history stays
 
 
 def test_a_company_without_a_row(client: TestClient, db_path: Path) -> None:

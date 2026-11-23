@@ -29,7 +29,7 @@ from fairband.engine.route import CompanyInputs, value_company
 from fairband.engine.types import Flag, ValuationResult
 from fairband.policy import Policy
 
-REVIEW_METHOD = "fairband-review/1"
+REVIEW_METHOD = "fairband-review/2"
 SPLIT_SCALED = "override-split-scaled"
 _FX_STALE = "fx-stale"  # last among a row's flags (method 8)
 

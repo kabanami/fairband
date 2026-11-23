@@ -170,7 +170,7 @@ def test_an_applied_override_returns_the_review_and_the_bridge(
         mechanical,
     )
     assert (
-        review["reviewMethod"] == "fairband-review/1"
+        review["reviewMethod"] == "fairband-review/2"
         and review["result"]["value"] == (review["value"])
     )
     assert body["bridge"] == review["bridge"] == latest["bridge"]

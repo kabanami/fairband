@@ -598,7 +598,7 @@ class Refresh:
         )
         with transaction(conn):
             snapshot_id = insert_snapshot(conn, result, refresh_id, clock=self._clock)
-            review_refusal(conn, result, snapshot_id, refresh_id, self._clock)
+            review_refusal(conn, result, snapshot_id, self._policy, refresh_id, self._clock)
             upsert_item(conn, refresh_id, symbol, "failed", reason, self._clock())
 
     def _stage(self, conn: sqlite3.Connection, refresh_id: int, stage: str, total: int) -> None:
@@ -625,11 +625,15 @@ def revalue_company(
     tax: TaxTable,
     moat: MoatTable,
     clock: Callable[[], datetime],
+    *,
+    made: bool = False,
 ) -> int:
     """Value ``symbol`` again inside the caller's transaction, or one of its own without one, and
     return the snapshot's id (module docstring; spec 2026-11-19 8.6): the policy recorded, a
     ``revalue`` record naming ``symbol``, the ``moat`` stage loading ``moat``, the symbol valued on
     the latest stored deciles as the value stage values it, and the record finished ``done``.
+    With ``made``, the moat class's write, the review the follow writes is a made one, which the
+    company holds (spec 2026-11-23 held reviewed value, 5.1).
     ``RefreshRunning`` while a refresh runs; any other exception rises as it comes."""
     with transaction(conn, immediate=True):
         record_policy(conn, policy, clock())
@@ -647,7 +651,9 @@ def revalue_company(
         set_stage(conn, refresh_id, "value")
         deciles = latest_deciles(conn)
         today = clock().date()
-        snapshot_id = _value_symbol(conn, refresh_id, symbol, policy, tax, deciles, today, clock)
+        snapshot_id = _value_symbol(
+            conn, refresh_id, symbol, policy, tax, deciles, today, clock, made=made
+        )
         set_stage(conn, refresh_id, "done")
         finish_refresh(conn, refresh_id, "done", clock())
     return snapshot_id
@@ -662,17 +668,20 @@ def _value_symbol(
     deciles: Deciles | None,
     today: date,
     clock: Callable[[], datetime],
+    *,
+    made: bool = False,
 ) -> int:
     """Value ``symbol`` on the facts the store holds and ``deciles``, then, in one transaction (the
-    caller's when there is one), write its snapshot, log its multiples, follow it with a review and
-    mark the symbol ``valued``; the snapshot's id."""
+    caller's when there is one), write its snapshot, log its multiples, follow it (a reading and
+    the held review carried; with ``made`` a made review, ``reviews.follow_snapshot``) and mark
+    the symbol ``valued``; the snapshot's id."""
     inputs = build_inputs(conn, symbol, policy, tax, today, deciles)
     result = value_company(inputs, deciles, policy, today)
     with transaction(conn):
         snapshot_id = insert_snapshot(conn, result, refresh_id, clock=clock)
         log_snapshot(conn, result, snapshot_id, refresh_id, clock())
         follow_snapshot(
-            conn, inputs, result, snapshot_id, deciles, policy, today, refresh_id, clock
+            conn, inputs, result, snapshot_id, deciles, policy, today, refresh_id, clock, made=made
         )
         upsert_item(conn, refresh_id, symbol, "valued", None, clock())
     return snapshot_id
