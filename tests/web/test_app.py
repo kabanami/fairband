@@ -1796,8 +1796,10 @@ def test_settings_view_saves_through_the_dialog_and_follows_the_run() -> None:
     <rule>" stands beside the field of the named setting the user changed (B-75), and the dialog
     shows the cap bands a changed size floor carries (8.9). A stored setting the policy refuses makes GET answer 409: the view
     shows the sentence and Reset all settings, a reset with no names. Revalue now posts a revalue
-    the header then follows; the view asks FairbandPage.running() while it is open, so the button
-    turns off for a run and the notice is read again when the run ends."""
+    the header then follows, handed the id the answer gave, so the revalue is the page's own and
+    locks it, and none after a 409 (spec 2026-11-23 refresh experience, 4.1); the view asks
+    FairbandPage.running() while it is open, so the button turns off for a run and the notice is
+    read again when the run ends."""
     js = _static_file("settings.js")
     for text in (
         "P.onShow.settings = function () {",
@@ -1814,7 +1816,8 @@ def test_settings_view_saves_through_the_dialog_and_follows_the_run() -> None:
         "P.api.post('/api/settings/reset', {})",
         "disabled: state.starting || P.running(),",
         "if (r.status === 409) state.started = 'A refresh is already running.';",
-        "P.followRefresh();",
+        "if (r.ok) P.followRefresh(r.body ? r.body.refreshId : null);",
+        "else if (r.status === 409) P.followRefresh();",
         "if (panel.hidden) {",
         "P.running()",
         "'takes effect at the next full refresh'",
@@ -1827,7 +1830,10 @@ def test_settings_view_saves_through_the_dialog_and_follows_the_run() -> None:
     assert "v.settingsHash != null && (v.settingsHash !== c.settingsHash ||" in js
     assert "v.policyVersion !== c.policyVersion)" in js
     controls = _static_file("controls.js")
-    assert "P.followRefresh = function () { started = true; poll(); };" in controls
+    assert (
+        "P.followRefresh = function (id) {\n    started = true;\n    if (id != null) keepMine(id);\n"
+        "    poll();\n  };"
+    ) in controls
     page = _static_file("index.html")
     assert '<script src="/static/settings.js"></script>' in page
     assert page.index("/static/watchlists.js") < page.index("/static/settings.js")

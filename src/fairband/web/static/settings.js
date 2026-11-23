@@ -378,7 +378,10 @@
     });
   }
 
-  /* Revalue now: a revalue the header then follows as it follows its own refreshes. */
+  /* Revalue now: a revalue the header then follows as it follows its own refreshes. The revalue
+     the answer names is the page's own, which locks the page while it runs; a run already
+     running (409) the page did not start, and it is followed with no lock (spec 2026-11-23
+     refresh experience, 4.1). */
   function revalue() {
     state.starting = true;
     state.started = null;
@@ -388,7 +391,8 @@
       if (r.status === 409) state.started = 'A refresh is already running.';
       else if (r.status === 503) state.started = 'No refresh worker.';
       else if (!r.ok) state.started = 'Not started: ' + detailOf(r) + '.';
-      if (r.ok || r.status === 409) P.followRefresh();
+      if (r.ok) P.followRefresh(r.body ? r.body.refreshId : null);
+      else if (r.status === 409) P.followRefresh();
       render();
     }).catch(function (err) {
       state.starting = false;

@@ -14,13 +14,14 @@
    never while the page is hidden (spec 2026-11-23 refresh experience, 4.3). While a refresh runs,
    one Cancel stands where the Refresh buttons were and the stamp is gone; under a run of the
    whole screen the tables keep their old figures at ink-faint, and under a run of named companies
-   nothing fades (4.1). A run of the whole screen, whoever started it, also locks the page under
-   the refresh layer, its run bar and Cancel in a panel over a dark scrim: nothing under it
-   answers, a change of the address is put back and Escape does nothing, until the run ends or,
-   on a long run, the reader keeps reading (4.1). When any run ends, whoever started it, the rows
-   load again, with the open drawer, the statistics when that view is open and the company page
-   when the run covered its company; the figures the run changed are marked as they land, and
-   after a run of the whole screen that ended done the status line counts them (4.2). The
+   nothing fades (4.1). A run of the whole screen this page started, the reader's own press, also
+   locks the page under the refresh layer, its run bar and Cancel in a panel over a dark scrim:
+   nothing under it answers, a change of the address is put back and Escape does nothing, until
+   the run ends or, on a long run, the reader keeps reading (4.1); a whole run the page did not
+   start, an agent's or another tab's, locks nothing. When any run ends, whoever started it, the
+   rows load again, with the open drawer, the statistics when that view is open and the company
+   page when the run covered its company; the figures the run changed are marked as they land,
+   and after a run of the whole screen that ended done the status line counts them (4.2). The
    Statistics view, once named Groups, is one plain table from /api/statistics (spec 6.3; spec
    2026-11-23 refresh experience, 4.5), with no chart, each group's name a link that opens the
    Screen on the group; #statistics names it, and the old #groups opens it. The company
@@ -55,6 +56,8 @@
   var LOCKED = 'The page is locked until the refresh ends.';
   var KEEP = ' Keep reading removes the lock; the refresh goes on.';
   var LONG_KINDS = ['full', 'revalue'];
+  /* Where the browser tab keeps the id of the run this page started (keepMine). */
+  var MINE_KEY = 'fairband.refresh.mine';
   var OPEN = P.OPEN_STATES;
   var BY = { sector: 'Sector', industry: 'Industry', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
@@ -100,6 +103,7 @@
                       changed on the rows, as the page counted it (onChanged), fresh for MARK_MS
                       after it was counted; or null */
     kept: null, /* the id of the run the reader kept reading under (Keep reading), or null */
+    mine: storedMine(), /* the id of the run this page started (keepMine), or null */
     address: null, /* the address the page held as the last lock began (lockPage), which a change
                       of the address is put back to while the lock holds (fromHash) */
     statusFailed: false /* the last read of the refresh's state failed */
@@ -213,13 +217,34 @@
     return whole(run) || (run.symbols || []).indexOf(P.company.symbol) !== -1;
   }
 
-  /* The page is locked while a run of the whole screen is alive, whoever started it, but for the
-     run the reader kept reading under (keepReading; spec 2026-11-23 refresh experience, 4.1). A
+  /* The page is locked while a run of the whole screen that this page started is alive
+     (state.mine), but for the run the reader kept reading under (keepReading; spec 2026-11-23
+     refresh experience, 4.1): the lock is for the reader's own press (Claude's ruling at the final
+     review, 2026-11-24). A whole run the page did not start, an agent's or another tab's, locks
+     nothing: the panels fade, the run bar stands in the status line and Cancel in the header. A
      run the server does not report alive, the command-line tool's, locks nothing, as it draws no
      bar. */
   function locked() {
     var run = state.running;
-    return run !== null && whole(run) && state.kept !== run.id;
+    return run !== null && whole(run) && run.id === state.mine && state.kept !== run.id;
+  }
+
+  /* The id of the run this page started, as the browser tab keeps it, so a reload during the
+     reader's own run locks again (4.1); null where it keeps none, or refuses its storage. */
+  function storedMine() {
+    try {
+      var id = JSON.parse(window.sessionStorage.getItem(MINE_KEY));
+      if (typeof id === 'number') return id;
+    } catch (e) { /* no storage, or not a number: none */ }
+    return null;
+  }
+
+  /* The run `id` is this page's own: kept in memory, and for the tab in its session storage. */
+  function keepMine(id) {
+    state.mine = id;
+    try {
+      window.sessionStorage.setItem(MINE_KEY, JSON.stringify(id));
+    } catch (e) { /* no storage: the id lives in memory until the page reloads */ }
   }
 
   /* A notice under the status line; one from a failed poll clears when a poll answers. */
@@ -277,7 +302,8 @@
   }
 
   /* A POST, then the status read at once. 409 and 503 have their own words; any other refusal
-     (a 403, a 400) and a request that never arrived read in caution. */
+     (a 403, a 400) and a request that never arrived read in caution. `onOk` takes the answer's
+     body. */
   function post(url, body, onOk) {
     notify(null);
     P.api.post(url, body)
@@ -288,7 +314,7 @@
         } else if (!r.ok) {
           var detail = r.body && r.body.detail ? String(r.body.detail) : 'no reason given';
           notify('The server refused the request: ' + detail + '.', true);
-        } else if (onOk) onOk();
+        } else if (onOk) onOk(r.body);
         poll();
       })
       .catch(function (err) {
@@ -297,8 +323,13 @@
       });
   }
 
+  /* A refresh the reader starts from the header: the run the server answers is this page's own,
+     which locks the page where it is a run of the whole screen (4.1). */
   function start(kind) {
-    post('/api/refresh', { kind: kind }, function () { started = true; });
+    post('/api/refresh', { kind: kind }, function (answer) {
+      started = true;
+      if (answer && answer.refreshId != null) keepMine(answer.refreshId);
+    });
   }
 
   function cancel() {
@@ -863,9 +894,11 @@
      { symbol, tab, id }, the id null but on a report of the Research tab and on a word of the
      Investor relations tab; listId is the list's id the address names, a number or null, which
      the watchlist page sets too as the reader chooses a list; running() is true
-     while a refresh runs; followRefresh() follows a refresh another view started (the Settings
+     while a refresh runs; followRefresh(id) follows a refresh another view started (the Settings
      view's revalue) as the header follows its own: the run bar while it runs, the rows loaded
-     again when it ends; countInbox(items) hands the header the Inbox view's own read, so its
+     again when it ends; `id`, the run its answer gave, is the page's own, which locks the page
+     where it is a run of the whole screen, and with none, after a 409, the run is followed with no
+     lock (4.1); countInbox(items) hands the header the Inbox view's own read, so its
      count follows; the Inbox view sets onInbox(items), which each of the header's own reads
      calls; onChanged({ prices, values }), which the screen's reload calls as the rows a run's
      end read land, marked, keeps their count for the status line where the run followed was a
@@ -877,7 +910,11 @@
   P.section = null;
   P.company = null;
   P.running = function () { return state.running !== null; };
-  P.followRefresh = function () { started = true; poll(); };
+  P.followRefresh = function (id) {
+    started = true;
+    if (id != null) keepMine(id);
+    poll();
+  };
   P.countInbox = inboxRead;
   P.onChanged = function (counts) {
     var ended = state.ended;

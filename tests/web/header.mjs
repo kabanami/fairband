@@ -13,7 +13,10 @@
 // them, and the company page, which has no script here, reads its company's detail as it opens, as
 // company.js's loader does first (/api/companies/<symbol>).
 //
-// The steps, a JSON list on stdin, each one object:
+// The input on stdin is the steps, a JSON list, or an object, {"steps", "storage"}, whose
+// `storage` is the browser tab's session storage as the scripts load: its entries, as a reload
+// finds them, or "throws", where the browser refuses it (a private window, blocked site data);
+// with none it starts empty. Each step is one object:
 //   {"do": "show", "view", "section"}            a header view, a link or a hash opens `view`
 //                                                (FairbandPage.show, controls.js)
 //   {"do": "hash", "hash"}                       the browser's Back or Forward, or a link, moves
@@ -39,6 +42,14 @@
 //                                                reading) is pressed; a disabled one does nothing
 //   {"do": "key", "key"}                         the key `key` goes down: the document's keydown
 //                                                listeners run, those of the capture phase first
+//   {"do": "start", "name"}                      the header's refresh button `name` (Refresh
+//                                                prices, Refresh all) is pressed
+//   {"do": "followRefresh", "id"}                FairbandPage.followRefresh(id), as the Settings
+//                                                view calls it on its revalue's answer; with no
+//                                                `id`, followRefresh(), as it calls it after a 409
+//   {"do": "storage", "set", "clear", "throws"}  the tab's session storage takes the entries `set`,
+//                                                is emptied (`clear` true), or starts or stops
+//                                                refusing every access (`throws`)
 // After each step and the work it sets off, the trace on stdout gains the urls fetched since the
 // step before (the reads the scripts start as they load are not counted), whether a view's panel
 // holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
@@ -58,16 +69,17 @@
 // whether the run bar is drawn, the stage word drawn in its place, the sentence, whether Keep
 // reading stands, Cancel as "enabled", "disabled" or null for none, and the notice (null for
 // none); whether each child of the body but the layer's mount is inert, main.app-page first; the
-// times FairbandPage.closePopups ran in the step; and whether a panel the step drew took the focus
+// times FairbandPage.closePopups ran in the step; whether a panel the step drew took the focus
 // as it mounted: as React does, the driver hands a panel's ref a node of its own when a panel of
-// another key than the last is drawn.
+// another key than the last is drawn; and the tab's session storage, its entries or "throws".
 //
 //   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
 
 const [bundle, app, finder, controls] = process.argv.slice(2, 6)
   .map((path) => readFileSync(path, 'utf8'));
-const steps = JSON.parse(readFileSync(0, 'utf8'));
+const given = JSON.parse(readFileSync(0, 'utf8'));
+const { steps, storage: stored = {} } = Array.isArray(given) ? { steps: given } : given;
 const later = globalThis.setTimeout; // the driver's own wait for the work a step sets off
 
 const React = {
@@ -142,9 +154,34 @@ const fetch = (url) => new Promise((resolve) => {
   asked.push(url);
   inFlight.push({ url, resolve });
 });
+// The tab's session storage: its entries, kept as strings, and whether the browser refuses it,
+// which then throws on every access, the window's property included, as a browser can.
+const session = { entries: {}, throws: stored === 'throws' };
+if (!session.throws) Object.assign(session.entries, stored);
+function refused() {
+  if (session.throws) throw new Error('the session storage is refused');
+}
+const sessionStorage = {
+  getItem(name) {
+    refused();
+    return name in session.entries ? session.entries[name] : null;
+  },
+  setItem(name, value) {
+    refused();
+    session.entries[name] = String(value);
+  },
+  removeItem(name) {
+    refused();
+    delete session.entries[name];
+  },
+};
 const listeners = {}; // the window's listeners by event
 const window = {
   React, ReactDOM, document, fetch, innerWidth: 1600, innerHeight: 1100,
+  get sessionStorage() {
+    refused();
+    return sessionStorage;
+  },
   addEventListener(event, listener) { (listeners[event] = listeners[event] || []).push(listener); },
 };
 // app.js's and controls.js's timers, each held until a tick step fires it: { id, run, ms }, in the
@@ -330,6 +367,19 @@ for (const step of steps) {
     for (const listener of documentListeners.visibilitychange || []) listener();
   } else if (step.do === 'press') press(step.name);
   else if (step.do === 'key') prevented = key(step.key);
+  else if (step.do === 'start') {
+    const [button] = [...elements(rootOn('header').drawn.props.children)]
+      .filter((e) => e.type === window.Fairband.Button && e.props['aria-label'] === step.name);
+    if (!button) throw new Error('no button ' + step.name + ' in the header');
+    button.props.onClick();
+  } else if (step.do === 'followRefresh') {
+    if ('id' in step) P.followRefresh(step.id);
+    else P.followRefresh();
+  } else if (step.do === 'storage') {
+    if (step.set) Object.assign(session.entries, step.set);
+    if (step.clear) session.entries = {};
+    if ('throws' in step) session.throws = step.throws;
+  }
   else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
   const header = rootOn('header').drawn;
@@ -375,6 +425,7 @@ for (const step of steps) {
       .map((child) => Boolean(child.inert)),
     closed,
     focused: mount(),
+    storage: session.throws ? 'throws' : Object.assign({}, session.entries),
   });
 }
 process.stdout.write(JSON.stringify(trace));

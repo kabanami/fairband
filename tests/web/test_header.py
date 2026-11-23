@@ -8,10 +8,10 @@ field of its own. The menu is in the founder's order, and a group's name in Stat
 Screen on its filter (spec 2026-11-23 refresh experience, 4.5 and 4.6). The page follows every
 run that ends, whoever started it: it asks the refresh's state every 30 seconds while no run is
 alive, and reads again what a run that ended may have changed; only a run of the whole screen
-fades the panels (4.1 and 4.3), and only such a run locks the page under the refresh layer until
-it ends, or until the reader keeps reading on a long run (4.1). The bundle, app.js, finder.js and
-controls.js run in node (``tests/web/header.mjs``) on steps the test gives, and the tests read the
-trace."""
+fades the panels (4.1 and 4.3), and only such a run that the page started, the reader's own
+press, locks the page under the refresh layer until it ends, or until the reader keeps reading on
+a long run (4.1). The bundle, app.js, finder.js and controls.js run in node
+(``tests/web/header.mjs``) on steps the test gives, and the tests read the trace."""
 
 import json
 import subprocess
@@ -114,12 +114,16 @@ BY_SECTOR = {
 }
 
 
-def _trace(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _trace(
+    steps: list[dict[str, Any]], storage: dict[str, str] | str | None = None
+) -> list[dict[str, Any]]:
+    """The trace of ``steps`` on a page loaded with the tab's session storage ``storage``: its
+    entries, as a reload finds them, ``"throws"`` where the browser refuses it, or empty."""
     assert NODE is not None
     done = subprocess.run(
         [NODE, str(DRIVER), str(BUNDLE)]
         + [str(STATIC / name) for name in ("app.js", "finder.js", "controls.js")],
-        input=json.dumps(steps),
+        input=json.dumps({"steps": steps, "storage": {} if storage is None else storage}),
         capture_output=True,
         text=True,
         check=True,
@@ -669,22 +673,42 @@ ESCAPE = {"do": "key", "key": "Escape"}
 FREE = [False] * 4  # main.app-page and the three mounts app.js appends beside it, none inert
 HELD = [True] * 4  # each of them inert
 CANCEL_URL = "/api/refresh/cancel"
+START_URL = "/api/refresh"
+MINE = "fairband.refresh.mine"  # the tab's session storage: the id of the page's own run
+BUTTONS = {"price": "Refresh prices", "full": "Refresh all"}
+
+
+def _mine(run_id: int, kind: str) -> list[dict[str, Any]]:
+    """The page starts the run ``run_id`` itself: for a price or a full refresh the reader presses
+    the header's button and the server answers the run's id; for a whole revalue, the Settings
+    view's Revalue now, which hands the header the id its answer gave
+    (``FairbandPage.followRefresh``). Either way the refresh's state is read at once."""
+    if kind == "revalue":
+        return [{"do": "followRefresh", "id": run_id}]
+    return [
+        {"do": "start", "name": BUTTONS[kind]},
+        {"do": "answer", "url": START_URL, "status": 200, "body": {"refreshId": run_id}},
+    ]
 
 
 @pytest.mark.parametrize(
-    ("kind", "title"),
-    [("price", "Refreshing prices"), ("full", "Refreshing all"), ("revalue", "Revaluing")],
+    ("kind", "title", "sentence"),
+    [
+        ("price", "Refreshing prices", LOCKED),
+        ("full", "Refreshing all", KEPT),
+        ("revalue", "Revaluing", KEPT),
+    ],
 )
-def test_a_whole_run_locks_the_page(kind: str, title: str) -> None:
-    """A run of the whole screen draws the layer over the page: a modal dialog labelled by its
-    title, the run bar, the sentence and Cancel. Every child of the body but the layer is inert,
-    main.app-page and the mounts beside it, and the popups close as the layer turns on, once. The
-    panel itself takes the focus as it turns on, not a button, so a key pressed by reflex neither
-    cancels the run nor lifts the lock; drawn again under the same lock, it does not take it
-    again. Before the run the layer is drawn off, empty, inert and hidden from a screen reader."""
-    landed, _, locked, _, again = _trace(
-        [LANDED, TICK, _alive(67, kind, None), TICK, _alive(67, kind, None)]
-    )
+def test_the_page_s_own_whole_run_locks_the_page(kind: str, title: str, sentence: str) -> None:
+    """A run of the whole screen the page started, the reader's press, draws the layer over the
+    page: a modal dialog labelled by its title, the run bar, the sentence and Cancel. Every child
+    of the body but the layer is inert, main.app-page and the mounts beside it, and the popups
+    close as the layer turns on, once. The panel itself takes the focus as it turns on, not a
+    button, so a key pressed by reflex neither cancels the run nor lifts the lock; drawn again
+    under the same lock, it does not take it again. Before the run the layer is drawn off, empty,
+    inert and hidden from a screen reader. The run's id is kept in the tab's session storage."""
+    trace = _trace([LANDED, *_mine(67, kind), _alive(67, kind, None), TICK, _alive(67, kind, None)])
+    landed, locked, again = trace[0], trace[-3], trace[-1]
     assert landed["layer"] == {
         "on": False,
         "dialog": False,
@@ -714,17 +738,128 @@ def test_a_whole_run_locks_the_page(kind: str, title: str) -> None:
         None,
     )
     assert layer["cancel"] == "enabled" and layer["notice"] is None
-    assert layer["sentence"] in (LOCKED, KEPT)
+    assert layer["sentence"] == sentence
     assert locked["inert"] == HELD and locked["closed"] == 1 and locked["focused"] is True
+    assert locked["storage"] == {MINE: "67"}
     assert again["layer"] == layer and again["inert"] == HELD and again["closed"] == 0
     assert again["focused"] is False
+
+
+@pytest.mark.parametrize("kind", ["price", "full", "revalue"])
+def test_a_whole_run_the_page_did_not_start_draws_no_layer(kind: str) -> None:
+    """Claude's ruling at the final review, 2026-11-24: the lock is for the reader's own press,
+    since the research playbook has an agent start runs of the whole screen, and a lock or a
+    darkening the reader did not start is the design's anti-goal. A whole run the page did not
+    start, an agent's or another tab's, alive as the page loads or seen later, draws no layer and
+    makes nothing inert; the page is as under a run before the layer: the panels faint, the run
+    bar in the status line and Cancel in the header. Its end is followed and marked, with the
+    count (4.2 and 4.3)."""
+    alive = _alive(67, kind, None)
+    [loaded] = _trace([alive])
+    *_, seen, _, ended, landed = _trace(
+        [
+            LANDED,
+            _screen(_rows()),
+            TICK,
+            alive,
+            TICK,
+            _ended_run(kind, None, "done"),
+            _screen(_rows(MANY)),
+        ]
+    )
+    for step in (loaded, seen):
+        assert step["layer"]["on"] is False and step["layer"]["hidden"] == "true"
+        assert step["inert"] == FREE and step["closed"] == 0 and step["focused"] is False
+        assert (step["recomputing"], step["run"], step["actions"]) == (True, True, ["Cancel"])
+        assert step["storage"] == {}
+    assert ended["reads"] == [SCREEN_URL] and ended["layer"]["on"] is False
+    assert landed["changes"] == "1,546 prices changed"
+
+
+def test_a_reload_during_the_page_s_own_run_locks_again() -> None:
+    """The run's id is kept for the browser tab, in its session storage, and read as the script
+    loads: the page loaded again while its own run is alive locks again, after Keep reading too,
+    since Keep reading is the page's own state (4.1). The page that wrote the id keeps it in
+    memory as well, so its storage emptied does not lift its lock; a page loaded on another id
+    locks nothing."""
+    *_, locked, kept = _trace([LANDED, *_mine(67, "full"), _alive(67, "full", None), KEEP])
+    assert locked["layer"]["on"] is True and kept["layer"]["on"] is False
+    assert kept["storage"] == {MINE: "67"}
+    [reloaded] = _trace([RUN_ALIVE], storage=kept["storage"])
+    assert reloaded["layer"]["on"] is True and reloaded["inert"] == HELD
+    assert reloaded["layer"]["title"] == "Refreshing all" and reloaded["focused"] is True
+    [other] = _trace([RUN_ALIVE], storage={MINE: "66"})
+    assert other["layer"]["on"] is False and other["inert"] == FREE
+    *_, cleared, _, again = _trace(
+        [
+            LANDED,
+            *_mine(67, "price"),
+            _alive(67, "price", None),
+            {"do": "storage", "clear": True},
+            TICK,
+            _alive(67, "price", None),
+        ]
+    )
+    assert cleared["storage"] == {}
+    assert again["layer"]["on"] is True and again["inert"] == HELD
+
+
+def test_with_a_storage_that_throws_the_lock_lives_in_memory() -> None:
+    """Where the browser refuses the storage (a private window, blocked site data), as the page
+    loads or as it writes, the page keeps its run's id in memory: its own run locks all the same,
+    and a reload, which finds no id, locks nothing."""
+    *_, locked, _, again = _trace(
+        [LANDED, *_mine(67, "price"), _alive(67, "price", None), TICK, _alive(67, "price", None)],
+        storage="throws",
+    )
+    assert locked["layer"]["on"] is True and locked["inert"] == HELD
+    assert again["layer"]["on"] is True and again["storage"] == "throws"
+    *_, refused = _trace(
+        [LANDED, {"do": "storage", "throws": True}, *_mine(67, "full"), _alive(67, "full", None)]
+    )
+    assert refused["layer"]["on"] is True and refused["inert"] == HELD
+    [reloaded] = _trace([RUN_ALIVE], storage="throws")
+    assert reloaded["layer"]["on"] is False and reloaded["inert"] == FREE
+
+
+def test_a_run_the_page_asked_for_and_did_not_start_locks_nothing() -> None:
+    """The Settings view's Revalue now hands the header the id of the revalue its answer gave
+    (``FairbandPage.followRefresh(id)``), so that whole revalue is the page's own and locks.
+    After a 409, a run already running that the page did not start, it hands none: the run is
+    followed with no lock, and its end reads the rows again. The header's own press answered 409
+    keeps no id either."""
+    *_, own = _trace([LANDED, {"do": "followRefresh", "id": 67}, _alive(67, "revalue", None)])
+    assert own["layer"]["on"] is True and own["layer"]["title"] == "Revaluing"
+    assert own["storage"] == {MINE: "67"}
+    *_, other, _, ended = _trace(
+        [
+            LANDED,
+            {"do": "followRefresh"},
+            _alive(67, "revalue", None),
+            TICK,
+            _idle(_run(67, "revalue"), RUN_66),
+        ]
+    )
+    assert other["layer"]["on"] is False and other["inert"] == FREE
+    assert other["recomputing"] is True and other["storage"] == {}
+    assert ended["reads"] == [SCREEN_URL]
+    *_, refused = _trace(
+        [
+            LANDED,
+            {"do": "start", "name": "Refresh prices"},
+            {"do": "answer", "url": START_URL, "status": 409, "body": {"running": 67}},
+            _alive(67, "price", None),
+        ]
+    )
+    assert refused["notice"] == "A refresh is already running."
+    assert refused["layer"]["on"] is False and refused["storage"] == {}
 
 
 def test_the_layer_draws_the_stage_word_alone_while_the_total_is_0() -> None:
     """As the status line does, where the run bar would draw nothing."""
     begun = _alive(67, "price", None)
     begun["body"]["refresh"] |= {"stage": "quotes", "done": 0, "failed": 0, "remaining": 0}
-    *_, locked = _trace([LANDED, TICK, begun])
+    *_, locked = _trace([LANDED, *_mine(67, "price"), begun])
     assert locked["layer"]["on"] is True
     assert (locked["layer"]["bar"], locked["layer"]["stage"]) == (False, "fetching prices")
 
@@ -742,7 +877,7 @@ def test_a_run_of_named_companies_draws_no_layer(kind: str, symbols: list[str]) 
 def test_keep_reading_stands_on_the_long_runs_only(kind: str, keep: bool) -> None:
     """A full refresh and a whole revalue run for minutes, and the reader may keep reading; a
     price refresh, about 26 seconds, holds the page to its end."""
-    *_, locked = _trace([LANDED, TICK, _alive(67, kind, None)])
+    *_, locked = _trace([LANDED, *_mine(67, kind), _alive(67, kind, None)])
     assert locked["layer"]["keep"] is keep
     assert locked["layer"]["sentence"] == (KEPT if keep else LOCKED)
 
@@ -750,19 +885,22 @@ def test_keep_reading_stands_on_the_long_runs_only(kind: str, keep: bool) -> Non
 def test_keep_reading_lifts_the_lock_for_that_run_alone() -> None:
     """The run goes on and the page is as under a run today: the bar in the status line, the
     tables faint, Cancel in the header. The next answer about the same run keeps the page free;
-    another run locks it again, with a panel of its own, which takes the focus."""
-    *_, locked, kept, _, same, _, other = _trace(
+    another run the page starts locks it again, with a panel of its own, which takes the focus."""
+    trace = _trace(
         [
             LANDED,
-            TICK,
+            *_mine(67, "full"),
             _alive(67, "full", None),
             KEEP,
             TICK,
             _alive(67, "full", None),
             TICK,
+            _idle(_run(67, "full"), RUN_66),
+            *_mine(68, "full"),
             _alive(68, "full", None),
         ]
     )
+    locked, kept, same, other = trace[3], trace[4], trace[6], trace[-1]
     assert locked["layer"]["on"] is True
     assert kept["layer"]["on"] is False and kept["inert"] == FREE
     assert (kept["run"], kept["recomputing"], kept["actions"]) == (True, True, ["Cancel"])
@@ -777,7 +915,13 @@ def test_the_run_s_end_lifts_the_lock(status: str) -> None:
     keeps the panel it last drew, so the scrim and the panel fade out together (4.1), while the
     layer is hidden from a screen reader and inert: nothing in it can be reached."""
     *_, locked, _, ended = _trace(
-        [LANDED, TICK, _alive(67, "price", None), TICK, _idle(_run(67, "price", status=status))]
+        [
+            LANDED,
+            *_mine(67, "price"),
+            _alive(67, "price", None),
+            TICK,
+            _idle(_run(67, "price", status=status)),
+        ]
     )
     assert locked["layer"]["on"] is True
     assert ended["layer"]["on"] is False and ended["layer"]["dialog"] is False
@@ -789,18 +933,6 @@ def test_the_run_s_end_lifts_the_lock(status: str) -> None:
     assert ended["inert"] == FREE and ended["run"] is False and ended["focused"] is False
 
 
-def test_a_whole_run_another_page_started_locks_too() -> None:
-    """The plan's review focus 5: a page that loads while a run of the whole screen is alive,
-    started in another tab or another browser, is locked at its first answer. Keep reading is the
-    page's own choice, so the page loaded again locks again."""
-    first, kept = _trace([RUN_ALIVE, KEEP])
-    [reloaded] = _trace([RUN_ALIVE])
-    assert first["layer"]["on"] is True and first["inert"] == HELD
-    assert first["layer"]["title"] == "Refreshing all"
-    assert kept["layer"]["on"] is False
-    assert reloaded["layer"] == first["layer"] and reloaded["inert"] == HELD
-
-
 def test_a_failed_status_read_offers_keep_reading_on_a_price_run() -> None:
     """The plan's review focus 1: the status read fails while the page is locked (the server
     restarts), so the page cannot know whether the run goes on. Keep reading stands on any kind,
@@ -808,14 +940,22 @@ def test_a_failed_status_read_offers_keep_reading_on_a_price_run() -> None:
     layer; a read that answers again with the run alive takes it away from a price run."""
     failed = {"do": "answer", "url": CURRENT, "status": 500, "body": {"detail": "restarting"}}
     *_, locked, _, lost, _, back = _trace(
-        [LANDED, TICK, _alive(67, "price", None), TICK, failed, TICK, _alive(67, "price", None)]
+        [
+            LANDED,
+            *_mine(67, "price"),
+            _alive(67, "price", None),
+            TICK,
+            failed,
+            TICK,
+            _alive(67, "price", None),
+        ]
     )
     assert locked["layer"]["keep"] is False
     assert lost["layer"]["on"] is True and lost["layer"]["keep"] is True
     assert lost["layer"]["sentence"] == KEPT
     assert lost["layer"]["notice"].startswith("The refresh status did not load: ")
     assert back["layer"]["keep"] is False and back["layer"]["notice"] is None
-    *_, kept = _trace([LANDED, TICK, _alive(67, "price", None), TICK, failed, KEEP])
+    *_, kept = _trace([LANDED, *_mine(67, "price"), _alive(67, "price", None), TICK, failed, KEEP])
     assert kept["layer"]["on"] is False and kept["inert"] == FREE
 
 
@@ -823,11 +963,11 @@ def test_back_and_forward_are_put_back_while_locked() -> None:
     """The plan's review focus 5: a change of the address while the lock holds (Back, Forward, a
     hash typed) is put back to the address the page held as the lock began, and nothing new shows
     or reads. Once the run ends, the address opens its view again."""
-    *_, page, _, locked, back, forward, _, ended, opened = _trace(
+    *_, page, _, _, locked, back, forward, _, ended, opened = _trace(
         [
             LANDED,
             _show("company", "MGCO"),
-            TICK,
+            *_mine(67, "price"),
             _alive(67, "price", None),
             {"do": "hash", "hash": "#statistics"},
             {"do": "hash", "hash": "#company/MGCO/financials"},
@@ -850,7 +990,7 @@ def test_back_and_forward_are_put_back_while_locked() -> None:
         [
             LANDED,
             _show("screen"),
-            TICK,
+            *_mine(67, "full"),
             _alive(67, "full", None),
             {"do": "hash", "hash": "#settings"},
         ]
@@ -862,12 +1002,12 @@ def test_the_list_picked_is_the_address_put_back() -> None:
     """The watchlist page writes its list's address itself, #watchlists/<id>, as the reader picks
     a list in its head (watchlists.js), not through FairbandPage.show. The address put back while
     locked is the one the page held as the lock began, so it names the list shown."""
-    *_, picked, _, locked, back = _trace(
+    *_, picked, _, _, locked, back = _trace(
         [
             LANDED,
             _show("watchlists"),
             {"do": "list", "id": 5},
-            TICK,
+            *_mine(67, "price"),
             _alive(67, "price", None),
             {"do": "hash", "hash": ""},
         ]
@@ -881,7 +1021,9 @@ def test_escape_does_nothing_while_locked() -> None:
     """Escape does not close the layer, and nothing under it answers: its default is prevented,
     so the drawer, whose Escape gives way to one acted on, stays open (app.js). Free, the page's
     Escape is its own again."""
-    _, free, _, locked, escaped = _trace([LANDED, ESCAPE, TICK, _alive(67, "price", None), ESCAPE])
+    *_, free, _, _, locked, escaped = _trace(
+        [LANDED, ESCAPE, *_mine(67, "price"), _alive(67, "price", None), ESCAPE]
+    )
     assert free["prevented"] is False
     assert locked["layer"]["on"] is True
     assert escaped["prevented"] is True and escaped["layer"]["on"] is True
@@ -911,7 +1053,7 @@ def test_cancel_in_the_layer_asks_the_server_and_is_disabled_after() -> None:
     *_, locked, pressed, taken = _trace(
         [
             LANDED,
-            TICK,
+            *_mine(67, "full"),
             _alive(67, "full", None),
             CANCEL,
             {"do": "answer", "url": CANCEL_URL, "status": 200, "body": {"cancelled": True}},
