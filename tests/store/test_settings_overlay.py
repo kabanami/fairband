@@ -131,6 +131,21 @@ def test_an_out_of_range_overlay_row_names_itself(conn: sqlite3.Connection) -> N
         effective_policy(conn)
 
 
+def test_a_stored_band_the_new_rule_refuses_names_both_settings(conn: sqlite3.Connection) -> None:
+    """Review Focus (spec 2026-11-23 thresholds, 5.2): a stored fair band whose low, 0.75, was
+    above 1 − the Narrow margin, as the rule asked before, and is not above 1 − the Wide margin,
+    0.80, as it asks now: the policy is not built, and the error names both settings and says
+    where to reset them."""
+    conn.execute("INSERT INTO settings VALUES ('fair_band', '[0.75, 1.1]', ?)", (AT.isoformat(),))
+    conn.commit()
+    with pytest.raises(ValueError) as refused:
+        effective_policy(conn)
+    assert str(refused.value) == (
+        "settings: margin_of_safety, fair_band: the band's low must be above 1 − the Wide margin "
+        "of safety; reset it on the Settings page"
+    )
+
+
 def test_values_are_stored_in_their_converted_form(conn: sqlite3.Connection) -> None:
     write_settings(
         conn,

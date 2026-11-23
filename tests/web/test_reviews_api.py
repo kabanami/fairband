@@ -547,6 +547,20 @@ def test_a_drop_recomputes_or_clears_the_review(client: TestClient) -> None:
     assert all("result" not in r and r["bridge"] for r in reviews)
 
 
+def test_a_changed_threshold_refuses_no_override(client: TestClient) -> None:
+    """Spec 2026-11-23 thresholds, 5.3: the margin of safety, the fair band and the trim multiple
+    move no value and enter no settings hash, so after a save of one the snapshot still reads as
+    valued under the settings in force: an override is applied and a drop taken, with no
+    revalue. The review written then carries its levels on the new threshold."""
+    saved = client.put("/api/settings", json={"changes": {"trim_multiple": 1.2}}, headers=HEADER)
+    assert saved.status_code == 200
+    posted = client.post("/api/companies/AAPL/overrides", json=BELIEF_8, headers=AGENT)
+    assert posted.status_code == 201, posted.text
+    review = posted.json()["review"]
+    assert review["trimLevel"] == pytest.approx(review["value"] * 1.2)
+    assert _drop(client, posted.json()["override"]["id"]).status_code == 200
+
+
 def test_settings_changed_refuses_an_override(client: TestClient) -> None:
     applied = _post(client, BELIEF_8)["override"]["id"]
     r = client.put("/api/settings", json={"changes": {"required_return": 0.1}}, headers=HEADER)

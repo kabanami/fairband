@@ -247,6 +247,25 @@ def test_a_universe_setting_reset_after_the_full_refresh(
     assert other.json()["valuedUnder"]["universeChanged"] is True  # still, until a full refresh
 
 
+def test_a_saved_threshold_leaves_the_screen_valued_under_the_settings_in_force(
+    client: TestClient,
+) -> None:
+    """Spec 2026-11-23 thresholds, 5.3: a save of the margin of safety, the fair band or the trim
+    multiple changes the value served and no settings hash, so the page has no revalue to ask
+    for: what the screen was valued under is still what is in force. Each of the three says it
+    takes effect at once."""
+    safety = {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
+    changes = {"trim_multiple": 1.2, "fair_band": [0.88, 1.12], "margin_of_safety": safety}
+    r = client.put("/api/settings", json={"changes": changes}, headers=HEADER)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["current"]["settingsHash"] == EMPTY_SETTINGS_HASH
+    assert body["valuedUnder"]["settingsHash"] == body["current"]["settingsHash"]
+    for name, value in changes.items():
+        found = _setting(body, name)
+        assert (found["value"], found["changed"], found["effect"]) == (value, True, "at once")
+
+
 def test_valued_under_counts_the_screens_snapshots_only(
     client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:

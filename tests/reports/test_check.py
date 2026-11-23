@@ -1193,16 +1193,16 @@ def test_a_cited_level_is_the_one_in_force(
 ) -> None:
     """Spec 2026-11-23 thresholds, 5.3: a cite of a level checks against the level on the policy
     in force, the figure the page shows. AAPL's value of $127.68 on a Wide moat has a buy level
-    of $102 at the default margin of 20%; under a margin of 10% it reads $115, and a cite of the
+    of $102 at the default margin of 20%; under a margin of 15% it reads $109, and a cite of the
     default's figure is refused with the figure in force."""
     sid = snapshots["AAPL"]
     ref = f"snapshot:{sid}/levels/buy"
     assert _check(conn, policy, sid, _cite("$102", ref)) == []
-    safety = {"None": 0.40, "Narrow": 0.30, "Wide": 0.10}
+    safety = {"None": 0.40, "Narrow": 0.30, "Wide": 0.15}
     wide = apply_overlay(policy, {"margin_of_safety": safety})
-    assert _check(conn, wide, sid, _cite("$115", ref)) == []
+    assert _check(conn, wide, sid, _cite("$109", ref)) == []
     stale = _one(_check(conn, wide, sid, _cite("$102", ref)), sid, "$102")
-    assert (stale.what, stale.detail) == (WRONG_UNIT, f"{ref} reads $114.91")
+    assert (stale.what, stale.detail) == (WRONG_UNIT, f"{ref} reads $108.52")
 
 
 def test_a_policy_score_is_cited_to_its_decimals(

@@ -149,9 +149,45 @@ def test_hash_covers_valuation_flags_and_the_fallback_only() -> None:
         {"required_return": 0.1, "refresh.workers": 4}
     )
     hashed = {s.name for s in SETTINGS if s.hashed}
-    assert hashed == {s.name for s in SETTINGS if s.group in ("valuation", "flags")} | {
-        "validity_fallback_days"
-    }
+    valuing = {s.name for s in SETTINGS if s.group in ("valuation", "flags")} - THRESHOLDS
+    assert hashed == valuing | {"validity_fallback_days"}
+
+
+# The three thresholds, which set a row's levels and word and move no value (spec 2026-11-23
+# thresholds, 5.3).
+THRESHOLDS = {"margin_of_safety", "fair_band", "trim_multiple"}
+
+
+def test_a_threshold_takes_effect_at_once_and_is_not_hashed() -> None:
+    """Spec 2026-11-23 thresholds, 5.3: the margin of safety, the fair band and the trim multiple
+    move no value, so a change of one shows at once and leaves the settings hash as it was: no
+    row then reads as valued under other settings."""
+    for name in THRESHOLDS:
+        assert (setting(name).effect, setting(name).hashed) == ("at once", False), name
+    assert settings_hash({"trim_multiple": 1.2, "fair_band": [0.95, 1.05]}) == EMPTY_SETTINGS_HASH
+    assert settings_hash({"required_return": 0.1, "trim_multiple": 1.2}) == settings_hash(
+        {"required_return": 0.1}
+    )
+    changed = apply_overlay(load_policy(), {"trim_multiple": 1.2})
+    assert (changed.trim_multiple, changed.settings_hash) == (1.2, EMPTY_SETTINGS_HASH)
+    safety = setting("margin_of_safety")
+    assert safety.description == (
+        "The discount to the value that sets the buy level; a price under a row's buy level "
+        "reads Well below."
+    )
+
+
+def test_the_bands_low_is_above_every_class_s_buy_level() -> None:
+    """Spec 2026-11-23 thresholds, 5.2: the first edge is each row's own, 1 − the margin of its
+    class, so the band's low must be above the highest of them, the Wide row's: at a Wide margin
+    of 20% a low of 0.81 is taken and one of 0.80 or 0.75 refused, though both are above the
+    Narrow row's 0.70."""
+    wide = {"None": 0.40, "Narrow": 0.30, "Wide": 0.20}
+    apply_overlay(load_policy(), {"margin_of_safety": wide, "fair_band": [0.81, 1.10]})
+    rule = "margin_of_safety, fair_band: the band's low must be above 1 − the Wide margin of safety"
+    for low in (0.80, 0.75):
+        with pytest.raises(ValueError, match=f"^{re.escape(rule)}$"):
+            apply_overlay(load_policy(), {"margin_of_safety": wide, "fair_band": [low, 1.10]})
 
 
 def test_the_empty_overlay_hashes_the_literal_of_the_migration() -> None:
@@ -162,13 +198,14 @@ def test_the_empty_overlay_hashes_the_literal_of_the_migration() -> None:
 def test_apply_overlay_changes_the_value_and_the_derived_edges() -> None:
     p = apply_overlay(
         load_policy(),
-        {"required_return": 0.1, "fair_band": [0.8, 1.2], "universe.cap_floor_usd": 5e9},
+        {"required_return": 0.1, "fair_band": [0.85, 1.2], "universe.cap_floor_usd": 5e9},
     )
     assert p.required_return == 0.1 and p.wide_terminal_roic_cap == pytest.approx(0.14)
-    assert p.designation_edges == pytest.approx((0.70, 0.8, 1.2, 1.35))
+    assert p.designation_edges == pytest.approx((0.70, 0.85, 1.2, 1.35))
     assert p.universe.cap_floor_usd == 5e9
+    # the band enters no hash (spec 2026-11-23 thresholds, 5.3): the hash is the hurdle rate's
     assert p.version == "fairband-policy-v19" and p.settings_hash == settings_hash(
-        {"required_return": 0.1, "fair_band": [0.8, 1.2]}
+        {"required_return": 0.1}
     )
 
 
@@ -307,18 +344,19 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
     ({"fair_band": [0.49, 1.15]}, "fair_band: the low must be from 0.50 to 0.99"),
     ({"fair_band": [1.0, 1.15]}, "fair_band: the low must be from 0.50 to 0.99"),
     ({"fair_band": [0.85, 1.0]}, "fair_band: the high must be from 1.01 to 1.50"),
-    # The derived edges ascend: e1 = 1 − the Narrow margin of safety below e2 = the band's low.
+    # Every class's edges ascend: e1 = 1 − its margin of safety below e2 = the band's low, so the
+    # low is above the highest e1, the Wide row's (0.80 at the defaults).
     (
         {"fair_band": [0.6, 1.15]},
-        "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
+        "margin_of_safety, fair_band: the band's low must be above 1 − the Wide margin of safety",
     ),
     (
-        {"fair_band": [0.70, 1.15]},
-        "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
+        {"fair_band": [0.80, 1.15]},
+        "margin_of_safety, fair_band: the band's low must be above 1 − the Wide margin of safety",
     ),
     (
-        {"margin_of_safety": _by_moat(0.45, 0.10, 0.05)},
-        "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
+        {"margin_of_safety": _by_moat(0.45, 0.30, 0.10)},
+        "margin_of_safety, fair_band: the band's low must be above 1 − the Wide margin of safety",
     ),
     ({"trim_multiple": 3.01}, "trim_multiple: must be up to 3.0"),
     (
@@ -460,9 +498,9 @@ INSIDE: list[dict[str, Any]] = [
     {"runway_years": _by_moat(30, 30, 30)},
     {"margin_of_safety": _by_moat(0.05, 0.05, 0.05), "fair_band": [0.96, 1.15]},
     {"margin_of_safety": _by_moat(0.70, 0.70, 0.70)},
-    {"fair_band": [0.50, 1.01], "margin_of_safety": _by_moat(0.70, 0.55, 0.25)},
-    {"fair_band": [0.71, 1.15]},  # just above e1 = 0.70
-    {"margin_of_safety": _by_moat(0.45, 0.11, 0.05)},  # e1 = 0.89, just below the band's 0.90
+    {"fair_band": [0.50, 1.01], "margin_of_safety": _by_moat(0.70, 0.55, 0.51)},
+    {"fair_band": [0.81, 1.15]},  # just above the Wide row's e1 = 0.80
+    {"margin_of_safety": _by_moat(0.45, 0.30, 0.11)},  # Wide e1 = 0.89, just below the band's 0.90
     {"fair_band": [0.99, 1.50], "trim_multiple": 3.0},
     {"wide_terminal_roic_spread": 0.0},
     {"wide_terminal_roic_spread": 0.10},

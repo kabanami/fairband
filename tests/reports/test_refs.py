@@ -271,7 +271,7 @@ def test_a_level_ref_reads_the_policy_in_force(
             found = _resolve(conn, ref, read_under)
             assert found is not None and found.unit == "per-share", ref
             assert found.value == pytest.approx(value * multiple), ref
-    safety = {"None": 0.40, "Narrow": 0.30, "Wide": 0.10}
+    safety = {"None": 0.40, "Narrow": 0.30, "Wide": 0.15}
     wide = apply_overlay(policy, {"margin_of_safety": safety})
     for ref, value in (
         (f"snapshot:{sid}/levels/buy", stored.value),
@@ -279,7 +279,7 @@ def test_a_level_ref_reads_the_policy_in_force(
         (f"secondary:{secondary_id}/levels/buy", secondary.value_per_share),
     ):
         found = _resolve(conn, ref, wide)
-        assert found is not None and found.value == pytest.approx(value * 0.90), ref  # Wide rows
+        assert found is not None and found.value == pytest.approx(value * 0.85), ref  # Wide rows
     kept = _resolve(conn, f"review:{review_id}/value", changed)
     ratio = _resolve(conn, f"snapshot:{sid}/price_to_value", changed)
     assert kept is not None and ratio is not None

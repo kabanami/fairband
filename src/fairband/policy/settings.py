@@ -21,7 +21,11 @@ too, so a file and an overlay fail alike, with the sentence ``"<name>[, <name>]:
 serves; a rule between two settings names both.
 
 The settings hash (8.4) is the sha256 of the JSON, sorted by key, of the overlay's entries that
-change a snapshot's figures: groups valuation and flags and ``validity_fallback_days``. The
+change a snapshot's figures: groups valuation and flags and ``validity_fallback_days``, less the
+three thresholds, ``margin_of_safety``, ``fair_band`` and ``trim_multiple`` (spec 2026-11-23
+thresholds, 5.3): they set a row's levels and word, move no value, and are read on the policy in
+force when a row is shown (``engine.levels.standing_for``), so a change of one takes effect at
+once and no row then reads as valued under other settings. The
 universe and refresh settings change which companies are valued and how they are fetched, and
 ``aging_fraction`` is read when a row is shown, so none of them enters it, nor does a name that is
 no longer a setting.
@@ -124,12 +128,12 @@ SETTINGS: tuple[Setting, ...] = (
         "margin_of_safety",
         "valuation",
         "Margin of safety, by moat",
-        "The discount to the value that sets the buy level; the Narrow figure also sets the first "
-        "designation edge.",
+        "The discount to the value that sets the buy level; a price under a row's buy level "
+        "reads Well below.",
         "fraction",
-        "revalue",
+        "at once",
         "5% to 70% each, non-increasing None ≥ Narrow ≥ Wide",
-        True,
+        False,
     ),
     Setting(
         "fair_band",
@@ -137,9 +141,9 @@ SETTINGS: tuple[Setting, ...] = (
         "Fair band (low, high)",
         "The range of price to value in which a price reads Near.",
         "times",
-        "revalue",
+        "at once",
         "low 0.50 to 0.99, high 1.01 to 1.50",
-        True,
+        False,
     ),
     Setting(
         "trim_multiple",
@@ -147,9 +151,9 @@ SETTINGS: tuple[Setting, ...] = (
         "Trim multiple",
         "The price to value of the trim level; a price at or above it reads Well above.",
         "times",
-        "revalue",
+        "at once",
         "above the band's high, up to 3.0",
-        True,
+        False,
     ),
     Setting(
         "wide_terminal_roic_spread",
@@ -637,9 +641,11 @@ def check(policy: Policy) -> None:
     low, high = p.fair_band
     if not 0.50 <= low <= 0.99:
         raise ValueError("fair_band: the low must be from 0.50 to 0.99")
-    if not low > 1 - p.margin_of_safety["Narrow"]:  # the derived edges ascend: e1 below e2
+    # every class's edges ascend, e1 below e2: the highest buy level, the Wide row's, is under
+    # the band's low (spec 2026-11-23 thresholds, 5.2)
+    if not low > 1 - p.margin_of_safety["Wide"]:
         raise ValueError(
-            "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin"
+            "margin_of_safety, fair_band: the band's low must be above 1 − the Wide margin"
             " of safety"
         )
     if not 1.01 <= high <= 1.50:
