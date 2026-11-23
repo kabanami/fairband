@@ -4,7 +4,7 @@
 from datetime import date
 from typing import Any
 
-from fairband.engine.held import HeldState, held_state, reading_outside
+from fairband.engine.held import HeldState, held_state, reading_outside, secondary_state
 
 CHANGED = "the input the override corrected changed"
 DROPPED = {
@@ -123,3 +123,31 @@ def test_a_value_with_no_reason_reads_by_its_date() -> None:
     assert _state(today=date(2027, 2, 2)).state == "expired"
     late = _state(today=date(2027, 2, 2), newer_period=date(2026, 12, 26))
     assert late.state == "expired-early"
+
+
+def test_a_secondary_valuation_s_state_and_its_two_reasons() -> None:
+    """Spec 5.9: a secondary valuation expires by its window's date, and early when a newer
+    period is on file or when the route now values the company. It has no reading."""
+    facts: dict[str, Any] = {
+        "valid_from": date(2026, 11, 1),
+        "valid_until": date(2027, 2, 1),
+        "made_period": date(2026, 9, 30),
+        "latest_period": date(2026, 9, 30),
+        "route_value": None,
+        "today": date(2026, 11, 23),
+        "aging_fraction": 0.75,
+    }
+    assert secondary_state(**facts) == HeldState("current", None, (), None, None, None)
+    assert secondary_state(**facts | {"today": date(2027, 2, 2)}).state == "expired"
+    newer = secondary_state(**facts | {"latest_period": date(2026, 12, 26)})
+    assert (newer.state, newer.reasons) == (
+        "expired-early",
+        ("The company has reported a newer period (to 26 Dec 2026).",),
+    )
+    both = secondary_state(**facts | {"latest_period": date(2026, 12, 26), "route_value": 1234.5})
+    assert both.reasons == (
+        "The company has reported a newer period (to 26 Dec 2026).",
+        "The route now values the company, at $1,234.50.",
+    )
+    unknown = secondary_state(**facts | {"made_period": None, "latest_period": date(2026, 12, 26)})
+    assert unknown.state == "current"  # without both period ends the first reason is not read

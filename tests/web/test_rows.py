@@ -53,7 +53,12 @@ from fairband.store.reviews import (
     set_held_state,
 )
 from fairband.store.secondary import SecondaryRow, insert_secondary, secondary_row
-from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshot
+from fairband.store.snapshots import (
+    SnapshotRow,
+    insert_snapshot,
+    latest_snapshot,
+    snapshot_row,
+)
 from fairband.web.app import create_app
 from fairband.web.rows import NO_AGENT_FIELDS, agent_fields, screen_row, sort_rows
 
@@ -194,6 +199,13 @@ def _aal_review(
             review = review_company(inputs, universe_deciles(), policy, TODAY, [target], refused)
         insert_review(conn, review, "AAL", snapshot_id, None, clock=lambda: NOW)
     return review.result.value
+
+
+def snapshot_of(db_path: Path, snapshot_id: int) -> SnapshotRow:
+    with closing(connect(db_path)) as conn:
+        found = snapshot_row(conn, snapshot_id)
+    assert found is not None
+    return found
 
 
 def _latest(db_path: Path, symbol: str) -> int:
@@ -445,12 +457,68 @@ def test_a_secondary_stands_in_where_the_route_refuses(
     assert results["HGCO"].value is not None and hgco.value_per_share > 0
     assert _agents(rows["HGCO"]) == NO_AGENT  # the route values the row: the fallback fills nothing
     assert (rows["AAPL"]["reviewed"], rows["AAPL"]["overrides"]) == (value, 1)  # the review leads
-    # a reprice keeps it; a later data date leaves it on the snapshot it was made on
+    # a reprice keeps it, and so does a refresh that replaces its snapshot with other data: it
+    # holds until a newer one or a made review that values the company (spec 2026-11-23 held
+    # reviewed value, 5.9)
     refused = results["AAL"]
     _snapshot(db_path, replace(refused, price=140.0))
     assert _rows(client)["AAL"]["reviewed"] == secondary.value_per_share
     _snapshot(db_path, replace(refused, data_date=date(2026, 11, 2)))
-    assert _agents(_rows(client)["AAL"]) == NO_AGENT
+    stays = _rows(client)["AAL"]
+    assert (stays["reviewed"], stays["expiredEarly"]) == (secondary.value_per_share, False)
+    made_on = snapshot_of(db_path, secondary.snapshot_id)
+    assert stays["validUntil"] == made_on.valid_until.isoformat()  # the window of its making
+    held = client.get("/api/companies/AAL").json()["secondary"]["held"]
+    assert (held["state"], held["reasons"], held["reading"]) == (stays["freshness"], [], None)
+
+
+def test_a_secondary_valuation_expires_early_when_the_route_values_the_company(
+    client: TestClient,
+    db_path: Path,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """Spec 5.9 and 7: the route now values AAL, whose row a secondary valuation filled. The
+    secondary still fills the Reviewed column, expired early, and its detail names the route's
+    value; the Mechanical column shows that value."""
+    with closing(connect(db_path)) as conn:
+        secondary = secondary_row(conn, secondaries["AAL"])
+    assert secondary is not None
+    valued = replace(results["HGCO"], symbol="AAL")
+    assert valued.value is not None
+    _snapshot(db_path, valued)
+    row = _rows(client)["AAL"]
+    assert (row["reviewed"], row["mechanical"]) == (secondary.value_per_share, valued.value)
+    assert (row["freshness"], row["expiredEarly"]) == ("expired", True)
+    held = client.get("/api/companies/AAL").json()["secondary"]["held"]
+    assert held["state"] == "expired-early"
+    assert held["reasons"][-1] == f"The route now values the company, at ${valued.value:,.2f}."
+
+
+def test_a_secondary_valuation_expires_early_at_a_newer_period(
+    client: TestClient,
+    db_path: Path,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """Spec 5.9: a newer period on file than the one the secondary valuation was made on expires
+    it early, by the review's first sentence; the row keeps the figure."""
+    with closing(connect(db_path)) as conn:
+        secondary = secondary_row(conn, secondaries["AAL"])
+        assert secondary is not None
+        conn.execute(
+            "UPDATE snapshots SET result = json_set(result, '$.intermediates.trailing_end',"
+            " '2026-09-30') WHERE id = ?",
+            (secondary.snapshot_id,),
+        )
+        conn.commit()
+    refused = results["AAL"]
+    later = replace(refused, intermediates=refused.intermediates | {"trailing_end": "2026-12-31"})
+    _snapshot(db_path, later)
+    row = _rows(client)["AAL"]
+    assert (row["reviewed"], row["expiredEarly"]) == (secondary.value_per_share, True)
+    held = client.get("/api/companies/AAL").json()["secondary"]["held"]
+    assert held["reasons"] == ["The company has reported a newer period (to 31 Dec 2026)."]
 
 
 def test_a_refused_review_on_a_valued_row_leaves_no_reviewed_value(
@@ -606,19 +674,25 @@ def test_a_revalued_row_returns_to_the_engines_levels(
     results: dict[str, ValuationResult],
     secondaries: dict[str, int],
 ) -> None:
-    """Plan 3, Review Focus 2: AAL's secondary counts on its refused snapshot until a revalue
-    values the row, its mature peers found: the secondary no longer counts, Reviewed is empty and
-    the band, levels and word are the engine's new ones. A revalue of AAPL leaves its review on
-    the older snapshot the same way."""
+    """AAL's secondary valuation fills its refused row; a revalue then values the row, its mature
+    peers found. The secondary still fills Reviewed, expired early (spec 2026-11-23 held reviewed
+    value, 5.9), with its own band, and Mechanical shows the engine's new value. A snapshot of
+    other data written with no refresh, which carries no review, leaves AAPL's review on the
+    older snapshot: the row shows the engine's value and levels."""
     assert _rows(client)["AAL"]["reviewed"] is not None
     inputs = replace(young_growth_inputs(), symbol="AAL")
     valued = value_company(inputs, universe_deciles(), policy, TODAY)
     assert valued.value is not None
     _snapshot(db_path, valued)
     aal = _rows(client)["AAL"]
-    assert _agents(aal) == NO_AGENT
-    assert _levels(aal) == _engines(_newest(db_path, "AAL"))  # as stored: the same policy
-    assert aal["fairValue"] == aal["mechanical"] == valued.value
+    with closing(connect(db_path)) as conn:
+        secondary = secondary_row(conn, secondaries["AAL"])
+    assert secondary is not None
+    assert (aal["reviewed"], aal["mechanical"]) == (secondary.value_per_share, valued.value)
+    assert (aal["freshness"], aal["expiredEarly"]) == ("expired", True)
+    moat = _table_moat(db_path, "AAL")
+    assert moat is not None and aal["fairValue"] == secondary.value_per_share
+    assert _levels(aal) == _in_force(secondary.value_per_share, moat, valued.price, policy)
     _, value = _review(db_path, policy, results)
     assert _rows(client)["AAPL"]["fairValue"] == value
     cited = results["AAPL"]

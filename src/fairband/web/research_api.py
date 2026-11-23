@@ -94,6 +94,8 @@ from fairband.web.rows import (
     held_block,
     record_standing,
     rested_on,
+    secondary_block,
+    secondary_made_on,
     window_ended,
 )
 
@@ -124,6 +126,11 @@ def agent_records(
     item = open_item(conn, symbol)
     table_moat = _moat(conn, symbol)
     counted = review if review is not None and counts_on(snapshot, cited, review) else None
+    # A secondary valuation made where the route refused holds (spec 2026-11-23 held reviewed
+    # value, 5.9), with its state. One made on a valued snapshot, from before the secondary route
+    # refused such a call, is served while it counts on the latest snapshot, as before.
+    made_on = secondary_made_on(snapshot, cited, secondary)
+    shown = secondary is not None and (made_on is not None or counts_on(snapshot, cited, secondary))
     return {
         "review": (
             None
@@ -141,9 +148,14 @@ def agent_records(
         "priceNeeds": _price_needs(snapshot, counted, policy, table_moat),
         "moat": table_moat,
         "secondary": (
-            _secondary(secondary, snapshot.price, policy, table_moat)
-            if secondary is not None and counts_on(snapshot, cited, secondary)
-            else None
+            None
+            if secondary is None or not shown
+            else _secondary(secondary, snapshot.price, policy, table_moat)
+            | {
+                "held": (
+                    None if made_on is None else secondary_block(made_on, snapshot, policy, today)
+                )
+            }
         ),
         "report": (
             None

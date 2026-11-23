@@ -51,10 +51,11 @@ from typing import Any
 
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
-from fairband.engine.held import held_state
+from fairband.engine.held import held_state, secondary_state
 from fairband.engine.levels import Standing, moat_of, standing_for, validity_state
 from fairband.engine.types import PHASE_NUMBER, Levels, money_of, result_to_json
 from fairband.policy import Moat, Policy
+from fairband.refresh.held import trailing_end_of
 from fairband.refresh.run import UNCLASSIFIED, Progress
 from fairband.reports.refs import same_snapshot_rows
 from fairband.store.companies import CompanyRow
@@ -280,17 +281,15 @@ def agent_fields(
             "flags": review.result.flags,
             "held": held_block(review, held, policy, today),
         }
-    elif (
-        snapshot.value is None
-        and secondary is not None
-        and secondary.value_per_share > 0
-        and counts_on(snapshot, cited, secondary)
-    ):
-        value = secondary.value_per_share
-        fields |= {
-            "reviewed": value,
-            "levels": _record_levels(value, table_moat, secondary, snapshot.price, policy),
-        }
+    else:
+        made_on = secondary_made_on(snapshot, cited, secondary)
+        if secondary is not None and made_on is not None and secondary.value_per_share > 0:
+            value = secondary.value_per_share
+            fields |= {
+                "reviewed": value,
+                "levels": _record_levels(value, table_moat, secondary, snapshot.price, policy),
+                "held": secondary_block(made_on, snapshot, policy, today),
+            }
     if report is not None:
         fields["agentStance"] = report.stance
         fields["covered"] = {
@@ -335,6 +334,50 @@ def held_block(
         "readingRefusal": state.reading_refusal,
         "readingLine": state.reading_line,
         "validUntil": result.valid_until.isoformat(),
+    }
+
+
+def secondary_made_on(
+    snapshot: SnapshotRow, cited: Mapping[int, SnapshotRow], secondary: SecondaryRow | None
+) -> SnapshotRow | None:
+    """The snapshot ``secondary`` was made on, when the secondary valuation holds the company's
+    row (spec 2026-11-23 held reviewed value, 5.9): the company's newest, made where the route
+    refused. It holds whatever snapshot is the latest, until an agent makes a newer one or a made
+    review values the company, which the caller reads first; it fills the Reviewed column where
+    its value a share is above zero, which the caller reads too. ``None`` otherwise: for no
+    secondary valuation, for one made on a snapshot the route valued, which filled no row before
+    the secondary route refused such a call and fills none now, and for one whose snapshot is
+    not on file."""
+    if secondary is None:
+        return None
+    made_on = _rests_on(snapshot, cited, secondary)
+    return made_on if made_on is not None and made_on.value is None else None
+
+
+def secondary_block(
+    made_on: SnapshotRow, snapshot: SnapshotRow, policy: Policy, today: date
+) -> dict[str, Any]:
+    """The state of a held secondary valuation made on ``made_on`` as the API serves it, in the
+    shape of a review's (``held_block``): by the window of ``made_on``, and expired early when
+    the latest ``snapshot`` holds a newer period or a value of the route's
+    (``engine.held.secondary_state``). It has no reading."""
+    state = secondary_state(
+        valid_from=made_on.data_date,
+        valid_until=made_on.valid_until,
+        made_period=trailing_end_of(made_on.result),
+        latest_period=trailing_end_of(snapshot.result),
+        route_value=snapshot.value,
+        today=today,
+        aging_fraction=policy.aging_fraction,
+    )
+    return {
+        "state": state.state,
+        "earlyAt": None,
+        "reasons": list(state.reasons),
+        "reading": None,
+        "readingRefusal": None,
+        "readingLine": None,
+        "validUntil": made_on.valid_until.isoformat(),
     }
 
 

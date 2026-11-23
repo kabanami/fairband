@@ -137,3 +137,32 @@ def _percent(change: float) -> str:
 
 def _day(d: date) -> str:
     return f"{d.day} {d:%b %Y}"
+
+
+def secondary_state(
+    *,
+    valid_from: date,
+    valid_until: date,
+    made_period: date | None,
+    latest_period: date | None,
+    route_value: float | None,
+    today: date,
+    aging_fraction: float,
+) -> HeldState:
+    """The state of a held secondary valuation (spec 2026-11-23 held reviewed value, 5.9), whose
+    window, the one of the snapshot it was made on, runs from ``valid_from`` to ``valid_until``.
+    It is expired early while a newer period is on file than the one it was made on
+    (``latest_period`` after ``made_period``; without both the reason is not read), with the
+    review's first sentence, or while the route values the company, ``route_value`` a share:
+    "The route now values the company, at $X.". Else it reads by its date. It has no reading,
+    and no refresh stores a day for it."""
+    reasons: list[str] = []
+    if made_period is not None and latest_period is not None and latest_period > made_period:
+        reasons.append(f"The company has reported a newer period (to {_day(latest_period)}).")
+    if route_value is not None:
+        reasons.append(f"The route now values the company, at ${route_value:,.2f}.")
+    if reasons:
+        state: State = "expired-early"
+    else:
+        state = validity_state(valid_from, valid_until, today, aging_fraction)
+    return HeldState(state, None, tuple(reasons), None, None, None)

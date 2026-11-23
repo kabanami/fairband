@@ -422,7 +422,19 @@ def test_a_refused_row_carries_its_counting_secondary(
         "createdAt": "2026-10-31T22:15:00+00:00",
         "principal": "agent",
         "actor": "claude-opus-5-5",
+        # it holds the row, by the window of the snapshot it was made on (spec 2026-11-23 held
+        # reviewed value, 5.9)
+        "held": {
+            "state": found["held"]["state"],
+            "earlyAt": None,
+            "reasons": [],
+            "reading": None,
+            "readingRefusal": None,
+            "readingLine": None,
+            "validUntil": refused.valid_until.isoformat(),
+        },
     }
+    assert found["held"]["state"] in ("current", "aging", "expired")
     (part,) = found["parts"]
     assert (part["name"], part["note"], part["value"]) == (
         "the business",

@@ -858,6 +858,21 @@ def test_a_report_and_a_reading_need_a_review_no_refresh_read_again() -> None:
     assert refusal in reading and "under a held review that a refresh read again" in reading
 
 
+def test_a_secondary_valuation_holds_its_row() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.9: section 15 says the newest secondary valuation
+    made where the route refused fills its row until a newer one or a made review that values the
+    company, how it expires, and that it has no reading and no Review again."""
+    secondary = _section(15)
+    for words in (
+        "It holds the row (spec 2026-11-23 held reviewed value, 5.9)",
+        "until an agent makes a newer one or a made review values the company",
+        '"The route now values the company, at $X."',
+        "It has no reading and no Review again",
+        "fills no row",
+    ):
+        assert words in secondary, words
+
+
 def test_a_held_value_s_state_and_its_sentences() -> None:
     """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
     sentences, says which stay and which can end, and what the row and the detail carry; 4.10
