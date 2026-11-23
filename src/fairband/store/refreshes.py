@@ -167,6 +167,14 @@ def latest_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
     return None if row is None else _refresh(row)
 
 
+def recent_refreshes(conn: sqlite3.Connection, limit: int = 20) -> list[RefreshRow]:
+    """The ``limit`` refreshes with the greatest ids, the newest first, whatever their status:
+    the page reads them to follow a run that ended between two of its reads (spec 2026-11-23
+    refresh experience, 4.3)."""
+    rows = conn.execute("SELECT * FROM refreshes ORDER BY id DESC LIMIT ?", (limit,))
+    return [_refresh(row) for row in rows]
+
+
 def latest_shown_refresh(conn: sqlite3.Connection) -> RefreshRow | None:
     """The refresh the page's status line describes: the one with the greatest id, passing over
     a revalue that names its companies and finished ``done``. A moat write records such a revalue

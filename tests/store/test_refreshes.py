@@ -19,6 +19,7 @@ from fairband.store.refreshes import (
     latest_refresh,
     latest_shown_refresh,
     mark_interrupted,
+    recent_refreshes,
     save_deciles,
     set_stage,
     upsert_item,
@@ -152,6 +153,28 @@ def test_save_deciles_and_latest_deciles(conn: sqlite3.Connection) -> None:
     assert latest_deciles(conn) == Deciles(edges, margin_edges, 1200, 980, second)
     computed = conn.execute("select computed_at from deciles where refresh_id = ?", (second,))
     assert computed.fetchone()[0] == "2026-11-01T09:35:00+00:00"
+
+
+def test_recent_refreshes_are_the_newest_first_whatever_their_status(
+    conn: sqlite3.Connection,
+) -> None:
+    """The ``limit`` refreshes with the greatest ids, 20 unless told, the newest first: the page
+    reads them to follow a run that ended between two of its reads (spec 2026-11-23 refresh
+    experience, 4.3)."""
+    assert recent_refreshes(conn) == []
+    statuses: tuple[Finished, ...] = ("done", "failed", "cancelled", "interrupted")
+    started = []
+    for n in range(24):
+        started.append(_start(conn))
+        finish_refresh(conn, started[-1], statuses[n % 4], T1)
+    started.append(_start(conn, "revalue", ["KO"]))  # running
+    recent = recent_refreshes(conn)
+    assert [r.id for r in recent] == started[:4:-1]
+    assert recent[0] == latest_refresh(conn)
+    assert (recent[0].status, recent[0].symbols) == ("running", ("KO",))
+    assert [r.status for r in recent[1:5]] == ["interrupted", "cancelled", "failed", "done"]
+    assert [r.id for r in recent_refreshes(conn, limit=3)] == started[:-4:-1]
+    assert not conn.in_transaction
 
 
 def test_latest_full_refresh_is_the_newest_done(conn: sqlite3.Connection) -> None:

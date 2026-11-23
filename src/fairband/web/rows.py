@@ -799,9 +799,12 @@ def snapshot_json(snapshot: SnapshotRow) -> dict[str, Any]:
 
 
 def refresh_json(refresh: RefreshRow) -> dict[str, Any]:
+    """The refresh's record, with ``symbols`` the companies it names, or ``None`` for a run of
+    the whole screen (spec 2026-11-23 refresh experience, 4.1)."""
     return {
         "id": refresh.id,
         "kind": refresh.kind,
+        "symbols": _symbols(refresh.symbols),
         "status": refresh.status,
         "stage": refresh.stage,
         "startedAt": refresh.started_at.isoformat(),
@@ -811,16 +814,38 @@ def refresh_json(refresh: RefreshRow) -> dict[str, Any]:
     }
 
 
-def progress_json(progress: Progress, kind: str | None) -> dict[str, Any]:
+def recent_json(refresh: RefreshRow) -> dict[str, Any]:
+    """One of the newest refreshes, as ``/api/refresh/current`` lists them while no run is alive:
+    enough for the page to follow a run that ended between two of its reads (spec 2026-11-23
+    refresh experience, 4.3)."""
+    return {
+        "id": refresh.id,
+        "kind": refresh.kind,
+        "symbols": _symbols(refresh.symbols),
+        "status": refresh.status,
+    }
+
+
+def progress_json(
+    progress: Progress, kind: str | None, symbols: tuple[str, ...] | None
+) -> dict[str, Any]:
+    """The running refresh's progress, with the kind and the companies its record names:
+    ``symbols`` is ``None`` for a run of the whole screen, for which the page locks (spec
+    2026-11-23 refresh experience, 4.1), and both are ``None`` when the record is not known."""
     return {
         "id": progress.refresh_id,
         "kind": kind,
+        "symbols": _symbols(symbols),
         "stage": progress.stage,
         "done": progress.done,
         "failed": progress.failed,
         "remaining": progress.remaining,
         "current": progress.current,
     }
+
+
+def _symbols(symbols: tuple[str, ...] | None) -> list[str] | None:
+    return None if symbols is None else list(symbols)
 
 
 def _table(intermediates: dict[str, Any], name: str) -> dict[str, Any]:

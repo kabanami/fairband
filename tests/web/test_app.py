@@ -354,6 +354,7 @@ def test_screen_envelope_columns_and_today(client: TestClient) -> None:
     assert body["refresh"] == {
         "id": 1,
         "kind": "full",
+        "symbols": None,
         "status": "done",
         "stage": "done",
         "startedAt": "2026-10-31T22:00:00+00:00",

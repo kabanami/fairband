@@ -46,6 +46,8 @@ KEY = "fake-fmp-key-0002"  # not a real key
 HOST = "http://127.0.0.1:8470"
 POST = {"X-Fairband-Request": "1"}
 MISSING_HEADER = {"detail": "missing X-Fairband-Request header"}
+# The current refresh's answer before any run.
+NO_RUN = {"refresh": None, "last": None, "shown": None, "error": None, "recent": []}
 # Each run's moat table, in place of the packaged file: the classes GuruFocus's Moat Scores gave
 # the fixtures' companies before method 1.8.
 MOAT = moat_table({"ACME": "Narrow", "BOLT": "None"})
@@ -53,16 +55,28 @@ MOAT = moat_table({"ACME": "Narrow", "BOLT": "None"})
 
 class Gate:
     """Stands in for ``fetch_company``: each fetch waits for ``release``, then reports its symbol
-    fetched with nothing called."""
+    fetched with nothing called. ``holding`` makes another step wait the same way."""
 
     def __init__(self) -> None:
         self._entered = threading.Semaphore(0)
         self.release = threading.Event()
 
     def __call__(self, conn: Any, fmp: Any, symbol: str, *rest: Any) -> FetchOutcome:
+        self._wait()
+        return FetchOutcome(symbol, 0, 0, (), None)
+
+    def holding[**P, R](self, function: Callable[P, R]) -> Callable[P, R]:
+        """``function``, which waits for ``release`` before it runs, as a fetch does."""
+
+        def held(*args: P.args, **kwargs: P.kwargs) -> R:
+            self._wait()
+            return function(*args, **kwargs)
+
+        return held
+
+    def _wait(self) -> None:
         self._entered.release()
         self.release.wait(5)
-        return FetchOutcome(symbol, 0, 0, (), None)
 
     def wait_entered(self, fetches: int) -> None:
         """Wait until ``fetches`` fetches have started."""
@@ -182,6 +196,7 @@ def test_api_start_status_cancel(client_with_worker: TestClient, gate: Gate, db_
         "refresh": {
             "id": 1,
             "kind": "scoped",
+            "symbols": ["ACME", "BOLT"],
             "stage": "fetch",
             "done": 0,
             "failed": 0,
@@ -202,6 +217,7 @@ def test_api_start_status_cancel(client_with_worker: TestClient, gate: Gate, db_
     cancelled = {
         "id": 1,
         "kind": "scoped",
+        "symbols": ["ACME", "BOLT"],
         "status": "cancelled",
         "stage": "fetch",
         "startedAt": "2026-11-01T09:30:00+00:00",
@@ -214,6 +230,7 @@ def test_api_start_status_cancel(client_with_worker: TestClient, gate: Gate, db_
         "last": cancelled,
         "shown": cancelled,
         "error": None,
+        "recent": [{"id": 1, "kind": "scoped", "symbols": ["ACME", "BOLT"], "status": "cancelled"}],
     }
     # A cancel with no run alive changes nothing.
     assert client.post("/api/refresh/cancel", headers=POST).json() == {"cancelled": True}
@@ -360,12 +377,79 @@ def test_api_revalue_with_symbols(client_with_worker: TestClient, db_path: Path)
     assert snapshot is not None and (snapshot.refresh_id, snapshot.value) == (1, None)
 
 
+@pytest.mark.parametrize("symbols", [["ACME"], None])
+def test_a_run_names_its_companies_while_it_runs_and_after(
+    client_with_worker: TestClient,
+    gate: Gate,
+    monkeypatch: pytest.MonkeyPatch,
+    symbols: list[str] | None,
+) -> None:
+    """The page locks for a run of the whole screen alone (spec 2026-11-23 refresh experience,
+    4.1), and a revalue can be either: one of ACME names it, and one of every company names none,
+    while it runs, in the last refresh's record and at the head of the newest runs, which the
+    page reads to follow a run that ended between two of its reads (4.3). A price refresh names
+    none. The revalue's moat stage waits on the gate, as a fetch does."""
+    client = client_with_worker
+    assert start(client, kind="price").json() == {"refreshId": 1}
+    join_runs()
+    price = current(client)["last"]
+    assert (price["kind"], price["status"], price["symbols"]) == ("price", "done", None)
+
+    monkeypatch.setattr(run_module, "load_moat_file", gate.holding(run_module.load_moat_file))
+    assert start(client, kind="revalue", symbols=symbols).json() == {"refreshId": 2}
+    gate.wait_entered(1)
+    assert current(client) == {
+        "refresh": {
+            "id": 2,
+            "kind": "revalue",
+            "symbols": symbols,
+            "stage": "moat",
+            "done": 0,
+            "failed": 0,
+            "remaining": 0,
+            "current": None,
+        }
+    }
+    gate.release.set()
+    join_runs()
+    body = current(client)
+    assert (body["last"]["id"], body["last"]["status"], body["last"]["symbols"]) == (
+        2,
+        "done",
+        symbols,
+    )
+    assert body["recent"] == [
+        {"id": 2, "kind": "revalue", "symbols": symbols, "status": "done"},
+        {"id": 1, "kind": "price", "symbols": None, "status": "done"},
+    ]
+
+
+def test_recent_holds_the_twenty_newest_runs(
+    client_without_worker: TestClient, db_path: Path
+) -> None:
+    """With no run alive the route answers the 20 newest runs, the newest first, each with its
+    id, kind, companies and status (spec 2026-11-23 refresh experience, 4.3)."""
+    with closing(connect(db_path)) as conn:
+        for n in range(25):
+            kind, named = ("scoped", ["ACME"]) if n % 2 else ("full", None)
+            refresh_id = create_refresh(
+                conn, kind, named, "fairband-policy-v1", METHOD_VERSION, NOW, EMPTY_SETTINGS_HASH
+            )
+            finish_refresh(conn, refresh_id, "done", NOW)
+    recent = current(client_without_worker)["recent"]
+    assert [run["id"] for run in recent] == list(range(25, 5, -1))
+    assert recent[:2] == [
+        {"id": 25, "kind": "full", "symbols": None, "status": "done"},
+        {"id": 24, "kind": "scoped", "symbols": ["ACME"], "status": "done"},
+    ]
+
+
 def test_api_without_worker_503(client_without_worker: TestClient) -> None:
     client = client_without_worker
     response = start(client, kind="full")
     assert response.status_code == 503
     assert response.json() == {"detail": "no refresh worker"}
-    assert current(client) == {"refresh": None, "last": None, "shown": None, "error": None}
+    assert current(client) == NO_RUN
     assert client.post("/api/refresh/cancel", headers=POST).json() == {"cancelled": True}
 
 
@@ -486,7 +570,7 @@ def test_start_under_a_stored_setting_outside_its_range_is_400(
         assert detail == (
             "settings: required_return: must be from 4% to 20%; reset it on the Settings page"
         )
-        assert current(client) == {"refresh": None, "last": None, "shown": None, "error": None}
+        assert current(client) == NO_RUN
 
 
 def test_start_closes_the_previous_runs_clients(db_path: Path, policy: Policy) -> None:
@@ -618,7 +702,7 @@ def test_serve_without_an_fmp_key_runs_a_revalue_only(
     ]
     response, body = served
     assert (response.status_code, response.json()) == (400, {"detail": str(MissingKey("fmp"))})
-    assert body == {"refresh": None, "last": None, "shown": None, "error": None}
+    assert body == NO_RUN
     assert "fakegfhalf" not in caplog.text
 
 

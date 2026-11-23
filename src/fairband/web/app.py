@@ -135,6 +135,7 @@ from fairband.store.refreshes import (
     latest_refresh,
     latest_shown_refresh,
     mark_interrupted,
+    recent_refreshes,
 )
 from fairband.store.reports import latest_reports
 from fairband.store.research import notes_for
@@ -172,6 +173,7 @@ from fairband.web.rows import (
     group_rows,
     placeholder_row,
     progress_json,
+    recent_json,
     refresh_json,
     rested_on,
     result_json,
@@ -525,22 +527,27 @@ def create_app(
 
     @app.get("/api/refresh/current")
     def refresh_current() -> dict[str, Any]:
-        """The running refresh's progress and kind; with none running, the last refresh's record,
-        the record the page's status line describes (``shown``: the last one, passing over a
-        finished revalue of named companies, which a moat write records) and the error the last
-        run raised, if any."""
+        """The running refresh's progress, kind and companies (``symbols``, ``None`` for a run of
+        the whole screen; spec 2026-11-23 refresh experience, 4.1); with none running, the last
+        refresh's record, the record the page's status line describes (``shown``: the last one,
+        passing over a finished revalue of named companies, which a moat write records), the
+        error the last run raised, if any, and the 20 newest runs, the newest first (``recent``,
+        by which the page follows a run that ended between two of its reads; 4.3)."""
         progress = None if worker is None else worker.status()
         with closing(conn_factory()) as conn:
             last = latest_refresh(conn)
             shown = latest_shown_refresh(conn)
+            recent = recent_refreshes(conn)
         if progress is not None:
-            kind = last.kind if last is not None and last.id == progress.refresh_id else None
-            return {"refresh": progress_json(progress, kind)}
+            run = last if last is not None and last.id == progress.refresh_id else None
+            kind, symbols = (None, None) if run is None else (run.kind, run.symbols)
+            return {"refresh": progress_json(progress, kind, symbols)}
         return {
             "refresh": None,
             "last": None if last is None else refresh_json(last),
             "shown": None if shown is None else refresh_json(shown),
             "error": None if worker is None else worker.last_error,
+            "recent": [recent_json(refresh) for refresh in recent],
         }
 
     @app.post("/api/refresh/cancel")
