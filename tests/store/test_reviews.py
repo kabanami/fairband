@@ -24,6 +24,7 @@ from fairband.store.reviews import (
     hold_review,
     insert_review,
     latest_review,
+    latest_review_on,
     latest_reviews,
     latest_secondary_value,
     latest_stance,
@@ -110,20 +111,38 @@ def test_a_review_reads_back_exactly(conn: sqlite3.Connection) -> None:
     assert found.result == result
 
 
-def test_the_current_review_is_the_newest_while_an_override_is_applied(
+def test_the_current_review_is_the_held_one_whatever_overrides_are_applied(
     conn: sqlite3.Connection,
 ) -> None:
-    assert latest_review(conn, "AAPL") is None
+    """Spec 2026-11-23 held reviewed value, 5.1 and 5.2: a company's current review is the made
+    review it holds, on the newest snapshot a refresh carried it onto. A reading is never it. It
+    stays when its override is dropped, as a refresh drops one, and ends when the held review is
+    cleared, as an agent's drop of the last override clears it. A copy of a review the company no
+    longer holds is not it either."""
+    assert latest_review(conn, "AAPL") is None and latest_review_on(conn, 4) is None
     override_id = _applied(conn, "AAPL")
     review = _review("AAPL", override_id)
-    first = insert_review(conn, review, "AAPL", 4, None, clock=lambda: NOW)
-    second = insert_review(conn, review, "AAPL", 5, 3, clock=lambda: LATER)
+    made = insert_review(conn, review, "AAPL", 4, None, clock=lambda: NOW)
+    insert_review(conn, review, "AAPL", 5, 3, kind="reading", made_id=made, clock=lambda: LATER)
     found = latest_review(conn, "AAPL")
-    assert found is not None and (found.id, found.snapshot_id) == (second, 5)
-    assert [r.id for r in reviews_for(conn, "AAPL")] == [second, first]
+    assert found is not None and (found.id, found.snapshot_id, found.kind) == (made, 4, "made")
+    assert latest_review_on(conn, 5) is None  # a reading alone is on snapshot 5
+    copy = insert_review(conn, review, "AAPL", 5, 3, kind="held", made_id=made, clock=lambda: LATER)
+    insert_review(conn, review, "AAPL", 5, 3, kind="reading", made_id=made, clock=lambda: LATER)
+    for found in (latest_review(conn, "AAPL"), latest_review_on(conn, 5)):
+        assert found is not None and (found.id, found.snapshot_id, found.kind) == (copy, 5, "held")
+    assert {s: r.id for s, r in latest_reviews(conn).items()} == {"AAPL": copy}
     drop_override(conn, override_id, "wrong", LATER)
-    assert latest_review(conn, "AAPL") is None  # the drop of the last override clears it
-    assert [r.id for r in reviews_for(conn, "AAPL")] == [second, first]  # the history stays
+    found = latest_review(conn, "AAPL")
+    assert found is not None and found.id == copy  # a dropped override does not end it
+    again = insert_review(conn, review, "AAPL", 6, None, clock=lambda: LATER)
+    insert_review(conn, review, "AAPL", 7, 4, kind="held", made_id=made, clock=lambda: LATER)
+    found = latest_review(conn, "AAPL")
+    assert found is not None and found.id == again  # the copy of the review held before is not
+    assert {s: r.id for s, r in latest_reviews(conn).items()} == {"AAPL": again}
+    clear_held(conn, "AAPL")
+    assert latest_review(conn, "AAPL") is None and latest_reviews(conn) == {}
+    assert len(reviews_for(conn, "AAPL")) == 6  # the history stays
 
 
 def test_latest_reviews_with_two_companies(conn: sqlite3.Connection) -> None:
@@ -132,7 +151,7 @@ def test_latest_reviews_with_two_companies(conn: sqlite3.Connection) -> None:
     newest = insert_review(conn, _review("AAPL", apple), "AAPL", 3, 2, clock=lambda: LATER)
     other = insert_review(conn, _review("MSFT", micro), "MSFT", 2, None, clock=lambda: NOW)
     insert_review(conn, _review("GONE", gone), "GONE", 4, None, clock=lambda: NOW)
-    drop_override(conn, gone, "wrong", LATER)
+    clear_held(conn, "GONE")
     found = latest_reviews(conn)
     assert list(found) == ["AAPL", "MSFT"]
     assert (found["AAPL"].id, found["MSFT"].id) == (newest, other)

@@ -245,7 +245,13 @@ from fairband.store.overrides import (
     set_review,
 )
 from fairband.store.refreshes import latest_deciles
-from fairband.store.reviews import ReviewRow, latest_review, review_log, reviews_for
+from fairband.store.reviews import (
+    ReviewRow,
+    clear_held,
+    latest_review,
+    review_log,
+    reviews_for,
+)
 from fairband.store.secondary import (
     GRID_ROWS,
     BalanceSource,
@@ -442,13 +448,16 @@ def add_review_routes(
         conn: sqlite3.Connection, symbol: str, snapshot: SnapshotRow, current: Policy
     ) -> tuple[int | None, _Dropped]:
         """The company's review over its applied overrides on ``snapshot``, written, once the
-        system has dropped those the row's route does not read (``reviews.drop_off_route``);
-        ``None`` with none left; and the overrides so dropped, each with its reason."""
+        system has dropped those the row's route does not read (``reviews.drop_off_route``): a
+        made review, which the company holds from here on (spec 2026-11-23 held reviewed value,
+        5.1). ``None`` with none left, and the company then holds no review: a person's act
+        left no override applied. With it, the overrides so dropped, each with its reason."""
         applied = applied_overrides(conn, symbol)
         dropped = drop_off_route(conn, applied, snapshot.result.phase.phase, snapshot.id, clock)
         gone = {o.id for o, _ in dropped}
         kept = [o for o in applied if o.id not in gone]
         if not kept:
+            clear_held(conn, symbol)
             return None, dropped
         today = clock().date()
         inputs, deciles = built_inputs(conn, snapshot, current, tax, today)

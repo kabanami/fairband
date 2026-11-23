@@ -58,7 +58,7 @@ from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import applied_overrides, drop_override, insert_override
 from fairband.store.research import add_finding, add_kill_criterion
-from fairband.store.reviews import insert_review, review_row
+from fairband.store.reviews import clear_held, insert_review, review_row
 from fairband.store.secondary import insert_derivation, no_secondary
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, snapshot_row
 from fairband.store.vendor import record_response
@@ -1298,9 +1298,11 @@ def test_a_review_cite_must_be_the_current_review(
         return check_sections(conn, "AAPL", repriced, sections, policy)
 
     assert on_the_reprice(f"review:{current}/value") == []
-    # with every override dropped the company has no current review
+    # with every override dropped by an agent the company holds no review (the web's write
+    # clears it: spec 2026-11-23 held reviewed value, 5.1)
     for row in applied_overrides(conn, "AAPL"):
         drop_override(conn, row.id, "withdrawn", NOW)
+    clear_held(conn, "AAPL")
     found = _one(on_the_reprice(f"review:{reprice_review}/value"), sid, value)
     assert found.detail == (
         f"review:{reprice_review}/value is not the company's current review: the company has none"

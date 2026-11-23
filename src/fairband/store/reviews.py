@@ -24,9 +24,11 @@ day a refresh first found a reason. ``insert_review`` names a made review as the
 same transaction (``hold_review``), its state empty; ``clear_held`` removes the row, and
 ``set_held_state`` writes the facts.
 
-The company's current review (``latest_review``, ``latest_reviews``) is its newest while an
-override is applied: a drop of the last one clears it, as a period-tied override dropped at a
-refresh with none left does, and no review is written in its place.
+The company's current review (``latest_review``, ``latest_reviews``) is the review it holds, on
+the newest snapshot it stands on: the made review itself, or the newest held copy of it. A
+reading is never the current review, nor is a copy of a review the company held before. A
+company that holds none has none: ``clear_held`` ends it, and the applied overrides do not decide
+it. ``latest_review_on`` gives the newest made or held review on one snapshot.
 
 The log keeps one row for each review written (10.6): the time, the company, the refresh, the
 snapshot and the review; the mechanical phase and value; the reviewed phase and value (no value on
@@ -56,8 +58,8 @@ from fairband.store._codec import (
 )
 from fairband.store.db import transaction
 
-# A company's reviews count while it holds an applied override.
-_CURRENT = "symbol IN (SELECT symbol FROM overrides WHERE state = 'applied')"
+# A made review or a held copy of one, not a reading.
+_STANDS = "kind IN ('made', 'held')"
 
 ReviewKind = Literal["made", "held", "reading"]
 
@@ -246,8 +248,9 @@ def set_held_state(conn: sqlite3.Connection, state: HeldRow) -> None:
 def latest_review(conn: sqlite3.Connection, symbol: str) -> ReviewRow | None:
     """The company's current review (module docstring), if it has one."""
     row = conn.execute(
-        f"SELECT * FROM reviews WHERE symbol = ? AND {_CURRENT} ORDER BY id DESC LIMIT 1",
-        (symbol,),
+        f"SELECT * FROM reviews WHERE symbol = ? AND {_STANDS} AND COALESCE(made_id, id) ="
+        " (SELECT review_id FROM held_reviews WHERE symbol = ?) ORDER BY id DESC LIMIT 1",
+        (symbol, symbol),
     ).fetchone()
     return None if row is None else _review(row)
 
@@ -259,9 +262,11 @@ def review_row(conn: sqlite3.Connection, review_id: int) -> ReviewRow | None:
 
 
 def latest_review_on(conn: sqlite3.Connection, snapshot_id: int) -> ReviewRow | None:
-    """The newest review written on the snapshot ``snapshot_id``, current or not, if any."""
+    """The newest made or held review on the snapshot ``snapshot_id``, current or not, if
+    any; a reading on it is none."""
     row = conn.execute(
-        "SELECT * FROM reviews WHERE snapshot_id = ? ORDER BY id DESC LIMIT 1", (snapshot_id,)
+        f"SELECT * FROM reviews WHERE snapshot_id = ? AND {_STANDS} ORDER BY id DESC LIMIT 1",
+        (snapshot_id,),
     ).fetchone()
     return None if row is None else _review(row)
 
@@ -275,8 +280,9 @@ def reviews_for(conn: sqlite3.Connection, symbol: str) -> list[ReviewRow]:
 def latest_reviews(conn: sqlite3.Connection) -> dict[str, ReviewRow]:
     """The current review of every company that has one, by symbol."""
     rows = conn.execute(
-        "SELECT * FROM reviews WHERE id IN (SELECT MAX(id) FROM reviews GROUP BY symbol)"
-        f" AND {_CURRENT} ORDER BY symbol"
+        "SELECT * FROM reviews WHERE id IN (SELECT MAX(r.id) FROM reviews r"
+        " JOIN held_reviews h ON h.symbol = r.symbol AND h.review_id = COALESCE(r.made_id, r.id)"
+        f" WHERE r.{_STANDS} GROUP BY r.symbol) ORDER BY symbol"
     )
     return {r["symbol"]: _review(r) for r in rows}
 

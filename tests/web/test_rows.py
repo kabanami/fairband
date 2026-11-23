@@ -44,7 +44,7 @@ from fairband.store.ledger import OWNER, Writer
 from fairband.store.moat import moat_row
 from fairband.store.overrides import drop_override, insert_override
 from fairband.store.reports import insert_report
-from fairband.store.reviews import ReviewRow, insert_review, latest_review
+from fairband.store.reviews import ReviewRow, clear_held, insert_review, latest_review
 from fairband.store.secondary import SecondaryRow, insert_secondary, secondary_row
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
@@ -326,12 +326,18 @@ def test_a_review_on_an_older_snapshot_is_not_the_rows_reviewed_value(
     assert (aapl["reviewed"], aapl["overrides"], aapl["mechanical"]) == (None, 0, cited.value + 1.0)
 
 
-def test_a_dropped_override_leaves_no_reviewed_value(
+def test_a_cleared_review_leaves_no_reviewed_value(
     client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
-    override_id, _ = _review(db_path, policy, results)
+    """Spec 2026-11-23 held reviewed value, 5.1: a dropped override alone does not end the review
+    the company holds, as a refresh's drop does not; the row is mechanical again once the held
+    review is cleared, as an agent's drop of the last override clears it."""
+    override_id, value = _review(db_path, policy, results)
     with closing(connect(db_path)) as conn:
         drop_override(conn, override_id, "guidance withdrawn", NOW)
+    assert _rows(client)["AAPL"]["reviewed"] == value
+    with closing(connect(db_path)) as conn:
+        clear_held(conn, "AAPL")
     assert _agents(_rows(client)["AAPL"]) == NO_AGENT
 
 
