@@ -151,10 +151,6 @@ def test_the_tint_fades_in_1_2_seconds_and_only_the_bar_stops_under_reduced_moti
         ),
         "@keyframes fb-gone { from { opacity: 1; } to { opacity: 0; } }",
         ".fb-changed { animation: fb-changed 1.2s ease-out; }",
-        (
-            ".fb-screen__move { color: var(--ink-muted); font-size: 10px; margin-right: 4px; "
-            "animation: fb-gone 1.2s ease-out forwards; }"
-        ),
         ".fb-run__seg { transition: width 200ms ease-out; }",
         "@media (prefers-reduced-motion: reduce) { .fb-run__seg { transition: none; } }",
     ):
@@ -162,6 +158,32 @@ def test_the_tint_fades_in_1_2_seconds_and_only_the_bar_stops_under_reduced_moti
     assert re.findall(r"prefers-reduced-motion[^{]*\{([^}]*\})", block) == [
         " .fb-run__seg { transition: none; }"
     ]
+
+
+def test_the_arrow_takes_no_room_beside_the_price() -> None:
+    """The look in a browser (2026-11-24): an arrow set in the line widened the price's column by
+    its glyph and its gap, so every column of the Screen moved about 11px as the arrows came and
+    again as they went, and on a narrow window it moved the company page's price, whose head
+    wraps, by 10px. The arrow is a box of no width and no height on the price's baseline, its
+    glyph set from the box's right edge 4px before the price, in ink-muted, fading with the tint:
+    no column and no line moves."""
+    css = _component_file("bundle.css")
+    block = css[css.index("/* fairband: the end signal (spec 2026-11-23 refresh experience") :]
+    [rule] = re.findall(r"\n\.fb-screen__move \{([^}]*)\}", block)
+    declared = {
+        name.strip(): value.strip()
+        for name, value in (part.split(":", 1) for part in rule.split(";") if part.strip())
+    }
+    assert declared == {
+        "display": "inline-block",
+        "width": "0",
+        "direction": "rtl",
+        "text-indent": "4px",
+        "line-height": "0",
+        "color": "var(--ink-muted)",
+        "font-size": "10px",
+        "animation": "fb-gone 1.2s ease-out forwards",
+    }
 
 
 def test_no_rule_of_the_bundle_selects_the_methodology_page_s_class() -> None:

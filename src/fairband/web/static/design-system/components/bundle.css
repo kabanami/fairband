@@ -1156,6 +1156,10 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 @keyframes fb-changed { from { background-color: color-mix(in srgb, var(--border) 45%, transparent); } to { background-color: transparent; } }
 @keyframes fb-gone { from { opacity: 1; } to { opacity: 0; } }
 .fb-changed { animation: fb-changed 1.2s ease-out; }
-.fb-screen__move { color: var(--ink-muted); font-size: 10px; margin-right: 4px; animation: fb-gone 1.2s ease-out forwards; }
+/* fairband: the arrow takes no room (spec 2026-11-23 refresh experience, 4.2; the look in a
+   browser, 2026-11-24), so no column of the Screen and no price of the company page's head moves
+   as it comes and goes: a box of no width and no height on the price's baseline, its glyph set
+   from the box's right edge, 4px before the price, into the cell's padding. */
+.fb-screen__move { display: inline-block; width: 0; direction: rtl; text-indent: 4px; line-height: 0; color: var(--ink-muted); font-size: 10px; animation: fb-gone 1.2s ease-out forwards; }
 .fb-run__seg { transition: width 200ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .fb-run__seg { transition: none; } }
