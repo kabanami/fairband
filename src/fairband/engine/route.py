@@ -586,7 +586,8 @@ def reprice(
         im |= decline_at_price(im, in_local, in_currency_value, local)
     else:
         im |= stable_at_price(im, in_local, in_currency_value, local)
-    price_to_value, designation = designation_for(price, value, policy.designation_edges)
+    # the row's own edges: the first is its moat class's buy level (spec 2026-11-23 thresholds 5.2)
+    price_to_value, designation = designation_for(price, value, policy.edges_for(im["moat"]))
     return replace(
         result,
         value=value,
@@ -653,7 +654,7 @@ def _valued(
     price against it (spec 2026-11-10 7.2); its inputs the base inputs, then ``moat``, the moat
     class's entry, then the route's."""
     value = v.value / i.fx_rate
-    price_to_value, designation = designation_for(price, value, policy.designation_edges)
+    price_to_value, designation = designation_for(price, value, policy.edges_for(v.moat))
     return ValuationResult(
         symbol=i.symbol,
         route=v.route,

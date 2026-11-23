@@ -393,7 +393,6 @@ def value_decline(c: Context) -> Valued | Refused:
         rule(policy, "z_distress", policy.z_distress, "score"),
         rule(policy, "z_safe", policy.z_safe, "score"),
         rule(policy, "f_score_low", policy.f_score_low, "score"),
-        rule(policy, "margin_of_safety", policy.margin_of_safety[moat], "ratio", f"{moat} moat"),
         *_peer_rules(c, used),
     )
     value, outside = e.value_per_share, outside_value(c)

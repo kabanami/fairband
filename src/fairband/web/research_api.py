@@ -65,10 +65,11 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
+from fairband.engine.levels import Standing
 from fairband.engine.overrides import LABELS, TAGS, unit_in
 from fairband.engine.price_needs import price_needs
 from fairband.engine.types import ValuationResult, money_of
-from fairband.policy import Policy
+from fairband.policy import Moat, Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.reports.render import references
@@ -88,7 +89,7 @@ from fairband.web.agents_api import criterion_json, finding_json, record_json
 from fairband.web.guidance_api import guidance_json
 from fairband.web.launch_api import launch_json
 from fairband.web.reviews_api import secondary_json
-from fairband.web.rows import counts_on, rested_on, standing, window_ended
+from fairband.web.rows import counts_on, moat_of, record_standing, rested_on, window_ended
 
 LEDGER_ROWS = 20  # the company's newest ledger rows the research read answers
 # Each input's bridge label and unit by its tag as a stored bridge line names it.
@@ -115,20 +116,24 @@ def agent_records(
     report = latest_report(conn, symbol)
     cited = snapshot_rows(conn, rested_on(snapshot, review, secondary, report))
     item = open_item(conn, symbol)
-    edges = policy.designation_edges
+    table_moat = _moat(conn, symbol)
     counted = review if review is not None and counts_on(snapshot, cited, review) else None
     return {
         "review": (
             None
             if counted is None
             else _review(
-                counted, {o.id: o for o in overrides_for(conn, symbol)}, snapshot.price, edges
+                counted,
+                {o.id: o for o in overrides_for(conn, symbol)},
+                snapshot.price,
+                policy,
+                table_moat,
             )
         ),
-        "priceNeeds": _price_needs(snapshot, counted, edges),
-        "moat": _moat(conn, symbol),
+        "priceNeeds": _price_needs(snapshot, counted, policy, table_moat),
+        "moat": table_moat,
         "secondary": (
-            _secondary(secondary, snapshot.price, edges)
+            _secondary(secondary, snapshot.price, policy, table_moat)
             if secondary is not None and counts_on(snapshot, cited, secondary)
             else None
         ),
@@ -186,47 +191,41 @@ def research_records(conn: sqlite3.Connection, company: str) -> dict[str, Any]:
     }
 
 
-def _levels(
-    buy: float | None, fair_low: float | None, fair_high: float | None, trim: float | None
-) -> dict[str, float] | None:
-    if buy is None or fair_low is None or fair_high is None or trim is None:
-        return None
-    return {"buy": buy, "fairLow": fair_low, "fairHigh": fair_high, "trim": trim}
-
-
-def _standing(
-    value: float | None,
-    levels: dict[str, float] | None,
-    price: float | None,
-    edges: tuple[float, float, float, float],
-) -> tuple[float | None, str | None]:
-    """Price ÷ ``value`` and its word at ``price`` on ``edges`` (``rows.standing``, which the
-    screen's row reads too, so the drawer and the row say one word); ``None`` without levels, a
-    value above zero or a positive price."""
-    if levels is None:
-        return None, None
-    return standing(value, price, edges)
+def _served(found: Standing | None) -> tuple[dict[str, float] | None, float | None, str | None]:
+    """A record's standing as the detail serves it: its levels ``{buy, fairLow, fairHigh, trim}``,
+    price ÷ value and the word; ``None`` for each without one."""
+    if found is None:
+        return None, None, None
+    levels = found.levels
+    served = {
+        "buy": levels.buy,
+        "fairLow": levels.fair_low,
+        "fairHigh": levels.fair_high,
+        "trim": levels.trim,
+    }
+    return served, found.price_to_value, found.designation
 
 
 def _price_needs(
-    snapshot: SnapshotRow, review: ReviewRow | None, edges: tuple[float, float, float, float]
+    snapshot: SnapshotRow, review: ReviewRow | None, policy: Policy, table_moat: Moat | None
 ) -> str | None:
     """What the price needs (``engine.price_needs``, ``method.md`` 4.11) of the value the meter
     draws: the counted ``review``'s when it has a value, read from the review's own result at
     its word at the latest snapshot's price, else the snapshot's; each with the required return
-    its own result read, so a row charged at r in every year gives that reason."""
+    its own result read, so a row charged at r in every year gives that reason. Each word is the
+    one the row shows, read on ``policy`` (``rows.record_standing``)."""
     if review is not None and review.value is not None:
-        levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
-        _, word = _standing(review.value, levels, snapshot.price, edges)
         reviewed = review.result
+        moat = moat_of(reviewed) or table_moat
+        _, _, word = _served(record_standing(review.value, moat, snapshot.price, policy, review))
         return price_needs(reviewed.route, reviewed.intermediates, word, _required_return(reviewed))
     result = snapshot.result
-    return price_needs(
-        result.route, result.intermediates, snapshot.designation, _required_return(result)
-    )
+    own = record_standing(snapshot.value, moat_of(result), snapshot.price, policy, snapshot)
+    word = None if own is None else own.designation
+    return price_needs(result.route, result.intermediates, word, _required_return(result))
 
 
-def _moat(conn: sqlite3.Connection, symbol: str) -> str | None:
+def _moat(conn: sqlite3.Connection, symbol: str) -> Moat | None:
     """The moat class in force (module docstring): the class of the company's row of the moat
     table, ``None`` without a row."""
     row = moat_row(conn, symbol)
@@ -247,12 +246,14 @@ def _review(
     review: ReviewRow,
     overrides: Mapping[int, OverrideRow],
     price: float | None,
-    edges: tuple[float, float, float, float],
+    policy: Policy,
+    table_moat: Moat | None,
 ) -> dict[str, Any]:
-    """The review, its designation at ``price``, the latest snapshot's, and its flags when it has
-    a value."""
-    levels = _levels(review.buy_level, review.fair_low, review.fair_high, review.trim_level)
-    ratio, word = _standing(review.value, levels, price, edges)
+    """The review, its levels and its designation at ``price``, the latest snapshot's, on
+    ``policy`` and its own moat class (``rows.record_standing``, which the screen's row reads
+    too, so the drawer and the row say one word), and its flags when it has a value."""
+    moat = moat_of(review.result) or table_moat
+    levels, ratio, word = _served(record_standing(review.value, moat, price, policy, review))
     flags = None if review.value is None else [asdict(f) for f in review.result.flags]
     return {
         "id": review.id,
@@ -297,14 +298,12 @@ def _line(line: Mapping[str, Any], override: OverrideRow | None, currency: str) 
 
 
 def _secondary(
-    secondary: SecondaryRow, price: float | None, edges: tuple[float, float, float, float]
+    secondary: SecondaryRow, price: float | None, policy: Policy, table_moat: Moat | None
 ) -> dict[str, Any]:
-    """The secondary valuation, its designation at ``price``, the latest snapshot's."""
+    """The secondary valuation, its levels and its designation at ``price``, the latest
+    snapshot's, on ``policy`` and the company's class in the moat table."""
     value = secondary.value_per_share
-    levels = _levels(
-        secondary.buy_level, secondary.fair_low, secondary.fair_high, secondary.trim_level
-    )
-    ratio, word = _standing(value, levels, price, edges)
+    levels, ratio, word = _served(record_standing(value, table_moat, price, policy, secondary))
     served = secondary_json(secondary)
     return {
         "id": secondary.id,

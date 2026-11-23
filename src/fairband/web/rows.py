@@ -16,6 +16,10 @@ published report's word, a column; and ``covered``, the coverage mark's record `
 expired}``, which no column draws and nothing sorts by, so it is no row key. Where ``reviewed`` is
 filled, the row's band, levels, price ÷ value and designation (``LEVEL_KEYS``) are the filling
 record's, the word at the latest price (18.1, plan 3); ``mechanical`` stays the snapshot's value.
+The levels and the word of every row, a mechanical one too, are read on the policy in force, from
+the record's stored value and its moat class (``record_standing``; spec 2026-11-23 thresholds,
+5.3): the thresholds move no value, so a change of one shows with no revalue, and the figures
+stored when the row was valued are not shown.
 Where a review fills it, the row's ``flags`` and ``flagCount`` read the review's flags too, which
 its stored result holds (spec 2026-11-13 8a); a secondary valuation has none, so a row it fills
 keeps the snapshot's. A row with no agent's record has ``NO_AGENT_FIELDS``. The fields are
@@ -30,15 +34,24 @@ mechanical value carries the mark: a value, no ``reviewed`` value and the policy
 agents' ``screen`` tool.
 """
 
+import json
 import statistics
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict
 from datetime import date
-from typing import Any
+from typing import Any, get_args
 
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
-from fairband.engine.levels import validity_state
-from fairband.engine.types import PHASE_NUMBER, money_of
+from fairband.engine.levels import Standing, standing_for, validity_state
+from fairband.engine.types import (
+    PHASE_NUMBER,
+    Levels,
+    ValuationResult,
+    money_of,
+    result_to_json,
+)
+from fairband.policy import Moat, Policy
 from fairband.refresh.run import UNCLASSIFIED, Progress
 from fairband.reports.refs import same_snapshot_rows
 from fairband.store.companies import CompanyRow
@@ -164,6 +177,68 @@ def rested_on(
     return {r.snapshot_id for r in records if r is not None and r.snapshot_id != snapshot.id}
 
 
+def moat_of(result: ValuationResult) -> Moat | None:
+    """The moat class the result was valued on, its intermediates' ``moat``; none without one (a
+    refusal before the class was read, or a result stored before the class was written)."""
+    found = result.intermediates.get("moat")
+    return found if found in get_args(Moat) else None
+
+
+def record_standing(
+    value: float | None,
+    moat: Moat | None,
+    price: float | None,
+    policy: Policy,
+    record: SnapshotRow | ReviewRow | SecondaryRow,
+) -> Standing | None:
+    """The levels, price ÷ value and word of ``record``, whose value is ``value``, at ``price``
+    (spec 2026-11-23 thresholds, 5.3): on ``policy``, the one in force, and the class ``moat``
+    (``levels.standing_for``), whatever policy the record was valued under. With no class, the
+    record's stored levels and the word the price has against them (``stored_standing``).
+    ``None`` without a value above zero, or with neither a class nor four stored levels."""
+    if value is None or value <= 0:
+        return None
+    if moat is not None:
+        return standing_for(value, moat, price, policy)
+    return stored_standing(value, price, record)
+
+
+def stored_standing(
+    value: float | None, price: float | None, record: SnapshotRow | ReviewRow | SecondaryRow
+) -> Standing | None:
+    """``record``'s levels as stored on the day it was made, and price ÷ ``value`` and the word
+    ``price`` has against them, the edges those levels over the value: under the buy level Well
+    below, and so on. A record of its day, whatever the policy in force: a published report's
+    card reads it (spec 2026-11-23 thresholds, 5.4), and so does a record no moat class is known
+    for. ``None`` without a value above zero or without four stored levels; no ratio and no word
+    without a price above zero."""
+    buy, low, high, trim = record.buy_level, record.fair_low, record.fair_high, record.trim_level
+    if value is None or value <= 0 or buy is None or low is None or high is None or trim is None:
+        return None
+    levels = Levels(buy=buy, fair_low=low, fair_high=high, trim=trim)
+    if price is None or price <= 0:
+        return Standing(levels, None, None)
+    edges = (buy / value, low / value, high / value, trim / value)
+    ratio, word = designation_for(price, value, edges)
+    return Standing(levels, ratio, word)
+
+
+def result_json(snapshot: SnapshotRow, policy: Policy) -> dict[str, Any]:
+    """The snapshot's result as the company detail serves it: ``result_to_json``'s dict with its
+    ``levels``, ``price_to_value`` and ``designation`` read on ``policy``, the one in force
+    (``record_standing``), so the drawer's meter and the agents' ``company`` tool show what the
+    screen's row shows (spec 2026-11-23 thresholds, 5.3). A refusal's are as stored, none."""
+    served: dict[str, Any] = json.loads(result_to_json(snapshot.result))
+    found = record_standing(
+        snapshot.value, moat_of(snapshot.result), snapshot.price, policy, snapshot
+    )
+    if found is not None:
+        served["levels"] = asdict(found.levels)
+        served["price_to_value"] = found.price_to_value
+        served["designation"] = found.designation
+    return served
+
+
 def agent_fields(
     snapshot: SnapshotRow,
     review: ReviewRow | None,
@@ -171,7 +246,8 @@ def agent_fields(
     report: ReportRow | None,
     cited: Mapping[int, SnapshotRow],
     today: date,
-    edges: tuple[float, float, float, float],
+    policy: Policy,
+    table_moat: Moat | None,
 ) -> dict[str, Any]:
     """The agents' fields of the row of the company's latest ``snapshot`` (spec 2026-11-06 Tier 2,
     18.1), from its current review, its newest secondary valuation and its latest published
@@ -183,9 +259,11 @@ def agent_fields(
     share when it counts and is above zero, with no override inside: spec 11's secondary is the
     fallback, standing in on the row where neither the route nor the review values the company (the
     review, read first, fills the row wherever it values it); else ``None`` and 0. ``levels`` are
-    the row's ``LEVEL_KEYS`` from the record that fills ``reviewed`` (plan 3): its value, its four
-    levels, and price ÷ value and its word at the snapshot's price on ``edges``, the effective
-    policy's (``standing``); ``None`` when ``reviewed`` is. ``flags`` are the review's flags when
+    the row's ``LEVEL_KEYS`` from the record that fills ``reviewed`` (plan 3): its value, and its
+    four levels, price ÷ value and word at the snapshot's price on ``policy``, the effective one
+    (``record_standing``), on the record's own moat class: a review's result's (``moat_of``), and
+    ``table_moat``, the class of the company's row of the moat table, for a secondary valuation
+    and for a review whose result holds none; ``None`` when ``reviewed`` is. ``flags`` are the review's flags when
     the review fills ``reviewed``, else ``None``: a secondary valuation has none, and a row it
     fills keeps the snapshot's (spec 2026-11-13 8a). ``agentStance`` is the report's word and
     ``covered`` its time, its actor (its principal where it names none, an owner's report) and
@@ -196,7 +274,9 @@ def agent_fields(
         fields |= {
             "reviewed": review.value,
             "overrides": len(review.override_ids),
-            "levels": _record_levels(review.value, review, snapshot.price, edges),
+            "levels": _record_levels(
+                review.value, moat_of(review.result) or table_moat, review, snapshot.price, policy
+            ),
             "flags": review.result.flags,
         }
     elif (
@@ -208,7 +288,7 @@ def agent_fields(
         value = secondary.value_per_share
         fields |= {
             "reviewed": value,
-            "levels": _record_levels(value, secondary, snapshot.price, edges),
+            "levels": _record_levels(value, table_moat, secondary, snapshot.price, policy),
         }
     if report is not None:
         fields["agentStance"] = report.stance
@@ -221,27 +301,24 @@ def agent_fields(
 
 
 def _record_levels(
-    value: float,
-    record: ReviewRow | SecondaryRow,
+    value: float | None,
+    moat: Moat | None,
+    record: SnapshotRow | ReviewRow | SecondaryRow,
     price: float | None,
-    edges: tuple[float, float, float, float],
+    policy: Policy,
 ) -> dict[str, Any]:
-    """The row's ``LEVEL_KEYS`` from ``record``, whose value is ``value``, at ``price``."""
-    ratio, word = standing(value, price, edges)
-    figures = (value, record.fair_low, record.fair_high, record.buy_level, record.trim_level)
-    return dict(zip(LEVEL_KEYS, (*figures, ratio, word), strict=True))
-
-
-def standing(
-    value: float | None, price: float | None, edges: tuple[float, float, float, float]
-) -> tuple[float | None, str | None]:
-    """Price ÷ ``value`` and its word at ``price`` on ``edges`` (``designation_for``), as the
-    snapshot's own are computed; ``None`` for both without a value above zero or a positive
-    price. The screen's rows and the drawer read a review's and a secondary valuation's word at
-    the latest price by it, never the word stored with the record at an older price."""
-    if value is None or value <= 0 or price is None or price <= 0:
-        return None, None
-    return designation_for(price, value, edges)
+    """The row's ``LEVEL_KEYS`` from ``record``, whose value is ``value``, at ``price``
+    (``record_standing``); where that gives nothing (no value above zero, or neither a class nor
+    stored levels), the record's stored levels with no price ÷ value and no word."""
+    found = record_standing(value, moat, price, policy, record)
+    if found is None:
+        figures = (record.fair_low, record.fair_high, record.buy_level, record.trim_level)
+        return dict(zip(LEVEL_KEYS, (value, *figures, None, None), strict=True))
+    levels = found.levels
+    figures = (levels.fair_low, levels.fair_high, levels.buy, levels.trim)
+    return dict(
+        zip(LEVEL_KEYS, (value, *figures, found.price_to_value, found.designation), strict=True)
+    )
 
 
 def counts_on(
@@ -284,13 +361,17 @@ def screen_row(
     agents: Mapping[str, Any],
     *,
     mark_min: int,
+    policy: Policy,
 ) -> dict[str, Any]:
     """The snapshot as a screen row; the name, sector, industry, cap band and market cap come
     from ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
     from ``aging_fraction`` of the window; ``watchlists`` are the ids of the lists the company is
     on; ``agents`` are its agents' fields (``agent_fields``, else ``NO_AGENT_FIELDS``), whose
     ``levels``, when set, stand in the row's ``LEVEL_KEYS`` for the snapshot's; ``mechanical``
-    stays the snapshot's value (spec 2026-11-06 Tier 2, 18.1, plan 3). ``flags`` are the flags'
+    stays the snapshot's value (spec 2026-11-06 Tier 2, 18.1, plan 3). The snapshot's own levels,
+    price ÷ value and word are read on ``policy``, the effective one, from its value and its moat
+    class (``record_standing``), not from the figures stored at its valuation (spec 2026-11-23
+    thresholds, 5.3); a refusal has none. ``flags`` are the flags'
     words and ``flagCount`` counts the quality warnings among them, a refusal's too: the review's
     flags where ``agents`` holds them, else the snapshot's (spec 2026-11-13 8a). ``warnings`` are
     the plain words of the snapshot's own quality warnings, never a review's, and ``marked`` holds
@@ -322,15 +403,16 @@ def screen_row(
     rating = _table(im, "rating")
     rate, _ = money_of(result)
     market_cap = None if company is None else company.market_cap
+    own = _record_levels(snapshot.value, moat_of(result), snapshot, snapshot.price, policy)
     row = {
         "ticker": snapshot.symbol,
         "name": None if company is None else company.name,
         "phase": None if phase is None else PHASE_NUMBER[phase],
-        "fairLow": snapshot.fair_low,
-        "fairHigh": snapshot.fair_high,
+        "fairLow": own["fairLow"],
+        "fairHigh": own["fairHigh"],
         "fairValue": snapshot.value,
-        "buyLevel": snapshot.buy_level,
-        "trimLevel": snapshot.trim_level,
+        "buyLevel": own["buyLevel"],
+        "trimLevel": own["trimLevel"],
         "price": snapshot.price,
         "mechanical": snapshot.value,
         "reviewed": agents["reviewed"],
@@ -357,8 +439,8 @@ def screen_row(
         "drawdown": facts.get("drawdown_from_peak"),
         "flags": [f.word for f in flags],
         "refusal": snapshot.refusal,
-        "priceToValue": snapshot.price_to_value,
-        "designation": snapshot.designation,
+        "priceToValue": own["priceToValue"],
+        "designation": own["designation"],
         "agentStance": agents["agentStance"],
         "priceDate": _iso(snapshot.price_date),
         "dataDate": snapshot.data_date.isoformat(),
@@ -462,20 +544,19 @@ def _order(key: str, stances: Sequence[str]) -> Callable[[dict[str, Any]], Any]:
     return lambda r: r[key]
 
 
-def group_rows(
-    rows: Sequence[dict[str, Any]], by: str, edges: tuple[float, float, float, float]
-) -> list[dict[str, Any]]:
+def group_rows(rows: Sequence[dict[str, Any]], by: str, below_value: float) -> list[dict[str, Any]]:
     """The rows grouped by ``by`` (``GROUP_BY``), ordered by group name. A group's name is the
     sector, the industry (the level under the sector), the engine's phase name (``unclassified``
     without a phase) or the cap band; ``none`` for a row without a sector, an industry or a cap
     band. Each group gives its row count, the rows with a value (``valued``), the median of
     price ÷ value over the valued rows with a positive price, and the share of the valued rows
-    whose price ÷ value is below the second designation edge (``edges[1]``: the ``below`` and
-    ``well-below`` bands); ``None`` for the last two when they cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
+    whose price ÷ value is below ``below_value``, the fair band's low end, every class's second
+    designation edge (the ``below`` and ``well-below`` bands); ``None`` for the last two when
+    they cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
     named: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         named.setdefault(_group_name(row, by), []).append(row)
-    return [_group(name, members, edges[1]) for name, members in sorted(named.items())]
+    return [_group(name, members, below_value) for name, members in sorted(named.items())]
 
 
 def _group_name(row: dict[str, Any], by: str) -> str:

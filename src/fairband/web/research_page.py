@@ -9,9 +9,12 @@ the report rests on: its snapshot, and its review and its secondary valuation wh
   ``mechanical``; the secondary valuation's where it is above zero, ``reviewed`` with the note
   "secondary valuation", as the report page's head named it. ``levels``, ``{buy, fairLow,
   fairHigh, trim}``, are the same record's.
-- ``priceToValue`` and ``designation`` are that value against the price of the report's snapshot
-  on the policy's edges, as ``rows.standing`` works them out, never the word stored with a record;
-  ``None`` without a value or a price.
+- ``priceToValue`` and ``designation`` are that value against the price of the report's snapshot,
+  the word read against the same record's stored levels (``rows.stored_standing``: under its buy
+  level Well below, and so on), never the word stored with a record at another price and never
+  the thresholds in force today: the card is part of a published report, a record of its day
+  (spec 2026-11-23 thresholds, 5.4). ``None`` without a value or a price; no word without the
+  record's four levels.
 - ``price``, ``priceDate``, ``dataDate`` and ``validUntil`` are the snapshot's, the days as ISO
   text; ``mechanicalValue`` the snapshot's value, ``None`` on a refused one.
 - ``refusal``, where no record gives a value: the review's where the report rests on one, else the
@@ -33,23 +36,26 @@ from fairband.store.research import KillCriterionRow, NewsItemRow
 from fairband.store.reviews import ReviewRow
 from fairband.store.secondary import SecondaryRow
 from fairband.store.snapshots import SnapshotRow
-from fairband.web.rows import standing
+from fairband.web.rows import stored_standing
 
 Basis = Literal["reviewed", "mechanical"]
 
 
 def report_call(
-    snapshot: SnapshotRow,
-    review: ReviewRow | None,
-    secondary: SecondaryRow | None,
-    edges: tuple[float, float, float, float],
+    snapshot: SnapshotRow, review: ReviewRow | None, secondary: SecondaryRow | None
 ) -> dict[str, Any]:
     """The value card's figures (module docstring) from the report's ``snapshot`` and the
-    ``review`` and ``secondary`` valuation it rests on, each ``None`` where it names none, on the
-    policy's designation ``edges``."""
+    ``review`` and ``secondary`` valuation it rests on, each ``None`` where it names none. The
+    card is part of a published report, a record (spec 2026-11-23 thresholds, 5.4): its levels
+    are the record's as stored, and its word the price's against those levels
+    (``rows.stored_standing``), whatever thresholds are in force today."""
     found = _value(snapshot, review, secondary)
     value, basis, note, levels = (None, None, None, None) if found is None else found
-    ratio, word = standing(value, snapshot.price, edges)
+    record = _record(snapshot, review, secondary)
+    stood = None if record is None else stored_standing(value, snapshot.price, record)
+    price = snapshot.price
+    ratio = None if value is None or value <= 0 or price is None or price <= 0 else price / value
+    word = None if stood is None else stood.designation
     refusal = None
     if found is None:
         refusal = snapshot.refusal if review is None else review.refusal
@@ -87,6 +93,20 @@ def _value(
             secondary.buy_level, secondary.fair_low, secondary.fair_high, secondary.trim_level
         )
         return secondary.value_per_share, "reviewed", "secondary valuation", levels
+    return None
+
+
+def _record(
+    snapshot: SnapshotRow, review: ReviewRow | None, secondary: SecondaryRow | None
+) -> SnapshotRow | ReviewRow | SecondaryRow | None:
+    """The record that gives the card's value, by ``_value``'s order of three; ``None`` where
+    none does."""
+    if review is not None and review.value is not None:
+        return review
+    if snapshot.value is not None:
+        return snapshot
+    if secondary is not None and secondary.value_per_share > 0:
+        return secondary
     return None
 
 

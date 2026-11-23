@@ -209,7 +209,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/1.8"
+    assert METHOD_VERSION == "fairband-mechanical/1.9"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -383,7 +383,6 @@ def test_mature_growth_inputs_cite_their_sources(
         "required_return",
         "terminal_growth",
         "runway_years",
-        "margin_of_safety",
         "belief",
         "terminal_roic",
     ):
@@ -392,8 +391,48 @@ def test_mature_growth_inputs_cite_their_sources(
             "rule",
             rule,
         )
-    assert by_name["runway_years"].value == 20 and by_name["margin_of_safety"].value == 0.20
+    assert by_name["runway_years"].value == 20 and "margin_of_safety" not in by_name
     assert by_name["moat_class"].note == "Wide" and by_name["belief"].value == pytest.approx(0.063)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        engine_companies.mature_growth_inputs,
+        engine_companies.mature_stable_inputs,
+        engine_companies.high_growth_inputs,
+        engine_companies.young_growth_inputs,
+        engine_companies.decline_inputs,
+        engine_companies.start_up_inputs,
+        engine_companies.fx_inputs,
+    ],
+)
+def test_no_result_stores_the_margin_of_safety(
+    make: Callable[[], CompanyInputs], deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-23 thresholds, 5.3 and 6: the margin of safety moves no value and a change of
+    its setting shows at once, so no route writes it among a result's inputs, where a stored copy
+    would show an old margin; the levels still read it."""
+    result = value_company(make(), deciles, policy, TODAY)
+    assert "margin_of_safety" not in {x.name for x in result.inputs}, result.symbol
+
+
+def test_well_below_starts_at_the_rows_own_buy_level(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Spec 2026-11-23 thresholds, 5.2: at 0.78 × its value a Wide row is under its buy level,
+    0.80 × the value, and reads Well below; a Narrow row's buy level is 0.70 ×, so it reads
+    Below. The valuation and the reprice give the same word, and the price moves no value."""
+    at = datetime(2026, 11, 1, tzinfo=UTC)
+    for moat, word in (("Wide", "well-below"), ("Narrow", "below")):
+        inputs = engine_companies.judged_moat(mg_inputs, moat, "owner", at)  # type: ignore[arg-type]
+        base = value_company(inputs, deciles, policy, TODAY)
+        assert base.value is not None and base.levels is not None
+        price = 0.78 * base.value
+        assert (price < base.levels.buy) == (moat == "Wide")
+        priced = value_company(replace(inputs, price=price), deciles, policy, TODAY)
+        assert (priced.value, priced.designation) == (base.value, word)
+        assert reprice(base, price, TODAY, policy).designation == word
 
 
 def test_an_input_assembly_estimated_is_tagged_as_an_estimate(
@@ -3258,7 +3297,7 @@ def test_reprice_keeps_value_changes_designation(
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
     assert r.value is not None and r.levels is not None
-    low = r.levels.buy * 0.9  # 0.675 × the value: Wide's buy level is 0.75 × the value
+    low = r.levels.buy * 0.9  # 0.72 × the value: under the Wide buy level, 0.80 × the value
     p = reprice(r, low, date(2026, 11, 2), policy)
     assert (p.value, p.levels, p.valid_until, p.data_date) == (
         r.value,
@@ -3266,7 +3305,7 @@ def test_reprice_keeps_value_changes_designation(
         r.valid_until,
         r.data_date,
     )
-    assert (p.price, p.price_date, p.designation) == (low, date(2026, 11, 2), "below")
+    assert (p.price, p.price_date, p.designation) == (low, date(2026, 11, 2), "well-below")
     assert p.price_to_value == low / r.value and r.designation == "above"
     fresh = value_company(
         replace(mg_inputs, price=low, price_date=date(2026, 11, 2)), deciles, policy, TODAY
@@ -3378,13 +3417,15 @@ def test_reprice_moves_the_price_input(
 def test_reprice_moves_the_designation_and_leaves_the_levels(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
-    """Spec 13.3: on a value of 100, a price refresh from 70 to 120 moves the word from below to
-    above; the levels stay."""
+    """Spec 13.3: on a value of 100, a price refresh from 85 to 120 moves the word from below to
+    above; the levels stay. (85, not the spec's 70: since method 1.9 a Wide row at 70 is under its
+    buy level of 80 and reads well below.)"""
     r = value_company(mg_inputs, deciles, policy, TODAY)
     at_100 = replace(r, value=100.0, levels=levels_for(100.0, "Wide", policy))
-    before = reprice(at_100, 70.0, date(2026, 11, 2), policy)
+    before = reprice(at_100, 85.0, date(2026, 11, 2), policy)
     after = reprice(before, 120.0, date(2026, 11, 3), policy)
-    assert (before.price_to_value, before.designation) == (0.7, "below")
+    assert (before.price_to_value, before.designation) == (0.85, "below")
+    assert reprice(at_100, 70.0, date(2026, 11, 2), policy).designation == "well-below"
     assert (after.price_to_value, after.designation) == (1.2, "above")
     assert after.levels == before.levels == levels_for(100.0, "Wide", policy)
     assert after.value == 100.0
@@ -3415,7 +3456,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.8"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.9"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH

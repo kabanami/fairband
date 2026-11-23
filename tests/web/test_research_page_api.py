@@ -24,6 +24,7 @@ from support.vendor import Vendor, passthrough_client
 from support.web import HEADER, NOW, TODAY
 from support.web_app import record_verdict
 
+from fairband.engine.designation import designation_for
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import value_company
@@ -45,7 +46,6 @@ from fairband.store.vendor import record_response
 from fairband.vendors.normalize_fmp import quote_observations
 from fairband.vendors.page_fmp import head_quote
 from fairband.web.research_page import of_report, report_call
-from fairband.web.rows import standing
 
 REFUSED_REVIEW = "the reviewed margin is refused"
 # The lists of the research read (``GET /api/companies/{symbol}/research``), in its order.
@@ -80,9 +80,12 @@ class _Rows:
     secondary: SecondaryRow
 
 
-@pytest.fixture
-def edges(policy: Policy) -> tuple[float, float, float, float]:
-    return policy.designation_edges
+def _word(value: float, price: float) -> tuple[float, str]:
+    """Price ÷ ``value`` and the word ``price`` has against the levels a row of ``value`` carries
+    here (``_band``): the card's word, read on the record's own stored levels (spec 2026-11-23
+    thresholds, 5.4)."""
+    buy, low, high, trim = _band(value)
+    return designation_for(price, value, (buy / value, low / value, high / value, trim / value))
 
 
 @pytest.fixture
@@ -152,13 +155,15 @@ def _no_value(review: ReviewRow, refusal: str) -> ReviewRow:
 
 
 def test_the_call_of_a_report_with_no_review(
-    rows: _Rows, edges: tuple[float, float, float, float]
+    rows: _Rows,
 ) -> None:
-    """The snapshot's value and levels; its price, its days and its window."""
+    """The snapshot's value and levels; its price, its days and its window. The word is the
+    price's against the record's own stored levels: at 1.5 × the value it is above, under this
+    row's stored trim level of 1.6 ×, though the policy's trim multiple in force is 1.35."""
     snapshot = rows.valued
-    ratio, word = standing(100.0, 150.0, edges)
-    assert snapshot.price_date is not None and word is not None
-    assert report_call(snapshot, None, None, edges) == {
+    ratio, word = _word(100.0, 150.0)
+    assert snapshot.price_date is not None and (ratio, word) == (1.5, "above")
+    assert report_call(snapshot, None, None) == {
         "value": 100.0,
         "basis": "mechanical",
         "note": None,
@@ -175,32 +180,32 @@ def test_the_call_of_a_report_with_no_review(
 
 
 def test_the_call_takes_the_review_s_value_and_levels(
-    rows: _Rows, edges: tuple[float, float, float, float]
+    rows: _Rows,
 ) -> None:
-    call = report_call(rows.valued, rows.review, rows.secondary, edges)
+    call = report_call(rows.valued, rows.review, rows.secondary)
     assert (call["value"], call["basis"], call["note"]) == (80.0, "reviewed", None)
     assert call["levels"] == _levels(80.0)
     assert call["mechanicalValue"] == 100.0
-    assert (call["priceToValue"], call["designation"]) == standing(80.0, 150.0, edges)
+    assert (call["priceToValue"], call["designation"]) == _word(80.0, 150.0)
 
 
 def test_the_word_is_worked_out_at_the_report_s_price(
-    rows: _Rows, edges: tuple[float, float, float, float]
+    rows: _Rows,
 ) -> None:
     """The word stored with a review is of the price it was valued at; the call's is the report's
     value against the price of the report's snapshot."""
     stored = replace(rows.review, price_to_value=0.5, designation="well-below")
-    call = report_call(rows.valued, stored, None, edges)
-    expected = standing(80.0, 150.0, edges)
+    call = report_call(rows.valued, stored, None)
+    expected = _word(80.0, 150.0)
     assert (call["priceToValue"], call["designation"]) == expected
     assert expected[1] != "well-below"
 
 
 def test_a_review_with_no_value_falls_to_the_secondary_valuation(
-    rows: _Rows, edges: tuple[float, float, float, float]
+    rows: _Rows,
 ) -> None:
     refused = _no_value(rows.review, REFUSED_REVIEW)
-    call = report_call(rows.refused, refused, rows.secondary, edges)
+    call = report_call(rows.refused, refused, rows.secondary)
     assert (call["value"], call["basis"], call["note"]) == (
         12.0,
         "reviewed",
@@ -208,28 +213,28 @@ def test_a_review_with_no_value_falls_to_the_secondary_valuation(
     )
     assert call["levels"] == _levels(12.0)
     assert (call["mechanicalValue"], call["refusal"]) == (None, None)
-    assert (call["priceToValue"], call["designation"]) == standing(12.0, 150.0, edges)
+    assert (call["priceToValue"], call["designation"]) == _word(12.0, 150.0)
 
 
 def test_a_refused_snapshot_its_review_values(
-    rows: _Rows, edges: tuple[float, float, float, float]
+    rows: _Rows,
 ) -> None:
     buy, low, high, trim = _band(5.0)
     review = replace(
         rows.review, value=5.0, buy_level=buy, fair_low=low, fair_high=high, trim_level=trim
     )
-    call = report_call(rows.refused, review, None, edges)
+    call = report_call(rows.refused, review, None)
     assert (call["value"], call["basis"], call["note"]) == (5.0, "reviewed", None)
     assert call["levels"] == _levels(5.0)
     assert (call["mechanicalValue"], call["refusal"]) == (None, None)
 
 
 def test_no_value_at_all_gives_the_refusal(
-    rows: _Rows, edges: tuple[float, float, float, float]
+    rows: _Rows,
 ) -> None:
     """The refusal is the review's where the report rests on one, else the snapshot's."""
-    bare = report_call(rows.refused, None, None, edges)
-    reviewed = report_call(rows.refused, _no_value(rows.review, REFUSED_REVIEW), None, edges)
+    bare = report_call(rows.refused, None, None)
+    reviewed = report_call(rows.refused, _no_value(rows.review, REFUSED_REVIEW), None)
     for call in (bare, reviewed):
         assert (call["value"], call["basis"], call["note"]) == (None, None, None)
         assert (call["levels"], call["priceToValue"], call["designation"]) == (None, None, None)
@@ -238,7 +243,7 @@ def test_no_value_at_all_gives_the_refusal(
 
 
 def test_a_secondary_of_zero_does_not_count(
-    rows: _Rows, edges: tuple[float, float, float, float]
+    rows: _Rows,
 ) -> None:
     nothing = replace(
         rows.secondary,
@@ -248,13 +253,13 @@ def test_a_secondary_of_zero_does_not_count(
         fair_high=None,
         trim_level=None,
     )
-    call = report_call(rows.refused, None, nothing, edges)
+    call = report_call(rows.refused, None, nothing)
     assert (call["value"], call["levels"], call["note"]) == (None, None, None)
     assert call["refusal"] == rows.refused.refusal
 
 
-def test_a_snapshot_with_no_price(rows: _Rows, edges: tuple[float, float, float, float]) -> None:
-    call = report_call(replace(rows.valued, price=None), None, None, edges)
+def test_a_snapshot_with_no_price(rows: _Rows) -> None:
+    call = report_call(replace(rows.valued, price=None), None, None)
     assert (call["value"], call["levels"]) == (100.0, _levels(100.0))
     assert (call["price"], call["priceToValue"], call["designation"]) == (None, None, None)
 
@@ -443,7 +448,7 @@ def test_the_report_is_the_report_read_s_answer(
     with closing(connect(db_path)) as conn:
         snapshot = snapshot_row(conn, sid)
     assert snapshot is not None and snapshot.value is not None
-    assert answer["call"] == report_call(snapshot, None, None, policy.designation_edges)
+    assert answer["call"] == report_call(snapshot, None, None)
     assert (answer["call"]["value"], answer["call"]["basis"]) == (snapshot.value, "mechanical")
     research = client.get("/api/companies/AAPL/research").json()
     own = [k for k in research["killCriteria"] if k["reportId"] == report["id"]]
@@ -474,15 +479,14 @@ def test_the_call_is_of_the_records_the_report_rests_on(
         secondary = secondary_row(conn, secondaries["AAL"])
         review = review_row(conn, review_id)
     assert snapshot is not None and secondary is not None and review is not None
-    edges = policy.designation_edges
     fallback = _page(client, "AAL", first["id"])["call"]
-    assert fallback == report_call(snapshot, None, secondary, edges)
+    assert fallback == report_call(snapshot, None, secondary)
     assert (fallback["value"], fallback["note"]) == (
         secondary.value_per_share,
         "secondary valuation",
     )
     reviewed = _page(client, "AAL")["call"]
-    assert reviewed == report_call(snapshot, review, None, edges)
+    assert reviewed == report_call(snapshot, review, None)
     assert (reviewed["value"], reviewed["basis"]) == (review.value, "reviewed")
 
 

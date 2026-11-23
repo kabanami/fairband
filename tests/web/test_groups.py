@@ -45,6 +45,7 @@ from fairband.store.db import connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh
 from fairband.store.snapshots import insert_snapshot
 from fairband.web.app import create_app
+from fairband.web.rows import group_rows
 
 TODAY = date(2026, 10, 31)  # the day the engine's test companies are valued
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
@@ -152,6 +153,26 @@ def ratio(results: dict[str, ValuationResult], symbol: str) -> float:
     r = results[symbol]
     assert r.price is not None and r.value is not None
     return r.price / r.value
+
+
+def test_group_rows_counts_below_value_under_the_figure_it_is_given() -> None:
+    """Spec 2026-11-23 thresholds, 5.3: the first edge is each row's own, so the groups take the
+    one edge every class shares, the fair band's low end: at 0.90 a row at 0.89 × its value is
+    below value and one at 0.90 × is not; a row with no value counts in neither."""
+    rows = [
+        {"sector": "Tech", "mechanical": 100.0, "price": 89.0},
+        {"sector": "Tech", "mechanical": 100.0, "price": 90.0},
+        {"sector": "Tech", "mechanical": None, "price": 50.0},
+    ]
+    assert group_rows(rows, "sector", 0.90) == [
+        {
+            "name": "Tech",
+            "count": 3,
+            "valued": 2,
+            "medianPriceToValue": pytest.approx(0.895),
+            "shareBelowValue": 0.5,
+        }
+    ]
 
 
 def test_groups_by_phase_median_and_share(

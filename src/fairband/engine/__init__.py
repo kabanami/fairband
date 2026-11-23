@@ -4,4 +4,4 @@ Every route returns a ``fairband.engine.types.ValuationResult``; a refusal is a 
 value and a reason, never an exception. ``METHOD_VERSION`` names the method each result cites.
 """
 
-METHOD_VERSION = "fairband-mechanical/1.8"
+METHOD_VERSION = "fairband-mechanical/1.9"

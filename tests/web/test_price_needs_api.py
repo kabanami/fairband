@@ -65,7 +65,7 @@ def results(policy: Policy, request: pytest.FixtureRequest) -> dict[str, Valuati
     valued = value_company(_aapl(getattr(request, "param", False)), deciles, policy, TODAY)
     refused = value_company(_aal(), deciles, policy, TODAY)
     growth = value_company(high_growth_inputs(), deciles, policy, TODAY)
-    assert valued.designation == "well-above" and growth.designation == "well-below"
+    assert valued.designation == "well-above" and growth.designation == "below"
     assert refused.value is None
     return {"AAPL": valued, "AAL": refused, "HGCO": growth}
 

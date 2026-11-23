@@ -282,8 +282,8 @@ def test_the_worked_decline_row_values_at_4_953(
     assert im["capex_vs_depreciation"] == {"capex": -30 * M, "depreciation": 40 * M}
     assert im["eps"] == {"reported": 0.45, "clean": 0.45, "forward": None}
     assert im["epv"] == pytest.approx(0.45 / 0.09)
-    # $3.00 against $4.9533: 0.606 × the value, below 0.70
-    assert (r.price_to_value, r.designation) == (3.0 / r.value, "well-below")
+    # $3.00 against $4.9533: 0.606 × the value, above the None row's buy level, 0.60 × the value
+    assert (r.price_to_value, r.designation) == (3.0 / r.value, "below")
     assert r.levels is not None and r.levels.buy == pytest.approx(r.value * 0.60)  # None moat
     # the price-side figures: no decline rate in the scan gives $3.00, the run-off being worth
     # 3.1251 at −50% (spec 13.1); the trailing P/E and no forward one; and the expected return
@@ -984,9 +984,14 @@ def test_the_inputs(decline_inputs: CompanyInputs, deciles: Deciles, policy: Pol
         "z_distress",
         "z_safe",
         "f_score_low",
-        "margin_of_safety",
     ]
-    for absent in ("aggregate_roic", "runway_return", "terminal_growth", "terminal_roic"):
+    for absent in (
+        "aggregate_roic",
+        "runway_return",
+        "terminal_growth",
+        "terminal_roic",
+        "margin_of_safety",
+    ):
         assert absent not in names, absent
     interest = input_named(r, "interest_expense")
     assert (interest.value, interest.unit, interest.provenance.source) == (
@@ -1054,8 +1059,10 @@ def test_the_decline_route_reads_the_table_s_class(
     assert wide.intermediates["moat"] == "Wide"
     assert wide.levels == levels_for(wide.value, "Wide", policy) != none.levels
     assert wide.levels.buy == pytest.approx(wide.value * (1 - policy.margin_of_safety["Wide"]))
-    safety = input_named(wide, "margin_of_safety")
-    assert (safety.value, safety.note) == (policy.margin_of_safety["Wide"], "Wide moat")
+    # no result stores the margin itself (spec 2026-11-23 thresholds, 5.3): the levels show it
+    assert "margin_of_safety" not in {i.name for i in wide.inputs}
+    # at $3.00, 0.606 × the value, the Wide row is under its buy level and the None row is not
+    assert (wide.designation, none.designation) == ("well-below", "below")
     agent = judged_moat(decline_inputs, "Wide", "agent claude-opus-5-5", NOW, "a toll road")
     judged = value_company(agent, deciles, policy, TODAY)
     assert (judged.value, judged.levels) == (wide.value, wide.levels)

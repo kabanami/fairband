@@ -230,6 +230,14 @@ valued files the four levels move and the RULE input `margin_of_safety` reads th
 "below" (price ÷ value 0.89, inside the old band and under the new one's 0.90). SUCO, a Start-up
 row with no value, is unchanged byte for byte.
 
+The six valued files re-captured under 1.9 on 2026-11-23 (spec 2026-11-23 thresholds, 5.2 and
+5.3; method 4.10), for two causes. No result holds the RULE input `margin_of_safety` any more,
+since the levels read the margin on the policy in force. And the first edge of the word is the
+row's own buy level, 1 − the margin of its moat class: the three None rows, HGCO, YGCO and DCCO,
+whose prices stand between 0.60 and 0.70 × their values, read "below" where they read
+"well-below" on the Narrow edge of 0.70. No value a share and no level moves. SUCO is unchanged
+byte for byte.
+
 Run from the repository root:
 
 ```

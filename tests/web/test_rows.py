@@ -20,27 +20,35 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
-from support.engine_companies import mature_growth_inputs, universe_deciles, young_growth_inputs
+from support.engine_companies import (
+    fx_inputs,
+    mature_growth_inputs,
+    universe_deciles,
+    young_growth_inputs,
+)
 from support.web import HEADER, HOST, NOW, TODAY, _settings
 
-from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
+from fairband.engine.levels import standing_for
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.secondary import Part, secondary_value
 from fairband.engine.types import Flag, ValuationResult
-from fairband.policy import Policy
+from fairband.policy import Moat, Policy
+from fairband.policy.settings import apply_overlay
 from fairband.store.db import connect
 from fairband.store.ledger import OWNER, Writer
+from fairband.store.moat import moat_row
 from fairband.store.overrides import drop_override, insert_override
 from fairband.store.reports import insert_report
 from fairband.store.reviews import ReviewRow, insert_review, latest_review
 from fairband.store.secondary import SecondaryRow, insert_secondary, secondary_row
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
-from fairband.web.rows import NO_AGENT_FIELDS, agent_fields, screen_row, sort_rows
+from fairband.web.rows import NO_AGENT_FIELDS, agent_fields, moat_of, screen_row, sort_rows
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 PUBLISHED = datetime(2026, 11, 1, 8, 0, tzinfo=UTC)
@@ -56,8 +64,6 @@ LEVELS = (
     "priceToValue",
     "designation",
 )
-Edges = tuple[float, float, float, float]
-EDGES: Edges = (0.1, 0.2, 0.3, 0.4)  # any four edges: the flags do not read them
 
 
 def _rows(client: TestClient, query: str = "") -> dict[str, dict[str, Any]]:
@@ -87,13 +93,26 @@ def _engines(snapshot: SnapshotRow) -> dict[str, Any]:
 
 
 def _record(
-    record: ReviewRow | SecondaryRow, value: float, price: float, edges: Edges
+    record: ReviewRow | SecondaryRow,
+    value: float,
+    price: float,
+    policy: Policy,
+    table_moat: Moat | None = None,
 ) -> dict[str, Any]:
-    """The band and levels of ``record``, whose value is ``value``, with price ÷ value and its
-    word at ``price`` on ``edges``."""
-    ratio, word = designation_for(price, value, edges)
-    figures = (value, record.fair_low, record.fair_high, record.buy_level, record.trim_level)
-    return dict(zip(LEVELS, (*figures, ratio, word), strict=True))
+    """The band, levels, price ÷ value and word a row shows for ``record``, whose value is
+    ``value``, at ``price``: on ``policy`` and the record's own moat class, a review's result's,
+    else ``table_moat``, the company's class in the moat table, which a secondary valuation
+    reads (spec 2026-11-23 thresholds, 5.3)."""
+    moat = (moat_of(record.result) if isinstance(record, ReviewRow) else None) or table_moat
+    assert moat is not None
+    return _in_force(value, moat, price, policy)
+
+
+def _table_moat(db_path: Path, symbol: str) -> Moat | None:
+    """The class of the company's row of the moat table, none without a row."""
+    with closing(connect(db_path)) as conn:
+        row = moat_row(conn, symbol)
+    return None if row is None else row.moat
 
 
 def _review(
@@ -386,13 +405,13 @@ def test_on_a_refused_row_a_valued_review_leads_the_secondary(
     assert value is not None and value != secondary.value_per_share
     aal = _rows(client)["AAL"]
     assert (aal["reviewed"], aal["overrides"], aal["mechanical"]) == (value, 1, None)
-    edges = policy.designation_edges
     # the levels follow the record that fills the cell (18.1, plan 3)
-    assert _levels(aal) == _record(_current_review(db_path, "AAL"), value, 150.0, edges)
+    assert _levels(aal) == _record(_current_review(db_path, "AAL"), value, 150.0, policy)
     assert _aal_review(db_path, policy, results, None) is None
     aal = _rows(client)["AAL"]
     assert (aal["reviewed"], aal["overrides"]) == (secondary.value_per_share, 0)
-    assert _levels(aal) == _record(secondary, secondary.value_per_share, 150.0, edges)
+    table = _table_moat(db_path, "AAL")
+    assert _levels(aal) == _record(secondary, secondary.value_per_share, 150.0, policy, table)
 
 
 def test_a_counting_review_sets_the_rows_levels(
@@ -406,14 +425,13 @@ def test_a_counting_review_sets_the_rows_levels(
     word."""
     _, value = _review(db_path, policy, results)
     review = _current_review(db_path, "AAPL")
-    edges = policy.designation_edges
     aapl = _rows(client)["AAPL"]
-    assert _levels(aapl) == _record(review, value, 150.0, edges)
+    assert _levels(aapl) == _record(review, value, 150.0, policy)
     assert (aapl["reviewed"], aapl["mechanical"]) == (value, results["AAPL"].value)
     _snapshot(db_path, reprice(results["AAPL"], 115.0, date(2026, 11, 2), policy))
     latest = _newest(db_path, "AAPL")
     aapl = _rows(client)["AAPL"]
-    assert _levels(aapl) == _record(review, value, 115.0, edges)
+    assert _levels(aapl) == _record(review, value, 115.0, policy)
     assert (review.designation, latest.designation, aapl["designation"]) == (
         "near",
         "near",
@@ -464,15 +482,15 @@ def test_a_refused_rows_secondary_sets_the_levels(
     with closing(connect(db_path)) as conn:
         secondary = secondary_row(conn, secondaries["AAL"])
     assert secondary is not None
-    value, edges = secondary.value_per_share, policy.designation_edges
+    value, table = secondary.value_per_share, _table_moat(db_path, "AAL")
     refused = results["AAL"]
     aal = _rows(client)["AAL"]
-    assert _levels(aal) == _record(secondary, value, 150.0, edges)
+    assert _levels(aal) == _record(secondary, value, 150.0, policy, table)
     assert aal["designation"] == secondary.designation == "below"
     assert (aal["mechanical"], aal["refusal"], aal["moat"]) == (None, refused.refusal, None)
     _snapshot(db_path, replace(refused, price=200.0))  # a reprice
     aal = _rows(client)["AAL"]
-    assert _levels(aal) == _record(secondary, value, 200.0, edges)
+    assert _levels(aal) == _record(secondary, value, 200.0, policy, table)
     assert (aal["designation"], aal["mechanical"]) == ("above", None)
     found = client.get("/api/companies/AAL").json()["secondary"]
     assert (found["priceToValue"], found["designation"]) == (
@@ -485,10 +503,10 @@ def test_the_rows_word_reads_the_effective_edges(
     client: TestClient, secondaries: dict[str, int]
 ) -> None:
     """The row's word reads the settings' edges at once, as the drawer's does: AAL's secondary at
-    0.84 × its value is below under the default edges and near under a fair band from 0.6, the
-    Narrow margin of safety at 45% so the edges still ascend."""
+    0.84 × its value is below under the default edges and near under a fair band from 0.6, every
+    margin of safety at 45% so each class's edges still ascend."""
     assert _rows(client)["AAL"]["designation"] == "below"
-    safety = {"None": 0.45, "Narrow": 0.45, "Wide": 0.25}
+    safety = {"None": 0.45, "Narrow": 0.45, "Wide": 0.45}
     changes = {"fair_band": [0.6, 1.15], "margin_of_safety": safety}
     assert client.put("/api/settings", json={"changes": changes}, headers=HEADER).status_code == 200
     detail = client.get("/api/companies/AAL").json()
@@ -514,7 +532,7 @@ def test_a_revalued_row_returns_to_the_engines_levels(
     _snapshot(db_path, valued)
     aal = _rows(client)["AAL"]
     assert _agents(aal) == NO_AGENT
-    assert _levels(aal) == _engines(_newest(db_path, "AAL"))
+    assert _levels(aal) == _engines(_newest(db_path, "AAL"))  # as stored: the same policy
     assert aal["fairValue"] == aal["mechanical"] == valued.value
     _, value = _review(db_path, policy, results)
     assert _rows(client)["AAPL"]["fairValue"] == value
@@ -523,33 +541,154 @@ def test_a_revalued_row_returns_to_the_engines_levels(
     _snapshot(db_path, replace(cited, value=cited.value + 1.0))  # a revalue
     aapl = _rows(client)["AAPL"]
     assert (aapl["reviewed"], aapl["mechanical"]) == (None, cited.value + 1.0)
-    assert _levels(aapl) == _engines(_newest(db_path, "AAPL"))
+    # the engine's value, with the levels and the word read on it (the stored levels are the
+    # older value's here, which this stand-in for a revalue kept)
+    assert _levels(aapl) == _mechanical(_newest(db_path, "AAPL"), policy)
+    assert aapl["fairLow"] == pytest.approx((cited.value + 1.0) * policy.fair_band[0])
 
 
-def test_agent_fields_read_the_edges_and_the_price_they_are_given(
+def _in_force(value: float, moat: Moat, price: float | None, policy: Policy) -> dict[str, Any]:
+    """The band, levels, price ÷ value and word of ``value`` on ``moat`` at ``price`` under
+    ``policy``, as ``standing_for`` gives them."""
+    s = standing_for(value, moat, price, policy)
+    figures = (value, s.levels.fair_low, s.levels.fair_high, s.levels.buy, s.levels.trim)
+    return dict(zip(LEVELS, (*figures, s.price_to_value, s.designation), strict=True))
+
+
+def _mechanical(snapshot: SnapshotRow, policy: Policy) -> dict[str, Any]:
+    return _levels(
+        screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy)
+    )
+
+
+def test_agent_fields_read_the_policy_and_the_price_they_are_given(
     db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
-    """``agent_fields`` reads the word on the edges its caller passes, the effective policy's, at
-    the latest snapshot's price; without a positive price the record's band and levels stand with
-    no price ÷ value or word. ``screen_row`` writes them over the snapshot's and keeps the
-    mechanical value, no ``levels`` key of its own; a row with no agent's record keeps the
-    snapshot's (``NO_AGENT_FIELDS``)."""
+    """Spec 2026-11-23 thresholds, 5.3: ``agent_fields`` reads the record's levels and word on the
+    policy its caller passes, the effective one, at the latest snapshot's price, on the record's
+    own moat class; without a positive price the band and levels stand with no price ÷ value or
+    word. ``screen_row`` writes them over the snapshot's and keeps the mechanical value, no
+    ``levels`` key of its own; a row with no agent's record reads the snapshot's value the same
+    way (``NO_AGENT_FIELDS``)."""
     _, value = _review(db_path, policy, results)
     snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
-    low = (0.1, 0.2, 0.3, 0.4)
-    fields = agent_fields(snapshot, review, None, None, {}, TODAY, low)
-    assert fields["levels"] == _record(review, value, 150.0, low)
-    assert fields["levels"]["designation"] == "well-above"
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3)
+    moat = moat_of(review.result)
+    assert moat is not None
+    changed = apply_overlay(policy, {"trim_multiple": 1.2, "fair_band": [0.95, 1.05]})
+    fields = agent_fields(snapshot, review, None, None, {}, TODAY, changed, None)
+    assert fields["levels"] == _in_force(value, moat, 150.0, changed)
+    assert fields["levels"]["trimLevel"] == pytest.approx(value * 1.2)
+    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=changed)
     assert _levels(row) == fields["levels"] and row["mechanical"] == snapshot.value
     assert "levels" not in row
     for price in (None, 0.0):
-        unpriced = agent_fields(replace(snapshot, price=price), review, None, None, {}, TODAY, low)
+        unpriced = agent_fields(
+            replace(snapshot, price=price), review, None, None, {}, TODAY, changed, None
+        )
         assert unpriced["levels"] == fields["levels"] | {"priceToValue": None, "designation": None}
     assert NO_AGENT_FIELDS["levels"] is None
-    assert _levels(screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3)) == (
-        _engines(snapshot)
+
+
+def test_a_mechanical_row_reads_its_levels_on_the_policy_in_force(
+    db_path: Path, policy: Policy
+) -> None:
+    """Spec 2026-11-23 thresholds, 5.3: a mechanical row's levels, price ÷ value and word come
+    from its stored value, its moat class and the policy in force, not from the figures stored
+    when it was valued: a changed trim multiple and band show with no revalue, and the value
+    stays. Under the policy it was valued with, the figures are the stored ones. A row with no
+    price has its levels and no word."""
+    snapshot = _newest(db_path, "AAPL")
+    value, moat = snapshot.value, moat_of(snapshot.result)
+    assert value is not None and moat is not None
+    assert _mechanical(snapshot, policy) == _engines(snapshot)
+    changed = apply_overlay(policy, {"trim_multiple": 1.2, "fair_band": [0.95, 1.05]})
+    row = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=changed)
+    assert row["trimLevel"] == pytest.approx(value * 1.2)
+    assert (row["fairLow"], row["fairHigh"]) == pytest.approx((value * 0.95, value * 1.05))
+    assert row["fairValue"] == row["mechanical"] == value
+    assert _levels(row) == _in_force(value, moat, snapshot.price, changed)
+    unpriced = _mechanical(replace(snapshot, price=None), policy)
+    assert unpriced == _engines(snapshot) | {"priceToValue": None, "designation": None}
+
+
+def test_a_row_valued_under_an_older_policy_reads_the_policy_in_force(
+    db_path: Path, policy: Policy
+) -> None:
+    """Review Focus: a snapshot valued under policy v18, whose stored levels are v18's, shows
+    v19's levels and word before any revalue."""
+    snapshot = _newest(db_path, "AAPL")
+    value, moat = snapshot.value, moat_of(snapshot.result)
+    assert value is not None and moat is not None
+    old = replace(
+        snapshot,
+        policy_version="fairband-policy-v18",
+        buy_level=value * 0.75,
+        fair_low=value * 0.85,
+        fair_high=value * 1.15,
+        trim_level=value * 1.5,
+        designation="near",
     )
+    assert _mechanical(old, policy) == _in_force(value, moat, snapshot.price, policy)
+    assert _mechanical(old, policy)["trimLevel"] == pytest.approx(value * 1.35)
+
+
+def test_a_reviewed_row_reads_well_below_from_its_own_buy_level(
+    db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 thresholds, 5.2: at 0.78 × the review's value a Wide row is under its buy
+    level and reads Well below; a Narrow row reads Below."""
+    _, value = _review(db_path, policy, results)
+    snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
+    priced = replace(snapshot, price=0.78 * value)
+    for moat, word in (("Wide", "well-below"), ("Narrow", "below")):
+        result = replace(review.result, intermediates=review.result.intermediates | {"moat": moat})
+        fields = agent_fields(
+            priced, replace(review, result=result), None, None, {}, TODAY, policy, None
+        )
+        assert fields["levels"]["designation"] == word, moat
+        assert fields["levels"]["buyLevel"] == pytest.approx(
+            value * (1 - policy.margin_of_safety[moat])  # type: ignore[index]
+        )
+
+
+def test_a_record_with_no_class_in_its_result_reads_the_tables_or_its_stored_levels(
+    db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Review Focus: a result with no ``moat`` among its intermediates reads its levels on the
+    moat table's class; with no class at all the reader gives the record's stored levels, and the
+    word the price has against them, and does not raise."""
+    _, value = _review(db_path, policy, results)
+    snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
+    bare = {k: v for k, v in review.result.intermediates.items() if k != "moat"}
+    unclassed = replace(review, result=replace(review.result, intermediates=bare))
+    changed = apply_overlay(policy, {"trim_multiple": 1.2})
+    on_table = agent_fields(snapshot, unclassed, None, None, {}, TODAY, changed, "Narrow")
+    assert on_table["levels"] == _in_force(value, "Narrow", 150.0, changed)
+    stored = agent_fields(snapshot, unclassed, None, None, {}, TODAY, changed, None)["levels"]
+    assert (stored["buyLevel"], stored["fairLow"], stored["fairHigh"], stored["trimLevel"]) == (
+        review.buy_level,
+        review.fair_low,
+        review.fair_high,
+        review.trim_level,
+    )
+    assert stored["priceToValue"] == 150.0 / value
+    assert review.fair_low is not None and review.fair_high is not None
+    assert review.fair_low <= 150.0 <= review.fair_high and stored["designation"] == "near"
+
+
+def test_a_row_in_another_currency_reads_its_levels_on_the_dollar_value(
+    db_path: Path, policy: Policy
+) -> None:
+    """Review Focus: a company in another currency has its levels in force on the value in US
+    dollars, the snapshot's own value, not on the route's value in the currency."""
+    _snapshot(db_path, value_company(fx_inputs(), universe_deciles(), policy, TODAY))
+    snapshot = _newest(db_path, "FXCO")
+    value, moat = snapshot.value, moat_of(snapshot.result)
+    assert value is not None and moat is not None
+    assert snapshot.result.intermediates["value_in_currency"] != value
+    row = _mechanical(snapshot, policy)
+    assert row["buyLevel"] == pytest.approx(value * (1 - policy.margin_of_safety[moat]))
+    assert row == _in_force(value, moat, snapshot.price, policy)
 
 
 def test_a_counting_review_sets_the_rows_flags(
@@ -561,11 +700,11 @@ def test_a_counting_review_sets_the_rows_flags(
     snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
     assert flag_count(snapshot.result.flags) == 1
     settled = replace(review, result=replace(review.result, flags=()))
-    fields = agent_fields(snapshot, settled, None, None, {}, TODAY, EDGES)
+    fields = agent_fields(snapshot, settled, None, None, {}, TODAY, policy, None)
     assert fields["flags"] == ()
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3)
+    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy)
     assert (row["flags"], row["flagCount"]) == ([], 0)
-    kept = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3)
+    kept = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy)
     assert kept["flags"] == [f.word for f in snapshot.result.flags] and kept["flagCount"] == 1
     assert NO_AGENT_FIELDS["flags"] is None
 
@@ -607,19 +746,19 @@ def test_a_refused_review_leaves_the_engines_flags(
     snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
     assert review.value is None
     bare = replace(review, result=replace(review.result, flags=()))
-    fields = agent_fields(snapshot, bare, None, None, {}, TODAY, EDGES)
+    fields = agent_fields(snapshot, bare, None, None, {}, TODAY, policy, None)
     assert fields["flags"] is None
     engines = ([f.word for f in snapshot.result.flags], flag_count(snapshot.result.flags))
     assert engines[1] == 1
     for row in (
-        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3),
+        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy),
         _rows(client)["AAPL"],
     ):
         assert (row["flags"], row["flagCount"]) == engines
 
 
 def test_a_refused_rows_secondary_leaves_the_engines_flags(
-    client: TestClient, db_path: Path, secondaries: dict[str, int]
+    client: TestClient, db_path: Path, policy: Policy, secondaries: dict[str, int]
 ) -> None:
     """Spec 2026-11-13 8a: on AAL's refused row the secondary valuation fills Reviewed and has no
     flags, so the row's flags and count stay the snapshot's: three notes and no warning."""
@@ -627,12 +766,12 @@ def test_a_refused_rows_secondary_leaves_the_engines_flags(
         secondary = secondary_row(conn, secondaries["AAL"])
     assert secondary is not None
     snapshot = _newest(db_path, "AAL")
-    fields = agent_fields(snapshot, None, secondary, None, {}, TODAY, EDGES)
+    fields = agent_fields(snapshot, None, secondary, None, {}, TODAY, policy, None)
     assert (fields["reviewed"], fields["flags"]) == (secondary.value_per_share, None)
     engines = ([f.word for f in snapshot.result.flags], flag_count(snapshot.result.flags))
     assert (len(engines[0]), engines[1]) == (3, 0)
     for row in (
-        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3),
+        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy),
         _rows(client)["AAL"],
     ):
         assert (row["flags"], row["flagCount"]) == engines
@@ -659,7 +798,7 @@ def test_the_row_reads_the_snapshots_flags_not_the_reviews(
     words = ["heavy capital spending", "negative free cash flow", "new shares issued"]
 
     def row(found: SnapshotRow, fields: Mapping[str, Any], mark_min: int = 3) -> dict[str, Any]:
-        return screen_row(found, None, TODAY, 0.6667, [], fields, mark_min=mark_min)
+        return screen_row(found, None, TODAY, 0.6667, [], fields, mark_min=mark_min, policy=policy)
 
     def mark(found: SnapshotRow, fields: Mapping[str, Any], mark_min: int = 3) -> tuple[Any, Any]:
         """The row's ``warnings`` and ``marked``."""
@@ -668,7 +807,7 @@ def test_the_row_reads_the_snapshots_flags_not_the_reviews(
 
     # a counting review with three warnings: the row's flags are its, the warnings the snapshot's
     warned_review = replace(review, result=replace(review.result, flags=three))
-    fields = agent_fields(snapshot, warned_review, None, None, {}, TODAY, EDGES)
+    fields = agent_fields(snapshot, warned_review, None, None, {}, TODAY, policy, None)
     drawn = row(snapshot, fields)
     assert (drawn["flags"], drawn["flagCount"]) == ([f.word for f in three], 3)
     assert mark(snapshot, fields) == (["value sensitive to its inputs"], False)
@@ -678,9 +817,11 @@ def test_the_row_reads_the_snapshots_flags_not_the_reviews(
     warned = replace(snapshot, result=replace(snapshot.result, flags=three))
     assert mark(warned, NO_AGENT_FIELDS) == (words, True)
     settled = replace(review, result=replace(review.result, flags=()))
-    filled = agent_fields(warned, settled, None, None, {}, TODAY, EDGES)
+    filled = agent_fields(warned, settled, None, None, {}, TODAY, policy, None)
     assert row(warned, filled)["flags"] == [] and mark(warned, filled) == (words, False)
-    refused = agent_fields(warned, replace(settled, value=None), None, None, {}, TODAY, EDGES)
+    refused = agent_fields(
+        warned, replace(settled, value=None), None, None, {}, TODAY, policy, None
+    )
     assert refused["reviewed"] is None and mark(warned, refused) == (words, True)
     # the cut-off is the caller's, and two warnings are under three
     assert mark(warned, NO_AGENT_FIELDS, mark_min=4) == (words, False)
@@ -693,7 +834,7 @@ def test_the_row_reads_the_snapshots_flags_not_the_reviews(
     assert refused_row.value is None
     with closing(connect(db_path)) as conn:
         secondary = secondary_row(conn, secondaries["AAL"])
-    stood_in = agent_fields(refused_row, None, secondary, None, {}, TODAY, EDGES)
+    stood_in = agent_fields(refused_row, None, secondary, None, {}, TODAY, policy, None)
     assert stood_in["reviewed"] is not None
     for standing_in in (NO_AGENT_FIELDS, stood_in):
         assert mark(refused_row, standing_in) == (words, False)

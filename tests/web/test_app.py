@@ -320,7 +320,7 @@ def test_screen_sorts_by_price_to_value(client: TestClient) -> None:
     """HGCO at 0.63 × its value, AAPL at 1.175, AAL refused with none: last either way."""
     rows = {row["ticker"]: row for row in _screen(client)["rows"]}
     assert rows["HGCO"]["priceToValue"] == pytest.approx(0.632, abs=5e-4)
-    assert rows["HGCO"]["designation"] == "well-below"
+    assert rows["HGCO"]["designation"] == "below"  # over its None class's buy level, 0.60 ×
     assert _tickers(client, "?sort=priceToValue&dir=asc") == ["HGCO", "AAPL", "AAL"]
     assert _tickers(client, "?sort=priceToValue&dir=desc") == ["AAPL", "HGCO", "AAL"]
 
@@ -395,17 +395,41 @@ def test_aging_fraction_from_the_overlay_changes_freshness(
 
 
 def test_groups_and_the_drawer_read_the_edges_of_the_settings(client: TestClient) -> None:
-    """HGCO sits at 0.63 × its value and AAPL at 1.175. Under a fair band from 0.6, with the Narrow
-    margin of safety at 45% so the edges still ascend, HGCO is no longer below the band."""
+    """HGCO sits at 0.63 × its value and AAPL at 1.175. Under a fair band from 0.6, with every
+    margin of safety at 45% so each class's edges still ascend, HGCO is no longer below the band."""
     [before] = client.get("/api/groups?by=sector").json()["groups"]
     assert before["shareBelowValue"] == 0.5  # HGCO below 0.90, AAPL not
-    safety = {"None": 0.45, "Narrow": 0.45, "Wide": 0.25}
+    safety = {"None": 0.45, "Narrow": 0.45, "Wide": 0.45}
     changes = {"fair_band": [0.6, 1.15], "margin_of_safety": safety}
     assert client.put("/api/settings", json={"changes": changes}, headers=HEADER).status_code == 200
     edges = client.get("/api/companies/AAPL").json()["designationEdges"]
     assert edges == [1 - 0.45, 0.6, 1.15, 1.35]
     [after] = client.get("/api/groups?by=sector").json()["groups"]
     assert after["shareBelowValue"] == 0.0
+
+
+def test_a_changed_threshold_shows_on_the_screen_and_in_the_detail_with_no_revalue(
+    client: TestClient,
+) -> None:
+    """Spec 2026-11-23 thresholds, 5.3 and 7: a saved trim multiple of 1.2 is on the screen's row
+    and in the company detail's result, which the drawer's meter and the agents' ``company`` tool
+    read, at the next read, with no refresh run; the value does not move. AAPL at 1.175 × its
+    value read above under the default trim multiple; the detail's word follows the row's."""
+    before = {row["ticker"]: row for row in _screen(client)["rows"]}["AAPL"]
+    value = before["mechanical"]
+    assert before["trimLevel"] == pytest.approx(value * 1.35) and before["designation"] == "above"
+    saved = client.put("/api/settings", json={"changes": {"trim_multiple": 1.16}}, headers=HEADER)
+    assert saved.status_code == 200
+    after = {row["ticker"]: row for row in _screen(client)["rows"]}["AAPL"]
+    assert (after["mechanical"], after["fairValue"]) == (value, value)
+    assert after["trimLevel"] == pytest.approx(value * 1.16)
+    assert after["designation"] == "well-above"  # 1.175 is at or above the new 1.16
+    result = client.get("/api/companies/AAPL").json()["result"]
+    assert result["value"] == value and result["levels"]["trim"] == after["trimLevel"]
+    assert (result["designation"], result["price_to_value"]) == (
+        after["designation"],
+        after["priceToValue"],
+    )
 
 
 def test_the_detail_reads_the_aging_fraction_of_the_settings(client: TestClient) -> None:
@@ -787,7 +811,9 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
     assert (body["review"], body["secondary"], body["report"], body["item"]) == (None,) * 4
     assert body["priceNeeds"] is None and body["result"]["designation"] == "above"
     # The policy's edges, by which the drawer keeps its price ÷ value figure inside the band.
-    assert body["designationEdges"] == pytest.approx([0.70, 0.90, 1.10, 1.35])
+    # AAPL's own edges, a Wide row's: the first is its buy level over its value
+    assert body["result"]["intermediates"]["moat"] == "Wide"
+    assert body["designationEdges"] == pytest.approx([0.80, 0.90, 1.10, 1.35])
     # The fraction of the window from which a validity window reads aging, as the Freshness
     # column does.
     assert body["agingFraction"] == 0.6667

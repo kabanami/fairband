@@ -231,9 +231,7 @@ def secondary_value(
     if per_share > 0:
         levels = levels_for(per_share, moat, policy)
         if price is not None and price > 0:
-            price_to_value, designation = designation_for(
-                price, per_share, policy.designation_edges
-            )
+            price_to_value, designation = designation_for(price, per_share, policy.edges_for(moat))
     return SecondaryValuation(
         form=form,
         parts=valued,

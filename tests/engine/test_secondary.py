@@ -78,6 +78,16 @@ def _drivers(drivers: Drivers, policy: Policy, **bridge: Any) -> SecondaryValuat
     )
 
 
+def test_a_secondary_valuation_reads_well_below_from_its_class_s_buy_level(policy: Policy) -> None:
+    """Spec 2026-11-23 thresholds, 5.2: a secondary valuation's word reads the edges of its moat
+    class, as a route's does: at 0.78 × its value a share, Well below on a Wide moat, whose buy
+    level is 0.80 ×, and Below on a Narrow one."""
+    for moat, word in (("Wide", "well-below"), ("Narrow", "below")):
+        value = _parts(ONE, 200.0, 100.0, 100.0, None, moat, policy).value_per_share  # type: ignore[arg-type]
+        made = _parts(ONE, 200.0, 100.0, 100.0, 0.78 * value, moat, policy)  # type: ignore[arg-type]
+        assert made.designation == word
+
+
 def test_one_part(policy: Policy) -> None:
     v = _parts(ONE, 200.0, 100.0, 100.0, 15.0, "None", policy)
     [part] = v.parts
@@ -93,7 +103,7 @@ def test_one_part(policy: Policy) -> None:
     assert (v.debt, v.cash, v.shares) == (200.0, 100.0, 100.0)
     assert v.levels == levels_for(v.value_per_share, "None", policy)
     assert (v.price_to_value, v.designation) == designation_for(
-        15.0, v.value_per_share, policy.designation_edges
+        15.0, v.value_per_share, policy.edges_for("None")
     )
     assert v.designation == "below"  # 15 ÷ 16.8242 = 0.8916, under the band's low of 0.90
     assert SECONDARY_METHOD == "fairband-secondary/2"

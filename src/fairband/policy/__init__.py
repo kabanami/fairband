@@ -202,6 +202,13 @@ class Policy:
         low, high = self.fair_band
         return (1 - self.margin_of_safety["Narrow"], low, high, self.trim_multiple)
 
+    def edges_for(self, moat: Moat) -> tuple[float, float, float, float]:
+        """e1 to e4 of a row of class ``moat``: 1 − its margin of safety, the fair band's low and
+        high, the trim multiple, so a price under the row's own buy level reads Well below (spec
+        2026-11-23 thresholds, 5.2)."""
+        low, high = self.fair_band
+        return (1 - self.margin_of_safety[moat], low, high, self.trim_multiple)
+
     @property
     def wide_terminal_roic_cap(self) -> float:
         """The Wide moat's terminal return cap: r + the spread."""

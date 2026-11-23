@@ -799,7 +799,7 @@ def _in_usd(
     levels = None if valuation.levels is None else levels_for(value, moat, policy)
     price_to_value, designation = valuation.price_to_value, valuation.designation
     if price_to_value is not None and price is not None:
-        price_to_value, designation = designation_for(price, value, policy.designation_edges)
+        price_to_value, designation = designation_for(price, value, policy.edges_for(moat))
     grid = valuation.grid
     if grid is not None:
         grid = replace(grid, cells=tuple(tuple(c / rate for c in row) for row in grid.cells))

@@ -2,6 +2,7 @@
 them."""
 
 import re
+from importlib import resources
 from pathlib import Path
 from typing import get_args
 
@@ -463,7 +464,7 @@ def test_method_1_8_reads_the_moat_table() -> None:
     the 1.8 row under policy v17, before policy v18's, and neither says a GuruFocus call runs."""
     text = METHOD.read_text(encoding="utf-8")
     assert (
-        "| Method version | `fairband-mechanical/1.8` (`fairband.engine.METHOD_VERSION`) |" in text
+        "| Method version | `fairband-mechanical/1.9` (`fairband.engine.METHOD_VERSION`) |" in text
     )
     two = _section(2)
     assert "GuruFocus `summary` |" not in two
@@ -608,7 +609,7 @@ def test_policy_v18_drops_three_values() -> None:
         "| Policy version | `fairband-policy-v19` (`src/fairband/policy/fairband-policy-v19.toml`) |"
     ) in text
     assert (
-        "| Method version | `fairband-mechanical/1.8` (`fairband.engine.METHOD_VERSION`) |" in text
+        "| Method version | `fairband-mechanical/1.9` (`fairband.engine.METHOD_VERSION`) |" in text
     )
     four = _section(4)
     assert "Every value comes from `fairband-policy-v19.toml`" in four
@@ -671,6 +672,43 @@ def test_policy_v19_sets_the_three_thresholds() -> None:
     for words in ("20%, 30% and 40% from Wide to None", "0.90 to 1.10", "1.35 (1.5)"):
         assert words in row, words
     assert "The method is unchanged at 1.8: no value moves." in row
+
+
+def test_method_1_9_gives_the_first_edge_by_moat_class() -> None:
+    """Spec 2026-11-23 thresholds, 5.2 and 5.3: 4.10 gives the first edge as the row's own buy
+    level over its value, with the three classes' figures, and says no result holds the margin of
+    safety; the routes' lists of RULE inputs no longer name it; the version table has the 1.9 row;
+    and the Methodology page's table of words names the buy level, with no edge of one class."""
+    text = METHOD.read_text(encoding="utf-8")
+    four = _section(4)
+    levels = four[four.index("### 4.10") : four.index("### 4.11")]
+    for words in (
+        "e1 = 1 − the margin of safety of the row's moat class, its buy level over its value",
+        (
+            "(0.80, 0.90, 1.10, 1.35 for a Wide row at the defaults; a Narrow row's e1 is 0.70 and"
+            " a None row's 0.60)"
+        ),
+        "No result holds the margin of safety among its inputs (method 1.9)",
+    ):
+        assert words in levels, words
+    assert "e1 = 1 − the Narrow margin of safety, e2" not in levels
+    policy = load_policy()
+    assert policy.edges_for("Wide") == pytest.approx((0.80, 0.90, 1.10, 1.35))
+    assert (policy.edges_for("Narrow")[0], policy.edges_for("None")[0]) == pytest.approx((0.7, 0.6))
+    assert "g_T, the margin of safety, the terminal return" not in text
+    assert "`f_score_low`, the margin of safety, and" not in text
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    assert rows[-1].startswith("| 1.9, policy v19 | 2026-11-23 | The row's own first edge (spec")
+    for words in (
+        "0.80 for a Wide row, 0.70 for a Narrow row and 0.60 for a None row at the defaults",
+        "No route writes the RULE input `margin_of_safety` any more",
+        "No value a share and no level moves.",
+    ):
+        assert words in rows[-1], words
+    page = resources.files("fairband.web").joinpath("static", "methodology.html").read_text("utf-8")
+    assert "designation_edges" not in page
+    assert '<td class="figure fb-num">under the buy level</td>' in page
+    assert "The first edge is the company's own buy level" in page
 
 
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:

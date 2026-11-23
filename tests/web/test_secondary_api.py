@@ -485,7 +485,7 @@ def test_a_secondary_valuation_reads_the_balance_sheet(
         levels.fair_high,
         levels.trim,
     )
-    ratio, designation = designation_for(150.0, body["valuePerShare"], policy.designation_edges)
+    ratio, designation = designation_for(150.0, body["valuePerShare"], policy.edges_for("Wide"))
     assert (body["priceToValue"], body["designation"]) == (ratio, designation)
     [part] = body["parts"]
     worked = [x * SCALE for x in (91.7431, 88.3764, 85.1332, 82.0091, 78.9996)]
@@ -855,7 +855,7 @@ def test_a_secondary_valuation_in_the_reporting_currency(
         levels.fair_high,
         levels.trim,
     )
-    ratio, designation = designation_for(50.0, value, policy.designation_edges)
+    ratio, designation = designation_for(50.0, value, policy.edges_for("Wide"))
     assert (body["priceToValue"], body["designation"]) == (ratio, designation)
     grid = body["grid"]
     assert (grid["rows"], grid["cols"]) == (list(engine.grid.rows), list(engine.grid.cols))

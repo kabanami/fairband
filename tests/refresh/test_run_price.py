@@ -367,18 +367,19 @@ def test_price_refresh_copies_refused_rows(env_valued: Env) -> None:
 
 
 def test_price_refresh_reprices_a_decline_row(env_valued: Env) -> None:
-    """A Decline row (spec 2026-11-06 13.1: $4.9533 a share, valued at $3.00, "well-below")
-    reprices from its stored intermediates alone: the value and the levels stay; the designation
-    ("below" at $4.00), the implied decline rate, the multiples and the expected return move to the
-    quote, as the engine's ``reprice`` moves them."""
+    """A Decline row (spec 2026-11-06 13.1: $4.9533 a share, valued at $3.00, "below": 0.606 × the
+    value, over its None class's buy level at 0.60 ×) reprices from its stored intermediates
+    alone: the value and the levels stay; the designation ("near" at $4.60), the implied decline
+    rate, the multiples and the expected return move to the quote, as the engine's ``reprice``
+    moves them."""
     env = env_valued
     decline = value_company(decline_inputs(), universe_deciles(), env.policy, date(2026, 10, 31))
-    assert (decline.route, decline.designation) == ("decline", "well-below")
+    assert (decline.route, decline.designation) == ("decline", "below")
     with closing(env.connect()) as conn:
         acme = next(c for c in latest_companies(conn) if c.symbol == "ACME")
         insert_companies(conn, [replace(acme, symbol="DCCO", name="Decline Co")])
         insert_snapshot(conn, decline, 1, clock=env.clock)
-    env.router.bodies["batch-quote"] = batch(NEW_PRICES | {"DCCO": 4.0})
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES | {"DCCO": 4.6})
 
     refresh_id = env.refresh().run("price")
 
@@ -387,8 +388,8 @@ def test_price_refresh_reprices_a_decline_row(env_valued: Env) -> None:
     assert (dcco.refresh_id, dcco.route, dcco.price, dcco.designation) == (
         refresh_id,
         "decline",
-        4.0,
-        "below",
+        4.6,
+        "near",
     )
     assert decline.levels is not None
     assert (dcco.value, dcco.buy_level, dcco.trim_level) == (
@@ -398,7 +399,7 @@ def test_price_refresh_reprices_a_decline_row(env_valued: Env) -> None:
     )
     now = env.clock.now
     assert dcco.result == reprice(
-        decline, 4.0, PRICE_DATE, env.policy, observed_at=now, entered_at=now
+        decline, 4.6, PRICE_DATE, env.policy, observed_at=now, entered_at=now
     )
     moved = dcco.result.intermediates["implied_decline_rate"]
     assert moved is not None and moved != decline.intermediates["implied_decline_rate"]

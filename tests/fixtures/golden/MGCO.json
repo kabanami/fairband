@@ -373,21 +373,6 @@
   {
    "estimate_method": null,
    "kind": "rule",
-   "name": "margin_of_safety",
-   "note": "Wide moat",
-   "provenance": {
-    "as_of": null,
-    "entered_at": null,
-    "observed_at": null,
-    "source": "policy"
-   },
-   "tag": "RULE",
-   "unit": "ratio",
-   "value": 0.2
-  },
-  {
-   "estimate_method": null,
-   "kind": "rule",
    "name": "terminal_roic",
    "note": "Wide moat",
    "provenance": {

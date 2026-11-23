@@ -74,6 +74,13 @@ def moat_row(conn: sqlite3.Connection, symbol: str) -> MoatRow | None:
     return None if row is None else _moat_row(row)
 
 
+def moat_classes(conn: sqlite3.Connection) -> dict[str, Moat]:
+    """The class in force of every company with a row, by symbol, in one read: the screen's rows
+    read a record's levels on it where the record's own result holds no class (spec 2026-11-23
+    thresholds, 5.3)."""
+    return {r["symbol"]: r["class"] for r in conn.execute("SELECT symbol, class FROM moat_classes")}
+
+
 def set_moat(
     conn: sqlite3.Connection,
     symbol: str,

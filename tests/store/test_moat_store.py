@@ -17,6 +17,7 @@ from fairband.store.moat import (
     MoatRow,
     file_moat,
     load_moat_file,
+    moat_classes,
     moat_row,
     set_moat,
     set_snapshot,
@@ -62,6 +63,15 @@ def _file_row(
 def _rows(conn: sqlite3.Connection) -> dict[str, MoatRow | None]:
     symbols = [r[0] for r in conn.execute("SELECT symbol FROM moat_classes ORDER BY symbol")]
     return {s: moat_row(conn, s) for s in symbols}
+
+
+def test_moat_classes_gives_every_company_s_class_in_one_read(conn: sqlite3.Connection) -> None:
+    """The class in force of every company with a row, by symbol, the screen's one read of the
+    table (spec 2026-11-23 thresholds, 5.3): a row with no class in its own result reads its
+    levels on this one. An empty table gives none."""
+    assert moat_classes(conn) == {}
+    load_moat_file(conn, _table({"AAA": "Wide", "BBB": "Narrow", "CCC": "None"}), AT)
+    assert moat_classes(conn) == {"AAA": "Wide", "BBB": "Narrow", "CCC": "None"}
 
 
 def test_the_load_writes_replaces_and_deletes_file_rows(conn: sqlite3.Connection) -> None:

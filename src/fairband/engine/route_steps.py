@@ -611,11 +611,12 @@ def sheet_entry(i: CompanyInputs) -> dict[str, Any]:
 
 def common_rules(policy: Policy, moat: Moat, terminal: float) -> tuple[TaggedInput, ...]:
     """The RULE inputs every route uses, with the route's moat and terminal return; the moat class
-    itself is ``route``'s entry (``moat_input``)."""
+    itself is ``route``'s entry (``moat_input``). The margin of safety is not among them (spec
+    2026-11-23 thresholds, 5.3): it moves no value, and the levels read it on the policy in force
+    (``levels.standing_for``), so a stored copy could show an older margin."""
     return (
         rule(policy, "required_return", policy.required_return, "ratio"),
         rule(policy, "terminal_growth", policy.terminal_growth, "ratio"),
-        rule(policy, "margin_of_safety", policy.margin_of_safety[moat], "ratio", f"{moat} moat"),
         rule(policy, "terminal_roic", terminal, "ratio", f"{moat} moat"),
     )
 

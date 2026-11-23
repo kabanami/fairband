@@ -24,6 +24,7 @@ from support.engine_companies import (
 from support.web import HEADER, NOW, TODAY
 
 from fairband.engine.designation import designation_for
+from fairband.engine.levels import levels_for
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
@@ -202,7 +203,8 @@ def test_the_detail_carries_the_review_with_its_bridge(
     (line,) = review.bridge
     price = results["AAPL"].price
     assert price is not None
-    ratio, word = designation_for(price, value, policy.designation_edges)
+    edges = policy.edges_for(review.result.intermediates["moat"])  # the review's own class
+    ratio, word = designation_for(price, value, edges)
     assert (ratio, word) == (review.result.price_to_value, review.result.designation)
     found = _detail(client, "AAPL")["review"]
     assert found == {
@@ -338,7 +340,8 @@ def test_a_refused_row_carries_its_valued_review(
     body = _detail(client, "AAL")
     assert (body["result"]["value"], body["result"]["refusal"]) == (None, refused.refusal)
     found = body["review"]
-    ratio, word = designation_for(refused.price, value, policy.designation_edges)
+    edges = policy.edges_for(review.result.intermediates["moat"])  # the review's own class
+    ratio, word = designation_for(refused.price, value, edges)
     assert (ratio, word) == (review.result.price_to_value, review.result.designation)
     assert (found["value"], found["priceToValue"], found["designation"]) == (value, ratio, word)
     assert found["levels"] == {
@@ -364,7 +367,7 @@ def test_a_refused_row_carries_its_valued_review(
         insert_snapshot(conn, replace(refused, price=100.0), 1, clock=lambda: NOW)
     repriced = _detail(client, "AAL")["review"]
     assert (repriced["priceToValue"], repriced["designation"]) == designation_for(
-        100.0, value, policy.designation_edges
+        100.0, value, edges
     )
 
 
@@ -377,15 +380,18 @@ def test_a_refused_row_carries_its_counting_secondary(
 ) -> None:
     """AAL's route refused; its secondary valuation counts on its snapshot, so the drawer draws
     the secondary's band (spec 18.2, the ruling of 2026-11-07): the levels, price ÷ value and its
-    word at the latest snapshot's price on the policy's edges, and the parts with their values
-    as the secondary read serves them (18.3)."""
+    word at the latest snapshot's price, on the policy in force and the company's class in the
+    moat table (spec 2026-11-23 thresholds, 5.3), and the parts with their values as the
+    secondary read serves them (18.3)."""
     refused = results["AAL"]
     assert refused.value is None and refused.price is not None
     with closing(connect(db_path)) as conn:
         secondary = secondary_row(conn, secondaries["AAL"])
     assert secondary is not None and secondary.buy_level is not None
     value = secondary.value_per_share
-    ratio, word = designation_for(refused.price, value, policy.designation_edges)
+    moat = _detail(client, "AAL")["moat"]  # the company's class in the moat table
+    in_force, edges = levels_for(value, moat, policy), policy.edges_for(moat)
+    ratio, word = designation_for(refused.price, value, edges)
     served = client.get("/api/companies/AAL/secondary").json()["secondaryValuations"][0]
     found = _detail(client, "AAL")["secondary"]
     assert found == {
@@ -393,10 +399,10 @@ def test_a_refused_row_carries_its_counting_secondary(
         "form": "parts",
         "valuePerShare": value,
         "levels": {
-            "buy": secondary.buy_level,
-            "fairLow": secondary.fair_low,
-            "fairHigh": secondary.fair_high,
-            "trim": secondary.trim_level,
+            "buy": in_force.buy,
+            "fairLow": in_force.fair_low,
+            "fairHigh": in_force.fair_high,
+            "trim": in_force.trim,
         },
         "priceToValue": ratio,
         "designation": word,
@@ -417,7 +423,7 @@ def test_a_refused_row_carries_its_counting_secondary(
         insert_snapshot(conn, replace(refused, price=100.0), 1, clock=lambda: NOW)
     repriced = _detail(client, "AAL")["secondary"]
     assert (repriced["priceToValue"], repriced["designation"]) == designation_for(
-        100.0, value, policy.designation_edges
+        100.0, value, edges
     )
     assert repriced["priceToValue"] == 100.0 / value
 

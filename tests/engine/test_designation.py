@@ -4,7 +4,7 @@ policy's edges; the worked numbers of spec 13.3 on a value of 100."""
 import pytest
 
 from fairband.engine.designation import designation_for
-from fairband.policy import load_policy
+from fairband.policy import Moat, load_policy
 
 EDGES = (0.65, 0.85, 1.15, 1.50)
 
@@ -33,3 +33,18 @@ def test_the_ratio_is_the_plain_division() -> None:
 
 def test_the_policy_holds_the_edges() -> None:
     assert load_policy().designation_edges == pytest.approx((0.70, 0.90, 1.10, 1.35))
+
+
+@pytest.mark.parametrize(
+    ("moat", "edges"),
+    [
+        ("Wide", (0.80, 0.90, 1.10, 1.35)),
+        ("Narrow", (0.70, 0.90, 1.10, 1.35)),
+        ("None", (0.60, 0.90, 1.10, 1.35)),
+    ],
+)
+def test_the_first_edge_is_the_rows_own_buy_level(moat: Moat, edges: tuple[float, ...]) -> None:
+    """Spec 2026-11-23 thresholds, 5.2: the edges of a row of a moat class are 1 − that class's
+    margin of safety, the fair band's two ends and the trim multiple, so a price under the row's
+    own buy level reads Well below."""
+    assert load_policy().edges_for(moat) == pytest.approx(edges)

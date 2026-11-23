@@ -90,7 +90,6 @@ bounded: one launch in flight for an item, and 15 seconds for the window command
 opener or no port answers it 503 and starts nothing.
 """
 
-import json
 import logging
 import os
 import re
@@ -110,7 +109,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import Scope
 
 from fairband.config import Settings, utcnow
-from fairband.engine.types import ValuationResult, money_of, rated, result_to_json
+from fairband.engine.types import ValuationResult, money_of, rated
 from fairband.launch.command import Opener
 from fairband.launch.settings import read_launch_file
 from fairband.policy import Policy
@@ -123,7 +122,7 @@ from fairband.refresh.run import KINDS
 from fairband.refresh.worker import RefreshWorker
 from fairband.store.companies import CompanyRow, latest_companies, latest_company
 from fairband.store.launches import fail_opening
-from fairband.store.moat import moat_row
+from fairband.store.moat import moat_classes, moat_row
 from fairband.store.refreshes import (
     RefreshRow,
     RefreshRunning,
@@ -166,10 +165,12 @@ from fairband.web.rows import (
     agent_fields,
     company_json,
     group_rows,
+    moat_of,
     placeholder_row,
     progress_json,
     refresh_json,
     rested_on,
+    result_json,
     screen_row,
     snapshot_json,
     sort_rows,
@@ -323,9 +324,11 @@ def create_app(
             }
             rest_on = {i for s, found in records.items() for i in rested_on(snapshots[s], *found)}
             cited = snapshot_rows(conn, rest_on)
-        edges = read_under.designation_edges
+            classes = moat_classes(conn) if records else {}
         agents = {
-            symbol: agent_fields(snapshots[symbol], *found, cited, today, edges)
+            symbol: agent_fields(
+                snapshots[symbol], *found, cited, today, read_under, classes.get(symbol)
+            )
             for symbol, found in records.items()
         }
         aging, mark_min = read_under.aging_fraction, read_under.warning_mark_min
@@ -334,7 +337,14 @@ def create_app(
             watchlists = lists.get(snapshot.symbol, [])
             fields = agents.get(snapshot.symbol, NO_AGENT_FIELDS)
             return screen_row(
-                snapshot, company, today, aging, watchlists, fields, mark_min=mark_min
+                snapshot,
+                company,
+                today,
+                aging,
+                watchlists,
+                fields,
+                mark_min=mark_min,
+                policy=read_under,
             )
 
         def row(company: CompanyRow) -> dict[str, Any]:
@@ -373,13 +383,16 @@ def create_app(
         if by not in GROUP_BY:
             raise HTTPException(400, f"by must be sector, industry, phase or cap, not {by}")
         rows, _, read_under = screen_rows(clock().date())
-        return {"by": by, "groups": group_rows(rows, by, read_under.designation_edges)}
+        return {"by": by, "groups": group_rows(rows, by, read_under.fair_band[0])}
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:
-        """The company's latest snapshot in full, with its latest universe row, two of the effective
-        policy's values: the designation edges, by which the drawer keeps its price ÷ value figure
-        inside the word's band, and ``aging_fraction``, from which a validity window reads aging
+        """The company's latest snapshot in full, its levels, price ÷ value and word read on the
+        effective policy (``rows.result_json``; spec 2026-11-23 thresholds, 5.3), with its latest
+        universe row, two of the effective
+        policy's values: the designation edges of the company's own moat class (the result's, else
+        its row's of the moat table; none without a class), by which the drawer keeps its price ÷
+        value figure inside the word's band, and ``aging_fraction``, from which a validity window reads aging
         where the screen's Freshness column does (no page draws the window since it left the drawer,
         the company page's design 11); and the agents' records that the drawer and the company page
         read (``research_api.agent_records``: ``review``, ``secondary``, ``report``, ``item``), with
@@ -426,7 +439,11 @@ def create_app(
             logo = logo_route(conn, snapshot.symbol)
             adr = adr_flag(conn, symbol, listed)
             note_count = len(notes_for(conn, snapshot.symbol))
-            moat_class = moat_json(moat_row(conn, snapshot.symbol), table)
+            held = moat_row(conn, snapshot.symbol)
+            moat_class = moat_json(held, table)
+        # the edges of the company's own class: the result's, else its row's of the moat table
+        own_class = moat_of(snapshot.result) or (None if held is None else held.moat)
+        edges = None if own_class is None else list(read_under.edges_for(own_class))
         warnings = warning_words(snapshot.result.flags)
         review = records["review"]
         reviewed = None if review is None else review["value"]
@@ -437,11 +454,11 @@ def create_app(
             "logo": logo,
             **_money_json(snapshot.result, adr),
             "snapshot": snapshot_json(snapshot),
-            "result": json.loads(result_to_json(snapshot.result)),
+            "result": result_json(snapshot, read_under),
             "warnings": warnings,
             "marked": is_marked(snapshot.value, reviewed, warnings, mark_min),
             "today": today.isoformat(),
-            "designationEdges": list(read_under.designation_edges),
+            "designationEdges": edges,
             "agingFraction": read_under.aging_fraction,
             **records,
             "moatClass": moat_class,

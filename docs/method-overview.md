@@ -8,7 +8,7 @@ it.
 The engine gives each company in the universe a value a share, or a stated reason for none. It is
 rule-based and holds no AI model. It reads vendor data stored at each refresh. The same inputs,
 versions and settings give the same result, bit for bit. This page describes method
-`fairband-mechanical/1.8` and policy `fairband-policy-v18`. (method 0, 2, 10)
+`fairband-mechanical/1.9` and policy `fairband-policy-v19`. (method 0, 2, 10)
 
 ## From data to a value
 

@@ -35,7 +35,7 @@ Each tab's read answers ``quote``, the head's figures on every tab (``page_fmp.h
   them (``reports_api.report_list``); ``report``, the revision ``report`` names, else the latest,
   whole as the report read answers it (``reports_api.report_json``), on the effective policy;
   ``call``, its value card's figures from the snapshot it rests on and the review and the
-  secondary valuation it names (``research_page.report_call``, on the policy's designation edges);
+  secondary valuation it names (``research_page.report_call``, on that record's stored levels);
   ``ofReport``, ``{killCriteria, newsItems}``, the records its cards draw
   (``research_page.of_report``), each as the research read serves it; the three ``null`` for a
   company with no report. ``records`` is the research read's eight lists
@@ -622,7 +622,7 @@ def _report_parts(
     reporting = reporting_currency(conn, symbol)
     return {
         "report": report_json(conn, report, policy, tax),
-        "call": report_call(snapshot, review, secondary, policy.designation_edges),
+        "call": report_call(snapshot, review, secondary),
         "ofReport": {
             "killCriteria": [criterion_json(k, reporting) for k in criteria],
             "newsItems": [record_json(n) for n in news],
