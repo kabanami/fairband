@@ -27,8 +27,10 @@
 //   {"do": "follow", "name"}                     the Statistics table's link `name` is pressed
 //   {"do": "sort", "column"}                     the table's head `column` is pressed: the view
 //                                                that shows sorts by it (app.js's sortBy)
-//   {"do": "list", "id"}                         the watchlist page's head names the list `id`
-//                                                (FairbandPage.selectList, as watchlists.js does)
+//   {"do": "list", "id"}                         the watchlist page's head names the list `id`, as
+//                                                watchlists.js's select does: FairbandPage.listId,
+//                                                the address #watchlists/<id> it writes itself, and
+//                                                FairbandPage.selectList
 //   {"do": "tick"}                               the time comes for app.js's and controls.js's
 //                                                pending timers: each fires, in the order set
 //   {"do": "visibility", "hidden"}               the page is hidden (true), as the browser's tab
@@ -51,11 +53,14 @@
 // link, whether the press kept the browser from following it, on a key whether a listener
 // prevented its default. Then what the refresh layer's root draws (spec 2026-11-23 refresh
 // experience, 4.1; null before it draws): whether it is on (is-on), whether it is a modal dialog
-// labelled by its title, its aria-hidden, the title's words, whether the run bar is drawn, the
-// stage word drawn in its place, the sentence, whether Keep reading stands, Cancel as "enabled",
-// "disabled" or null for none, and the notice (null for none); whether each child of the body but
-// the layer's mount is inert, main.app-page first; and the times FairbandPage.closePopups ran in
-// the step.
+// labelled by its title, its aria-hidden, whether it is inert itself, whether it holds a panel,
+// and the panel's parts, the one drawn or the one it keeps as the lock lifts: the title's words,
+// whether the run bar is drawn, the stage word drawn in its place, the sentence, whether Keep
+// reading stands, Cancel as "enabled", "disabled" or null for none, and the notice (null for
+// none); whether each child of the body but the layer's mount is inert, main.app-page first; the
+// times FairbandPage.closePopups ran in the step; and whether a panel the step drew took the focus
+// as it mounted: as React does, the driver hands a panel's ref a node of its own when a panel of
+// another key than the last is drawn.
 //
 //   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -229,6 +234,8 @@ function layer() {
     dialog: top.props.role === 'dialog' && top.props['aria-modal'] === 'true' &&
       Boolean(title) && top.props['aria-labelledby'] === title.props.id,
     hidden: top.props['aria-hidden'] || null,
+    inert: top.props.inert === '' || top.props.inert === true,
+    panel: Boolean(one('app-layer__panel')),
     title: words('app-layer__title'),
     bar: all.some((e) => e.type === window.Fairband.RunProgress),
     stage: words('app-layer__stage'),
@@ -237,6 +244,22 @@ function layer() {
     cancel: cancel ? (cancel.props.disabled ? 'disabled' : 'enabled') : null,
     notice: words('app-layer__notice'),
   };
+}
+
+// The layer's panel, mounted as React mounts it: when the layer draws a panel of another key than
+// the last, its ref is handed a node, whose focus the step records. Gives whether it took the
+// focus.
+let mountedKey = null;
+function mount() {
+  const root = rootOn('layer');
+  const panel = [...elements(root && root.drawn)].find((e) => hasClass(e, 'app-layer__panel'));
+  if (!panel || panel.props.key === mountedKey) return false;
+  mountedKey = panel.props.key;
+  let focused = false;
+  if (panel.props.ref) {
+    panel.props.ref({ focus() { focused = true; }, querySelector() { return null; } });
+  }
+  return focused && panel.props.tabIndex === -1;
 }
 
 // The layer's button `name`, pressed: a disabled one does nothing, as in the browser.
@@ -295,7 +318,11 @@ for (const step of steps) {
     prevented = false;
     link.props.onClick({ preventDefault() { prevented = true; } });
   } else if (step.do === 'sort') table().props.onSort(step.column);
-  else if (step.do === 'list') P.selectList(step.id);
+  else if (step.do === 'list') {
+    P.listId = step.id;
+    history.replaceState(null, '', '#watchlists' + (step.id == null ? '' : '/' + step.id));
+    P.selectList(step.id);
+  }
   else if (step.do === 'tick') {
     for (const timer of timers.splice(0)) timer.run();
   } else if (step.do === 'visibility') {
@@ -347,6 +374,7 @@ for (const step of steps) {
     inert: document.body.children.filter((child) => child !== panels.layer)
       .map((child) => Boolean(child.inert)),
     closed,
+    focused: mount(),
   });
 }
 process.stdout.write(JSON.stringify(trace));

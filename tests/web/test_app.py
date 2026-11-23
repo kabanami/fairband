@@ -1231,12 +1231,11 @@ def test_page_opens_the_view_the_hash_names() -> None:
         show
     )
     assert "P.section = tab === 'methodology' && section ? section : null;" in show
-    assert "state.address = tab === 'screen' ? location.pathname" in show
+    assert "history.replaceState(null, '', tab === 'screen' ? location.pathname" in show
     assert (
         ": '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : '') +"
     ) in show
-    assert "(tab === 'watchlists' && P.listId != null ? '/' + P.listId : '');" in show
-    assert "history.replaceState(null, '', state.address);" in show
+    assert "(tab === 'watchlists' && P.listId != null ? '/' + P.listId : ''));" in show
     assert "panels[id].hidden = id !== tab && !(id === 'screen' && tab === 'watchlists');" in show
     assert "if (P.onShow[tab]) P.onShow[tab]();" in show
     assert "var parts = location.hash.slice(1).split('/');" in js

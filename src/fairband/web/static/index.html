@@ -117,9 +117,9 @@
   @media (prefers-color-scheme: light) {
     :root:not([data-theme]) { --app-scrim: rgb(17 22 27 / 0.5); }
   }
-  /* Over the whole page, the header included; it fades in and out over 150 ms, under the
-     system's reduced-motion setting too, a fade of colour being no movement (4.8). Hidden, it
-     takes no pointer. */
+  /* Over the whole page, the header included; it fades in and out over 150 ms with its panel,
+     which it keeps as the lock lifts, under the system's reduced-motion setting too, a fade of
+     colour being no movement (4.8). Hidden, it takes no pointer. */
   .app-layer {
     position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center;
     justify-content: center; background: var(--app-scrim); opacity: 0; visibility: hidden;
@@ -127,11 +127,12 @@
   }
   .app-layer.is-on { opacity: 1; visibility: visible; transition: opacity 150ms; }
   /* The panel on the raised surface, 400px wide, or the window's width less a 16px gutter each
-     side, its border and padding inside that width. */
+     side, its border and padding inside that width. It takes the focus as the layer turns on,
+     with no ring: its edge already shows where the focus is. */
   .app-layer__panel {
     box-sizing: border-box; width: min(400px, calc(100vw - 32px)); padding: var(--space-5);
     background: var(--surface-raised); border: 1px solid var(--hairline);
-    border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); outline: none;
   }
   .app-layer__title { margin: 0 0 var(--space-3); }
   /* The run bar in the panel: its stage word and its counts on one line, the track under them

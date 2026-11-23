@@ -678,8 +678,10 @@ CANCEL_URL = "/api/refresh/cancel"
 def test_a_whole_run_locks_the_page(kind: str, title: str) -> None:
     """A run of the whole screen draws the layer over the page: a modal dialog labelled by its
     title, the run bar, the sentence and Cancel. Every child of the body but the layer is inert,
-    main.app-page and the mounts beside it, and the popups close as the layer turns on, once.
-    Before the run the layer is drawn off, empty and hidden from a screen reader."""
+    main.app-page and the mounts beside it, and the popups close as the layer turns on, once. The
+    panel itself takes the focus as it turns on, not a button, so a key pressed by reflex neither
+    cancels the run nor lifts the lock; drawn again under the same lock, it does not take it
+    again. Before the run the layer is drawn off, empty, inert and hidden from a screen reader."""
     landed, _, locked, _, again = _trace(
         [LANDED, TICK, _alive(67, kind, None), TICK, _alive(67, kind, None)]
     )
@@ -687,6 +689,8 @@ def test_a_whole_run_locks_the_page(kind: str, title: str) -> None:
         "on": False,
         "dialog": False,
         "hidden": "true",
+        "inert": True,
+        "panel": False,
         "title": None,
         "bar": False,
         "stage": None,
@@ -695,14 +699,25 @@ def test_a_whole_run_locks_the_page(kind: str, title: str) -> None:
         "cancel": None,
         "notice": None,
     }
-    assert landed["inert"] == FREE
+    assert landed["inert"] == FREE and landed["focused"] is False
     layer = locked["layer"]
-    assert (layer["on"], layer["dialog"], layer["hidden"]) == (True, True, None)
-    assert (layer["title"], layer["bar"], layer["stage"]) == (title, True, None)
+    assert (layer["on"], layer["dialog"], layer["hidden"], layer["inert"]) == (
+        True,
+        True,
+        None,
+        False,
+    )
+    assert (layer["panel"], layer["title"], layer["bar"], layer["stage"]) == (
+        True,
+        title,
+        True,
+        None,
+    )
     assert layer["cancel"] == "enabled" and layer["notice"] is None
     assert layer["sentence"] in (LOCKED, KEPT)
-    assert locked["inert"] == HELD and locked["closed"] == 1
+    assert locked["inert"] == HELD and locked["closed"] == 1 and locked["focused"] is True
     assert again["layer"] == layer and again["inert"] == HELD and again["closed"] == 0
+    assert again["focused"] is False
 
 
 def test_the_layer_draws_the_stage_word_alone_while_the_total_is_0() -> None:
@@ -735,7 +750,7 @@ def test_keep_reading_stands_on_the_long_runs_only(kind: str, keep: bool) -> Non
 def test_keep_reading_lifts_the_lock_for_that_run_alone() -> None:
     """The run goes on and the page is as under a run today: the bar in the status line, the
     tables faint, Cancel in the header. The next answer about the same run keeps the page free;
-    another run locks it again."""
+    another run locks it again, with a panel of its own, which takes the focus."""
     *_, locked, kept, _, same, _, other = _trace(
         [
             LANDED,
@@ -753,17 +768,25 @@ def test_keep_reading_lifts_the_lock_for_that_run_alone() -> None:
     assert (kept["run"], kept["recomputing"], kept["actions"]) == (True, True, ["Cancel"])
     assert same["layer"]["on"] is False and same["inert"] == FREE
     assert other["layer"]["on"] is True and other["inert"] == HELD
+    assert other["layer"]["title"] == "Refreshing all" and other["focused"] is True
 
 
 @pytest.mark.parametrize("status", ["done", "failed", "cancelled"])
 def test_the_run_s_end_lifts_the_lock(status: str) -> None:
-    """A run that ends, done or not, takes the layer away, and the page is free again."""
+    """A run that ends, done or not, takes the layer away, and the page is free again. The layer
+    keeps the panel it last drew, so the scrim and the panel fade out together (4.1), while the
+    layer is hidden from a screen reader and inert: nothing in it can be reached."""
     *_, locked, _, ended = _trace(
         [LANDED, TICK, _alive(67, "price", None), TICK, _idle(_run(67, "price", status=status))]
     )
     assert locked["layer"]["on"] is True
-    assert ended["layer"]["on"] is False and ended["layer"]["hidden"] == "true"
-    assert ended["inert"] == FREE and ended["run"] is False
+    assert ended["layer"]["on"] is False and ended["layer"]["dialog"] is False
+    assert (ended["layer"]["hidden"], ended["layer"]["inert"]) == ("true", True)
+    assert ended["layer"]["panel"] is True
+    assert {key: ended["layer"][key] for key in ("title", "bar", "sentence", "cancel")} == {
+        key: locked["layer"][key] for key in ("title", "bar", "sentence", "cancel")
+    }
+    assert ended["inert"] == FREE and ended["run"] is False and ended["focused"] is False
 
 
 def test_a_whole_run_another_page_started_locks_too() -> None:
@@ -798,8 +821,8 @@ def test_a_failed_status_read_offers_keep_reading_on_a_price_run() -> None:
 
 def test_back_and_forward_are_put_back_while_locked() -> None:
     """The plan's review focus 5: a change of the address while the lock holds (Back, Forward, a
-    hash typed) is put back to the address the page last set, and nothing new shows or reads.
-    Once the run ends, the address opens its view again."""
+    hash typed) is put back to the address the page held as the lock began, and nothing new shows
+    or reads. Once the run ends, the address opens its view again."""
     *_, page, _, locked, back, forward, _, ended, opened = _trace(
         [
             LANDED,
@@ -833,6 +856,25 @@ def test_back_and_forward_are_put_back_while_locked() -> None:
         ]
     )
     assert (screen["hash"], screen["view"], screen["reads"]) == ("", "screen", [])
+
+
+def test_the_list_picked_is_the_address_put_back() -> None:
+    """The watchlist page writes its list's address itself, #watchlists/<id>, as the reader picks
+    a list in its head (watchlists.js), not through FairbandPage.show. The address put back while
+    locked is the one the page held as the lock began, so it names the list shown."""
+    *_, picked, _, locked, back = _trace(
+        [
+            LANDED,
+            _show("watchlists"),
+            {"do": "list", "id": 5},
+            TICK,
+            _alive(67, "price", None),
+            {"do": "hash", "hash": ""},
+        ]
+    )
+    assert (picked["hash"], picked["view"]) == ("#watchlists/5", "watchlists")
+    assert locked["layer"]["on"] is True
+    assert (back["hash"], back["view"], back["reads"]) == ("#watchlists/5", "watchlists", [])
 
 
 def test_escape_does_nothing_while_locked() -> None:

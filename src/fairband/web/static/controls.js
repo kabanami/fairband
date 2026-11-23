@@ -100,10 +100,14 @@
                       changed on the rows, as the page counted it (onChanged), fresh for MARK_MS
                       after it was counted; or null */
     kept: null, /* the id of the run the reader kept reading under (Keep reading), or null */
-    address: null, /* the address show last set; null before the first view opens */
+    address: null, /* the address the page held as the last lock began (lockPage), which a change
+                      of the address is put back to while the lock holds (fromHash) */
     statusFailed: false /* the last read of the refresh's state failed */
   };
   var shut = false; /* the page was locked at the last draw (lockPage) */
+  var locks = 0; /* the locks so far: each draws a panel of its own (layerView) */
+  var lastPanel = null; /* the panel the layer last drew, which it keeps as the lock lifts */
+  var viewed = false; /* a view has opened (show) */
   var timer = null;
   var inboxTimer = null;
   var freshTimer = null; /* ends the count's freshness (onChanged) */
@@ -347,19 +351,19 @@
      the Screen's place from the scroller as it turns to the list and a hidden scroller reads
      none; no other view tells it, so it keeps its mode while hidden.
      A view shown closes the watchlist popup and the Notes box (FairbandPage.closePopups), which
-     no press closes when the browser's Back or Forward moves the hash. The address it sets is
-     kept in state.address, which fromHash puts back while the page is locked (spec 2026-11-23
-     refresh experience, 4.1). */
+     no press closes when the browser's Back or Forward moves the hash. Once a view has opened
+     (viewed), fromHash holds the address while the page is locked (spec 2026-11-23 refresh
+     experience, 4.1). */
   function show(tab, section, id, report) {
+    viewed = true;
     if (VIEWS.indexOf(tab) === -1 || (tab === 'company' && !section)) tab = 'screen';
     var opened = state.tab !== tab;
     P.section = tab === 'methodology' && section ? section : null;
     var moved = tab === 'company' && keepCompany(section, id, report);
     var listed = tab === 'watchlists' && keepList(section);
-    state.address = tab === 'screen' ? location.pathname
+    history.replaceState(null, '', tab === 'screen' ? location.pathname
       : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : '') +
-        (tab === 'watchlists' && P.listId != null ? '/' + P.listId : '');
-    history.replaceState(null, '', state.address);
+        (tab === 'watchlists' && P.listId != null ? '/' + P.listId : ''));
     if (!opened && !P.section && !moved && !listed) return;
     state.tab = tab;
     state.detailsOpen = false; /* a view opened with no press, by Back or Forward, shuts it too */
@@ -432,10 +436,12 @@
      tab on the same report, the company's latest where no id is given, the hash replaced by the
      tab's; #report with no symbol is the Screen, as show has it (the Research tab's design,
      7.1). While the page is locked, a change of the address (Back, Forward, a hash typed) shows
-     nothing and is put back to the address show last set (spec 2026-11-23 refresh experience,
-     4.1); before show set one, the first view opens all the same. */
+     nothing and is put back to the address the page held as the lock began (state.address,
+     lockPage), whatever wrote it: show, or the watchlist page naming its list (spec 2026-11-23
+     refresh experience, 4.1). The first view opens all the same where the lock began before it,
+     as the page loads, and its address is the one held. */
   function fromHash() {
-    if (locked() && state.address !== null) {
+    if (locked() && viewed) {
       history.replaceState(null, '', state.address);
       return;
     }
@@ -443,7 +449,11 @@
     if (parts[0] === 'groups') parts[0] = 'statistics';
     if (parts[0] === 'report') show('company', parts[1], 'research', parts[2]);
     else show(parts[0], parts[1], parts[2], parts[3]);
+    if (locked()) state.address = address();
   }
+
+  /* The address the page holds: its path and its hash. */
+  function address() { return location.pathname + location.hash; }
 
   function groupBy(event) {
     state.by = event.target.value;
@@ -652,36 +662,44 @@
      run's kind. In its panel, the run bar as the status line draws it, or the stage word alone
      while the stage reports a total of 0; the sentence; the notice, where there is one; Cancel,
      which does what the header's does, disabled once asked; and Keep reading, where it stands
-     (keeps). Its first enabled button takes the focus as it turns on (focusFirst). Escape does
-     nothing to it. Not locked, the layer is drawn empty and hidden from a screen reader; it fades
-     in and out over 150 ms (index.html). */
+     (keeps). The panel itself takes the focus as the layer turns on (focusPanel), so a key pressed
+     by reflex neither cancels the run nor lifts the lock; Tab reaches the buttons. Escape does
+     nothing to it. Not locked, the layer is hidden from a screen reader and inert, and keeps the
+     panel it last drew (lastPanel), so the scrim and the panel fade out together over 150 ms
+     (index.html); before the first lock it holds none. Each lock draws a panel of its own, keyed
+     by the count of locks, so the panel a lock draws mounts, and takes the focus, as it turns
+     on. */
   function layerView(on) {
-    if (!on) return h('div', { className: 'app-layer', 'aria-hidden': 'true' });
+    if (!on) {
+      return h('div', { className: 'app-layer', 'aria-hidden': 'true', inert: '' }, lastPanel);
+    }
     var run = runProps(state.running);
     var keep = keeps(state.running);
     var notice = state.notice;
+    lastPanel = h('div', {
+      key: 'lock-' + locks, className: 'app-layer__panel', tabIndex: -1, ref: focusPanel
+    },
+      h('h2', { id: LAYER_TITLE, className: 'heading app-layer__title' },
+        LAYER_TITLES[state.running.kind]),
+      run.total > 0 ? h(F.RunProgress, run)
+        : h('div', { className: 'caption app-layer__stage' }, run.stage),
+      h('p', { className: 'caption app-layer__say' }, LOCKED + (keep ? KEEP : '')),
+      notice ? h('p', {
+        className: 'caption app-layer__notice' +
+          (notice.caution ? ' app-layer__notice--caution' : '')
+      }, notice.text) : null,
+      h('div', { className: 'app-layer__buttons' },
+        h(F.Button, {
+          key: 'cancel', variant: 'quiet', size: 'sm', disabled: state.cancelAsked,
+          onClick: cancel
+        }, 'Cancel'),
+        keep ? h(F.Button, {
+          key: 'keep', variant: 'primary', size: 'sm', onClick: keepReading
+        }, 'Keep reading') : null));
     return h('div', {
       className: 'app-layer is-on', role: 'dialog', 'aria-modal': 'true',
       'aria-labelledby': LAYER_TITLE
-    },
-      h('div', { className: 'app-layer__panel', ref: focusFirst },
-        h('h2', { id: LAYER_TITLE, className: 'heading app-layer__title' },
-          LAYER_TITLES[state.running.kind]),
-        run.total > 0 ? h(F.RunProgress, run)
-          : h('div', { className: 'caption app-layer__stage' }, run.stage),
-        h('p', { className: 'caption app-layer__say' }, LOCKED + (keep ? KEEP : '')),
-        notice ? h('p', {
-          className: 'caption app-layer__notice' +
-            (notice.caution ? ' app-layer__notice--caution' : '')
-        }, notice.text) : null,
-        h('div', { className: 'app-layer__buttons' },
-          h(F.Button, {
-            key: 'cancel', variant: 'quiet', size: 'sm', disabled: state.cancelAsked,
-            onClick: cancel
-          }, 'Cancel'),
-          keep ? h(F.Button, {
-            key: 'keep', variant: 'primary', size: 'sm', onClick: keepReading
-          }, 'Keep reading') : null)));
+    }, lastPanel);
   }
 
   /* Keep reading stands on a long run, a full refresh or a revalue of the whole screen, and on
@@ -700,27 +718,32 @@
     render();
   }
 
-  /* The panel's ref: its first enabled button takes the focus as the panel is drawn, which is as
-     the layer turns on. React calls it with the panel once, as it mounts, and with null as it
-     goes. */
-  function focusFirst(panel) {
-    var button = panel && panel.querySelector('button:not(:disabled)');
-    if (button) button.focus();
+  /* The panel's ref: the panel takes the focus as it is drawn, which is as the layer turns on.
+     React calls it with the panel once, as the lock's panel mounts, after the layer has lost its
+     inert, and with null as it goes. */
+  function focusPanel(panel) {
+    if (panel) panel.focus();
   }
 
   /* Locks the page or frees it (4.1). While it is locked, every child of the body but the layer's
      mount is inert: main.app-page and the mounts the scripts add beside it (the watchlist
      popup's, the Notes box's, the moat box's), so no pointer, key or focus reaches what is under
      the layer. It is set at each draw while locked, so a mount added under the lock is covered
-     too, and taken off once as the lock lifts. As the lock turns on, the open popups close
-     (FairbandPage.closePopups): they would stand under the layer, out of reach. */
+     too, and taken off once as the lock lifts. As the lock turns on, the page's address is kept
+     for the lock (state.address, which fromHash puts back), the lock is counted, so the layer
+     draws a panel of its own, and the open popups close (FairbandPage.closePopups): they would
+     stand under the layer, out of reach. */
   function lockPage(on) {
     if (on || shut) {
       Array.prototype.forEach.call(document.body.children, function (child) {
         if (child !== layerMount) child.inert = on;
       });
     }
-    if (on && !shut) P.closePopups();
+    if (on && !shut) {
+      state.address = address();
+      locks += 1;
+      P.closePopups();
+    }
     shut = on;
   }
 
