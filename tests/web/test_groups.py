@@ -172,7 +172,7 @@ def test_groups_by_phase_median_and_share(
             "count": 1,
             "valued": 1,
             "medianPriceToValue": pytest.approx(ratio(results, "STBL")),
-            "shareBelowValue": 0.0,
+            "shareBelowValue": 1.0,  # STBL at 0.89 × the value, under the band's 0.90
         },
         {"name": "Young Growth", "count": 1, **EMPTY},
         {"name": "unclassified", "count": 1, **EMPTY},  # NEWC, with no snapshot yet
@@ -187,7 +187,7 @@ def test_groups_by_sector_and_cap(client: TestClient, results: dict[str, Valuati
             "count": 2,
             "valued": 1,
             "medianPriceToValue": pytest.approx(ratio(results, "STBL")),
-            "shareBelowValue": 0.0,
+            "shareBelowValue": 1.0,
         },
         {
             "name": "Technology",
@@ -211,23 +211,23 @@ def test_groups_by_sector_and_cap(client: TestClient, results: dict[str, Valuati
             "count": 4,
             "valued": 3,
             "medianPriceToValue": pytest.approx(mid),
-            "shareBelowValue": pytest.approx(1 / 3),
+            "shareBelowValue": pytest.approx(2 / 3),  # BBB at 0.60 and STBL at 0.89, under 0.90
         },
         {"name": "none", "count": 1, **EMPTY},
     ]
 
 
 def test_share_below_value_reads_the_second_edge(tmp_path: Path, policy: Policy) -> None:
-    """LOW at 0.80 × the value is below value though above its Wide moat's buy level (0.75 ×);
-    HIGH at 0.90 × is not: the group's share is one half."""
+    """LOW at 0.85 × the value is below value though above its Wide moat's buy level (0.80 ×);
+    HIGH at 0.95 × is not: the group's share is one half."""
     deciles = universe_deciles()
     valued = value_company(mature_growth_inputs(), deciles, policy, TODAY)
     assert valued.value is not None and valued.levels is not None
-    assert valued.levels.buy == pytest.approx(0.75 * valued.value)
-    low = reprice(replace(valued, symbol="LOW"), 0.80 * valued.value, TODAY, policy)
-    high = reprice(replace(valued, symbol="HIGH"), 0.90 * valued.value, TODAY, policy)
+    assert valued.levels.buy == pytest.approx(0.80 * valued.value)
+    low = reprice(replace(valued, symbol="LOW"), 0.85 * valued.value, TODAY, policy)
+    high = reprice(replace(valued, symbol="HIGH"), 0.95 * valued.value, TODAY, policy)
     assert (low.designation, high.designation) == ("below", "near")
-    assert policy.designation_edges[1] == 0.85
+    assert policy.designation_edges[1] == 0.90
     db_path = tmp_path / "data" / "fairband.db"
     listed = [company("LOW", 1, "Technology", "mid"), company("HIGH", 1, "Technology", "mid")]
     seed(db_path, policy, listed, [low, high])
@@ -237,7 +237,7 @@ def test_share_below_value_reads_the_second_edge(tmp_path: Path, policy: Policy)
         "name": "Technology",
         "count": 2,
         "valued": 2,
-        "medianPriceToValue": pytest.approx(0.85),
+        "medianPriceToValue": pytest.approx(0.90),
         "shareBelowValue": 0.5,
     }
 

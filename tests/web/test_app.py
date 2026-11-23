@@ -398,12 +398,12 @@ def test_groups_and_the_drawer_read_the_edges_of_the_settings(client: TestClient
     """HGCO sits at 0.63 × its value and AAPL at 1.175. Under a fair band from 0.6, with the Narrow
     margin of safety at 45% so the edges still ascend, HGCO is no longer below the band."""
     [before] = client.get("/api/groups?by=sector").json()["groups"]
-    assert before["shareBelowValue"] == 0.5  # HGCO below 0.85, AAPL not
+    assert before["shareBelowValue"] == 0.5  # HGCO below 0.90, AAPL not
     safety = {"None": 0.45, "Narrow": 0.45, "Wide": 0.25}
     changes = {"fair_band": [0.6, 1.15], "margin_of_safety": safety}
     assert client.put("/api/settings", json={"changes": changes}, headers=HEADER).status_code == 200
     edges = client.get("/api/companies/AAPL").json()["designationEdges"]
-    assert edges == [1 - 0.45, 0.6, 1.15, 1.5]
+    assert edges == [1 - 0.45, 0.6, 1.15, 1.35]
     [after] = client.get("/api/groups?by=sector").json()["groups"]
     assert after["shareBelowValue"] == 0.0
 
@@ -787,7 +787,7 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
     assert (body["review"], body["secondary"], body["report"], body["item"]) == (None,) * 4
     assert body["priceNeeds"] is None and body["result"]["designation"] == "above"
     # The policy's edges, by which the drawer keeps its price ÷ value figure inside the band.
-    assert body["designationEdges"] == [0.65, 0.85, 1.15, 1.5]
+    assert body["designationEdges"] == pytest.approx([0.70, 0.90, 1.10, 1.35])
     # The fraction of the window from which a validity window reads aging, as the Freshness
     # column does.
     assert body["agingFraction"] == 0.6667

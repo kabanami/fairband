@@ -457,7 +457,8 @@ def test_a_refused_rows_secondary_sets_the_levels(
 ) -> None:
     """Spec 18.1, plan 3: on AAL's refused row the secondary valuation fills Reviewed, and the
     row's band, levels and word are its own, the word at the latest price: below at $150, the
-    price it was made at, and near once a reprice to $200 puts the price at 1.12 × its $178.24.
+    price it was made at, and above once a reprice to $200 puts the price at 1.12 × its $178.24,
+    over the band's 1.10.
     The Mechanical column stays empty and the refusal stays; the research read says the same
     word."""
     with closing(connect(db_path)) as conn:
@@ -472,7 +473,7 @@ def test_a_refused_rows_secondary_sets_the_levels(
     _snapshot(db_path, replace(refused, price=200.0))  # a reprice
     aal = _rows(client)["AAL"]
     assert _levels(aal) == _record(secondary, value, 200.0, edges)
-    assert (aal["designation"], aal["mechanical"]) == ("near", None)
+    assert (aal["designation"], aal["mechanical"]) == ("above", None)
     found = client.get("/api/companies/AAL").json()["secondary"]
     assert (found["priceToValue"], found["designation"]) == (
         aal["priceToValue"],
@@ -491,7 +492,7 @@ def test_the_rows_word_reads_the_effective_edges(
     changes = {"fair_band": [0.6, 1.15], "margin_of_safety": safety}
     assert client.put("/api/settings", json={"changes": changes}, headers=HEADER).status_code == 200
     detail = client.get("/api/companies/AAL").json()
-    assert detail["designationEdges"] == [1 - 0.45, 0.6, 1.15, 1.5]
+    assert detail["designationEdges"] == [1 - 0.45, 0.6, 1.15, 1.35]
     assert _rows(client)["AAL"]["designation"] == detail["secondary"]["designation"] == "near"
 
 

@@ -91,7 +91,7 @@ BAND_RULE = "the low must be below 1 and the high above 1"
 
 
 def _packaged_bytes() -> bytes:
-    return resources.files("fairband.policy").joinpath("fairband-policy-v18.toml").read_bytes()
+    return resources.files("fairband.policy").joinpath("fairband-policy-v19.toml").read_bytes()
 
 
 def _file_values(name: str) -> dict[str, Any]:
@@ -115,11 +115,11 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
 
 def test_values_match_design() -> None:
     p = load_policy()
-    assert p.version == "fairband-policy-v18" and len(p.hash) == 64
+    assert p.version == "fairband-policy-v19" and len(p.hash) == 64
     assert p.required_return == 0.09 and p.terminal_growth == 0.03
     assert p.runway_years == {"None": 5, "Narrow": 10, "Wide": 20}
-    assert p.margin_of_safety == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
-    assert p.fair_band == (0.85, 1.15) and p.trim_multiple == 1.5
+    assert p.margin_of_safety == {"None": 0.40, "Narrow": 0.30, "Wide": 0.20}
+    assert p.fair_band == (0.90, 1.10) and p.trim_multiple == 1.35
     assert p.wide_terminal_roic_cap == 0.13
     assert len(p.base_rates) == 11
     assert p.base_rates[0] == BaseRateClass(325, 0.085, "$0-325 Mn", 0.40)
@@ -149,12 +149,35 @@ def test_bounds_the_industry_fallback() -> None:
     assert load_policy().industry_peer_max == 10
 
 
-def test_v18_is_the_packaged_policy() -> None:
+def test_v19_is_v18_with_the_three_thresholds() -> None:
+    """Spec 2026-11-23 thresholds, 3 and 5.1: v19 is v18 with the margins of safety, the fair band
+    and the trim multiple the founder chose on 2026-11-23, each after a figure of Morningstar's
+    methodology; no other value changes."""
+    v18, v19 = _file_values("fairband-policy-v18.toml"), _file_values("fairband-policy-v19.toml")
+    changed = {"margin_of_safety", "fair_band", "trim_multiple"}
+    assert v18.keys() == v19.keys()
+    assert {k: v19[k] for k in v19.keys() - changed} == {k: v18[k] for k in v18.keys() - changed}
+    assert v19["margin_of_safety"]["value"] == {"None": 0.40, "Narrow": 0.30, "Wide": 0.20}
+    assert v19["fair_band"]["value"] == [0.90, 1.10]
+    assert v19["trim_multiple"]["value"] == 1.35
+    for name in changed:
+        assert "Morningstar" in v19[name]["source"] and "2026-11-23" in v19[name]["source"]
+
+
+def test_v18_holds_the_earlier_thresholds() -> None:
+    """The v18 file's own values, read without the loader, which loads v19: the margins of safety,
+    the fair band and the trim multiple of the earlier method."""
+    v18 = _file_values("fairband-policy-v18.toml")
+    assert v18["margin_of_safety"]["value"] == {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}
+    assert (v18["fair_band"]["value"], v18["trim_multiple"]["value"]) == ([0.85, 1.15], 1.5)
+
+
+def test_v19_is_the_packaged_policy() -> None:
     """Spec 2026-11-19 8.9: the Moat Score's two thresholds and GuruFocus's reuse window are gone
     from the policy; v17's warning threshold, 20%, and the mark's count, 3, stay (7.4), and the
     non-recurring flag's share stays gone."""
     p = load_policy()
-    assert p.version == "fairband-policy-v18"
+    assert p.version == "fairband-policy-v19"
     for gone in sorted(V18_DROPPED):
         assert not hasattr(p, gone), gone
     assert not hasattr(p.refresh, V18_DROPPED_REFRESH)
@@ -278,7 +301,7 @@ def test_the_packaged_policy_keeps_the_earlier_versions_values() -> None:
     }
     assert policy.refresh.fmp_calls_per_minute == 2850
     assert policy.refresh.rate_limit_hold_s == 60
-    assert policy.designation_edges == (0.65, 0.85, 1.15, 1.50)
+    assert policy.designation_edges == pytest.approx((0.70, 0.90, 1.10, 1.35))
     assert (policy.runoff_years, policy.runoff_recovery, policy.distress_sale_fraction) == (
         10,
         0.6,
@@ -378,7 +401,7 @@ def test_a_malformed_distress_table_is_refused(
 
 def test_derives_the_edges_and_the_wide_cap() -> None:
     p = load_policy()
-    assert p.designation_edges == (0.65, 0.85, 1.15, 1.5)
+    assert p.designation_edges == pytest.approx((0.70, 0.90, 1.10, 1.35))
     assert p.wide_terminal_roic_cap == 0.13
     assert p.wide_terminal_roic_spread == 0.04 and p.repricing_horizon_years == 3
     assert p.settings_hash == EMPTY_SETTINGS_HASH
@@ -568,7 +591,7 @@ def test_v18_is_v17_without_the_three_values() -> None:
     workers' comment counts FMP's calls alone and the hold's names no GuruFocus 429. The file's
     version and header say v18."""
     v17 = _file_values("fairband-policy-v17.toml")
-    v18 = load_policy().raw["values"]
+    v18 = _file_values("fairband-policy-v18.toml")  # its own file: the loader loads v19
     assert v17.keys() - v18.keys() == V18_DROPPED and v18.keys() <= v17.keys()
     kept = v18.keys() - {"refresh"}
     assert {k: v18[k] for k in kept} == {k: v17[k] for k in kept}
@@ -584,8 +607,8 @@ def test_v18_is_v17_without_the_three_values() -> None:
     assert refresh18["source"] == reworded != refresh17["source"]
     settings = {s.name for s in SETTINGS}
     assert "refresh.gf_reuse_days" not in settings and not settings & V18_DROPPED
-    text = _packaged_bytes().decode()
-    assert load_policy().raw["meta"] == {"version": "fairband-policy-v18"}
+    text = resources.files("fairband.policy").joinpath("fairband-policy-v18.toml").read_text()
+    assert tomllib.loads(text)["meta"] == {"version": "fairband-policy-v18"}
     assert text.startswith("# Fairband policy v18: every valuation constant the engine reads,")
     assert (
         "# v18: v17 without moat_wide_min, moat_narrow_min and refresh.gf_reuse_days "
@@ -848,7 +871,12 @@ def test_v6_is_v5_with_the_two_values_swapped() -> None:
     assert {k: v6[k] for k in kept} == {k: v5[k] for k in kept}
     assert v6["wide_terminal_roic_spread"]["value"] == 0.04
     assert v6["repricing_horizon_years"]["value"] == 3
-    assert v5["designation_edges"]["value"] == list(load_policy().designation_edges)
+    derived = [  # the edges as v6's own values give them: v19 changed the three they come from
+        1 - v6["margin_of_safety"]["value"]["Narrow"],
+        *v6["fair_band"]["value"],
+        v6["trim_multiple"]["value"],
+    ]
+    assert v5["designation_edges"]["value"] == pytest.approx(derived)
     assert v5["wide_terminal_roic_cap"]["value"] == load_policy().wide_terminal_roic_cap
 
 

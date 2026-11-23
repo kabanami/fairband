@@ -165,8 +165,9 @@ def test_apply_overlay_changes_the_value_and_the_derived_edges() -> None:
         {"required_return": 0.1, "fair_band": [0.8, 1.2], "universe.cap_floor_usd": 5e9},
     )
     assert p.required_return == 0.1 and p.wide_terminal_roic_cap == pytest.approx(0.14)
-    assert p.designation_edges == (0.65, 0.8, 1.2, 1.5) and p.universe.cap_floor_usd == 5e9
-    assert p.version == "fairband-policy-v18" and p.settings_hash == settings_hash(
+    assert p.designation_edges == pytest.approx((0.70, 0.8, 1.2, 1.35))
+    assert p.universe.cap_floor_usd == 5e9
+    assert p.version == "fairband-policy-v19" and p.settings_hash == settings_hash(
         {"required_return": 0.1, "fair_band": [0.8, 1.2]}
     )
 
@@ -312,7 +313,7 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
         "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
     ),
     (
-        {"fair_band": [0.65, 1.15]},
+        {"fair_band": [0.70, 1.15]},
         "margin_of_safety, fair_band: the band's low must be above 1 − the Narrow margin of safety",
     ),
     (
@@ -321,7 +322,7 @@ OUTSIDE: list[tuple[dict[str, Any], str]] = [
     ),
     ({"trim_multiple": 3.01}, "trim_multiple: must be up to 3.0"),
     (
-        {"trim_multiple": 1.15},
+        {"trim_multiple": 1.10},
         "fair_band, trim_multiple: the trim multiple must be above the band's high",
     ),
     ({"wide_terminal_roic_spread": 0.11}, "wide_terminal_roic_spread: must be from 0 to 10 points"),
@@ -460,8 +461,8 @@ INSIDE: list[dict[str, Any]] = [
     {"margin_of_safety": _by_moat(0.05, 0.05, 0.05), "fair_band": [0.96, 1.15]},
     {"margin_of_safety": _by_moat(0.70, 0.70, 0.70)},
     {"fair_band": [0.50, 1.01], "margin_of_safety": _by_moat(0.70, 0.55, 0.25)},
-    {"fair_band": [0.66, 1.15]},  # just above e1 = 0.65
-    {"margin_of_safety": _by_moat(0.45, 0.16, 0.05)},  # e1 = 0.84, just below the band's 0.85
+    {"fair_band": [0.71, 1.15]},  # just above e1 = 0.70
+    {"margin_of_safety": _by_moat(0.45, 0.11, 0.05)},  # e1 = 0.89, just below the band's 0.90
     {"fair_band": [0.99, 1.50], "trim_multiple": 3.0},
     {"wide_terminal_roic_spread": 0.0},
     {"wide_terminal_roic_spread": 0.10},
@@ -603,8 +604,8 @@ def test_a_thin_revenue_step_max_of_0_percent_or_more_is_accepted() -> None:
     [
         ("required_return", 0.09),
         ("runway_years", {"None": 5, "Narrow": 10, "Wide": 20}),
-        ("margin_of_safety", {"None": 0.45, "Narrow": 0.35, "Wide": 0.25}),
-        ("fair_band", [0.85, 1.15]),
+        ("margin_of_safety", {"None": 0.40, "Narrow": 0.30, "Wide": 0.20}),
+        ("fair_band", [0.90, 1.10]),
         ("wide_terminal_roic_spread", 0.04),
         ("return_without_goodwill_cap", 0.25),
         ("repricing_horizon_years", 3),

@@ -498,23 +498,23 @@ def test_cli_line_keeps_the_ratio_inside_its_band(env_with_deciles: Env) -> None
     acme = env.snapshot("ACME")
     assert acme.value is not None
     edges = env.policy.designation_edges
-    assert edges == (0.65, 0.85, 1.15, 1.50)
+    assert edges == (0.70, 0.90, 1.10, 1.35)
     value = f"{acme.value:.2f}"
 
     def line(ratio: float | None, designation: str | None) -> str:
         row = replace(acme, price_to_value=ratio, designation=designation)
         return cli._snapshot_line("ACME", row, edges)
 
-    assert line(0.8499, "below") == f"ACME  Mature Growth  value {value}  below (0.849 × value)"
-    assert line(1.1501, "above") == f"ACME  Mature Growth  value {value}  above (1.151 × value)"
-    assert line(0.6499, "well-below").endswith("well-below (0.649 × value)")
-    assert line(1.4999, "above").endswith("above (1.499 × value)")
+    assert line(0.8999, "below") == f"ACME  Mature Growth  value {value}  below (0.899 × value)"
+    assert line(1.1001, "above") == f"ACME  Mature Growth  value {value}  above (1.101 × value)"
+    assert line(0.6999, "well-below").endswith("well-below (0.699 × value)")
+    assert line(1.3499, "above").endswith("above (1.349 × value)")
     # A third decimal that rounds onto the edge too is kept a thousandth off it.
-    assert line(0.84996, "below").endswith("below (0.849 × value)")
-    assert line(1.15002, "above").endswith("above (1.151 × value)")
+    assert line(0.89996, "below").endswith("below (0.899 × value)")
+    assert line(1.10002, "above").endswith("above (1.101 × value)")
     # On an edge, and off every edge, two decimals as before.
-    assert line(85 / 100, "near").endswith("near (0.85 × value)")
-    assert line(150 / 100, "well-above").endswith("well-above (1.50 × value)")
+    assert line(90 / 100, "near").endswith("near (0.90 × value)")
+    assert line(135 / 100, "well-above").endswith("well-above (1.35 × value)")
     assert line(0.7512, "below").endswith("below (0.75 × value)")
     assert line(1.0468, "near").endswith("near (1.05 × value)")
     # A snapshot valued before the designation (method 0.5) has a value and no word.

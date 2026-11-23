@@ -95,7 +95,7 @@ def test_one_part(policy: Policy) -> None:
     assert (v.price_to_value, v.designation) == designation_for(
         15.0, v.value_per_share, policy.designation_edges
     )
-    assert v.designation == "near"  # 15 ÷ 16.8242 = 0.8916
+    assert v.designation == "below"  # 15 ÷ 16.8242 = 0.8916, under the band's low of 0.90
     assert SECONDARY_METHOD == "fairband-secondary/2"
 
 

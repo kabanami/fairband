@@ -9,11 +9,11 @@ policy = load_policy()
 
 def test_levels_wide() -> None:
     lv = levels_for(100.0, "Wide", policy)
-    assert lv == Levels(buy=75.0, fair_low=85.0, fair_high=115.0, trim=150.0)
+    assert lv == Levels(buy=80.0, fair_low=90.0, fair_high=110.0, trim=135.0)
 
 
 def test_levels_none_moat() -> None:
-    assert levels_for(100.0, "None", policy).buy == 55.0
+    assert levels_for(100.0, "None", policy).buy == 60.0
 
 
 def test_validity_states() -> None:

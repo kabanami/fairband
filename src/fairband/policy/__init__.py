@@ -1,6 +1,6 @@
 """The policy: every valuation constant, in one versioned TOML file with a source line per value.
 
-``load_policy`` reads ``fairband-policy-v18.toml`` from the package unless given a path. Each
+``load_policy`` reads ``fairband-policy-v19.toml`` from the package unless given a path. Each
 ``[values.<name>]`` table holds ``value`` and ``source``; a missing or malformed one raises
 ``ValueError`` naming the section. ``Policy.hash`` is the sha256 of the file bytes, so a result can
 cite the exact policy it was computed under. Code elsewhere holds no valuation constant. The v1
@@ -48,7 +48,9 @@ nothing and drops three values: the Moat Score's two thresholds, ``moat_wide_min
 ``moat_narrow_min``, unread since method 1.8 takes the class from the moat table, and the
 setting ``refresh.gf_reuse_days``, the reuse window of the provider ``gf``, whose stored value the
 overlay skips (``fairband.policy.settings``); the fetch calls that provider no more (spec
-2026-11-19 8.10).
+2026-11-19 8.10). v19 (spec 2026-11-23 thresholds, 3) adds and drops nothing and changes three
+values, the founder's of 2026-11-23: the margins of safety, 20%, 30% and 40% from Wide to None,
+the fair band, 0.90 to 1.10, and the trim multiple, 1.35.
 
 ``in_currency`` restates the policy for a company in another currency (spec 2026-11-10 7.3): the
 five nominal USD rates, the required return, the terminal growth, the inflation addition, the cap
@@ -70,7 +72,7 @@ from typing import Any, Literal
 
 Moat = Literal["Wide", "Narrow", "None"]
 
-_POLICY_FILE = "fairband-policy-v18.toml"
+_POLICY_FILE = "fairband-policy-v19.toml"
 _MOATS: tuple[Moat, ...] = ("None", "Narrow", "Wide")
 
 
@@ -228,7 +230,7 @@ def in_currency(policy: Policy, differential: float) -> Policy:
 
 
 def load_policy(path: Path | None = None) -> Policy:
-    """Parse the policy file (default: the packaged v18 file) into a ``Policy`` with the empty
+    """Parse the policy file (default: the packaged v19 file) into a ``Policy`` with the empty
     overlay's settings hash, and check every setting's range."""
     from fairband.policy.settings import EMPTY_SETTINGS_HASH, check
 

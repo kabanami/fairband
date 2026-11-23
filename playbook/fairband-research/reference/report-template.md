@@ -376,8 +376,8 @@ contracts, so revenue keeps compounding. The price counts on slower growth than 
 waits for two quarters of churn under the new prices.
 
 The price of $234.70 is below the value this report puts on the company, $283 a share, but above
-the price at which the discount to the value is wide enough to buy, $184. Prices close to the
-value run from $240 to $325.
+the price at which the discount to the value is wide enough to buy, $198. Prices close to the
+value run from $255 to $311.
 
 The company is in its Mature Growth stage. Revenue grew 11.0% a year over three years, which is
 high for its size. The operating margin is positive and rising. The business is not cyclical: its
@@ -462,11 +462,11 @@ figure is a cite.
         " is below the value this report puts on the company, ",
         {"cite": "$283", "ref": "review:89/value"},
         " a share, but above the price at which the discount to the value is wide enough to buy, ",
-        {"cite": "$184", "ref": "review:89/levels/buy"},
+        {"cite": "$198", "ref": "review:89/levels/buy"},
         ". Prices close to the value run from ",
-        {"cite": "$240", "ref": "review:89/levels/fair_low"},
+        {"cite": "$255", "ref": "review:89/levels/fair_low"},
         " to ",
-        {"cite": "$325", "ref": "review:89/levels/fair_high"},
+        {"cite": "$311", "ref": "review:89/levels/fair_high"},
         ".\n\nThe company is in its Mature Growth stage. Revenue grew ",
         {"cite": "11.0%", "ref": "snapshot:412/phase/growth_3y"},
         " a year over three years, which is high for its size. The operating margin is positive and rising. The business is not cyclical: its profits do not rise and fall with its industry's cycle.\n\nReasons for:\n\n1. Most revenue recurs each month.\n2. Customers rarely leave once their books run on the product.\n3. The company funds its growth from its own cash.\n\nMain risks:\n\n1. Customers may leave under the new prices.\n2. A payroll rival bundles accounting into its own product.\n3. Small firms cut spending in a recession.\n\nWhat would change the view:\n\n- Two quarters in a row of falling revenue.\n\nThe value is valid until 27 Jan 2027, the date of the next earnings report."

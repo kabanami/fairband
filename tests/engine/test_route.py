@@ -392,7 +392,7 @@ def test_mature_growth_inputs_cite_their_sources(
             "rule",
             rule,
         )
-    assert by_name["runway_years"].value == 20 and by_name["margin_of_safety"].value == 0.25
+    assert by_name["runway_years"].value == 20 and by_name["margin_of_safety"].value == 0.20
     assert by_name["moat_class"].note == "Wide" and by_name["belief"].value == pytest.approx(0.063)
 
 

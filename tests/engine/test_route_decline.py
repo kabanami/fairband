@@ -282,9 +282,9 @@ def test_the_worked_decline_row_values_at_4_953(
     assert im["capex_vs_depreciation"] == {"capex": -30 * M, "depreciation": 40 * M}
     assert im["eps"] == {"reported": 0.45, "clean": 0.45, "forward": None}
     assert im["epv"] == pytest.approx(0.45 / 0.09)
-    # $3.00 against $4.9533: 0.606 × the value, below 0.65
+    # $3.00 against $4.9533: 0.606 × the value, below 0.70
     assert (r.price_to_value, r.designation) == (3.0 / r.value, "well-below")
-    assert r.levels is not None and r.levels.buy == pytest.approx(r.value * 0.55)  # None moat
+    assert r.levels is not None and r.levels.buy == pytest.approx(r.value * 0.60)  # None moat
     # the price-side figures: no decline rate in the scan gives $3.00, the run-off being worth
     # 3.1251 at −50% (spec 13.1); the trailing P/E and no forward one; and the expected return
     # growing at the path's rates for years 2 to 4

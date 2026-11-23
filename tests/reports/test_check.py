@@ -1184,7 +1184,7 @@ def test_a_price_is_cited_to_cents(
     # a value a share and a level to cents or to whole dollars
     for text in ("$128", "$127.68"):
         assert _check(conn, policy, sid, _cite(text, f"snapshot:{sid}/value")) == []
-    assert _check(conn, policy, sid, _cite("$96", f"snapshot:{sid}/levels/buy")) == []
+    assert _check(conn, policy, sid, _cite("$102", f"snapshot:{sid}/levels/buy")) == []
 
 
 def test_a_policy_score_is_cited_to_its_decimals(

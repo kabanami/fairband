@@ -21,8 +21,8 @@ versions and settings give the same result, bit for bit. This page describes met
 3. **Value.** Each route but Start-up gives a value a share. It discounts future cash at the
    required return r, also called the hurdle rate. Most routes end with a terminal value, which
    grows at terminal growth forever. (method 4.8, 5a.7, 6b, 14.2)
-4. **Levels.** The buy level is the value less a margin of safety. The fair band is 0.85 to 1.15
-   times the value, and the trim level 1.5 times. (method 4.10)
+4. **Levels.** The buy level is the value less a margin of safety. The fair band is 0.90 to 1.10
+   times the value, and the trim level 1.35 times. (method 4.10)
 5. **Designation.** The price divided by the value falls in one of five bands, from Well below to
    Well above. The word describes the price, never an action. (method 4.10)
 
@@ -59,7 +59,7 @@ by the runway's end. (method 4.6 to 4.8)
   company. A rule on ten years of returns drafted it, corrected by hand where the rule is wrong.
   The owner or an agent may change a class, and the newest is in force. A company with no class
   is refused. On the mature routes, the runway is 5, 10 or 20 years, from None to Wide. The margin
-  of safety is 45%, 35% or 25%, in the same order. A Wide moat lifts the terminal return, up to r
+  of safety is 40%, 30% or 20%, in the same order. A Wide moat lifts the terminal return, up to r
   plus 4 points. (method 4.1, 4.7, 4.9, 4.9a)
 - **Policy.** By default r is 9% and terminal growth 3%. The belief is the Base Rate Book's median
   ten-year net income growth for companies of similar sales, plus 2 points. Many policy values are

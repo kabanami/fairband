@@ -1,7 +1,7 @@
 {
  "data_date": "2026-10-30",
  "deciles_refresh_id": 1,
- "designation": "near",
+ "designation": "below",
  "flags": [],
  "inputs": [
   {
@@ -317,7 +317,7 @@
    },
    "tag": "RULE",
    "unit": "ratio",
-   "value": 0.25
+   "value": 0.2
   },
   {
    "estimate_method": null,
@@ -574,10 +574,10 @@
   "value_per_share": 45.17763156726709
  },
  "levels": {
-  "buy": 33.88322367545032,
-  "fair_high": 51.95427630235715,
-  "fair_low": 38.400986832177026,
-  "trim": 67.76644735090063
+  "buy": 36.142105253813675,
+  "fair_high": 49.6953947239938,
+  "fair_low": 40.65986841054038,
+  "trim": 60.989802615810575
  },
  "phase": {
   "checks": [],

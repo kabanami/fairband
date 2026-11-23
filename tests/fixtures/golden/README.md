@@ -222,6 +222,14 @@ and GuruFocus's reuse window, which no route ever read. The policy version is ma
 settings hash, masked too, is the empty overlay's under either policy, so all seven files are
 unchanged byte for byte.
 
+All seven re-captured under policy v19 on 2026-11-23, the method unchanged at 1.8 (spec 2026-11-23
+thresholds, 3 and 5.1), for the three thresholds: the margins of safety of 20%, 30% and 40%, the
+fair band of 0.90 to 1.10 and the trim multiple of 1.35. No value a share moves. In the six
+valued files the four levels move and the RULE input `margin_of_safety` reads the new margin
+(0.20 on MGCO, MSCO and FXCO, 0.40 on HGCO, YGCO and DCCO). One word moves: MSCO's designation is
+"below" (price ÷ value 0.89, inside the old band and under the new one's 0.90). SUCO, a Start-up
+row with no value, is unchanged byte for byte.
+
 Run from the repository root:
 
 ```

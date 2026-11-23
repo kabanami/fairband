@@ -32,4 +32,4 @@ def test_the_ratio_is_the_plain_division() -> None:
 
 
 def test_the_policy_holds_the_edges() -> None:
-    assert load_policy().designation_edges == EDGES
+    assert load_policy().designation_edges == pytest.approx((0.70, 0.90, 1.10, 1.35))

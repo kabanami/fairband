@@ -278,7 +278,7 @@ _SOURCES: dict[str, str] = {
     f"segment:{SYMBOL}/product/Sensors/2025": "revenue by product, Sensors, fiscal 2025",
     f"table:{SYMBOL}/growth/gross_margin/2025": "the growth table, gross margin, fiscal 2025",
     f"table:{SYMBOL}/returns/roic/2025": "the returns table, ROIC, fiscal 2025",
-    "policy:required_return": "policy required_return, fairband-policy-v18",
+    "policy:required_return": "policy required_return, fairband-policy-v19",
     f"table:{SYMBOL}/growth/operating_margin/2025": (
         "the growth table, operating margin, fiscal 2025"
     ),
@@ -456,7 +456,7 @@ def _input(
     }
 
 
-_POLICY = "policy fairband-policy-v18"
+_POLICY = "policy fairband-policy-v19"
 APPENDIX_A: dict[str, Any] = {
     "snapshot": {
         "id": SNAPSHOT_ID,
@@ -562,7 +562,7 @@ APPENDIX_A: dict[str, Any] = {
     ],
     "versions": {
         "method": "fairband-mechanical/1.8",
-        "policy": "fairband-policy-v18",
+        "policy": "fairband-policy-v19",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "review": "fairband-review/1",
         "secondary": None,
@@ -808,7 +808,7 @@ _REVIEW: dict[str, Any] = {
     "mechanicalValue": 196.5,
     "bridge": [_RECORD_LINE],
     "overrideIds": [12],
-    "policyVersion": "fairband-policy-v18",
+    "policyVersion": "fairband-policy-v19",
     "methodVersion": "fairband-mechanical/1.8",
     "reviewMethod": "fairband-review/1",
     "settingsHash": EMPTY_SETTINGS_HASH,
@@ -913,7 +913,7 @@ RECORDS: dict[str, Any] = {
             "evidence": _EVIDENCE,
             "debtSource": "none",
             "cashSource": "none",
-            "policyVersion": "fairband-policy-v18",
+            "policyVersion": "fairband-policy-v19",
             "settingsHash": EMPTY_SETTINGS_HASH,
             "decilesRefreshId": None,
             "secondaryMethod": "fairband-secondary/2",

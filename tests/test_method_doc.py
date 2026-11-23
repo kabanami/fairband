@@ -534,9 +534,10 @@ def test_method_1_8_reads_the_moat_table() -> None:
     assert "the gate tests, the moat table |" not in sources
     assert "`docs/gurufocus-removal.md` 6.4" in sources
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-2].startswith("| 1.8, policy v17 | 2026-11-21 | The moat table (spec 2026-11-19 8")
+    row = next(x for x in rows if x.startswith("| 1.8, policy v17 |"))
+    assert row.startswith("| 1.8, policy v17 | 2026-11-21 | The moat table (spec 2026-11-19 8")
     for words in ('"no moat class"', "`moat_score`", "`moat_classes`", "unread", "74 corrections"):
-        assert words in rows[-2], words
+        assert words in row, words
     # the acceptance's counts on refresh 68's data, each with its denominator (spec 2026-11-19 10),
     # as the 1.7 row gives plan 2's; the class triples read again on the acceptance's copy
     for words in (
@@ -560,20 +561,20 @@ def test_method_1_8_reads_the_moat_table() -> None:
         ),
         "TTMI's, NVO's and RELX's stay",
     ):
-        assert words in rows[-2], words
-    assert "plan 3's readout counts them" not in rows[-2]
+        assert words in row, words
+    assert "plan 3's readout counts them" not in row
     # the 1.8 rows describe what ships, one version under policy v18: no GuruFocus call runs, and
     # the override of the tag is refused for the agent's verdict (the final review, I2 and M4)
     assert (
         "Assembly no longer reads GuruFocus's `summary`, and the call itself leaves with policy "
         "v18 (section 2)."
-    ) in rows[-2]
+    ) in row
     assert (
         "An override of `moat.class` is refused: an agent records its verdict with `moat_set`, and "
         "a report needs that verdict on its snapshot (14.2, 14.3, 16.3)."
-    ) in rows[-2]
-    for row in rows[-2:]:
-        assert "the fetch still asks" not in row and "runs until it goes" not in row
+    ) in row
+    for each in (x for x in rows if x.startswith("| 1.8, ")):
+        assert "the fetch still asks" not in each and "runs until it goes" not in each
     # section 2 says nothing unchanged from nothing; 4.9a's margin skips a statement with no
     # revenue too; the routes' DATA lists hold no RULE or JUDGMENT input (the final review, M5 to
     # M7)
@@ -604,16 +605,16 @@ def test_policy_v18_drops_three_values() -> None:
     under v17, saying no value moves."""
     text = METHOD.read_text(encoding="utf-8")
     assert (
-        "| Policy version | `fairband-policy-v18` (`src/fairband/policy/fairband-policy-v18.toml`) |"
+        "| Policy version | `fairband-policy-v19` (`src/fairband/policy/fairband-policy-v19.toml`) |"
     ) in text
     assert (
         "| Method version | `fairband-mechanical/1.8` (`fairband.engine.METHOD_VERSION`) |" in text
     )
     four = _section(4)
-    assert "Every value comes from `fairband-policy-v18.toml`" in four
+    assert "Every value comes from `fairband-policy-v19.toml`" in four
     assert (
-        "Policies v1 to v17 stay in the package unchanged, because the snapshots valued under them "
-        "cite their hashes. The engine loads v18 only."
+        "Policies v1 to v18 stay in the package unchanged, because the snapshots valued under them "
+        "cite their hashes. The engine loads v19 only."
     ) in four
     outside_history = text.replace(_section(11), "")
     for gone in ("`moat_wide_min`", "`moat_narrow_min`", "`refresh.gf_reuse_days`"):
@@ -627,11 +628,12 @@ def test_policy_v18_drops_three_values() -> None:
     assert "GuruFocus" not in depth
     assert "No call goes to GuruFocus" in _section(2) and "7 days" not in _section(2)
     rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
-    assert rows[-1].startswith(
+    row = next(x for x in rows if x.startswith("| 1.8, policy v18 |"))
+    assert row.startswith(
         "| 1.8, policy v18 | 2026-11-21 | The policy drops the Moat Score's two thresholds and "
         "GuruFocus's reuse window. "
     )
-    assert rows[-1].endswith(" The method is unchanged at 1.8: no value moves. |")
+    assert row.endswith(" The method is unchanged at 1.8: no value moves. |")
     for words in (
         "`moat_wide_min` and `moat_narrow_min`, unread since method 1.8",
         "the setting `refresh.gf_reuse_days` (spec 2026-11-19 8.9; 4.1)",
@@ -641,8 +643,34 @@ def test_policy_v18_drops_three_values() -> None:
             "no GuruFocus call (spec 2026-11-19 8.10; section 2)."
         ),
     ):
-        assert words in rows[-1], words
-    assert rows[-2].startswith("| 1.8, policy v17 |")
+        assert words in row, words
+    assert rows[rows.index(row) - 1].startswith("| 1.8, policy v17 |")
+
+
+def test_policy_v19_sets_the_three_thresholds() -> None:
+    """Spec 2026-11-23 thresholds, 3 and 5.1: section 4.1 gives the three values policy v19 sets,
+    each with the figure it had before and its source, 4.10 the band's and the trim's defaults,
+    and the version table a row for policy v19 under method 1.8 that says no value moves."""
+    four = _section(4)
+    for words in (
+        "| Margin of safety: None 40%, Narrow 30%, Wide 20% (policy v19; 45%, 35% and 25% before) |",
+        "| Fair band 0.90 to 1.10 × value (policy v19; 0.85 to 1.15 before) | `fair_band` | yes |",
+        "| Trim at 1.35 × value (policy v19; 1.5 before) | `trim_multiple` | yes |",
+        "Morningstar's Equity Research Methodology (September 2022, Exhibit 4)",
+    ):
+        assert words in four, words
+    levels = four[four.index("### 4.10") : four.index("### 4.11")]
+    assert "(0.90 and 1.10 at the defaults)" in levels and "(1.35 at the defaults)" in levels
+    assert "0.85 and 1.15 at the defaults" not in levels
+    policy = load_policy()
+    assert policy.margin_of_safety == {"None": 0.40, "Narrow": 0.30, "Wide": 0.20}
+    assert (policy.fair_band, policy.trim_multiple) == ((0.90, 1.10), 1.35)
+    rows = [x for x in _section(11).splitlines() if x.startswith("| 1.")]
+    row = next(x for x in rows if x.startswith("| 1.8, policy v19 |"))
+    assert row.startswith("| 1.8, policy v19 | 2026-11-23 | The thresholds (spec 2026-11-23")
+    for words in ("20%, 30% and 40% from Wide to None", "0.90 to 1.10", "1.35 (1.5)"):
+        assert words in row, words
+    assert "The method is unchanged at 1.8: no value moves." in row
 
 
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:

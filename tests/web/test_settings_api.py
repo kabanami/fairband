@@ -63,11 +63,11 @@ def test_get_settings_shape(client: TestClient) -> None:
     }
     assert r["description"].startswith("The yearly return you require")
     assert body["current"] == {
-        "policyVersion": "fairband-policy-v18",
+        "policyVersion": "fairband-policy-v19",
         "settingsHash": EMPTY_SETTINGS_HASH,
     }
     assert body["valuedUnder"] == {
-        "policyVersion": "fairband-policy-v18",
+        "policyVersion": "fairband-policy-v19",
         "settingsHash": EMPTY_SETTINGS_HASH,
         "fullRefreshAt": STARTED.isoformat(),
         "universeChanged": False,
@@ -78,7 +78,7 @@ def test_the_table_settings_serve_their_json_form(client: TestClient) -> None:
     body = client.get("/api/settings").json()
     runway = _setting(body, "runway_years")
     assert runway["default"] == runway["value"] == {"None": 5, "Narrow": 10, "Wide": 20}
-    assert _setting(body, "fair_band")["value"] == [0.85, 1.15]
+    assert _setting(body, "fair_band")["value"] == [0.90, 1.10]
     assert _setting(body, "universe.cap_bands")["value"] == [
         [200e9, "Mega"],
         [10e9, "Large"],
@@ -340,7 +340,7 @@ def test_a_stored_row_of_a_removed_setting_is_skipped(client: TestClient, db_pat
 def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> None:
     body = client.get("/api/policy").json()
     assert (body["version"], body["settingsHash"], body["changed"]) == (
-        "fairband-policy-v18",
+        "fairband-policy-v19",
         EMPTY_SETTINGS_HASH,
         0,
     )
@@ -352,7 +352,7 @@ def test_policy_route_has_the_cited_values_and_no_table(client: TestClient) -> N
         "changed": False,
     }
     edges = body["values"]["designation_edges"]
-    assert edges["value"] == [0.65, 0.85, 1.15, 1.5] and edges["setting"] is False
+    assert edges["value"] == [1 - 0.30, 0.90, 1.10, 1.35] and edges["setting"] is False
     assert body["values"]["wide_terminal_roic_cap"]["value"] == 0.13
     # the cap on the return without goodwill is a setting since 2026-11-15 (method 4.6, B-170)
     cap = body["values"]["return_without_goodwill_cap"]
