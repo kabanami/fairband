@@ -31,7 +31,7 @@ from support.engine_companies import (
 from support.web import HEADER, HOST, NOW, TODAY, _settings
 
 from fairband.engine.flags import flag_count
-from fairband.engine.levels import standing_for
+from fairband.engine.levels import moat_of, standing_for
 from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
@@ -48,7 +48,7 @@ from fairband.store.reviews import ReviewRow, insert_review, latest_review
 from fairband.store.secondary import SecondaryRow, insert_secondary, secondary_row
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
-from fairband.web.rows import NO_AGENT_FIELDS, agent_fields, moat_of, screen_row, sort_rows
+from fairband.web.rows import NO_AGENT_FIELDS, agent_fields, screen_row, sort_rows
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 PUBLISHED = datetime(2026, 11, 1, 8, 0, tzinfo=UTC)

@@ -27,11 +27,12 @@ from fairband.config import (
     require,
     utcnow,
 )
+from fairband.engine.levels import moat_of, standing_for
 from fairband.engine.types import PHASE_NUMBER
 from fairband.launch.command import system_opener
 from fairband.launch.run import run_launcher
 from fairband.mcp.server import main as run_mcp
-from fairband.policy import load_policy
+from fairband.policy import Policy, load_policy
 from fairband.policy.moat import MoatTable, load_moat_table
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.clients import build_clients, build_fmp
@@ -289,7 +290,7 @@ def _refresh(args: argparse.Namespace) -> int:
         for line in _calibration_lines(calibration):
             print(line)
     for symbol, snapshot in rows:
-        print(_snapshot_line(symbol, snapshot, policy.designation_edges))
+        print(_snapshot_line(symbol, snapshot, policy))
     return 0 if status == "done" else 1
 
 
@@ -345,20 +346,27 @@ def _print_progress(progress: Progress) -> None:
     )
 
 
-def _snapshot_line(symbol: str, snapshot: SnapshotRow | None, edges: Sequence[float]) -> str:
+def _snapshot_line(symbol: str, snapshot: SnapshotRow | None, policy: Policy) -> str:
     """``AAPL  Mature Growth  value 189.40  near (1.05 × value)``, or the phase (``—`` without
-    one) and the refusal reason. A snapshot valued before the designation ends at its value. The
-    ratio is ``_ratio_figure``'s, on the policy's designation ``edges``."""
+    one) and the refusal reason. The word and the ratio are read on ``policy``, the one in force,
+    and the edges of the row's own moat class (``levels.standing_for``; spec 2026-11-23
+    thresholds, 5.2 and 5.3), as the screen's row reads them, not the word stored with the
+    snapshot; the ratio is ``_ratio_figure``'s on those edges. A snapshot without a price, a
+    value above zero or a class ends at its value."""
     if snapshot is None:
         return f"{symbol}  —  no snapshot yet"
     phase = snapshot.phase or "—"
     if snapshot.value is None:
         return f"{symbol}  {phase}  {snapshot.refusal}"
     line = f"{symbol}  {phase}  value {snapshot.value:.2f}"
-    if snapshot.designation is None or snapshot.price_to_value is None:
+    moat = moat_of(snapshot.result)
+    if moat is None or snapshot.value <= 0:
         return line
-    ratio = _ratio_figure(snapshot.price_to_value, edges)
-    return f"{line}  {snapshot.designation} ({ratio} × value)"
+    found = standing_for(snapshot.value, moat, snapshot.price, policy)
+    if found.price_to_value is None or found.designation is None:
+        return line
+    ratio = _ratio_figure(found.price_to_value, policy.edges_for(moat))
+    return f"{line}  {found.designation} ({ratio} × value)"
 
 
 def _ratio_figure(ratio: float, edges: Sequence[float]) -> str:

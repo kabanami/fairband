@@ -157,10 +157,11 @@ from datetime import date
 from typing import Any
 
 from fairband.engine.anchor import TrailingFigures
+from fairband.engine.levels import levels_for, moat_of
 from fairband.engine.overrides import LABELS, TAGS
 from fairband.engine.route import CompanyInputs
 from fairband.engine.types import PhaseEvidence
-from fairband.policy import Policy
+from fairband.policy import Moat, Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable, load_tax_table
 from fairband.refresh.inputs import build_inputs
@@ -178,6 +179,7 @@ from fairband.store.companies import latest_company
 from fairband.store.currency import currency_of, reporting_currency
 from fairband.store.guidance import UNITS as GUIDANCE_UNITS
 from fairband.store.guidance import guidance_row
+from fairband.store.moat import moat_row
 from fairband.store.refreshes import latest_deciles
 from fairband.store.research import KillCriterionRow, finding_row, kill_criterion_row
 from fairband.store.reviews import review_row
@@ -787,6 +789,25 @@ class Resolver:
         except ValueError:
             return False
 
+    def _level(
+        self, value: float | None, moat: Moat | None, name: str, stored: float | None
+    ) -> float | None:
+        """The level ``name`` (``buy``, ``fair_low``, ``fair_high`` or ``trim``) of a record whose
+        value is ``value``, on the resolver's policy, the one in force, and the record's moat
+        class ``moat`` (spec 2026-11-23 thresholds, 5.3): the figure the page shows, so a cite of
+        a level checks against it whatever policy the record was valued under. ``stored``, the
+        record's own level, where it has none, no value above zero, or no class is known."""
+        if stored is None or value is None or value <= 0 or moat is None:
+            return stored
+        level: float = getattr(levels_for(value, moat, self.policy), name)
+        return level
+
+    def _table_moat(self) -> Moat | None:
+        """The class of the company's row of the moat table, read once: a secondary valuation's,
+        which stores none, and a review's whose result holds none."""
+        row = self._once("moat row", lambda: moat_row(self.conn, self.symbol))
+        return None if row is None else row.moat
+
     def _snapshot(self, path: str) -> Resolved | None:
         head, _, rest = path.partition("/")
         row = _row(snapshot_row, self.conn, head)
@@ -800,7 +821,8 @@ class Resolver:
         elif kind == "price_to_value" and not name:
             found = result.price_to_value, "multiple"
         elif kind == "levels" and name in _LEVELS:
-            found = None if result.levels is None else getattr(result.levels, name), "per-share"
+            stored = None if result.levels is None else getattr(result.levels, name)
+            found = self._level(result.value, moat_of(result), name, stored), "per-share"
         elif kind == "inputs":
             cited = next((x for x in result.inputs if x.name == name), None)
             if cited is not None:
@@ -829,7 +851,9 @@ class Resolver:
             case ["price_to_value"]:
                 found = row.price_to_value, "multiple"
             case ["levels", name] if name in _LEVEL_COLUMNS:
-                found = getattr(row, _LEVEL_COLUMNS[name]), "per-share"
+                moat = moat_of(row.result) or self._table_moat()
+                stored = getattr(row, _LEVEL_COLUMNS[name])
+                found = self._level(row.value, moat, name, stored), "per-share"
             case ["bridge", n, ("delta" | "old" | "new") as field]:
                 line = _nth(row.bridge, n)
                 if line is not None:
@@ -851,7 +875,9 @@ class Resolver:
                 column, unit = _SECONDARY_FIELDS[name]
                 found = getattr(row, column), unit
             case ["levels", name] if name in _LEVEL_COLUMNS:
-                found = getattr(row, _LEVEL_COLUMNS[name]), "per-share"
+                stored = getattr(row, _LEVEL_COLUMNS[name])
+                level = self._level(row.value_per_share, self._table_moat(), name, stored)
+                found = level, "per-share"
             case ["grid", i, j] if grid is not None:
                 cells = _nth(grid["cells"], i)
                 cell = None if cells is None else _nth(cells, j)

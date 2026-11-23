@@ -30,6 +30,8 @@ from fairband.engine.route import reprice, value_company
 from fairband.engine.secondary import Drivers, Part, secondary_value
 from fairband.engine.sensitivity import SensitivityGrid
 from fairband.policy import Policy
+from fairband.policy.moat import MoatEntry, MoatTable
+from fairband.policy.settings import apply_overlay
 from fairband.policy.tax import load_tax_table
 from fairband.refresh.inputs import build_inputs
 from fairband.refresh.inputs_statements import statements_for, stored_quarters
@@ -52,10 +54,11 @@ from fairband.reports.tables import financial_tables, quarters_table
 from fairband.store.currency import reporting_currency
 from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
+from fairband.store.moat import load_moat_file
 from fairband.store.multiples import log_multiples
 from fairband.store.research import add_finding, add_kill_criterion, set_kill_criterion
-from fairband.store.reviews import insert_review
-from fairband.store.secondary import insert_derivation, insert_secondary
+from fairband.store.reviews import insert_review, review_row
+from fairband.store.secondary import insert_derivation, insert_secondary, secondary_row
 from fairband.store.sensitivities import insert_sensitivity
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.store.vendor import record_response
@@ -236,6 +239,51 @@ def test_review_refs(conn: sqlite3.Connection, policy: Policy, snapshots: dict[s
         "review:99/value",
     ):
         assert _resolve(conn, ref, policy) is None, ref
+
+
+def test_a_level_ref_reads_the_policy_in_force(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-23 thresholds, 5.3: a cited level is the figure the page shows, the record's
+    value on the policy in force and the record's own moat class, whatever policy the record was
+    valued under: a snapshot's and a review's class is its result's, a secondary valuation's the
+    company's row of the moat table, and with no row its stored level. The value and price ÷
+    value stay the stored figures."""
+    sid = snapshots["AAPL"]
+    review_id, secondary_id = _review_id(conn, policy, sid), _secondary_id(conn, policy, sid)
+    stored, review = snapshot_row(conn, sid), review_row(conn, review_id)
+    secondary = secondary_row(conn, secondary_id)
+    assert stored is not None and review is not None and secondary is not None
+    assert stored.value is not None and review.value is not None
+    changed = apply_overlay(policy, {"trim_multiple": 1.2})
+    trim = f"secondary:{secondary_id}/levels/trim"
+    held = _resolve(conn, trim, changed)
+    assert held is not None and held.value == secondary.trim_level  # no class known: as stored
+    entry = MoatEntry("AAPL", "Wide", date(2026, 11, 19), "rule")
+    table = MoatTable("fairband-moat-v1", date(2026, 11, 21), "a test", "4.9a", {"AAPL": entry})
+    load_moat_file(conn, table, NOW)
+    for ref, value in (
+        (f"snapshot:{sid}/levels/trim", stored.value),
+        (f"review:{review_id}/levels/trim", review.value),
+        (trim, secondary.value_per_share),
+    ):
+        for read_under, multiple in ((changed, 1.2), (policy, 1.35)):
+            found = _resolve(conn, ref, read_under)
+            assert found is not None and found.unit == "per-share", ref
+            assert found.value == pytest.approx(value * multiple), ref
+    safety = {"None": 0.40, "Narrow": 0.30, "Wide": 0.10}
+    wide = apply_overlay(policy, {"margin_of_safety": safety})
+    for ref, value in (
+        (f"snapshot:{sid}/levels/buy", stored.value),
+        (f"review:{review_id}/levels/buy", review.value),
+        (f"secondary:{secondary_id}/levels/buy", secondary.value_per_share),
+    ):
+        found = _resolve(conn, ref, wide)
+        assert found is not None and found.value == pytest.approx(value * 0.90), ref  # Wide rows
+    kept = _resolve(conn, f"review:{review_id}/value", changed)
+    ratio = _resolve(conn, f"snapshot:{sid}/price_to_value", changed)
+    assert kept is not None and ratio is not None
+    assert (kept.value, ratio.value) == (review.value, stored.price_to_value)
 
 
 def test_a_company_in_another_currency_resolves_its_rate_and_names_it(

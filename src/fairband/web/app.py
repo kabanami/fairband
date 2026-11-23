@@ -109,6 +109,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import Scope
 
 from fairband.config import Settings, utcnow
+from fairband.engine.levels import moat_of
 from fairband.engine.types import ValuationResult, money_of, rated
 from fairband.launch.command import Opener
 from fairband.launch.settings import read_launch_file
@@ -165,7 +166,6 @@ from fairband.web.rows import (
     agent_fields,
     company_json,
     group_rows,
-    moat_of,
     placeholder_row,
     progress_json,
     refresh_json,

@@ -39,18 +39,12 @@ import statistics
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import date
-from typing import Any, get_args
+from typing import Any
 
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
-from fairband.engine.levels import Standing, standing_for, validity_state
-from fairband.engine.types import (
-    PHASE_NUMBER,
-    Levels,
-    ValuationResult,
-    money_of,
-    result_to_json,
-)
+from fairband.engine.levels import Standing, moat_of, standing_for, validity_state
+from fairband.engine.types import PHASE_NUMBER, Levels, money_of, result_to_json
 from fairband.policy import Moat, Policy
 from fairband.refresh.run import UNCLASSIFIED, Progress
 from fairband.reports.refs import same_snapshot_rows
@@ -175,13 +169,6 @@ def rested_on(
     """The ids of the snapshots ``records`` rest on, the company's latest ``snapshot`` left out:
     the snapshots ``agent_fields`` needs read."""
     return {r.snapshot_id for r in records if r is not None and r.snapshot_id != snapshot.id}
-
-
-def moat_of(result: ValuationResult) -> Moat | None:
-    """The moat class the result was valued on, its intermediates' ``moat``; none without one (a
-    refusal before the class was read, or a result stored before the class was written)."""
-    found = result.intermediates.get("moat")
-    return found if found in get_args(Moat) else None
 
 
 def record_standing(

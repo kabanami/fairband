@@ -490,35 +490,44 @@ def test_cli_prints_the_value_line(
 
 def test_cli_line_keeps_the_ratio_inside_its_band(env_with_deciles: Env) -> None:
     """Two decimals that would land on a designation edge the ratio is not on would print the
-    next band's figure beside the word (0.8499 as 0.85, where near starts): the line gives a
+    next band's figure beside the word (0.8999 as 0.90, where near starts): the line gives a
     third decimal, kept a thousandth off the edge. A ratio on an edge, or whose two decimals land
-    on no edge, prints as before; a snapshot without a designation ends at its value."""
+    on no edge, prints as before. The word and the edges are read on the policy in force and the
+    row's own moat class (spec 2026-11-23 thresholds, 5.2 and 5.3), not from the word stored with
+    the snapshot: a Wide row at 0.78 × its value is under its buy level and reads well-below,
+    where a Narrow row reads below; a snapshot without a price ends at its value."""
     env = env_with_deciles
     env.run(["ACME"])
     acme = env.snapshot("ACME")
     assert acme.value is not None
-    edges = env.policy.designation_edges
-    assert edges == (0.70, 0.90, 1.10, 1.35)
-    value = f"{acme.value:.2f}"
+    policy = env.policy
+    assert policy.edges_for("Narrow") == (0.70, 0.90, 1.10, 1.35)
 
-    def line(ratio: float | None, designation: str | None) -> str:
-        row = replace(acme, price_to_value=ratio, designation=designation)
-        return cli._snapshot_line("ACME", row, edges)
+    def line(price: float | None, moat: str = "Narrow") -> str:
+        """The line of ACME valued at $100 on ``moat`` and priced ``price``, its stored word and
+        ratio left as they were: the line must not read them."""
+        result = replace(acme.result, intermediates=acme.result.intermediates | {"moat": moat})
+        row = replace(acme, value=100.0, price=price, result=result)
+        return cli._snapshot_line("ACME", row, policy)
 
-    assert line(0.8999, "below") == f"ACME  Mature Growth  value {value}  below (0.899 × value)"
-    assert line(1.1001, "above") == f"ACME  Mature Growth  value {value}  above (1.101 × value)"
-    assert line(0.6999, "well-below").endswith("well-below (0.699 × value)")
-    assert line(1.3499, "above").endswith("above (1.349 × value)")
+    assert line(89.99) == "ACME  Mature Growth  value 100.00  below (0.899 × value)"
+    assert line(110.01) == "ACME  Mature Growth  value 100.00  above (1.101 × value)"
+    assert line(69.99).endswith("well-below (0.699 × value)")
+    assert line(134.99).endswith("above (1.349 × value)")
     # A third decimal that rounds onto the edge too is kept a thousandth off it.
-    assert line(0.89996, "below").endswith("below (0.899 × value)")
-    assert line(1.10002, "above").endswith("above (1.101 × value)")
+    assert line(89.996).endswith("below (0.899 × value)")
+    assert line(110.002).endswith("above (1.101 × value)")
     # On an edge, and off every edge, two decimals as before.
-    assert line(90 / 100, "near").endswith("near (0.90 × value)")
-    assert line(135 / 100, "well-above").endswith("well-above (1.35 × value)")
-    assert line(0.7512, "below").endswith("below (0.75 × value)")
-    assert line(1.0468, "near").endswith("near (1.05 × value)")
-    # A snapshot valued before the designation (method 0.5) has a value and no word.
-    assert line(None, None) == f"ACME  Mature Growth  value {value}"
+    assert line(90.0).endswith("near (0.90 × value)")
+    assert line(135.0).endswith("well-above (1.35 × value)")
+    assert line(75.12).endswith("below (0.75 × value)")
+    assert line(104.68).endswith("near (1.05 × value)")
+    # The first edge is the row's own buy level: 0.80 × the value on a Wide moat.
+    assert line(78.0, "Wide").endswith("well-below (0.78 × value)")
+    assert line(78.0).endswith("below (0.78 × value)")
+    assert line(79.99, "Wide").endswith("well-below (0.799 × value)")
+    # A snapshot with no price has a value and no word.
+    assert line(None) == "ACME  Mature Growth  value 100.00"
 
 
 def test_cli_exits_1_when_the_refresh_is_not_done(

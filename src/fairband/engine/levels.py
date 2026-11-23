@@ -9,10 +9,10 @@ value and the factor as written, rounded once to a float: plain float multiplica
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, get_args
 
 from fairband.engine.designation import designation_for
-from fairband.engine.types import Designation, Levels
+from fairband.engine.types import Designation, Levels, ValuationResult
 from fairband.policy import Moat, Policy
 
 
@@ -34,6 +34,14 @@ def levels_for(value: float, moat: Moat, policy: Policy) -> Levels:
         fair_high=_times(value, _decimal(high)),
         trim=_times(value, _decimal(policy.trim_multiple)),
     )
+
+
+def moat_of(result: ValuationResult) -> Moat | None:
+    """The moat class the result was valued on, its intermediates' ``moat``; none without one (a
+    refusal before the class was read, or a result stored before the class was written). The
+    readers of a stored record's levels find its class by it."""
+    found = result.intermediates.get("moat")
+    return found if found in get_args(Moat) else None
 
 
 def standing_for(value: float, moat: Moat, price: float | None, policy: Policy) -> Standing:

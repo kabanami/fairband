@@ -65,7 +65,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from fairband.engine.levels import Standing
+from fairband.engine.levels import Standing, moat_of
 from fairband.engine.overrides import LABELS, TAGS, unit_in
 from fairband.engine.price_needs import price_needs
 from fairband.engine.types import ValuationResult, money_of
@@ -89,7 +89,7 @@ from fairband.web.agents_api import criterion_json, finding_json, record_json
 from fairband.web.guidance_api import guidance_json
 from fairband.web.launch_api import launch_json
 from fairband.web.reviews_api import secondary_json
-from fairband.web.rows import counts_on, moat_of, record_standing, rested_on, window_ended
+from fairband.web.rows import counts_on, record_standing, rested_on, window_ended
 
 LEDGER_ROWS = 20  # the company's newest ledger rows the research read answers
 # Each input's bridge label and unit by its tag as a stored bridge line names it.
