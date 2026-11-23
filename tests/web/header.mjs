@@ -13,10 +13,11 @@
 // them, and the company page, which has no script here, reads its company's detail as it opens, as
 // company.js's loader does first (/api/companies/<symbol>).
 //
-// The input on stdin is the steps, a JSON list, or an object, {"steps", "storage"}, whose
-// `storage` is the browser tab's session storage as the scripts load: its entries, as a reload
+// The input on stdin is the steps, a JSON list, or an object, {"steps", "storage", "hidden"}:
+// `storage` is the browser tab's session storage as the scripts load, its entries, as a reload
 // finds them, or "throws", where the browser refuses it (a private window, blocked site data);
-// with none it starts empty. Each step is one object:
+// with none it starts empty. With `hidden` true the page loads hidden, as the browser restores a
+// tab in the background. Each step is one object:
 //   {"do": "show", "view", "section"}            a header view, a link or a hash opens `view`
 //                                                (FairbandPage.show, controls.js)
 //   {"do": "hash", "hash"}                       the browser's Back or Forward, or a link, moves
@@ -79,7 +80,8 @@ import { readFileSync } from 'node:fs';
 const [bundle, app, finder, controls] = process.argv.slice(2, 6)
   .map((path) => readFileSync(path, 'utf8'));
 const given = JSON.parse(readFileSync(0, 'utf8'));
-const { steps, storage: stored = {} } = Array.isArray(given) ? { steps: given } : given;
+const { steps, storage: stored = {}, hidden = false } = Array.isArray(given)
+  ? { steps: given } : given;
 const later = globalThis.setTimeout; // the driver's own wait for the work a step sets off
 
 const React = {
@@ -123,7 +125,7 @@ const panels = {}; // the page's elements by id, each made once
 const documentListeners = {}; // the document's listeners by event
 const captured = new Set(); // those of them registered for the capture phase
 const document = {
-  hidden: false,
+  hidden,
   body: {
     children: [],
     appendChild(node) { document.body.children.push(node); return node; },

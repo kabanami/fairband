@@ -1155,7 +1155,7 @@ def test_the_count_follows_the_poll() -> None:
         "inboxTimer = setTimeout(pollInbox, INBOX_MS);",
     )
     assert "P.countInbox = inboxRead;" in js
-    assert js.rstrip().endswith("render();\n  poll();\n  pollInbox();\n})();")
+    assert js.rstrip().endswith("render();\n  poll(true);\n  pollInbox();\n})();")
     view = _static_file("inbox.js")
     assert "P.countInbox(body.items);" in _function(view, "load")
     # the header's reads redraw the view's table while it shows, unless its own read is in flight

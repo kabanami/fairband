@@ -10,18 +10,19 @@
    ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the
    company page draws the run bar and a notice alone, not the last refresh's line or Details ▾
    (the company page's design, the decision log of 2026-11-17). The page asks
-   /api/refresh/current every 30 seconds while no refresh runs and every 2 seconds while one does,
-   never while the page is hidden (spec 2026-11-23 refresh experience, 4.3). While a refresh runs,
-   one Cancel stands where the Refresh buttons were and the stamp is gone; under a run of the
-   whole screen the tables keep their old figures at ink-faint, and under a run of named companies
-   nothing fades (4.1). A run of the whole screen this page started, the reader's own press, also
-   locks the page under the refresh layer, its run bar and Cancel in a panel over a dark scrim:
-   nothing under it answers, a change of the address is put back and Escape does nothing, until
-   the run ends or, on a long run, the reader keeps reading (4.1); a whole run the page did not
-   start, an agent's or another tab's, locks nothing. When any run ends, whoever started it, the
-   rows load again, with the open drawer, the statistics when that view is open and the company
-   page when the run covered its company; the figures the run changed are marked as they land,
-   and after a run of the whole screen that ended done the status line counts them (4.2). The
+   /api/refresh/current as it loads, hidden or not, then every 30 seconds while no refresh runs
+   and every 2 seconds while one does, never while the page is hidden (spec 2026-11-23 refresh
+   experience, 4.3). While a refresh runs, one Cancel stands where the Refresh buttons were and
+   the stamp is gone; under a run of the whole screen the tables keep their old figures at
+   ink-faint, and under a run of named companies nothing fades (4.1). A run of the whole screen
+   this page started, the reader's own press, also locks the page under the refresh layer, its
+   run bar and Cancel in a panel over a dark scrim: nothing under it answers, a change of the
+   address is put back and Escape does nothing, until the run ends or, on a long run, the reader
+   keeps reading (4.1); a whole run the page did not start, an agent's or another tab's, locks
+   nothing. When any run ends, whoever started it, the rows load again, with the open drawer, the
+   statistics when that view is open and the company page when the run covered its company; the
+   figures the run changed are marked as they land, and after a run of the whole screen that
+   ended done the status line counts them (4.2). The
    Statistics view, once named Groups, is one plain table from /api/statistics (spec 6.3; spec
    2026-11-23 refresh experience, 4.5), with no chart, each group's name a link that opens the
    Screen on the group; #statistics names it, and the old #groups opens it. The company
@@ -122,16 +123,19 @@
 
   /* ------------------------------------------------------------------ polling */
 
-  /* The refresh's state (spec 2026-11-23 refresh experience, 4.3), read as the page loads, after
-     each request (post), every 2 seconds while a run is alive and every 30 while none is; never
-     while the page is hidden, and at once as it shows again. An answer with a run alive draws its
-     bar; where it is the page's first answer, the rows were read under the run before, so the
-     run's end is followed. An answer with none alive follows the runs that ended (followRuns).
-     A read that fails keeps the run it knew, and so the lock, with Keep reading in the layer
-     (keeps) until a read answers again (4.1). */
-  function poll() {
+  /* The refresh's state (spec 2026-11-23 refresh experience, 4.3), read as the page loads
+     (`atLoad`), after each request (post), every 2 seconds while a run is alive and every 30 while
+     none is; never while the page is hidden but as it loads, and at once as it shows again. The
+     read as the page loads goes while it is hidden too, a tab the browser restored in the
+     background, so the page knows the run its rows were read under and follows a run that ends
+     before it is first shown. An answer with a run alive draws its bar; where it is the page's
+     first answer, the rows were read under the run before, so the run's end is followed. An
+     answer with none alive follows the runs that ended (followRuns). A read that fails keeps the
+     run it knew, and so the lock, with Keep reading in the layer (keeps) until a read answers
+     again (4.1). */
+  function poll(atLoad) {
     clearTimeout(timer);
-    if (document.hidden) return;
+    if (document.hidden && atLoad !== true) return;
     var request = ++latestPoll;
     P.getJson('/api/refresh/current')
       .then(function (body) {
@@ -937,6 +941,6 @@
   document.addEventListener('DOMContentLoaded', fromHash);
 
   render();
-  poll();
+  poll(true);
   pollInbox();
 })();

@@ -115,15 +115,19 @@ BY_SECTOR = {
 
 
 def _trace(
-    steps: list[dict[str, Any]], storage: dict[str, str] | str | None = None
+    steps: list[dict[str, Any]],
+    storage: dict[str, str] | str | None = None,
+    hidden: bool = False,
 ) -> list[dict[str, Any]]:
     """The trace of ``steps`` on a page loaded with the tab's session storage ``storage``: its
-    entries, as a reload finds them, ``"throws"`` where the browser refuses it, or empty."""
+    entries, as a reload finds them, ``"throws"`` where the browser refuses it, or empty; with
+    ``hidden``, a page loaded in a hidden tab."""
     assert NODE is not None
+    given = {"steps": steps, "storage": {} if storage is None else storage, "hidden": hidden}
     done = subprocess.run(
         [NODE, str(DRIVER), str(BUNDLE)]
         + [str(STATIC / name) for name in ("app.js", "finder.js", "controls.js")],
-        input=json.dumps({"steps": steps, "storage": {} if storage is None else storage}),
+        input=json.dumps(given),
         capture_output=True,
         text=True,
         check=True,
@@ -464,6 +468,20 @@ def test_a_hidden_page_does_not_ask_and_asks_at_once_when_shown() -> None:
     assert (ticked["reads"], ticked["waits"]) == ([], [])
     assert shown["reads"] == [CURRENT, "/api/inbox"]
     assert landed["waits"] == [30000]
+
+
+def test_a_page_loaded_hidden_asks_once_at_load() -> None:
+    """A page loaded in a hidden tab (a browser restores its background tabs hidden) asks for the
+    refresh's state once as it loads, so it knows the run its rows were read under; the later
+    reads wait for it to show (4.3). A run that ends while it is still hidden is followed when it
+    shows: its rows are read again."""
+    landed, ticked, shown, followed = _trace(
+        [LANDED, TICK, _visible(True), _idle(_run(67, "price"), RUN_66)], hidden=True
+    )
+    assert landed["waits"] == [30000]
+    assert (ticked["reads"], ticked["waits"]) == ([], [])
+    assert shown["reads"] == [CURRENT, "/api/inbox"]
+    assert followed["reads"] == [SCREEN["url"]]
 
 
 @pytest.mark.parametrize(("seen", "missing"), [(10, True), (20, False)])
