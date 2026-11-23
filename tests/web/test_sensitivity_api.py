@@ -27,6 +27,7 @@ from fairband.policy.tax import TaxTable
 from fairband.reports.check import UNRESOLVED, WRONG_SNAPSHOT, headings, required_judgments
 from fairband.store.db import connect
 from fairband.store.refreshes import latest_deciles, save_deciles
+from fairband.store.reviews import held_row, set_held_state
 from fairband.store.snapshots import insert_snapshot
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
@@ -112,6 +113,38 @@ def _report(route: Route, *parts: Any) -> dict[str, Any]:
 def _sensitivities(client: TestClient, symbol: str = "AAPL") -> list[dict[str, Any]]:
     entries = client.get(f"/api/companies/{symbol}/ledger").json()["entries"]
     return [e for e in entries if e["kind"] == "sensitivity"]
+
+
+def test_a_reading_is_refused_on_a_review_a_refresh_read_again(
+    client: TestClient, db_path: Path
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.8: a sensitivity reading runs over the overrides
+    applied on the latest snapshot, so under a held review that a valuing refresh read again its
+    centre would not be the held value. It is refused until the review is made again."""
+    posted = client.post(
+        "/api/companies/AAPL/overrides",
+        json={
+            "tag": "growth.belief",
+            "new": 0.08,
+            "reason": "guidance raised",
+            "evidence": [TRANSCRIPT],
+            "lifetime": "lasting",
+        },
+        headers=AGENT,
+    )
+    assert posted.status_code == 201, posted.text
+    _post(client, GRID)  # under a review no refresh read again: taken
+    with closing(connect(db_path)) as conn:
+        held = held_row(conn, "AAPL")
+        assert held is not None
+        set_held_state(conn, replace(held, read_again_at=NOW))
+    r = client.post("/api/companies/AAPL/sensitivities", json=GRID, headers=AGENT)
+    assert (r.status_code, r.json()) == (
+        409,
+        {"detail": "the review was made before the latest refresh: make it again"},
+    )
+    assert client.post("/api/companies/AAPL/review", headers=AGENT).status_code == 200
+    _post(client, GRID)
 
 
 @pytest.mark.usefixtures("secondaries", "verdicts")  # a report needs both on its snapshot

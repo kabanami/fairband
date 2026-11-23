@@ -839,6 +839,25 @@ def test_review_again_is_the_third_act() -> None:
     assert "Two acts make one" not in held
 
 
+def test_a_report_and_a_reading_need_a_review_no_refresh_read_again() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.8: section 16's check takes a ``review:`` cite of
+    the review the company holds, or of a copy of it, and refuses one once a refresh that values
+    read the review again; 14.8 refuses a sensitivity reading in the same state."""
+    text = METHOD.read_text(encoding="utf-8")
+    refusal = '"the review was made before the latest refresh: make it again"'
+    cite = next(x for x in text.splitlines() if x.startswith("- `wrong snapshot`:"))
+    for words in (
+        "A `review:` cite must be of the review the company holds (14.6)",
+        "the made review or a copy of it",
+        refusal,
+        "A price refresh does not count",
+    ):
+        assert words in cite, words
+    readings = _section(14)
+    reading = readings[readings.index("### 14.8") : readings.index("### 14.9")]
+    assert refusal in reading and "under a held review that a refresh read again" in reading
+
+
 def test_a_held_value_s_state_and_its_sentences() -> None:
     """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
     sentences, says which stay and which can end, and what the row and the detail carry; 4.10

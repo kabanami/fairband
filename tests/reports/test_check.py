@@ -23,7 +23,7 @@ from support.payloads import store_payloads
 from support.web import TODAY
 
 from fairband.engine.overrides import Override
-from fairband.engine.review import review_company
+from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import Route, ValuationResult
 from fairband.policy import Policy
@@ -58,7 +58,13 @@ from fairband.store.guidance import insert_guidance
 from fairband.store.ledger import Writer
 from fairband.store.overrides import applied_overrides, drop_override, insert_override
 from fairband.store.research import add_finding, add_kill_criterion
-from fairband.store.reviews import clear_held, insert_review, review_row
+from fairband.store.reviews import (
+    clear_held,
+    held_row,
+    insert_review,
+    review_row,
+    set_held_state,
+)
 from fairband.store.secondary import insert_derivation, no_secondary
 from fairband.store.snapshots import SnapshotRow, insert_snapshot, snapshot_row
 from fairband.store.vendor import record_response
@@ -1291,13 +1297,20 @@ def test_a_review_cite_must_be_the_current_review(
     assert cited is not None
     moved = reprice(cited.result, 160.0, date(2026, 11, 2), policy)
     repriced = insert_snapshot(conn, moved, cited.refresh_id, clock=lambda: NOW)
-    reprice_review = _applied_review(conn, policy, repriced)
+    carried = Review(stored.result, stored.mechanical_value, (), stored.override_ids)
+    reprice_review = insert_review(  # the held review's copy, as a price refresh carries it
+        conn, carried, "AAPL", repriced, cited.refresh_id, kind="held", made_id=current
+    )
 
     def on_the_reprice(ref: str) -> list[Finding]:
         sections = _report([*_clean(sid), _cite(value, ref)])
         return check_sections(conn, "AAPL", repriced, sections, policy)
 
     assert on_the_reprice(f"review:{current}/value") == []
+    # a review the company held before is not its current review on the reprice either
+    assert _one(on_the_reprice(f"review:{older}/value"), sid, value).detail == (
+        f"review:{older}/value is not the company's current review: cite review:{reprice_review}"
+    )
     # with every override dropped by an agent the company holds no review (the web's write
     # clears it: spec 2026-11-23 held reviewed value, 5.1)
     for row in applied_overrides(conn, "AAPL"):
@@ -1306,6 +1319,51 @@ def test_a_review_cite_must_be_the_current_review(
     found = _one(on_the_reprice(f"review:{reprice_review}/value"), sid, value)
     assert found.detail == (
         f"review:{reprice_review}/value is not the company's current review: the company has none"
+    )
+
+
+def test_a_review_a_refresh_read_again_is_not_cited(
+    conn: sqlite3.Connection, policy: Policy, snapshots: dict[str, int]
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.8 and 7: a report needs a held review that no
+    refresh has read again. A cite of the held review, or of a copy of it, is refused once a
+    valuing refresh ran after the review was made, and accepted after the review is made
+    again. A price refresh does not count: its copy on the repriced snapshot is the held review,
+    and either id is cited."""
+    sid = snapshots["AAPL"]
+    made = _applied_review(conn, policy, sid)
+    stored = review_row(conn, made)
+    assert stored is not None and stored.value is not None
+    value = f"${stored.value:,.2f}"
+    cited = snapshot_row(conn, sid)
+    assert cited is not None
+    moved = reprice(cited.result, 160.0, date(2026, 11, 2), policy)
+    repriced = insert_snapshot(conn, moved, cited.refresh_id, clock=lambda: NOW)
+    review = Review(stored.result, stored.mechanical_value, (), stored.override_ids)
+    copy = insert_review(
+        conn, review, "AAPL", repriced, cited.refresh_id, kind="held", made_id=made
+    )
+
+    def on_the_reprice(ref: str) -> list[Finding]:
+        sections = _report([*_clean(sid), _cite(value, ref)])
+        return check_sections(conn, "AAPL", repriced, sections, policy)
+
+    assert on_the_reprice(f"review:{made}/value") == []
+    assert on_the_reprice(f"review:{copy}/value") == []
+    held = held_row(conn, "AAPL")
+    assert held is not None and held.review_id == made
+    set_held_state(conn, replace(held, read_again_at=NOW))
+    for ref in (f"review:{made}/value", f"review:{copy}/value"):
+        found = _one(on_the_reprice(ref), sid, value)
+        assert (found.what, found.detail) == (
+            WRONG_SNAPSHOT,
+            f"{ref}: the review was made before the latest refresh: make it again",
+        )
+    again = _applied_review(conn, policy, repriced)  # a made review: the state starts empty
+    assert on_the_reprice(f"review:{again}/value") == []
+    found = _one(on_the_reprice(f"review:{made}/value"), sid, value)
+    assert found.detail == (
+        f"review:{made}/value is not the company's current review: cite review:{again}"
     )
 
 

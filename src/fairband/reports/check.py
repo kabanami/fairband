@@ -118,7 +118,7 @@ from fairband.reports.refs import (
     same_snapshot,
     snapshots_of,
 )
-from fairband.store.reviews import latest_review, latest_review_on, review_row
+from fairband.store.reviews import held_row, latest_review, latest_review_on, review_row
 from fairband.store.sensitivities import sensitivity_row
 
 UNRESOLVED = "unresolved reference"
@@ -546,18 +546,32 @@ def _cite_failure(
     return _unit_failure(cite, ref, resolved)
 
 
+# Why a held review that a valuing refresh read again is not cited, and why no sensitivity
+# reading is taken under it (spec 2026-11-23 held reviewed value, 5.8).
+READ_AGAIN = "the review was made before the latest refresh: make it again"
+
+
 def _stale_review(conn: sqlite3.Connection, symbol: str, ref: str) -> str | None:
-    """Why a ``review:`` cite of the company is not of its current review, the newest on its
-    snapshot that the current one is or reprices; ``None`` when it is, or for another ref."""
+    """Why a ``review:`` cite of the company is not of its current review, the newest made or
+    held one on its snapshot that the current one is or reprices; ``None`` when it is, or for
+    another ref. The current review is the one the company holds (spec 2026-11-23 held reviewed
+    value, 5.8): where a refresh that values read it again since it was made, no review is
+    cited, "the review was made before the latest refresh: make it again", and the agent makes
+    it again by an override or by Review again. A price refresh does not count: its copy on the
+    repriced snapshot is the held review."""
     form, _, path = ref.strip().partition(":")
     record = record_id_of(path.partition("/")[0])
     cited = review_row(conn, record) if form == "review" and record is not None else None
     if cited is None or cited.symbol != symbol:
         return None
+    held = held_row(conn, symbol)
+    if held is not None and held.read_again_at is not None and cited.held_id == held.review_id:
+        return f"{ref}: {READ_AGAIN}"
     current = latest_review(conn, symbol)
     newest = latest_review_on(conn, cited.snapshot_id)
     if (
         current is not None
+        and cited.held_id == current.held_id  # the held review, or a copy of it
         and newest is not None
         and newest.id == cited.id
         and same_snapshot(conn, cited.snapshot_id, current.snapshot_id)

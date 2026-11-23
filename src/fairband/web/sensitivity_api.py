@@ -49,10 +49,11 @@ from fairband.policy.settings import exchange_symbol
 from fairband.policy.tax import TaxTable
 from fairband.refresh.reviews import engine_overrides
 from fairband.reports.charts import reading_axes
+from fairband.reports.check import READ_AGAIN
 from fairband.store.db import transaction
 from fairband.store.ledger import record
 from fairband.store.overrides import OverrideRow, applied_overrides
-from fairband.store.reviews import latest_review
+from fairband.store.reviews import held_row, latest_review
 from fairband.store.sensitivities import insert_sensitivity, sensitivity_row
 from fairband.store.snapshots import SnapshotRow, snapshot_row
 from fairband.web.agents_api import WriterOf, record_json
@@ -103,6 +104,11 @@ def add_sensitivity_routes(
             snapshot = snapshot_of(conn, symbol)
             current = effective(conn, policy)
             require_current(current, snapshot)
+            held = held_row(conn, symbol)
+            if held is not None and held.read_again_at is not None:
+                # the grid runs over the overrides applied today: its centre would not be the
+                # held value (spec 2026-11-23 held reviewed value, 5.8)
+                raise HTTPException(409, READ_AGAIN)
             applied = applied_overrides(conn, symbol)
             refused = _refusal(body, applied, snapshot, current)
             if refused is not None:
