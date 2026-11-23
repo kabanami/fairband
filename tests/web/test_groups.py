@@ -1,6 +1,8 @@
 """The group view, ``GET /api/groups``, on a temporary migrated database: the screen's rows grouped
 by sector, phase or cap band, with each group's count, the companies with a value, the median
 price ÷ value and the share below value (price ÷ value under the second designation edge, 0.85).
+The phase is the classifier's, whatever phase a review shows on the row (spec 2026-11-23 refresh
+experience, 4.4).
 
 The universe of one full refresh admits six companies:
 
@@ -36,6 +38,7 @@ from support.engine_companies import (
 
 from fairband.config import DEFAULT_PORT, Settings
 from fairband.engine import METHOD_VERSION
+from fairband.engine.review import Review
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import ValuationResult
 from fairband.policy import Policy, load_policy
@@ -43,7 +46,8 @@ from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.store.companies import CompanyRow, insert_companies
 from fairband.store.db import connect, migrate
 from fairband.store.refreshes import create_refresh, finish_refresh
-from fairband.store.snapshots import insert_snapshot
+from fairband.store.reviews import insert_review
+from fairband.store.snapshots import insert_snapshot, latest_snapshot
 from fairband.web.app import create_app
 from fairband.web.rows import group_rows
 
@@ -197,6 +201,34 @@ def test_groups_by_phase_median_and_share(
         },
         {"name": "Young Growth", "count": 1, **EMPTY},
         {"name": "unclassified", "count": 1, **EMPTY},  # NEWC, with no snapshot yet
+    ]
+
+
+def test_the_groups_count_the_classifiers_phase(
+    tmp_path: Path, client: TestClient, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 refresh experience, 4.4: a review that moves AAPL to Mature Stable moves
+    its row's phase, and the groups by phase, which the Methodology page counts, stay the
+    classifier's: AAPL is still counted in Mature Growth, and NEWC, with no snapshot, in
+    unclassified."""
+    before = groups(client, "phase")
+    aapl = results["AAPL"]
+    moved = replace(aapl, phase=replace(aapl.phase, phase="Mature Stable"))
+    with closing(connect(tmp_path / "data" / "fairband.db")) as conn:
+        snapshot = latest_snapshot(conn, "AAPL")
+        assert snapshot is not None
+        review = Review(moved, aapl.value, (), ())
+        insert_review(conn, review, "AAPL", snapshot.id, None, clock=lambda: NOW)
+    rows = {row["ticker"]: row for row in client.get("/api/screen").json()["rows"]}
+    assert (rows["AAPL"]["reviewed"], rows["AAPL"]["phase"]) == (aapl.value, 5)
+    assert rows["AAPL"]["mechanicalPhase"] == 4
+    assert (rows["NEWC"]["phase"], rows["NEWC"]["mechanicalPhase"]) == (None, None)
+    assert groups(client, "phase") == before
+    assert [(g["name"], g["count"]) for g in before] == [
+        ("Mature Growth", 3),
+        ("Mature Stable", 1),
+        ("Young Growth", 1),
+        ("unclassified", 1),
     ]
 
 

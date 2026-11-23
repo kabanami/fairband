@@ -207,7 +207,7 @@ def _young_growth() -> dict[str, Any]:
     """LFOX valued on the revenue growth route as a Young Growth company, with the figures the
     drawer once wrote under its band: the failure probability, the cross-check and the required
     return every year is discounted at."""
-    detail = answers.detail()
+    detail = answers.detail(phase="Young Growth")
     result = detail["result"]
     result["route"] = "revenue-growth"
     result["phase"]["phase"] = "Young Growth"
@@ -222,7 +222,7 @@ def _young_growth() -> dict[str, Any]:
 
 def _start_up() -> dict[str, Any]:
     """LFOX refused as a Start-up company, with the figures its route writes."""
-    detail = answers.refused_detail()
+    detail = answers.refused_detail() | {"phase": "Start-up"}
     result = detail["result"]
     result["phase"]["phase"] = "Start-up"
     result["refusal"] = "a Start-up company has no value until it earns"
@@ -324,6 +324,11 @@ def test_a_reviewed_row_draws_the_review_s_band() -> None:
     assert text(_one(tree, "app-moat")) == "NARROW MOAT"
 
 
+def _badges(head: dict[str, Any]) -> list[dict[str, Any]]:
+    """The head's PhaseBadge elements, undrawn: their props as given."""
+    return [kid for kid in head["props"]["children"] if kid and "phase" in kid["props"]]
+
+
 def test_the_moat_stamp_follows_the_phase_badge() -> None:
     """Right after the phase badge, in the stamp's words; a company with no row in the moat table
     is stamped ``MOAT NOT SET``, and a row with no phase has no badge."""
@@ -335,11 +340,21 @@ def test_the_moat_stamp_follows_the_phase_badge() -> None:
         assert text(kids[badge + 1]) == words
     [head, *_] = _drawn(answers.unset_detail())
     assert text(_one(head, "app-moat")) == "MOAT NOT SET"
-    unphased = answers.detail()
-    unphased["result"]["phase"]["phase"] = None
-    [head, *_] = _drawn(unphased)
-    assert [kid for kid in head["props"]["children"] if kid and "phase" in kid["props"]] == []
+    [head, *_] = _drawn(answers.detail(phase=None))
+    assert _badges(head) == []
     assert text(_one(head, "app-moat")) == "WIDE MOAT"
+
+
+def test_the_badge_draws_the_shown_phase() -> None:
+    """Spec 2026-11-23 refresh experience, 4.4: the head's badge draws the detail's ``phase``, the
+    phase the screen's row shows, a review's where the review has a value, not its result's, the
+    classifier's: Mature Stable over a result of Mature Growth is badge 5; none is no badge."""
+    assert answers.DETAIL["result"]["phase"]["phase"] == "Mature Growth"
+    [head, *_] = _drawn(answers.detail(phase="Mature Stable"))
+    [badge] = _badges(head)
+    assert badge["props"] == {"phase": 5, "size": "sm", "children": []}
+    [head, *_] = _drawn(answers.detail(phase=None))
+    assert _badges(head) == []
 
 
 def _fair_figure(tree: Any) -> Any:

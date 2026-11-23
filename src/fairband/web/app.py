@@ -406,12 +406,14 @@ def create_app(
         where the screen's Freshness column does (no page draws the window since it left the drawer,
         the company page's design 11); and the agents' records that the drawer and the company page
         read (``research_api.agent_records``: ``review``, ``secondary``, ``report``, ``item``), with
-        ``moat``, the moat class in force, which the drawer's head and the company page's head
-        stamp (the company page's design, 7.2): the class of the company's row of the moat table,
-        a refused row's too, ``None`` without a row (spec 2026-11-19 8.6); and ``moatClass``, that
-        row with the class the moat table the app was given holds for the company
-        (``moat_api.moat_json``), ``None`` without a row; and ``noteCount``, the count of the
-        company's notes, which the Notes control draws beside its word (11.1); and the company
+        ``phase``, the phase the screen's row shows, which the two heads' badge draws: the
+        review's where it has a value, else the snapshot's (spec 2026-11-23 refresh experience,
+        4.4); with ``moat``, the moat class in force, which the drawer's head and the company
+        page's head stamp (the company page's design, 7.2): the class of the company's row of the
+        moat table, a refused row's too, ``None`` without a row (spec 2026-11-19 8.6); and
+        ``moatClass``, that row with the class the moat table the app was given holds for the
+        company (``moat_api.moat_json``), ``None`` without a row; and ``noteCount``, the count of
+        the company's notes, which the Notes control draws beside its word (11.1); and the company
         brief (B-149), the latest stored profile's description, which the drawer shows cut at six
         lines and the MCP ``company`` tool carries (the company page's Overview reads its own,
         ``page_fmp``); and ``logo`` (B-203), the address of the company's logo read where the

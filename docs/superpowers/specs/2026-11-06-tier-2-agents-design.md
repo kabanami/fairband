@@ -936,6 +936,11 @@ engine's value; the engine's own levels stay on the snapshot and in Appendix A. 
 (`impliedGrowth`, `expectedReturn`, `epv`, the multiples) stay the mechanical row's. A review that
 refused fills nothing, and the row stays the engine's.
 
+**The phase follows the review (2026-11-23).** Where a review fills `Reviewed`, the row's `phase`
+is the review's result's, the one a `phase` override set; elsewhere the snapshot's. A secondary
+valuation has no phase and changes none (the founder, 2026-11-23; spec 2026-11-23 refresh
+experience, 4.4).
+
 The coverage mark: `◆` after the ticker in the Ticker cell, in `prov-input`, present when the
 company has a published report; its title "Report <date> by <actor>"; `ink-faint` when the
 report's snapshot window has expired. The brand book's write glyph fits: a report is a write. It

@@ -961,9 +961,11 @@
   }
 
   /* The drawer under its bar, form A (the company page's design, 11), in this order and nothing
-     else: the head, the logo, the ticker, the phase badge, the moat stamp (moatStamp) and the chip
-     of the owner's or an agent's class (moatChip), with no control (spec 2026-11-19 8.8), the name
-     and, for a company in another currency or an ADR, the line that says what its figures are in
+     else: the head, the logo, the ticker, the phase badge of the detail's phase, the one the
+     screen's row shows, a review's where the review has a value (spec 2026-11-23 refresh
+     experience, 4.4), the moat stamp (moatStamp) and the chip of the owner's or an agent's class
+     (moatChip), with no control (spec 2026-11-19 8.8), the name and, for a company in another
+     currency or an ADR, the line that says what its figures are in
      (currencyLine, spec 2026-11-10 7.4); one caption, the sector and the industry (sectorLine);
      the company brief whole, which the page's style cuts at six lines; the value band, the meter
      and under it the four levels in the screen's words (levelRows), or where the meter draws no
@@ -972,7 +974,7 @@
      The rest of what a company has is on its page. */
   function sections(body) {
     var r = body.result;
-    var phase = PHASE_NUMBER[r.phase.phase];
+    var phase = PHASE_NUMBER[body.phase];
     var sector = sectorLine(body.company);
     var rows = levelRows(body);
     var ask = asked(r.symbol);

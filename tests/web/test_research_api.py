@@ -29,7 +29,7 @@ from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.secondary import Drivers, Part, secondary_value
-from fairband.engine.types import ValuationResult
+from fairband.engine.types import Phase, ValuationResult
 from fairband.policy import Policy
 from fairband.store.db import connect
 from fairband.store.ledger import OWNER, Writer
@@ -81,14 +81,25 @@ def _override(db_path: Path, results: dict[str, ValuationResult]) -> int:
         )
 
 
+def _phased(result: ValuationResult, phase: Phase | None) -> ValuationResult:
+    """``result`` with its phase ``phase``, as a ``phase`` override sets a review's."""
+    return replace(result, phase=replace(result.phase, phase=phase))
+
+
 def _review(
-    db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    phase: Phase | None = None,
 ) -> tuple[int, Review]:
-    """The override and the review it produced on AAPL's snapshot."""
+    """The override and the review it produced on AAPL's snapshot, its result's phase ``phase``
+    where one is given, the route's otherwise."""
     override_id = _override(db_path, results)
     belief = Override(override_id, "growth.belief", 0.08, "agent", AGENT.actor, NOW, "raised")
     inputs = replace(mature_growth_inputs(), symbol="AAPL")
     review = review_company(inputs, universe_deciles(), policy, TODAY, [belief], results["AAPL"])
+    if phase is not None:
+        review = replace(review, result=_phased(review.result, phase))
     with closing(connect(db_path)) as conn:
         insert_review(conn, review, "AAPL", _latest(db_path, "AAPL"), None, clock=lambda: NOW)
     assert review.result.value is not None
@@ -531,6 +542,35 @@ def test_records_on_an_older_snapshot_leave_the_detail(
     body = _detail(client, "AAPL")
     assert body["review"] is not None and body["secondary"] is None
     assert body["report"] is not None and body["report"]["stance"] == "hold"
+
+
+def test_the_detail_answers_the_shown_phase(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 refresh experience, 4.4: the detail's ``phase`` is the phase the screen's
+    row shows, by the engine's name: the snapshot's with no review; the review's result's where
+    the review has a value, Mature Stable over the engine's Mature Growth, while the detail's
+    ``result`` stays the snapshot's, the classifier's; the snapshot's again under a newer review
+    that refused, whatever phase its result carries; and none for a snapshot with no phase."""
+    assert _detail(client, "AAPL")["phase"] == "Mature Growth"
+    override_id, _ = _review(db_path, policy, results, phase="Mature Stable")
+    body = _detail(client, "AAPL")
+    assert body["phase"] == "Mature Stable" and body["result"]["phase"]["phase"] == "Mature Growth"
+    refused = replace(
+        _phased(results["AAPL"], "Mature Stable"),
+        value=None,
+        levels=None,
+        price_to_value=None,
+        designation=None,
+        refusal="the reviewed phase is refused",
+    )
+    with closing(connect(db_path)) as conn:
+        review = Review(refused, results["AAPL"].value, (), (override_id,))
+        insert_review(conn, review, "AAPL", _latest(db_path, "AAPL"), None, clock=lambda: NOW)
+    assert _detail(client, "AAPL")["phase"] == "Mature Growth"
+    with closing(connect(db_path)) as conn:
+        insert_snapshot(conn, _phased(results["HGCO"], None), 1, clock=lambda: NOW)
+    assert _detail(client, "HGCO")["phase"] is None
 
 
 def test_the_detail_carries_the_report_and_its_summary(client: TestClient, db_path: Path) -> None:

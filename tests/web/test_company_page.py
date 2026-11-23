@@ -118,7 +118,7 @@ def test_the_head_s_parts() -> None:
 def test_the_head_of_a_company_with_less_on_file() -> None:
     """No universe row: no name and no caption line. No logo, no phase, no price date: none of
     them is drawn; a missing price is a dash."""
-    bare = answers.detail(company=None, logo=None)
+    bare = answers.detail(company=None, logo=None, phase=None)
     bare["result"] |= {"price": None, "price_date": None}
     bare["result"]["phase"] |= {"phase": None}
     tree = _head(bare)
@@ -131,6 +131,16 @@ def test_the_head_of_a_company_with_less_on_file() -> None:
     assert text(price) == "—"
     [ticker] = classed(tree, "ticker")
     assert text(ticker) == "LFOX"
+
+
+def test_the_head_s_badge_draws_the_shown_phase() -> None:
+    """Spec 2026-11-23 refresh experience, 4.4: the badge draws the detail's ``phase``, the phase
+    the screen's row shows, a review's where the review has a value, not its result's, the
+    classifier's: Mature Stable over a result of Mature Growth is badge 5; none is no badge."""
+    assert answers.DETAIL["result"]["phase"]["phase"] == "Mature Growth"
+    [badge] = _badges(_head(answers.detail(phase="Mature Stable")))
+    assert (badge["props"]["phase"], badge["props"]["size"]) == (5, "sm")
+    assert _badges(_head(answers.detail(phase=None))) == []
 
 
 def test_the_moat_stamp_s_three_words_and_none() -> None:

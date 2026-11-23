@@ -43,7 +43,11 @@ value, else the snapshot's; ``None`` otherwise. And ``moat`` (the company page's
 moat class in force (method 4.9), ``"Wide"``, ``"Narrow"`` or ``"None"``: the class of the
 company's row of the moat table, on a refused snapshot too, ``None`` without a row (spec 2026-11-19
 8.6). Every write of a class values the company again, so a valued snapshot holds the row's class;
-a snapshot refused before its route holds none, and the row still has one.
+a snapshot refused before its route holds none, and the row still has one. And ``phase`` (spec
+2026-11-23 refresh experience, 4.4), the engine's name of the phase the screen's row shows, which
+the heads of the drawer and of the company page draw: the review's result's when the review has a
+value, else the snapshot's (``rows.shown_phase``), ``None`` without one. The detail's ``result``
+stays the snapshot's, with the classifier's phase, which the Research tab's evidence reads.
 
 ``GET /api/companies/{symbol}/research`` answers the company's research records (18.3,
 ``research_records``), which the drawer's Details listed until it left (the company page's design,
@@ -96,6 +100,7 @@ from fairband.web.rows import (
     rested_on,
     secondary_block,
     secondary_made_on,
+    shown_phase,
     window_ended,
 )
 
@@ -113,11 +118,11 @@ def agent_records(
     tax: TaxTable,
     now: datetime,
 ) -> dict[str, Any]:
-    """The detail's ``review``, ``priceNeeds``, ``moat``, ``secondary``, ``report`` and ``item``
-    (module docstring) on the company's latest ``snapshot``; ``policy`` is the effective one and
-    ``tax`` the statements' table, by which the summary's references read their sources; ``today``
-    is the day the report's window is judged on and ``now`` the time the item's launch is read
-    at."""
+    """The detail's ``review``, ``priceNeeds``, ``moat``, ``phase``, ``secondary``, ``report`` and
+    ``item`` (module docstring) on the company's latest ``snapshot``; ``policy`` is the effective
+    one and ``tax`` the statements' table, by which the summary's references read their sources;
+    ``today`` is the day the report's window is judged on and ``now`` the time the item's launch
+    is read at."""
     symbol = snapshot.symbol
     review = latest_review(conn, symbol)
     secondary = latest_secondary(conn, symbol)
@@ -147,6 +152,7 @@ def agent_records(
         ),
         "priceNeeds": _price_needs(snapshot, counted, policy, table_moat),
         "moat": table_moat,
+        "phase": shown_phase(snapshot, counted),
         "secondary": (
             None
             if secondary is None or not shown

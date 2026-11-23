@@ -273,6 +273,9 @@ def test_screen_rows_and_default_sort(
         "warnings": ["value sensitive to its inputs"],
         "marked": False,  # one warning, under three
         "expiredEarly": False,  # no review fills the row (spec 2026-11-23 held reviewed value)
+        # the classifier's phase, which ``phase`` shows where no review fills the row (spec
+        # 2026-11-23 refresh experience, 4.4): tests/web/test_rows.py
+        "mechanicalPhase": 4,
     }
 
     refused = results["AAL"]
@@ -301,9 +304,9 @@ def test_screen_sort_nulls_last(client: TestClient) -> None:
     assert _tickers(client, "?sort=marketCap&dir=desc") == ["AAPL", "HGCO", "AAL"]
     assert _tickers(client, "?sort=ticker&dir=desc") == ["HGCO", "AAPL", "AAL"]
     assert _tickers(client, "?sort=marketCap") == ["AAL", "HGCO", "AAPL"]  # ascending by default
-    # every row key sorts but the coverage mark's record, the warning mark's two fields and
-    # the held review's early expiry, which no column draws
-    fields = {"covered", "warnings", "marked", "expiredEarly"}
+    # every row key sorts but the coverage mark's record, the warning mark's two fields, the
+    # held review's early expiry and the classifier's phase, which no column draws
+    fields = {"covered", "warnings", "marked", "expiredEarly", "mechanicalPhase"}
     assert set(_screen(client)["rows"][0]) == {*ROW_KEYS, *fields}
     for key in ROW_KEYS:
         for direction in ("asc", "desc"):
@@ -492,7 +495,7 @@ def test_screen_placeholder_row_not_yet_valued(
 ) -> None:
     _universe(db_path, policy, ("NEWC", "New Co", 3_000_000_000, True))
     [row] = _screen(client)["rows"]
-    fields = {"covered", "warnings", "marked", "expiredEarly"}
+    fields = {"covered", "warnings", "marked", "expiredEarly", "mechanicalPhase"}
     assert set(row) == {*DESIGN_ROW_KEYS, *EXTRA_COLUMNS, *fields}
     assert {key: value for key, value in row.items() if value is not None} == {
         "ticker": "NEWC",
@@ -803,7 +806,11 @@ def test_company_detail(client: TestClient, results: dict[str, ValuationResult])
         # test_the_detail_carries_warnings_and_marked
         "warnings",
         "marked",
+        # the phase the screen's row shows (spec 2026-11-23 refresh experience, 4.4), the
+        # snapshot's here: tests/web/test_research_api.py
+        "phase",
     }
+    assert body["phase"] == "Mature Growth"
     assert (body["warnings"], body["marked"]) == (["value sensitive to its inputs"], False)
     assert body["launchReady"] is False
     # The company brief (B-149) is the stored profile's description; none is stored here.

@@ -304,10 +304,12 @@
 
   /* The head on every tab (7.2), from the company's detail `d`, and `quote`, the open tab's
      stored quote, null before its answer is in. Left: the logo on the drawer's tile at 40px
-     (FairbandPage.logo), the name, the ticker, the phase badge, the moat stamp
-     (FairbandPage.moatStamp), the chip where the class is the owner's or an agent's
-     (FairbandPage.moatChip) and the control that opens the moat box under it, which, once a write
-     is taken, reads the page again (FairbandPage.moatControl, load; spec 2026-11-19 8.8); and one
+     (FairbandPage.logo), the name, the ticker, the phase badge of the detail's phase, the one the
+     screen's row shows, a review's where the review has a value (spec 2026-11-23 refresh
+     experience, 4.4), the moat stamp (FairbandPage.moatStamp), the chip where the class is the
+     owner's or an agent's (FairbandPage.moatChip) and the control that opens the moat box under
+     it, which, once a write is taken, reads the page again (FairbandPage.moatControl, load; spec
+     2026-11-19 8.8); and one
      caption line, the exchange, the sector and the industry of the universe row, the parts it
      has. Right: the latest snapshot's price in figure-lg, in US dollars, the day's change, and
      the day of its close; then Notes with the count of the
@@ -320,7 +322,7 @@
   function head(d, quote) {
     var r = d.result;
     var c = d.company || {};
-    var phase = P.PHASE_NUMBER[r.phase.phase];
+    var phase = P.PHASE_NUMBER[d.phase];
     var line = [c.exchange, c.sector, c.industry].filter(Boolean).join(' · ');
     var row = watchRow(r.symbol, P.rows(), P.watchlists());
     var ask = state.request && state.request.symbol === r.symbol ? state.request

@@ -34,6 +34,12 @@ reads ``expired``, so the filter that hides expired rows hides it, and the field
 is true, which no column draws and nothing sorts by, so it is no row key. The row keeps its
 number. A row no review fills reads its snapshot's window and is never expired early.
 
+Where a review fills it, the row's ``phase`` is the review's result's phase (``shown_phase``; spec
+2026-11-23 refresh experience, 4.4), the one a ``phase`` override set; elsewhere the snapshot's. A
+secondary valuation has no phase and changes none. The field ``mechanicalPhase`` is always the
+snapshot's, the classifier's, which the groups by phase count; no column draws it and nothing
+sorts by it, so it is no row key.
+
 Every row also has the mark's two fields (spec 2026-11-19 7.5), which no column draws and nothing
 sorts by, so neither is a row key: ``warnings``, the plain words of the snapshot's quality warnings
 in the order of its flags (``warning_words``), never a review's, and ``marked``, whether the
@@ -53,7 +59,7 @@ from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
 from fairband.engine.held import held_state, secondary_state, trailing_end_of
 from fairband.engine.levels import Standing, moat_of, standing_for, validity_state
-from fairband.engine.types import PHASE_NUMBER, Levels, money_of, result_to_json
+from fairband.engine.types import PHASE_NUMBER, Levels, Phase, money_of, result_to_json
 from fairband.policy import Moat, Policy
 from fairband.refresh.run import UNCLASSIFIED, Progress
 from fairband.reports.refs import same_snapshot_rows
@@ -150,7 +156,7 @@ DESIGN_COLUMNS = (
 COLUMNS = DESIGN_COLUMNS + tuple(key for key in EXTRA_KEYS if key not in DESIGN_COLUMNS)
 
 # The agents' fields of a row with no agent's record: no reviewed value, no override inside it, no
-# stance, no coverage mark, and no levels or flags over the snapshot's.
+# stance, no coverage mark, and no levels, flags or phase over the snapshot's.
 NO_AGENT_FIELDS: Mapping[str, Any] = {
     "reviewed": None,
     "overrides": 0,
@@ -159,6 +165,7 @@ NO_AGENT_FIELDS: Mapping[str, Any] = {
     "levels": None,
     "flags": None,
     "held": None,
+    "phase": None,
 }
 # The row keys the record that fills ``reviewed`` sets in place of the snapshot's (spec 2026-11-06
 # Tier 2, 18.1, plan 3): its band, levels, price ÷ value and designation.
@@ -236,6 +243,16 @@ def result_json(snapshot: SnapshotRow, policy: Policy) -> dict[str, Any]:
     return served
 
 
+def shown_phase(snapshot: SnapshotRow, review: ReviewRow | None) -> Phase | None:
+    """The phase the screen's row and the company detail show (spec 2026-11-23 refresh
+    experience, 4.4): the result's phase of ``review``, the review the company holds, where it
+    has a value and so fills the Reviewed column, the phase a ``phase`` override set; else the
+    company's latest ``snapshot``'s, the classifier's. ``None`` where that phase is none."""
+    if review is not None and review.value is not None:
+        return review.result.phase.phase
+    return snapshot.result.phase.phase
+
+
 def agent_fields(
     snapshot: SnapshotRow,
     review: ReviewRow | None,
@@ -263,8 +280,11 @@ def agent_fields(
     ``table_moat``, the class of the company's row of the moat table, for a secondary valuation
     and for a review whose result holds none; ``None`` when ``reviewed`` is. ``flags`` are the review's flags when
     the review fills ``reviewed``, else ``None``: a secondary valuation has none, and a row it
-    fills keeps the snapshot's (spec 2026-11-13 8a). ``agentStance`` is the report's word and
-    ``covered`` its time, its actor (its principal where it names none, an owner's report) and
+    fills keeps the snapshot's (spec 2026-11-13 8a). ``phase`` is the name of the phase the row
+    shows (``shown_phase``) when the review fills ``reviewed``, else ``None``: a secondary
+    valuation has none, and a row it fills keeps the snapshot's (spec 2026-11-23 refresh
+    experience, 4.4). ``agentStance`` is the report's word and ``covered`` its time, its actor
+    (its principal where it names none, an owner's report) and
     whether the window of the snapshot it rests on ended before ``today`` (``window_ended``); both
     ``None`` without a report. ``held`` is the state of the review that fills ``reviewed``, on
     ``today`` and on ``policy`` (``held_block``), from ``held``, the company's row of the held
@@ -282,6 +302,7 @@ def agent_fields(
             ),
             "flags": review.result.flags,
             "held": held_block(review, held, policy, today),
+            "phase": shown_phase(snapshot, review),
         }
     else:
         made_on = secondary_made_on(snapshot, cited, secondary)
@@ -459,7 +480,10 @@ def screen_row(
     flags where ``agents`` holds them, else the snapshot's (spec 2026-11-13 8a). ``warnings`` are
     the plain words of the snapshot's own quality warnings, never a review's, and ``marked`` holds
     on a mechanical value with no reviewed value in ``agents`` and ``mark_min``, the effective
-    policy's ``warning_mark_min``, warnings or more (spec 2026-11-19 7.5). The moat shows on
+    policy's ``warning_mark_min``, warnings or more (spec 2026-11-19 7.5). ``phase`` is the
+    review's where ``agents`` holds one, else the snapshot's, and ``mechanicalPhase`` the
+    snapshot's, each as the menu's number (spec 2026-11-23 refresh experience, 4.4); the route
+    and the columns read from the intermediates stay the snapshot's. The moat shows on
     a row with a value only: a growth refusal keeps the moat class for the price refresh, not for
     the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the price
     needs, a growth row's; a row refused for its target margin has the latter alone.
@@ -480,6 +504,7 @@ def screen_row(
     flags = result.flags if agents["flags"] is None else agents["flags"]
     warnings = warning_words(result.flags)
     phase = result.phase.phase
+    shown = phase if agents["phase"] is None else agents["phase"]
     im = result.intermediates
     multiples = _table(im, "multiples")
     facts = _table(im, "price_facts")
@@ -490,7 +515,7 @@ def screen_row(
     row = {
         "ticker": snapshot.symbol,
         "name": None if company is None else company.name,
-        "phase": None if phase is None else PHASE_NUMBER[phase],
+        "phase": None if shown is None else PHASE_NUMBER[shown],
         "fairLow": own["fairLow"],
         "fairHigh": own["fairHigh"],
         "fairValue": snapshot.value,
@@ -544,6 +569,7 @@ def screen_row(
         "covered": agents["covered"],
         "warnings": warnings,
         "marked": is_marked(snapshot.value, agents["reviewed"], warnings, mark_min),
+        "mechanicalPhase": None if phase is None else PHASE_NUMBER[phase],
     }
     if agents["levels"] is not None:
         row |= agents["levels"]
@@ -591,10 +617,11 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
     """The row of an admitted company with no snapshot yet: its name, sector, industry, cap band
     and market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
     warning and no mark, no agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a
-    snapshot; ``levels`` and ``held`` are no row keys, and ``flags`` stands for the row's flags,
-    not in them), no early expiry and ``None`` elsewhere."""
+    snapshot; ``levels`` and ``held`` are no row keys, and ``flags`` and ``phase`` stand for the
+    row's flags and phase, not in them), no early expiry, no phase, shown or mechanical, and
+    ``None`` elsewhere."""
     row: dict[str, Any] = dict.fromkeys(ROW_KEYS)
-    aside = ("levels", "flags", "held")
+    aside = ("levels", "flags", "held", "phase")
     row |= {key: value for key, value in NO_AGENT_FIELDS.items() if key not in aside}
     market_cap = company.market_cap
     row |= {
@@ -611,6 +638,7 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
         "warnings": [],
         "marked": False,
         "expiredEarly": False,
+        "mechanicalPhase": None,
     }
     return row
 
@@ -638,8 +666,11 @@ def group_rows(rows: Sequence[dict[str, Any]], by: str, below_value: float) -> l
     """The rows grouped by ``by`` (``GROUP_BY``), ordered by group name. A group's name is the
     sector, the industry (the level under the sector), the engine's phase name (``unclassified``
     without a phase) or the cap band; ``none`` for a row without a sector, an industry or a cap
-    band. Each group gives its row count, the rows with a value (``valued``), the median of
-    price ÷ value over the valued rows with a positive price, and the share of the valued rows
+    band. The phase is the classifier's, ``mechanicalPhase``, never the one a review shows, so
+    the Methodology page's count of the companies in each phase describes the classifier (spec
+    2026-11-23 refresh experience, 4.4). Each group gives its row count, the rows with a value
+    (``valued``), the median of price ÷ value over the valued rows with a positive price, and the
+    share of the valued rows
     whose price ÷ value is below ``below_value``, the fair band's low end, every class's second
     designation edge (the ``below`` and ``well-below`` bands); ``None`` for the last two when
     they cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
@@ -651,7 +682,7 @@ def group_rows(rows: Sequence[dict[str, Any]], by: str, below_value: float) -> l
 
 def _group_name(row: dict[str, Any], by: str) -> str:
     if by == "phase":
-        phase = row["phase"]
+        phase = row["mechanicalPhase"]
         return UNCLASSIFIED if phase is None else _PHASE_NAMES[phase]
     name = row["capBand"] if by == "cap" else row[by]
     return NONE if name is None else str(name)

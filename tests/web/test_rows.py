@@ -10,7 +10,9 @@ the latest price on the effective edges, and ``mechanical`` stays the engine's v
 3). Where a review fills ``reviewed``, the row's flag words and its count of quality warnings are
 the review's; a secondary valuation has no flags, so a row it fills keeps the snapshot's (spec
 2026-11-13 8a). The row's ``warnings`` and ``marked`` read the snapshot's flags alone, never a
-review's (spec 2026-11-19 7.5)."""
+review's (spec 2026-11-19 7.5). Where a review fills ``reviewed``, the row's ``phase`` is the
+review's result's; ``mechanicalPhase`` is always the snapshot's (spec 2026-11-23 refresh
+experience, 4.4)."""
 
 import sqlite3
 from collections.abc import Callable, Mapping
@@ -36,7 +38,7 @@ from fairband.engine.overrides import Override
 from fairband.engine.review import Review, review_company
 from fairband.engine.route import reprice, value_company
 from fairband.engine.secondary import Part, secondary_value
-from fairband.engine.types import Flag, ValuationResult
+from fairband.engine.types import PHASE_NUMBER, Flag, Phase, ValuationResult
 from fairband.policy import Moat, Policy
 from fairband.policy.settings import apply_overlay
 from fairband.store.db import connect
@@ -60,7 +62,7 @@ from fairband.store.snapshots import (
     snapshot_row,
 )
 from fairband.web.app import create_app
-from fairband.web.rows import NO_AGENT_FIELDS, agent_fields, screen_row, sort_rows
+from fairband.web.rows import NO_AGENT_FIELDS, agent_fields, screen_row, shown_phase, sort_rows
 
 AGENT = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
 PUBLISHED = datetime(2026, 11, 1, 8, 0, tzinfo=UTC)
@@ -127,11 +129,20 @@ def _table_moat(db_path: Path, symbol: str) -> Moat | None:
     return None if row is None else row.moat
 
 
+def _phased(result: ValuationResult, phase: Phase | None) -> ValuationResult:
+    """``result`` with its phase ``phase``, as a ``phase`` override sets a review's."""
+    return replace(result, phase=replace(result.phase, phase=phase))
+
+
 def _review(
-    db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    phase: Phase | None = None,
 ) -> tuple[int, float]:
     """An applied growth.belief override of AAPL at 8% and the review it produced on AAPL's
-    snapshot; the override's id and the review's value."""
+    latest snapshot, its result's phase ``phase`` where one is given, the route's otherwise; the
+    override's id and the review's value."""
     with closing(connect(db_path)) as conn:
         snapshot = latest_snapshot(conn, "AAPL")
         assert snapshot is not None
@@ -158,6 +169,8 @@ def _review(
         review = review_company(
             inputs, universe_deciles(), policy, TODAY, [belief], results["AAPL"]
         )
+        if phase is not None:
+            review = replace(review, result=_phased(review.result, phase))
         insert_review(conn, review, "AAPL", snapshot.id, None, clock=lambda: NOW)
     value = review.result.value
     assert value is not None and value != results["AAPL"].value
@@ -229,12 +242,17 @@ def _current_review(db_path: Path, symbol: str) -> ReviewRow:
     return review
 
 
-def _refused_review(db_path: Path, results: dict[str, ValuationResult], override_id: int) -> None:
+def _refused_review(
+    db_path: Path,
+    results: dict[str, ValuationResult],
+    override_id: int,
+    phase: Phase | None = None,
+) -> None:
     """A newer review of AAPL on its latest snapshot, with ``override_id`` inside, that
-    refused."""
+    refused; its result's phase ``phase`` where one is given, the engine's otherwise."""
     mechanical = results["AAPL"]
     refused = replace(
-        mechanical,
+        mechanical if phase is None else _phased(mechanical, phase),
         value=None,
         levels=None,
         price_to_value=None,
@@ -726,6 +744,75 @@ def test_a_revalued_row_returns_to_the_engines_levels(
     # the held review keeps the row: its value and band, with the engine's new value beside it
     assert (aapl["reviewed"], aapl["mechanical"]) == (value, cited.value + 1.0)
     assert aapl["fairLow"] == pytest.approx(value * policy.fair_band[0])
+
+
+def test_a_review_that_changes_the_phase_sets_the_rows_phase(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 refresh experience, 4.4: where a review fills Reviewed, the row's phase is
+    the review's result's, Mature Stable where the engine's is Mature Growth, and
+    ``mechanicalPhase`` keeps the snapshot's, the classifier's. The route stays the mechanical
+    row's (18.1). A row no review fills shows its snapshot's phase in both."""
+    assert results["AAPL"].phase.phase == "Mature Growth"
+    _review(db_path, policy, results, phase="Mature Stable")
+    rows = _rows(client)
+    row = rows["AAPL"]
+    assert row["phase"] == PHASE_NUMBER["Mature Stable"]
+    assert row["mechanicalPhase"] == PHASE_NUMBER["Mature Growth"]
+    assert row["route"] == "mature-growth"
+    assert rows["HGCO"]["phase"] == rows["HGCO"]["mechanicalPhase"] == PHASE_NUMBER["High Growth"]
+    snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
+    assert shown_phase(snapshot, review) == "Mature Stable"
+    assert shown_phase(snapshot, None) == "Mature Growth"
+    fields = agent_fields(snapshot, review, None, None, {}, TODAY, policy, None)
+    assert fields["phase"] == "Mature Stable"
+
+
+def test_a_refused_review_leaves_the_snapshots_phase(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 4.4: a newer review that refused fills nothing, so the row's phase is the snapshot's,
+    whatever phase the refusal's result carries."""
+    override_id, _ = _review(db_path, policy, results, phase="Mature Stable")
+    _refused_review(db_path, results, override_id, phase="Mature Stable")
+    snapshot, review = _newest(db_path, "AAPL"), _current_review(db_path, "AAPL")
+    assert review.value is None and review.result.phase.phase == "Mature Stable"
+    row = _rows(client)["AAPL"]
+    assert row["reviewed"] is None
+    assert row["phase"] == row["mechanicalPhase"] == PHASE_NUMBER["Mature Growth"]
+    assert shown_phase(snapshot, review) == "Mature Growth"
+    assert agent_fields(snapshot, review, None, None, {}, TODAY, policy, None)["phase"] is None
+
+
+def test_an_unclassified_row_takes_its_reviews_phase(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 4.4: a snapshot with no phase shows the phase of the review that fills its row, and
+    its ``mechanicalPhase`` stays empty."""
+    _snapshot(db_path, _phased(results["AAPL"], None))
+    _review(db_path, policy, results, phase="Young Growth")
+    row = _rows(client)["AAPL"]
+    assert (row["phase"], row["mechanicalPhase"]) == (PHASE_NUMBER["Young Growth"], None)
+
+
+def test_a_secondary_valuation_changes_no_phase(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+    secondaries: dict[str, int],
+) -> None:
+    """Spec 4.4: a secondary valuation has no phase and changes none. On AAL's refused row it
+    fills Reviewed, and the row's phase stays the snapshot's, Young Growth."""
+    with closing(connect(db_path)) as conn:
+        secondary = secondary_row(conn, secondaries["AAL"])
+    assert secondary is not None
+    row = _rows(client)["AAL"]
+    assert row["reviewed"] == secondary.value_per_share
+    assert row["phase"] == row["mechanicalPhase"] == PHASE_NUMBER["Young Growth"]
+    fields = agent_fields(_newest(db_path, "AAL"), None, secondary, None, {}, TODAY, policy, None)
+    assert fields["reviewed"] == secondary.value_per_share and fields["phase"] is None
+    assert NO_AGENT_FIELDS["phase"] is None
 
 
 def _in_force(value: float, moat: Moat, price: float | None, policy: Policy) -> dict[str, Any]:

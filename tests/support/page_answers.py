@@ -13,7 +13,8 @@ quarters end a quarter apart), and the window from the stored list's params (a r
 2026, the 365 days to 1 Nov 2026). The detail is written by hand in the shape of ``GET
 /api/companies/{symbol}`` (``web/app.py``, ``company``): LFOX valued on the Mature Growth route at
 $196.50 against a price of $182.40, a wide moat, the moat table's file row, no quality warning and
-so no mark, two notes, no review, no report and no open item.
+so no mark, two notes, no review, so the phase shown is the snapshot's, no report and no open
+item.
 
 The builders give the variants: a refused row, a reviewed row with a published report, a company
 with no row in the moat table, the four answers of a company with nothing stored but its profile,
@@ -216,6 +217,7 @@ DETAIL: dict[str, Any] = {
     "review": None,
     "priceNeeds": None,
     "moat": "Wide",
+    "phase": "Mature Growth",  # the phase the row shows: the snapshot's, with no review
     "moatClass": MOAT_FILE,
     "secondary": None,
     "report": None,
