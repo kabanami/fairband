@@ -8,8 +8,10 @@ field of its own. The menu is in the founder's order, and a group's name in Stat
 Screen on its filter (spec 2026-11-23 refresh experience, 4.5 and 4.6). The page follows every
 run that ends, whoever started it: it asks the refresh's state every 30 seconds while no run is
 alive, and reads again what a run that ended may have changed; only a run of the whole screen
-fades the panels (4.1 and 4.3). The bundle, app.js, finder.js and controls.js run in node
-(``tests/web/header.mjs``) on steps the test gives, and the tests read the trace."""
+fades the panels (4.1 and 4.3), and only such a run locks the page under the refresh layer until
+it ends, or until the reader keeps reading on a long run (4.1). The bundle, app.js, finder.js and
+controls.js run in node (``tests/web/header.mjs``) on steps the test gives, and the tests read the
+trace."""
 
 import json
 import subprocess
@@ -477,14 +479,16 @@ def test_runs_past_the_list_read_everything_again(seen: int, missing: bool) -> N
 def test_a_run_another_process_runs_is_followed_at_its_end(at_load: bool) -> None:
     """A run of the command-line tool, in another process, has no progress on the server: the
     state answers no run alive, and the run's entry in ``recent`` says ``running``. Such an entry
-    is not followed, nor passed: it reads nothing, draws no bar and fades nothing, and the next
-    answer, where it is done, reads the Screen again; so too where it ran as the page loaded."""
+    is not followed, nor passed: it reads nothing, draws no bar, fades nothing and locks nothing
+    (4.1: the layer is for a run the server reports alive), and the next answer, where it is done,
+    reads the Screen again; so too where it ran as the page loaded."""
     running = _idle(_run(67, "full", status="running"), RUN_66)
     ended = _idle(_run(67, "full"), RUN_66)
     *_, during, _, after = _trace(
         [running, TICK, ended] if at_load else [LANDED, TICK, running, TICK, ended]
     )
     assert during["reads"] == [] and during["run"] is False and during["recomputing"] is False
+    assert during["layer"]["on"] is False and during["inert"] == [False] * 4
     assert after["reads"] == [SCREEN["url"]]
 
 
@@ -654,3 +658,227 @@ def test_a_failed_read_asks_again_on_the_cycle_and_says_when() -> None:
     assert idle["notice"].endswith(". The page asks again every 30 seconds.")
     assert alive["waits"] == [2000]
     assert alive["notice"].endswith(". The page asks again every 2 seconds.")
+
+
+# The refresh layer (spec 2026-11-23 refresh experience, 4.1).
+LOCKED = "The page is locked until the refresh ends."
+KEPT = LOCKED + " Keep reading removes the lock; the refresh goes on."
+KEEP = {"do": "press", "name": "Keep reading"}
+CANCEL = {"do": "press", "name": "Cancel"}
+ESCAPE = {"do": "key", "key": "Escape"}
+FREE = [False] * 4  # main.app-page and the three mounts app.js appends beside it, none inert
+HELD = [True] * 4  # each of them inert
+CANCEL_URL = "/api/refresh/cancel"
+
+
+@pytest.mark.parametrize(
+    ("kind", "title"),
+    [("price", "Refreshing prices"), ("full", "Refreshing all"), ("revalue", "Revaluing")],
+)
+def test_a_whole_run_locks_the_page(kind: str, title: str) -> None:
+    """A run of the whole screen draws the layer over the page: a modal dialog labelled by its
+    title, the run bar, the sentence and Cancel. Every child of the body but the layer is inert,
+    main.app-page and the mounts beside it, and the popups close as the layer turns on, once.
+    Before the run the layer is drawn off, empty and hidden from a screen reader."""
+    landed, _, locked, _, again = _trace(
+        [LANDED, TICK, _alive(67, kind, None), TICK, _alive(67, kind, None)]
+    )
+    assert landed["layer"] == {
+        "on": False,
+        "dialog": False,
+        "hidden": "true",
+        "title": None,
+        "bar": False,
+        "stage": None,
+        "sentence": None,
+        "keep": False,
+        "cancel": None,
+        "notice": None,
+    }
+    assert landed["inert"] == FREE
+    layer = locked["layer"]
+    assert (layer["on"], layer["dialog"], layer["hidden"]) == (True, True, None)
+    assert (layer["title"], layer["bar"], layer["stage"]) == (title, True, None)
+    assert layer["cancel"] == "enabled" and layer["notice"] is None
+    assert layer["sentence"] in (LOCKED, KEPT)
+    assert locked["inert"] == HELD and locked["closed"] == 1
+    assert again["layer"] == layer and again["inert"] == HELD and again["closed"] == 0
+
+
+def test_the_layer_draws_the_stage_word_alone_while_the_total_is_0() -> None:
+    """As the status line does, where the run bar would draw nothing."""
+    begun = _alive(67, "price", None)
+    begun["body"]["refresh"] |= {"stage": "quotes", "done": 0, "failed": 0, "remaining": 0}
+    *_, locked = _trace([LANDED, TICK, begun])
+    assert locked["layer"]["on"] is True
+    assert (locked["layer"]["bar"], locked["layer"]["stage"]) == (False, "fetching prices")
+
+
+@pytest.mark.parametrize(("kind", "symbols"), [("scoped", ["MSCO"]), ("revalue", ["MGCO"])])
+def test_a_run_of_named_companies_draws_no_layer(kind: str, symbols: list[str]) -> None:
+    """An agent's run, a moat write's: nothing darkens and nothing locks."""
+    *_, alive = _trace([LANDED, TICK, _alive(67, kind, symbols)])
+    assert alive["run"] is True
+    assert alive["layer"]["on"] is False and alive["layer"]["hidden"] == "true"
+    assert alive["inert"] == FREE and alive["closed"] == 0
+
+
+@pytest.mark.parametrize(("kind", "keep"), [("price", False), ("full", True), ("revalue", True)])
+def test_keep_reading_stands_on_the_long_runs_only(kind: str, keep: bool) -> None:
+    """A full refresh and a whole revalue run for minutes, and the reader may keep reading; a
+    price refresh, about 26 seconds, holds the page to its end."""
+    *_, locked = _trace([LANDED, TICK, _alive(67, kind, None)])
+    assert locked["layer"]["keep"] is keep
+    assert locked["layer"]["sentence"] == (KEPT if keep else LOCKED)
+
+
+def test_keep_reading_lifts_the_lock_for_that_run_alone() -> None:
+    """The run goes on and the page is as under a run today: the bar in the status line, the
+    tables faint, Cancel in the header. The next answer about the same run keeps the page free;
+    another run locks it again."""
+    *_, locked, kept, _, same, _, other = _trace(
+        [
+            LANDED,
+            TICK,
+            _alive(67, "full", None),
+            KEEP,
+            TICK,
+            _alive(67, "full", None),
+            TICK,
+            _alive(68, "full", None),
+        ]
+    )
+    assert locked["layer"]["on"] is True
+    assert kept["layer"]["on"] is False and kept["inert"] == FREE
+    assert (kept["run"], kept["recomputing"], kept["actions"]) == (True, True, ["Cancel"])
+    assert same["layer"]["on"] is False and same["inert"] == FREE
+    assert other["layer"]["on"] is True and other["inert"] == HELD
+
+
+@pytest.mark.parametrize("status", ["done", "failed", "cancelled"])
+def test_the_run_s_end_lifts_the_lock(status: str) -> None:
+    """A run that ends, done or not, takes the layer away, and the page is free again."""
+    *_, locked, _, ended = _trace(
+        [LANDED, TICK, _alive(67, "price", None), TICK, _idle(_run(67, "price", status=status))]
+    )
+    assert locked["layer"]["on"] is True
+    assert ended["layer"]["on"] is False and ended["layer"]["hidden"] == "true"
+    assert ended["inert"] == FREE and ended["run"] is False
+
+
+def test_a_whole_run_another_page_started_locks_too() -> None:
+    """The plan's review focus 5: a page that loads while a run of the whole screen is alive,
+    started in another tab or another browser, is locked at its first answer. Keep reading is the
+    page's own choice, so the page loaded again locks again."""
+    first, kept = _trace([RUN_ALIVE, KEEP])
+    [reloaded] = _trace([RUN_ALIVE])
+    assert first["layer"]["on"] is True and first["inert"] == HELD
+    assert first["layer"]["title"] == "Refreshing all"
+    assert kept["layer"]["on"] is False
+    assert reloaded["layer"] == first["layer"] and reloaded["inert"] == HELD
+
+
+def test_a_failed_status_read_offers_keep_reading_on_a_price_run() -> None:
+    """The plan's review focus 1: the status read fails while the page is locked (the server
+    restarts), so the page cannot know whether the run goes on. Keep reading stands on any kind,
+    with the notice of the failed read in the panel, so the reader is never held behind the
+    layer; a read that answers again with the run alive takes it away from a price run."""
+    failed = {"do": "answer", "url": CURRENT, "status": 500, "body": {"detail": "restarting"}}
+    *_, locked, _, lost, _, back = _trace(
+        [LANDED, TICK, _alive(67, "price", None), TICK, failed, TICK, _alive(67, "price", None)]
+    )
+    assert locked["layer"]["keep"] is False
+    assert lost["layer"]["on"] is True and lost["layer"]["keep"] is True
+    assert lost["layer"]["sentence"] == KEPT
+    assert lost["layer"]["notice"].startswith("The refresh status did not load: ")
+    assert back["layer"]["keep"] is False and back["layer"]["notice"] is None
+    *_, kept = _trace([LANDED, TICK, _alive(67, "price", None), TICK, failed, KEEP])
+    assert kept["layer"]["on"] is False and kept["inert"] == FREE
+
+
+def test_back_and_forward_are_put_back_while_locked() -> None:
+    """The plan's review focus 5: a change of the address while the lock holds (Back, Forward, a
+    hash typed) is put back to the address the page last set, and nothing new shows or reads.
+    Once the run ends, the address opens its view again."""
+    *_, page, _, locked, back, forward, _, ended, opened = _trace(
+        [
+            LANDED,
+            _show("company", "MGCO"),
+            TICK,
+            _alive(67, "price", None),
+            {"do": "hash", "hash": "#statistics"},
+            {"do": "hash", "hash": "#company/MGCO/financials"},
+            TICK,
+            _idle(_run(67, "price"), RUN_66),
+            {"do": "hash", "hash": "#statistics"},
+        ]
+    )
+    assert page["hash"] == "#company/MGCO" and locked["layer"]["on"] is True
+    for step in (back, forward):
+        assert (step["hash"], step["view"], step["reads"]) == ("#company/MGCO", "", [])
+        assert step["layer"]["on"] is True
+    assert ended["layer"]["on"] is False
+    assert (opened["hash"], opened["view"], opened["reads"]) == (
+        "#statistics",
+        "statistics",
+        [STATISTICS],
+    )
+    *_, screen = _trace(
+        [
+            LANDED,
+            _show("screen"),
+            TICK,
+            _alive(67, "full", None),
+            {"do": "hash", "hash": "#settings"},
+        ]
+    )
+    assert (screen["hash"], screen["view"], screen["reads"]) == ("", "screen", [])
+
+
+def test_escape_does_nothing_while_locked() -> None:
+    """Escape does not close the layer, and nothing under it answers: its default is prevented,
+    so the drawer, whose Escape gives way to one acted on, stays open (app.js). Free, the page's
+    Escape is its own again."""
+    _, free, _, locked, escaped = _trace([LANDED, ESCAPE, TICK, _alive(67, "price", None), ESCAPE])
+    assert free["prevented"] is False
+    assert locked["layer"]["on"] is True
+    assert escaped["prevented"] is True and escaped["layer"]["on"] is True
+
+
+def test_the_layer_s_mount_and_rules_stand() -> None:
+    """The layer's mount is the body's child after main.app-page, so it covers the header too;
+    its scrim has a value in each theme and in the light preference, as tokens.css declares its
+    themes, and it fades in and out over 150 ms, the one motion of the layer (4.8)."""
+    page = " ".join(_static_file("index.html").split())
+    assert '</main> <div id="layer"></div> <script ' in page
+    assert ':root, [data-theme="dark"] { --app-scrim: rgb(0 0 0 / 0.62); }' in page
+    assert '[data-theme="light"] { --app-scrim: rgb(17 22 27 / 0.5); }' in page
+    assert (
+        "@media (prefers-color-scheme: light) { :root:not([data-theme]) "
+        "{ --app-scrim: rgb(17 22 27 / 0.5); } }"
+    ) in page
+    assert "transition: opacity 150ms, visibility 0s 150ms; }" in page
+    assert (
+        ".app-layer.is-on { opacity: 1; visibility: visible; transition: opacity 150ms; }" in page
+    )
+
+
+def test_cancel_in_the_layer_asks_the_server_and_is_disabled_after() -> None:
+    """Cancel does what the header's Cancel does: it posts, and once the server takes it, it is
+    disabled until the run ends, the notice in the panel; the state is read at once."""
+    *_, locked, pressed, taken = _trace(
+        [
+            LANDED,
+            TICK,
+            _alive(67, "full", None),
+            CANCEL,
+            {"do": "answer", "url": CANCEL_URL, "status": 200, "body": {"cancelled": True}},
+        ]
+    )
+    assert locked["layer"]["cancel"] == "enabled"
+    assert pressed["reads"] == [CANCEL_URL] and pressed["layer"]["cancel"] == "enabled"
+    assert taken["reads"] == [CURRENT]
+    assert taken["layer"]["cancel"] == "disabled" and taken["layer"]["keep"] is True
+    assert taken["layer"]["notice"] == (
+        "Cancel asked: the refresh stops after the companies in flight."
+    )

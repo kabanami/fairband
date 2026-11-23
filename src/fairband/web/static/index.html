@@ -110,6 +110,42 @@
   .is-recomputing .fb-table:not(.app-research .fb-table) tbody td *:not(.fb-phase__n) {
     color: var(--ink-faint);
   }
+  /* The refresh layer (spec 2026-11-23 refresh experience, 4.1). The scrim is no token: the
+     archive's tokens are fixed. One value for each theme, named as tokens.css names its themes. */
+  :root, [data-theme="dark"] { --app-scrim: rgb(0 0 0 / 0.62); }
+  [data-theme="light"] { --app-scrim: rgb(17 22 27 / 0.5); }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) { --app-scrim: rgb(17 22 27 / 0.5); }
+  }
+  /* Over the whole page, the header included; it fades in and out over 150 ms, under the
+     system's reduced-motion setting too, a fade of colour being no movement (4.8). Hidden, it
+     takes no pointer. */
+  .app-layer {
+    position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center;
+    justify-content: center; background: var(--app-scrim); opacity: 0; visibility: hidden;
+    transition: opacity 150ms, visibility 0s 150ms;
+  }
+  .app-layer.is-on { opacity: 1; visibility: visible; transition: opacity 150ms; }
+  /* The panel on the raised surface, 400px wide, or the window's width less a 16px gutter each
+     side, its border and padding inside that width. */
+  .app-layer__panel {
+    box-sizing: border-box; width: min(400px, calc(100vw - 32px)); padding: var(--space-5);
+    background: var(--surface-raised); border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-popover);
+  }
+  .app-layer__title { margin: 0 0 var(--space-3); }
+  /* The run bar in the panel: its stage word and its counts on one line, the track under them
+     across the panel, as the approved mockup draws it; the stage word alone while the total is
+     0. */
+  .app-layer__panel .fb-run {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-3);
+  }
+  .app-layer__panel .fb-run__track { grid-column: 1 / -1; grid-row: 2; }
+  .app-layer__stage { color: var(--ink-muted); }
+  .app-layer__say { margin: var(--space-3) 0 var(--space-4); color: var(--ink-faint); }
+  .app-layer__notice { margin: 0 0 var(--space-4); color: var(--ink-muted); }
+  .app-layer__notice--caution { color: var(--caution); }
+  .app-layer__buttons { display: flex; justify-content: flex-end; gap: var(--space-2); }
 
   .app-groups__bar { margin-bottom: var(--space-2); }
   .app-by { color: var(--ink-muted); }
@@ -1627,6 +1663,7 @@
   <section id="inbox" hidden></section>
   <section id="company" hidden></section>
 </main>
+<div id="layer"></div>
 <script src="/static/vendor/react.production.min.js"></script>
 <script src="/static/vendor/react-dom.production.min.js"></script>
 <script src="/static/design-system/components/bundle.js"></script>

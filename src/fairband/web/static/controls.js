@@ -14,13 +14,16 @@
    never while the page is hidden (spec 2026-11-23 refresh experience, 4.3). While a refresh runs,
    one Cancel stands where the Refresh buttons were and the stamp is gone; under a run of the
    whole screen the tables keep their old figures at ink-faint, and under a run of named companies
-   nothing fades (4.1). When any run ends, whoever started it, the rows load again, with the open
-   drawer, the statistics when that view is open and the company page when the run covered its
-   company; the figures the run changed are marked as they land, and after a run of the whole
-   screen that ended done the status line counts them (4.2). The Statistics view, once named
-   Groups, is one plain table from /api/statistics (spec 6.3; spec 2026-11-23 refresh experience,
-   4.5), with no chart, each group's name a link that
-   opens the Screen on the group; #statistics names it, and the old #groups opens it. The company
+   nothing fades (4.1). A run of the whole screen, whoever started it, also locks the page under
+   the refresh layer, its run bar and Cancel in a panel over a dark scrim: nothing under it
+   answers, a change of the address is put back and Escape does nothing, until the run ends or,
+   on a long run, the reader keeps reading (4.1). When any run ends, whoever started it, the rows
+   load again, with the open drawer, the statistics when that view is open and the company page
+   when the run covered its company; the figures the run changed are marked as they land, and
+   after a run of the whole screen that ended done the status line counts them (4.2). The
+   Statistics view, once named Groups, is one plain table from /api/statistics (spec 6.3; spec
+   2026-11-23 refresh experience, 4.5), with no chart, each group's name a link that opens the
+   Screen on the group; #statistics names it, and the old #groups opens it. The company
    page (company.js) is a
    panel no header view names: #company/<symbol> opens its Overview, #company/<symbol>/financials
    its Financials tab, #company/<symbol>/estimates its Estimates tab,
@@ -44,6 +47,14 @@
      experience, 4.1), and the newest runs the refresh's state answers while none runs (4.3). */
   var WHOLE_KINDS = ['price', 'full', 'revalue'];
   var RECENT = 20;
+  /* The refresh layer's words (4.1): its title by the run's kind, the id that labels the dialog,
+     the sentence and what it goes on to say where Keep reading stands; the kinds of a long run,
+     on which Keep reading stands, a whole revalue running for minutes as a full refresh does. */
+  var LAYER_TITLES = { price: 'Refreshing prices', full: 'Refreshing all', revalue: 'Revaluing' };
+  var LAYER_TITLE = 'app-layer-title';
+  var LOCKED = 'The page is locked until the refresh ends.';
+  var KEEP = ' Keep reading removes the lock; the refresh goes on.';
+  var LONG_KINDS = ['full', 'revalue'];
   var OPEN = P.OPEN_STATES;
   var BY = { sector: 'Sector', industry: 'Industry', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
@@ -70,6 +81,9 @@
   var header = ReactDOM.createRoot(document.getElementById('header'));
   var bar = ReactDOM.createRoot(document.getElementById('controls'));
   var groupsRoot = ReactDOM.createRoot(panels.statistics);
+  /* The refresh layer's mount, the body's child after main.app-page (index.html). */
+  var layerMount = document.getElementById('layer');
+  var layer = ReactDOM.createRoot(layerMount);
   var state = {
     tab: 'screen',
     by: 'sector',
@@ -82,10 +96,14 @@
     open: 0, /* the open work items, pending and claimed: the Inbox view's count */
     seen: null, /* the id of the newest refresh the rows were read under; null before an answer */
     ended: null, /* { id, kind, status }: the newest whole run the last follow took in, or null */
-    changes: null /* { id, kind, prices, values, fresh }: what the last whole run that ended done
-                     changed on the rows, as the page counted it (onChanged), fresh for MARK_MS
-                     after it was counted; or null */
+    changes: null, /* { id, kind, prices, values, fresh }: what the last whole run that ended done
+                      changed on the rows, as the page counted it (onChanged), fresh for MARK_MS
+                      after it was counted; or null */
+    kept: null, /* the id of the run the reader kept reading under (Keep reading), or null */
+    address: null, /* the address show last set; null before the first view opens */
+    statusFailed: false /* the last read of the refresh's state failed */
   };
+  var shut = false; /* the page was locked at the last draw (lockPage) */
   var timer = null;
   var inboxTimer = null;
   var freshTimer = null; /* ends the count's freshness (onChanged) */
@@ -100,7 +118,9 @@
      each request (post), every 2 seconds while a run is alive and every 30 while none is; never
      while the page is hidden, and at once as it shows again. An answer with a run alive draws its
      bar; where it is the page's first answer, the rows were read under the run before, so the
-     run's end is followed. An answer with none alive follows the runs that ended (followRuns). */
+     run's end is followed. An answer with none alive follows the runs that ended (followRuns).
+     A read that fails keeps the run it knew, and so the lock, with Keep reading in the layer
+     (keeps) until a read answers again (4.1). */
   function poll() {
     clearTimeout(timer);
     if (document.hidden) return;
@@ -109,6 +129,7 @@
       .then(function (body) {
         if (request !== latestPoll) return;
         var alive = state.running !== null; /* a run was alive at the answer before */
+        state.statusFailed = false;
         if (state.notice && state.notice.fromPoll) state.notice = null; /* it answers again */
         state.running = body.refresh;
         if (body.refresh !== null) {
@@ -130,6 +151,7 @@
            answers: on a run's cycle while one was alive, else on the idle one. */
         var alive = state.running !== null || started;
         timer = setTimeout(poll, alive ? POLL_MS : IDLE_MS);
+        state.statusFailed = true;
         notify('The refresh status did not load: ' + err.message + (alive
           ? '. The page asks again every 2 seconds.' : '. The page asks again every 30 seconds.'),
           true, true);
@@ -185,6 +207,15 @@
      names the company (4.3). */
   function covers(run) {
     return whole(run) || (run.symbols || []).indexOf(P.company.symbol) !== -1;
+  }
+
+  /* The page is locked while a run of the whole screen is alive, whoever started it, but for the
+     run the reader kept reading under (keepReading; spec 2026-11-23 refresh experience, 4.1). A
+     run the server does not report alive, the command-line tool's, locks nothing, as it draws no
+     bar. */
+  function locked() {
+    var run = state.running;
+    return run !== null && whole(run) && state.kept !== run.id;
   }
 
   /* A notice under the status line; one from a failed poll clears when a poll answers. */
@@ -316,16 +347,19 @@
      the Screen's place from the scroller as it turns to the list and a hidden scroller reads
      none; no other view tells it, so it keeps its mode while hidden.
      A view shown closes the watchlist popup and the Notes box (FairbandPage.closePopups), which
-     no press closes when the browser's Back or Forward moves the hash. */
+     no press closes when the browser's Back or Forward moves the hash. The address it sets is
+     kept in state.address, which fromHash puts back while the page is locked (spec 2026-11-23
+     refresh experience, 4.1). */
   function show(tab, section, id, report) {
     if (VIEWS.indexOf(tab) === -1 || (tab === 'company' && !section)) tab = 'screen';
     var opened = state.tab !== tab;
     P.section = tab === 'methodology' && section ? section : null;
     var moved = tab === 'company' && keepCompany(section, id, report);
     var listed = tab === 'watchlists' && keepList(section);
-    history.replaceState(null, '', tab === 'screen' ? location.pathname
+    state.address = tab === 'screen' ? location.pathname
       : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : '') +
-        (tab === 'watchlists' && P.listId != null ? '/' + P.listId : ''));
+        (tab === 'watchlists' && P.listId != null ? '/' + P.listId : '');
+    history.replaceState(null, '', state.address);
     if (!opened && !P.section && !moved && !listed) return;
     state.tab = tab;
     state.detailsOpen = false; /* a view opened with no press, by Back or Forward, shuts it too */
@@ -397,8 +431,14 @@
      or a bookmark may still name, #report/<symbol> and #report/<symbol>/<id>, open the Research
      tab on the same report, the company's latest where no id is given, the hash replaced by the
      tab's; #report with no symbol is the Screen, as show has it (the Research tab's design,
-     7.1). */
+     7.1). While the page is locked, a change of the address (Back, Forward, a hash typed) shows
+     nothing and is put back to the address show last set (spec 2026-11-23 refresh experience,
+     4.1); before show set one, the first view opens all the same. */
   function fromHash() {
+    if (locked() && state.address !== null) {
+      history.replaceState(null, '', state.address);
+      return;
+    }
     var parts = location.hash.slice(1).split('/');
     if (parts[0] === 'groups') parts[0] = 'statistics';
     if (parts[0] === 'report') show('company', parts[1], 'research', parts[2]);
@@ -544,6 +584,8 @@
 
   function render() {
     var alive = state.running !== null;
+    var lock = locked();
+    lockPage(lock);
     /* Every panel's tables fade while a run of the whole screen is alive, but the Methodology
        view's: its examples are figures as of a named date, not the running refresh's. The
        Research tab's appendixes keep theirs (index.html): they are the records of the snapshot
@@ -599,8 +641,95 @@
       notice ? h('p', {
         className: 'caption app-status' + (notice.caution ? ' app-status--caution' : '')
       }, notice.text) : null));
+    layer.render(layerView(lock));
     if (state.tab === 'statistics') groupsRoot.render(groupsView());
   }
+
+  /* -------------------------------------------------------------- the refresh layer */
+
+  /* The refresh layer (spec 2026-11-23 refresh experience, 4.1): while the page is locked, a
+     modal dialog over the whole page, the header included, labelled by its title, which names the
+     run's kind. In its panel, the run bar as the status line draws it, or the stage word alone
+     while the stage reports a total of 0; the sentence; the notice, where there is one; Cancel,
+     which does what the header's does, disabled once asked; and Keep reading, where it stands
+     (keeps). Its first enabled button takes the focus as it turns on (focusFirst). Escape does
+     nothing to it. Not locked, the layer is drawn empty and hidden from a screen reader; it fades
+     in and out over 150 ms (index.html). */
+  function layerView(on) {
+    if (!on) return h('div', { className: 'app-layer', 'aria-hidden': 'true' });
+    var run = runProps(state.running);
+    var keep = keeps(state.running);
+    var notice = state.notice;
+    return h('div', {
+      className: 'app-layer is-on', role: 'dialog', 'aria-modal': 'true',
+      'aria-labelledby': LAYER_TITLE
+    },
+      h('div', { className: 'app-layer__panel', ref: focusFirst },
+        h('h2', { id: LAYER_TITLE, className: 'heading app-layer__title' },
+          LAYER_TITLES[state.running.kind]),
+        run.total > 0 ? h(F.RunProgress, run)
+          : h('div', { className: 'caption app-layer__stage' }, run.stage),
+        h('p', { className: 'caption app-layer__say' }, LOCKED + (keep ? KEEP : '')),
+        notice ? h('p', {
+          className: 'caption app-layer__notice' +
+            (notice.caution ? ' app-layer__notice--caution' : '')
+        }, notice.text) : null,
+        h('div', { className: 'app-layer__buttons' },
+          h(F.Button, {
+            key: 'cancel', variant: 'quiet', size: 'sm', disabled: state.cancelAsked,
+            onClick: cancel
+          }, 'Cancel'),
+          keep ? h(F.Button, {
+            key: 'keep', variant: 'primary', size: 'sm', onClick: keepReading
+          }, 'Keep reading') : null)));
+  }
+
+  /* Keep reading stands on a long run, a full refresh or a revalue of the whole screen, and on
+     any run while the last read of the refresh's state failed: the page cannot know then that the
+     run goes on (the server restarts), and the reader is never held behind the layer (4.1). */
+  function keeps(run) {
+    return LONG_KINDS.indexOf(run.kind) !== -1 || state.statusFailed;
+  }
+
+  /* Keep reading lifts the lock for the run alive, on this page alone: the run goes on, and the
+     page is as under a run today, the run bar in the status line, the tables faint and Cancel in
+     the header. Another run locks the page again, and so does a reload: the choice is the page's
+     own state (4.1). */
+  function keepReading() {
+    if (state.running) state.kept = state.running.id;
+    render();
+  }
+
+  /* The panel's ref: its first enabled button takes the focus as the panel is drawn, which is as
+     the layer turns on. React calls it with the panel once, as it mounts, and with null as it
+     goes. */
+  function focusFirst(panel) {
+    var button = panel && panel.querySelector('button:not(:disabled)');
+    if (button) button.focus();
+  }
+
+  /* Locks the page or frees it (4.1). While it is locked, every child of the body but the layer's
+     mount is inert: main.app-page and the mounts the scripts add beside it (the watchlist
+     popup's, the Notes box's, the moat box's), so no pointer, key or focus reaches what is under
+     the layer. It is set at each draw while locked, so a mount added under the lock is covered
+     too, and taken off once as the lock lifts. As the lock turns on, the open popups close
+     (FairbandPage.closePopups): they would stand under the layer, out of reach. */
+  function lockPage(on) {
+    if (on || shut) {
+      Array.prototype.forEach.call(document.body.children, function (child) {
+        if (child !== layerMount) child.inert = on;
+      });
+    }
+    if (on && !shut) P.closePopups();
+    shut = on;
+  }
+
+  /* Escape does nothing while the page is locked: the layer does not close, and nothing under it
+     answers. Its default is prevented before any other listener runs, so the drawer, whose
+     Escape gives way to one a control has acted on (app.js), stays open (4.1). */
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && locked()) event.preventDefault();
+  }, true);
 
   /* A refresh button's words: the full ones, and the short ones index.html shows in their place
      below 400px, where the full ones no longer fit beside the lockup (B-82). The button names

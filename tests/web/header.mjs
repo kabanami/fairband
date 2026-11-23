@@ -4,9 +4,11 @@
 // last drew, the few browser objects the scripts touch (each view's panel one object whose
 // `hidden` controls.js sets, a query that finds no element, as app.js asks for the table's
 // scroller when the Watchlists view turns the table to its list, the hash, the history the views
-// replace, the window's and the document's listeners, each panel's classes) and a fetch of the
-// driver's own, answered only when a step answers it. The reads the scripts start as they load
-// stay in flight, so a step can answer the first read of the refresh's state, or the screen's rows
+// replace, the window's and the document's listeners, each panel's classes, the body's children,
+// main.app-page and the layer's mount as index.html writes them, then the mounts the scripts
+// append, each with the `inert` controls.js sets) and a fetch of the driver's own, answered only
+// when a step answers it. The reads the scripts start as they load stay in flight, so a step can
+// answer the first read of the refresh's state, or the screen's rows
 // (/api/screen?sort=ticker&dir=asc). app.js's and controls.js's timers are held until a step fires
 // them, and the company page, which has no script here, reads its company's detail as it opens, as
 // company.js's loader does first (/api/companies/<symbol>).
@@ -31,6 +33,10 @@
 //                                                pending timers: each fires, in the order set
 //   {"do": "visibility", "hidden"}               the page is hidden (true), as the browser's tab
 //                                                is left, or shown again (false)
+//   {"do": "press", "name"}                      the refresh layer's button `name` (Cancel, Keep
+//                                                reading) is pressed; a disabled one does nothing
+//   {"do": "key", "key"}                         the key `key` goes down: the document's keydown
+//                                                listeners run, those of the capture phase first
 // After each step and the work it sets off, the trace on stdout gains the urls fetched since the
 // step before (the reads the scripts start as they load are not counted), whether a view's panel
 // holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
@@ -42,7 +48,14 @@
 // then the FIND and the filters of the table the screen's root last drew and its rows a run's end
 // marked, each [ticker, priceMove] (null before it draws one), the Statistics table's names, each
 // [name, the link's href, or null for plain text] (null before it draws one), and, on a press of a
-// link, whether the press kept the browser from following it.
+// link, whether the press kept the browser from following it, on a key whether a listener
+// prevented its default. Then what the refresh layer's root draws (spec 2026-11-23 refresh
+// experience, 4.1; null before it draws): whether it is on (is-on), whether it is a modal dialog
+// labelled by its title, its aria-hidden, the title's words, whether the run bar is drawn, the
+// stage word drawn in its place, the sentence, whether Keep reading stands, Cancel as "enabled",
+// "disabled" or null for none, and the notice (null for none); whether each child of the body but
+// the layer's mount is inert, main.app-page first; and the times FairbandPage.closePopups ran in
+// the step.
 //
 //   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -91,18 +104,26 @@ function classList() {
 }
 const panels = {}; // the page's elements by id, each made once
 const documentListeners = {}; // the document's listeners by event
+const captured = new Set(); // those of them registered for the capture phase
 const document = {
   hidden: false,
-  body: { appendChild(node) { return node; } },
-  createElement() { return { appended: true }; },
+  body: {
+    children: [],
+    appendChild(node) { document.body.children.push(node); return node; },
+  },
+  createElement() { return { appended: true, inert: false }; },
   getElementById(id) {
     return panels[id] || (panels[id] = { id, hidden: false, classList: classList() });
   },
   querySelector() { return null; },
-  addEventListener(event, listener) {
+  addEventListener(event, listener, options) {
     (documentListeners[event] = documentListeners[event] || []).push(listener);
+    if (options === true || (options && options.capture)) captured.add(listener);
   },
 };
+// The body as index.html writes it: main.app-page, then the layer's mount after it.
+const main = { tag: 'main', inert: false };
+document.body.children.push(main, document.getElementById('layer'));
 const location = { hash: '', pathname: '/' };
 const history = {
   replaceState(state, title, url) {
@@ -152,6 +173,9 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
 P.onShow.company = P.onShow.company ||
   (() => { P.getJson('/api/companies/' + encodeURIComponent(P.company.symbol)); });
 asked.length = 0;
+let closed = 0; // the times FairbandPage.closePopups ran in the step
+const closePopups = P.closePopups;
+P.closePopups = () => { closed += 1; closePopups(); };
 
 function* elements(tree) {
   if (Array.isArray(tree)) { for (const child of tree) yield* elements(child); return; }
@@ -187,6 +211,56 @@ function names() {
   return cells.length ? cells : null;
 }
 
+const hasClass = (e, name) => String(e.props.className || '').split(' ').includes(name);
+
+// What the refresh layer's root last drew, else null before it draws.
+function layer() {
+  const root = rootOn('layer');
+  if (!root || !root.drawn) return null;
+  const top = root.drawn;
+  const all = [...elements(top)];
+  const one = (name) => all.find((e) => hasClass(e, name));
+  const words = (name) => (one(name) ? textOf(one(name)) : null);
+  const button = (name) => all.find((e) => e.type === window.Fairband.Button && textOf(e) === name);
+  const title = one('app-layer__title');
+  const cancel = button('Cancel');
+  return {
+    on: hasClass(top, 'is-on'),
+    dialog: top.props.role === 'dialog' && top.props['aria-modal'] === 'true' &&
+      Boolean(title) && top.props['aria-labelledby'] === title.props.id,
+    hidden: top.props['aria-hidden'] || null,
+    title: words('app-layer__title'),
+    bar: all.some((e) => e.type === window.Fairband.RunProgress),
+    stage: words('app-layer__stage'),
+    sentence: words('app-layer__say'),
+    keep: Boolean(button('Keep reading')),
+    cancel: cancel ? (cancel.props.disabled ? 'disabled' : 'enabled') : null,
+    notice: words('app-layer__notice'),
+  };
+}
+
+// The layer's button `name`, pressed: a disabled one does nothing, as in the browser.
+function press(name) {
+  const root = rootOn('layer');
+  const [button] = [...elements(root && root.drawn)]
+    .filter((e) => e.type === window.Fairband.Button && textOf(e) === name);
+  if (!button) throw new Error('no button ' + name + ' in the layer');
+  if (!button.props.disabled) button.props.onClick();
+}
+
+// A key goes down with the focus on the page: the document's keydown listeners run, those of the
+// capture phase first. Gives whether one of them prevented its default.
+function key(name) {
+  const event = {
+    key: name, defaultPrevented: false, target: null,
+    preventDefault() { event.defaultPrevented = true; },
+  };
+  const all = documentListeners.keydown || [];
+  const ordered = all.filter((l) => captured.has(l)).concat(all.filter((l) => !captured.has(l)));
+  for (const listener of ordered) listener(event);
+  return event.defaultPrevented;
+}
+
 function answered(step) {
   const at = inFlight.findIndex((call) => call.url === step.url);
   if (at === -1) throw new Error('no fetch in flight to ' + step.url);
@@ -201,6 +275,7 @@ function answered(step) {
 const trace = [];
 for (const step of steps) {
   let prevented = null;
+  closed = 0;
   if (step.do === 'show') P.show(step.view, step.section);
   else if (step.do === 'hash') {
     location.hash = step.hash;
@@ -226,7 +301,9 @@ for (const step of steps) {
   } else if (step.do === 'visibility') {
     document.hidden = step.hidden;
     for (const listener of documentListeners.visibilitychange || []) listener();
-  } else throw new Error('no step ' + step.do);
+  } else if (step.do === 'press') press(step.name);
+  else if (step.do === 'key') prevented = key(step.key);
+  else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
   const header = rootOn('header').drawn;
   const bar = [...elements(rootOn('controls').drawn)];
@@ -266,6 +343,10 @@ for (const step of steps) {
       return [textOf(cell), link ? link.props.href : null];
     }),
     prevented,
+    layer: layer(),
+    inert: document.body.children.filter((child) => child !== panels.layer)
+      .map((child) => Boolean(child.inert)),
+    closed,
   });
 }
 process.stdout.write(JSON.stringify(trace));
