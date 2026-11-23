@@ -51,11 +51,10 @@ from typing import Any
 
 from fairband.engine.designation import designation_for
 from fairband.engine.flags import flag_count
-from fairband.engine.held import held_state, secondary_state
+from fairband.engine.held import held_state, secondary_state, trailing_end_of
 from fairband.engine.levels import Standing, moat_of, standing_for, validity_state
 from fairband.engine.types import PHASE_NUMBER, Levels, money_of, result_to_json
 from fairband.policy import Moat, Policy
-from fairband.refresh.held import trailing_end_of
 from fairband.refresh.run import UNCLASSIFIED, Progress
 from fairband.reports.refs import same_snapshot_rows
 from fairband.store.companies import CompanyRow

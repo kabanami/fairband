@@ -121,6 +121,7 @@ from typing import cast
 
 from fairband.engine.anchor import base_year
 from fairband.engine.classifier import Deciles
+from fairband.engine.held import trailing_end_of
 from fairband.engine.overrides import (
     ANCHOR_METRICS,
     PHASES,
@@ -135,14 +136,7 @@ from fairband.engine.review import Review, review_company
 from fairband.engine.route import CompanyInputs, refusal_result
 from fairband.engine.types import Phase, Route, ValuationResult
 from fairband.policy import Policy
-from fairband.refresh.held import (
-    basis_date,
-    carry_held,
-    log_row,
-    read_again,
-    savepoint,
-    trailing_end_of,
-)
+from fairband.refresh.held import basis_date, carry_held, log_row, read_again, savepoint
 from fairband.refresh.inputs_splits import SplitRow, named_splits, splits_for
 from fairband.reports.refs import guidance_cited
 from fairband.store.db import transaction

@@ -18,6 +18,15 @@ expiry item yet posted for that same ``valid_until``, gets a valuation review po
 system; then every pending expiry item whose company is on no watchlist drops. The rule writes the
 system's ledger row of each post and each drop itself, in its transaction.
 
+A watched company that holds a review, or else a secondary valuation that holds its row, is read
+by that record's state in place of the latest snapshot's window (spec 2026-11-23 held reviewed
+value, 5.10; ``engine.held``): expired by its own window's date it posts "expired <date>", and
+expired early "expired early: <the first reason>", "override 36 no longer applies" say. The item
+keeps the record it stands for, the made review's id or the secondary valuation's, and one item
+stands for one held record whatever becomes of it: a second reason on the same record posts
+nothing, and a review made again, when it expires, posts one. A company on no watchlist gets no
+item.
+
 An expiry item stands for its window, the ``valid_until`` it was posted for, whatever becomes of
 it. Declined, in particular, it holds: no new item is posted for the company on any later read
 while its latest snapshot's window is that one, including a newer snapshot in the same window,
@@ -30,13 +39,18 @@ decline.
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
+from fairband.engine.held import held_state, secondary_state, trailing_end_of
+from fairband.policy import Policy
 from fairband.policy.settings import exchange_symbol
 from fairband.store._codec import dump_date, dump_stamp, inserted_id, load_date, load_stamp
 from fairband.store.db import transaction
 from fairband.store.ledger import SYSTEM, Principal, Writer, record
-from fairband.store.snapshots import latest_snapshot
+from fairband.store.reviews import held_row, latest_review
+from fairband.store.secondary import latest_secondary
+from fairband.store.settings import effective_policy
+from fairband.store.snapshots import SnapshotRow, latest_snapshot, snapshot_row
 
 Mode = Literal["valuation review", "full report"]
 State = Literal["pending", "claimed", "done", "declined", "dropped"]
@@ -89,8 +103,11 @@ def post_item(
     at: datetime,
     *,
     expiry_valid_until: date | None = None,
+    expiry_review_id: int | None = None,
+    expiry_secondary_id: int | None = None,
 ) -> int:
-    """Post a pending item for the company, by ``writer``; return its id."""
+    """Post a pending item for the company, by ``writer``; return its id. An expiry item names
+    what it stands for: its window's end, or the held review or the held secondary valuation."""
     symbol = exchange_symbol(symbol)
     if mode not in MODES:
         raise ValueError("a mode is valuation review or full report")
@@ -99,8 +116,9 @@ def post_item(
             raise ItemOpen(f"an item for {symbol} is open")
         cursor = conn.execute(
             "INSERT INTO work_items (symbol, mode, note, snapshot_id, origin, posted_by,"
-            " posted_actor, posted_client, posted_at, state, expiry_valid_until)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+            " posted_actor, posted_client, posted_at, state, expiry_valid_until,"
+            " expiry_review_id, expiry_secondary_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
             (
                 symbol,
                 mode,
@@ -112,6 +130,8 @@ def post_item(
                 writer.client,
                 dump_stamp(at),
                 dump_date(expiry_valid_until),
+                expiry_review_id,
+                expiry_secondary_id,
             ),
         )
     return inserted_id(cursor)
@@ -179,38 +199,34 @@ def oldest_pending(conn: sqlite3.Connection) -> WorkItem | None:
 
 
 def post_expiry_items(
-    conn: sqlite3.Connection, today: date, at: datetime
+    conn: sqlite3.Connection, today: date, at: datetime, policy: Policy | None = None
 ) -> tuple[list[int], list[int]]:
     """Run the expiry rule (the module docstring) on ``today``, posting and dropping ``at``;
     return the ids posted and the ids dropped, each in ascending order. A company on two lists is
-    one company. Each post and each drop is the system's ledger row, written in the same
-    transaction (``_record_expiry``)."""
+    one company. A held record's state is read on ``policy``'s fair band and aging fraction, the
+    effective policy's (the packaged file with the stored settings) when none is given. Each
+    post and each drop is the system's ledger row, written in the same transaction
+    (``_record_expiry``)."""
     with transaction(conn, immediate=True):
-        expired = conn.execute(
-            "SELECT s.symbol, s.id, s.valid_until FROM snapshots s"
-            " WHERE s.id IN (SELECT MAX(id) FROM snapshots GROUP BY symbol)"
-            " AND s.symbol IN (SELECT symbol FROM watchlist_entries)"
-            " AND s.valid_until < ?"
-            " AND NOT EXISTS (SELECT 1 FROM work_items w WHERE w.symbol = s.symbol"
-            " AND (w.state IN (?, ?) OR (w.origin = 'expiry'"
-            " AND w.expiry_valid_until = s.valid_until)))"
-            " ORDER BY s.symbol",
-            (dump_date(today), *OPEN_STATES),
+        read_under = effective_policy(conn) if policy is None else policy
+        watched = conn.execute(
+            "SELECT DISTINCT symbol FROM watchlist_entries ORDER BY symbol"
         ).fetchall()
-        posted = [
-            post_item(
-                conn,
-                r["symbol"],
-                "valuation review",
-                f"expired {r['valid_until']}",
-                r["id"],
-                "expiry",
-                SYSTEM,
-                at,
-                expiry_valid_until=load_date(r["valid_until"]),
+        posted: list[int] = []
+        for row in watched:
+            symbol = str(row["symbol"])
+            snapshot = latest_snapshot(conn, symbol)
+            if snapshot is None or open_item(conn, symbol) is not None:
+                continue
+            due = _due(conn, symbol, snapshot, today, read_under)
+            if due is None or _posted_for(conn, symbol, due[1]):
+                continue
+            note, key = due
+            posted.append(
+                post_item(
+                    conn, symbol, "valuation review", note, snapshot.id, "expiry", SYSTEM, at, **key
+                )
             )
-            for r in expired
-        ]
         stranded = conn.execute(
             "SELECT id FROM work_items WHERE state = 'pending' AND origin = 'expiry'"
             " AND symbol NOT IN (SELECT symbol FROM watchlist_entries) ORDER BY id"
@@ -223,6 +239,78 @@ def post_expiry_items(
             item = work_item(conn, item_id)
             _record_expiry(conn, at, "drop", item, f"dropped: {item.symbol} is on no watchlist")
     return posted, dropped
+
+
+def _due(
+    conn: sqlite3.Connection, symbol: str, snapshot: SnapshotRow, today: date, policy: Policy
+) -> tuple[str, dict[str, Any]] | None:
+    """The note and the key of the expiry item ``symbol`` is due on ``today``, ``None`` when it
+    is due none: by the state of the review it holds; else of the secondary valuation that holds
+    its row, its newest, above zero and made where the route refused; else by the window of
+    ``snapshot``, its latest. The key names what the item stands for, as ``post_item`` takes
+    it."""
+    held = held_row(conn, symbol)
+    review = None if held is None else latest_review(conn, symbol)
+    if held is not None and review is not None:
+        result = review.result
+        state = held_state(
+            value=review.value,
+            valid_from=result.data_date,
+            valid_until=result.valid_until,
+            newer_period=held.newer_period,
+            dropped=held.dropped,
+            reading_value=held.reading_value,
+            reading_refusal=held.reading_refusal,
+            early_at=held.early_at,
+            band=policy.fair_band,
+            today=today,
+            aging_fraction=policy.aging_fraction,
+        )
+        note = _note(state.state, state.notes, result.valid_until)
+        return None if note is None else (note, {"expiry_review_id": held.review_id})
+    secondary = latest_secondary(conn, symbol)
+    made_on = None if secondary is None else snapshot_row(conn, secondary.snapshot_id)
+    if (
+        secondary is not None
+        and secondary.value_per_share > 0
+        and made_on is not None
+        and made_on.value is None
+    ):
+        found = secondary_state(
+            valid_from=made_on.data_date,
+            valid_until=made_on.valid_until,
+            made_period=trailing_end_of(made_on.result),
+            latest_period=trailing_end_of(snapshot.result),
+            route_value=snapshot.value,
+            today=today,
+            aging_fraction=policy.aging_fraction,
+        )
+        note = _note(found.state, found.notes, made_on.valid_until)
+        return None if note is None else (note, {"expiry_secondary_id": secondary.id})
+    if snapshot.valid_until < today:
+        window = snapshot.valid_until
+        return f"expired {window.isoformat()}", {"expiry_valid_until": window}
+    return None
+
+
+def _note(state: str, notes: tuple[str, ...], valid_until: date) -> str | None:
+    """An expiry item's note for a held record in ``state``: "expired early: <the first
+    reason>", "expired <date>", or ``None`` for a record that is not expired."""
+    if state == "expired-early":
+        return f"expired early: {notes[0]}"
+    return f"expired {valid_until.isoformat()}" if state == "expired" else None
+
+
+def _posted_for(conn: sqlite3.Connection, symbol: str, key: dict[str, Any]) -> bool:
+    """Whether an expiry item of ``symbol`` was already posted for what ``key`` names, whatever
+    became of it."""
+    [(column, value)] = key.items()
+    stored = dump_date(value) if isinstance(value, date) else value
+    row = conn.execute(
+        f"SELECT 1 FROM work_items WHERE symbol = ? AND origin = 'expiry' AND {column} = ?",
+        (symbol, stored),
+    ).fetchone()
+    return row is not None
 
 
 def _record_expiry(

@@ -7,8 +7,11 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from support.engine_companies import mature_growth_inputs, universe_deciles
 
-from fairband.engine.route import refusal_result
+from fairband.engine.review import Review
+from fairband.engine.route import refusal_result, value_company
+from fairband.engine.secondary import Part, secondary_value
 from fairband.policy import load_policy
 from fairband.store.inbox import (
     ItemOpen,
@@ -26,6 +29,8 @@ from fairband.store.inbox import (
     work_items,
 )
 from fairband.store.ledger import OWNER, LedgerRow, Writer, entries
+from fairband.store.reviews import held_row, insert_review, set_held_state
+from fairband.store.secondary import insert_secondary
 from fairband.store.snapshots import insert_snapshot
 from fairband.store.watchlists import add_symbol, create_watchlist, remove_symbol
 
@@ -286,6 +291,160 @@ def test_a_declined_expiry_item_holds_for_its_window(conn: sqlite3.Connection, c
         date(2026, 10, 15),
     )
     assert work_item(conn, first).state == "declined"
+
+
+CHANGED = "the input the override corrected changed"
+
+
+def _held(conn: sqlite3.Connection, symbol: str, snapshot_id: int, valid_until: date) -> int:
+    """A made review of ``symbol`` on ``snapshot_id``, valued, its window ending on
+    ``valid_until``, which the company holds; the review's id."""
+    policy = load_policy()
+    inputs = replace(mature_growth_inputs(), symbol=symbol)
+    result = value_company(inputs, universe_deciles(), policy, date(2026, 10, 31))
+    result = replace(result, valid_until=valid_until)
+    review = Review(result, result.value, (), (36,))
+    return insert_review(conn, review, symbol, snapshot_id, None, clock=lambda: NOW)
+
+
+def _drops(conn: sqlite3.Connection, symbol: str, **facts: object) -> None:
+    held = held_row(conn, symbol)
+    assert held is not None
+    set_held_state(conn, replace(held, **facts))  # type: ignore[arg-type]
+
+
+DROPPED = {"id": 36, "tag": "earnings.nri_gap", "reason": CHANGED, "at": NOW.isoformat()}
+
+
+def test_a_watched_company_expired_early_gets_one_item_for_its_held_review(
+    conn: sqlite3.Connection, core: int
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.10 and 7: a watched company whose held review
+    expired early gets one valuation review, whose note gives the first reason. The item stands
+    for that held review whatever becomes of it: declined, it is not posted again, and a second
+    reason on the same review posts nothing. A review made again, when it expires, posts one."""
+    snapshot_id = _expire(conn, "AAPL", VALID)  # the latest snapshot's window is open
+    made = _held(conn, "AAPL", snapshot_id, VALID)
+    assert post_expiry_items(conn, TODAY, NOW) == ([], [])  # current: nothing to post
+    _drops(conn, "AAPL", dropped=(DROPPED,), early_at=TODAY)
+    [item_id], [] = post_expiry_items(conn, TODAY, NOW)
+    item = work_item(conn, item_id)
+    assert (item.symbol, item.mode, item.origin, item.snapshot_id) == (
+        "AAPL",
+        "valuation review",
+        "expiry",
+        snapshot_id,
+    )
+    assert item.note == "expired early: override 36 no longer applies"
+    assert (item.expiry_review_id, item.expiry_secondary_id, item.expiry_valid_until) == (
+        made,
+        None,
+        None,
+    )
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [])  # open
+    decline_item(conn, item_id, "not now", LATER)
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [])  # declined: it holds
+    _drops(conn, "AAPL", dropped=(DROPPED,), newer_period=date(2026, 12, 26), early_at=TODAY)
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [])  # a second reason, the same review
+    again = _held(conn, "AAPL", snapshot_id, VALID)
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [])  # made again: current
+    _drops(conn, "AAPL", newer_period=date(2026, 12, 26), early_at=TODAY)
+    [second], [] = post_expiry_items(conn, TODAY, LATER)
+    newer = work_item(conn, second)
+    assert (newer.note, newer.expiry_review_id) == (
+        "expired early: a newer period is on file",
+        again,
+    )
+
+
+def test_the_held_review_s_window_decides_in_place_of_the_snapshot_s(
+    conn: sqlite3.Connection, core: int
+) -> None:
+    """Spec 5.10: for a watched company that holds a review, the rule reads that review's state
+    in place of the latest snapshot's window. A held review whose window is open posts nothing
+    though the latest snapshot's ended; one whose window ended posts "expired <date>" though the
+    latest snapshot's is open; and a reading outside the fair band is an early expiry."""
+    open_window = _expire(conn, "AAPL", VALID)
+    _held(conn, "AAPL", open_window, VALID)
+    _expire(conn, "AAPL")  # the latest snapshot's window ended; the held review's did not
+    assert post_expiry_items(conn, TODAY, NOW) == ([], [])
+    latest = _expire(conn, "MSFT", VALID)
+    made = _held(conn, "MSFT", latest, EXPIRED)
+    [item_id], [] = post_expiry_items(conn, TODAY, NOW)
+    item = work_item(conn, item_id)
+    assert (item.symbol, item.note, item.expiry_review_id) == ("MSFT", "expired 2026-10-01", made)
+    held = held_row(conn, "AAPL")
+    assert held is not None
+    _drops(conn, "AAPL", reading_value=1.0, early_at=TODAY)
+    [early], [] = post_expiry_items(conn, TODAY, LATER)
+    assert work_item(conn, early).note == "expired early: computed again, the review gives $1.00"
+
+
+def test_an_unwatched_company_expired_early_gets_no_item(
+    conn: sqlite3.Connection, core: int
+) -> None:
+    """The founder's rule (spec 2, anti-goals): no item for a company on no watchlist. A pending
+    item of a held review drops when its company leaves every list, as an expiry item does."""
+    snapshot_id = _expire(conn, "IBM", VALID)
+    _held(conn, "IBM", snapshot_id, VALID)
+    _drops(conn, "IBM", dropped=(DROPPED,), early_at=TODAY)
+    assert post_expiry_items(conn, TODAY, NOW) == ([], [])
+    watched = _expire(conn, "AAPL", VALID)
+    _held(conn, "AAPL", watched, VALID)
+    _drops(conn, "AAPL", dropped=(DROPPED,), early_at=TODAY)
+    [item_id], [] = post_expiry_items(conn, TODAY, NOW)
+    remove_symbol(conn, core, "AAPL")
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [item_id])
+
+
+def test_a_watched_company_s_held_secondary_valuation_posts_by_its_state(
+    conn: sqlite3.Connection, core: int
+) -> None:
+    """Spec 5.9 and 5.10: a watched company with no held review and a held secondary valuation
+    is read by that record's state: nothing while its window is open, one item, keyed to the
+    secondary valuation, when a newer period is on file."""
+    policy = load_policy()
+    made_on = _expire(conn, "MSFT", VALID)  # a refused row, as the fixture's rows are
+    parts = (Part("the business", (100.0,) * 5, 0.03, None),)
+    valuation = secondary_value(
+        parts=parts, debt=200.0, cash=100.0, shares=100.0, price=15.0, moat="Wide", policy=policy
+    )
+    evidence = [{"kind": "filing", "ref": "10-K 2025", "note": None, "figure": "debt"}]
+    secondary_id = insert_secondary(
+        conn,
+        "MSFT",
+        made_on,
+        parts,
+        valuation,
+        *("the segments diverge", evidence, "agent", "statements", policy.version, "{}", 1),
+        AGENT,
+        NOW,
+    )
+    assert post_expiry_items(conn, TODAY, NOW) == ([], [])
+    conn.execute(
+        "UPDATE snapshots SET result = json_set(result, '$.intermediates.trailing_end',"
+        " '2026-09-30') WHERE id = ?",
+        (made_on,),
+    )
+    conn.commit()
+    result = refusal_result("MSFT", "a test row", policy, date(2026, 9, 1))
+    later = replace(
+        result,
+        valid_until=VALID,
+        intermediates=result.intermediates | {"trailing_end": "2026-12-31"},
+    )
+    refresh_id = conn.execute("SELECT MAX(id) FROM refreshes").fetchone()[0]
+    latest = insert_snapshot(conn, later, refresh_id, clock=lambda: NOW)
+    [item_id], [] = post_expiry_items(conn, TODAY, NOW)
+    item = work_item(conn, item_id)
+    assert (item.symbol, item.note, item.snapshot_id) == (
+        "MSFT",
+        "expired early: a newer period is on file",
+        latest,
+    )
+    assert (item.expiry_secondary_id, item.expiry_review_id) == (secondary_id, None)
+    decline_item(conn, item_id, "not now", LATER)
+    assert post_expiry_items(conn, TODAY, LATER) == ([], [])  # one item for one held record
 
 
 def test_the_expiry_rule_writes_its_own_ledger_rows(conn: sqlite3.Connection, core: int) -> None:

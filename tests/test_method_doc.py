@@ -873,6 +873,22 @@ def test_a_secondary_valuation_holds_its_row() -> None:
         assert words in secondary, words
 
 
+def test_the_inbox_reads_the_held_record_s_state() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.10: 14.6 says the inbox's expiry rule reads a
+    watched company's held record in place of its snapshot's window, the two notes, that one
+    item stands for one held record, and that a company on no watchlist gets none."""
+    reviews = _section(14)
+    held = reviews[reviews.index("### 14.6") : reviews.index("### 14.7")]
+    for words in (
+        "The inbox's expiry rule",
+        "in place of its latest snapshot's window (spec 5.10)",
+        '"expired early: override 36 no longer applies"',
+        "One item stands for one held review whatever becomes of it",
+        "a company on no watchlist gets no item",
+    ):
+        assert words in held, words
+
+
 def test_a_held_value_s_state_and_its_sentences() -> None:
     """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
     sentences, says which stay and which can end, and what the row and the detail carry; 4.10

@@ -48,7 +48,7 @@ from datetime import date, datetime
 
 from fairband.engine import METHOD_VERSION
 from fairband.engine.designation import designation_for
-from fairband.engine.held import READING_FAILED, reading_outside
+from fairband.engine.held import READING_FAILED, reading_outside, trailing_end_of
 from fairband.engine.levels import levels_for, moat_of
 from fairband.engine.review import BridgeLine, Review
 from fairband.engine.route import reprice
@@ -222,17 +222,6 @@ def basis_date(conn: sqlite3.Connection, snapshot_id: int) -> date | None:
     if found is None:
         return None
     return found.data_date if found.price_date is None else min(found.price_date, found.data_date)
-
-
-def trailing_end_of(result: ValuationResult) -> date | None:
-    """The trailing period end of the snapshot ``result``: its ``trailing_end``; without one (a
-    result stored before method 1.3), the ``as_of`` of its ``shares_diluted`` input, the newest
-    quarterly row's period end, the fiscal year's when that row holds no count; else ``None``."""
-    stored = result.intermediates.get("trailing_end")
-    if stored is not None:
-        return date.fromisoformat(stored)
-    shares = next((i for i in result.inputs if i.name == "shares_diluted"), None)
-    return None if shares is None else shares.provenance.as_of
 
 
 @contextmanager

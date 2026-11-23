@@ -27,19 +27,25 @@ from typing import Any, Literal
 
 from fairband.engine.levels import validity_state
 from fairband.engine.overrides import LABELS
+from fairband.engine.types import ValuationResult
 
 # The start of the refusal of a reading that failed (``refresh.reviews``): such a reading is no
 # reason, and the last good reading stands.
 READING_FAILED = "review failed"
 
 State = Literal["current", "aging", "expired", "expired-early"]
+NEWER_PERIOD = "a newer period is on file"  # reason 1's short form
 
 
 @dataclass(frozen=True)
 class HeldState:
     """A held value's state on a day: the state, the day a refresh first found a reason (``None``
     with none stored), the sentences of the reasons that hold in the order 1, 2, 3, the newest
-    good reading's value or its refusal, and the reading's sentence when it is no reason."""
+    good reading's value or its refusal, the reading's sentence when it is no reason, and
+    ``notes``, each reason's short form, of which an inbox item's note gives the first (spec
+    5.10): "a newer period is on file", "override 36 no longer applies", "computed again, the
+    review gives $229.25", "computed again, the review gives no value" and, for a secondary
+    valuation, "the route now values the company"."""
 
     state: State
     early_at: date | None
@@ -47,6 +53,7 @@ class HeldState:
     reading: float | None
     reading_refusal: str | None
     reading_line: str | None
+    notes: tuple[str, ...] = ()
 
 
 def held_state(
@@ -68,18 +75,23 @@ def held_state(
     the facts a refresh stored (module docstring): ``newer_period``, ``dropped`` (each ``{id,
     tag, reason}``), the newest good reading and ``early_at``."""
     reasons: list[str] = []
+    notes: list[str] = []
     if newer_period is not None:
         reasons.append(f"The company has reported a newer period (to {_day(newer_period)}).")
+        notes.append(NEWER_PERIOD)
     for override in dropped:
         tag = str(override["tag"])
         label = LABELS.get(tag, tag)  # type: ignore[call-overload]
         reasons.append(
             f"Override {override['id']} ({label}) no longer applies: {override['reason']}."
         )
+        notes.append(f"override {override['id']} no longer applies")
     sentence = _reading_sentence(value, reading_value, reading_refusal)
     outside = reading_outside(value, reading_value, reading_refusal, band)
     if outside and sentence is not None:
         reasons.append(sentence)
+        gives = "no value" if reading_value is None else f"${reading_value:,.2f}"
+        notes.append(f"computed again, the review gives {gives}")
     if reasons:
         state: State = "expired-early"
     else:
@@ -91,6 +103,7 @@ def held_state(
         reading=reading_value,
         reading_refusal=reading_refusal,
         reading_line=None if outside else sentence,
+        notes=tuple(notes),
     )
 
 
@@ -157,12 +170,26 @@ def secondary_state(
     "The route now values the company, at $X.". Else it reads by its date. It has no reading,
     and no refresh stores a day for it."""
     reasons: list[str] = []
+    notes: list[str] = []
     if made_period is not None and latest_period is not None and latest_period > made_period:
         reasons.append(f"The company has reported a newer period (to {_day(latest_period)}).")
+        notes.append(NEWER_PERIOD)
     if route_value is not None:
         reasons.append(f"The route now values the company, at ${route_value:,.2f}.")
+        notes.append("the route now values the company")
     if reasons:
         state: State = "expired-early"
     else:
         state = validity_state(valid_from, valid_until, today, aging_fraction)
-    return HeldState(state, None, tuple(reasons), None, None, None)
+    return HeldState(state, None, tuple(reasons), None, None, None, tuple(notes))
+
+
+def trailing_end_of(result: ValuationResult) -> date | None:
+    """The trailing period end of the snapshot ``result``: its ``trailing_end``; without one (a
+    result stored before method 1.3), the ``as_of`` of its ``shares_diluted`` input, the newest
+    quarterly row's period end, the fiscal year's when that row holds no count; else ``None``."""
+    stored = result.intermediates.get("trailing_end")
+    if stored is not None:
+        return date.fromisoformat(stored)
+    shares = next((i for i in result.inputs if i.name == "shares_diluted"), None)
+    return None if shares is None else shares.provenance.as_of
