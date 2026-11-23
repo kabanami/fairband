@@ -855,13 +855,14 @@ export declare function ValueCell(props: ValueCellProps): unknown;
 export declare function ValueBridge(props: ValueBridgeProps): unknown;
 /**
  * fairband: the scale comes from `fairValue`, never from the price (spec 2026-11-23 refresh
- * experience, 4.7). A price inside it is drawn to scale; a price beyond an end is pinned 7px in
- * from that end (`fb-band__price-mark--pinned`) behind one break mark on the track
- * (`fb-band__break fb-band__break--low` or `--high`), its title and the head keeping the true
- * price; the reviewed value's marker is pinned the same way, with no break mark. The tier says
- * where the price lies against the band (`fb-band__tier--under`, `--in` or `--over`), and its two
- * labels (`fb-band__tier-label--low` and `--high`) sit outside their ticks, each with `--tick`,
- * `--price`, `--len` and `--other` (the other label's length in ch) for bundle.css.
+ * experience, 4.7). A price inside it is drawn to scale, but never nearer an end than 7px, so
+ * its dot stays on the meter (`left: clamp(7px, X%, calc(100% - 7px))`); a price beyond an end
+ * is pinned 7px in from that end (`fb-band__price-mark--pinned`) behind one break mark on the
+ * track (`fb-band__break fb-band__break--low` or `--high`), its title and the head keeping the
+ * true price; the reviewed value's marker takes the same two rules, with no break mark. The tier
+ * says where the price lies against the band (`fb-band__tier--under`, `--in` or `--over`), and
+ * its two labels (`fb-band__tier-label--low` and `--high`) sit outside their ticks, each with
+ * `--tick`, `--price`, `--len` and `--other` (the other label's length in ch) for bundle.css.
  */
 export declare function BandMeter(props: BandMeterProps): unknown;
 export declare function ValidityWindow(props: ValidityWindowProps): unknown;

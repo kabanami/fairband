@@ -452,11 +452,14 @@
     // fairband: a marker beyond an end of the scale, the price's or the reviewed value's, is
     // pinned 7px in from that end; a pinned price draws a break mark on the track before it, so
     // its place does not read as true (spec 2026-11-23 refresh experience, 4.7). Its title and the
-    // head keep the true price.
+    // head keep the true price. A marker inside the scale stands where its figure lies, but never
+    // nearer an end than those 7px, so a price at an end keeps its dot and its ring on the meter
+    // (the look in a browser, 2026-11-24).
     var beyond = function (v) { return v > max ? 'high' : v < min ? 'low' : null; };
     var place = function (v) {
       var end = beyond(v);
-      return end === 'high' ? 'calc(100% - 7px)' : end === 'low' ? '7px' : at(v) + '%';
+      return end === 'high' ? 'calc(100% - 7px)' : end === 'low' ? '7px'
+        : 'clamp(7px, ' + at(v) + '%, calc(100% - 7px))';
     };
     var pinned = beyond(price);
 

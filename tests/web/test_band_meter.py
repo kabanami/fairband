@@ -98,7 +98,7 @@ def test_each_tier_label_is_placed_off_the_price_marker() -> None:
     assert side == "fb-band__tier-label--low"
     assert list(style) == ["--tick", "--price", "--len", "--other"]
     assert style["--tick"].startswith("34.781") and style["--tick"].endswith("%")
-    assert style["--price"].startswith("32.338") and style["--price"].endswith("%")
+    assert _placed(style["--price"]) == pytest.approx(32.338, abs=0.001)
     assert style["--len"] == "7ch" and style["--other"] == "7ch"
     side, style = _tier_label(html, "$242.32")
     assert side == "fb-band__tier-label--high"
@@ -139,6 +139,14 @@ def _at(length: str) -> float:
     """A length given in % as its number."""
     assert length.endswith("%"), length
     return float(length.removesuffix("%"))
+
+
+def _placed(length: str) -> float:
+    """A marker's place inside the scale, ``clamp(7px, X%, calc(100% - 7px))``, as the number X:
+    where its figure lies, but never nearer an end than a pinned marker stands."""
+    found = re.fullmatch(r"clamp\(7px, (.+%), calc\(100% - 7px\)\)", length)
+    assert found is not None, length
+    return _at(found[1])
 
 
 def test_the_scale_comes_from_the_value_not_the_price() -> None:
@@ -194,15 +202,31 @@ def test_a_price_inside_the_scale_is_drawn_to_scale_with_no_break() -> None:
     html = render({**AGILENT, "price": 61.77, "designation": "near"})
     mark = _mark(html, "fb-band__price-mark")
     assert mark["class"] == "fb-band__price-mark"
-    assert _at(mark["style"]["left"]) == pytest.approx(50.0)
+    assert _placed(mark["style"]["left"]) == pytest.approx(50.0)
     assert "fb-band__break" not in html
     # the scale's ends, the same floats the bundle computes, are inside it
     for price, at in ((61.77 * 1.55, 100.0), (61.77 * 0.45, 0.0)):
         html = render({**AGILENT, "price": price})
         mark = _mark(html, "fb-band__price-mark")
         assert mark["class"] == "fb-band__price-mark", price
-        assert _at(mark["style"]["left"]) == pytest.approx(at, abs=1e-9)
+        assert _placed(mark["style"]["left"]) == pytest.approx(at, abs=1e-9)
         assert "fb-band__break" not in html
+
+
+def test_a_marker_at_an_end_of_the_scale_keeps_its_dot_on_the_meter() -> None:
+    """The look in a browser (2026-11-24): a price at 0.45 or 1.55 times the value, an end of the
+    scale and so inside it, stood on the track's end, and its dot, 11px across with a 2px ring,
+    hung 6.5px off the meter. A marker inside the scale stands where its figure lies but never
+    nearer an end than the 7px a pinned one stands in, the price's and the reviewed value's
+    alike; the band's labels read the same place, so they keep clear of the marker drawn."""
+    for price in (61.77 * 1.55, 61.77 * 0.45, 61.77):
+        html = render({**AGILENT, "price": price, "reviewedValue": price})
+        for name in ("fb-band__price-mark", "fb-band__reviewed-mark"):
+            left = _mark(html, name)["style"]["left"]
+            assert left.startswith("clamp(7px, ") and left.endswith("%, calc(100% - 7px))"), left
+        place = _mark(html, "fb-band__price-mark")["style"]["left"]
+        for text in ("$55.59", "$67.94"):
+            assert _tier_label(html, text)[1]["--price"] == place
 
 
 def test_the_band_labels_sit_outside_their_ticks() -> None:
@@ -262,7 +286,7 @@ def test_a_value_at_or_below_zero_draws_no_nan() -> None:
         html = render(props)
         assert "NaN" not in html and "Infinity" not in html, props
         assert "fb-band__break" not in html and "--pinned" not in html, props
-        assert _at(_mark(html, "fb-band__price-mark")["style"]["left"]) <= 100.0
+        assert _placed(_mark(html, "fb-band__price-mark")["style"]["left"]) <= 100.0
 
 
 def test_a_reviewed_value_beyond_the_scale_is_pinned_as_the_price_is() -> None:
@@ -275,7 +299,7 @@ def test_a_reviewed_value_beyond_the_scale_is_pinned_as_the_price_is() -> None:
     html = render({**AGILENT, "price": 61.77, "reviewedValue": 20.0})
     assert _mark(html, "fb-band__reviewed-mark")["style"] == {"left": "7px"}
     html = render({**AGILENT, "price": 170.38, "reviewedValue": 61.77})
-    assert _at(_mark(html, "fb-band__reviewed-mark")["style"]["left"]) == pytest.approx(50.0)
+    assert _placed(_mark(html, "fb-band__reviewed-mark")["style"]["left"]) == pytest.approx(50.0)
     assert [b["class"] for b in _marks(html, "fb-band__break")] == [
         "fb-band__break fb-band__break--high"
     ]
