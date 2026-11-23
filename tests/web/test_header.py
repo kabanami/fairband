@@ -488,6 +488,155 @@ def test_a_run_another_process_runs_is_followed_at_its_end(at_load: bool) -> Non
     assert after["reads"] == [SCREEN["url"]]
 
 
+SCREEN_URL = SCREEN["url"]
+MANY = 1546  # the screen's rows in the count's tests, past a thousand
+
+
+def _rows(moved: int = 0, revalued: int = 0) -> list[dict[str, Any]]:
+    """The screen's ``MANY`` rows, the first ``moved`` a dollar dearer than at the start and the
+    first ``revalued`` a dollar more valuable."""
+    return [
+        {
+            "ticker": f"T{n:04d}",
+            "name": f"T{n:04d} Co",
+            "price": 11.0 if n < moved else 10.0,
+            "fairValue": 21.0 if n < revalued else 20.0,
+            "watchlists": [],
+        }
+        for n in range(MANY)
+    ]
+
+
+def _screen(rows: list[dict[str, Any]], url: str = SCREEN_URL) -> dict[str, Any]:
+    return {"do": "answer", "url": url, "status": 200, "body": {"rows": rows}}
+
+
+def _ended_run(kind: str, symbols: list[str] | None, status: str) -> dict[str, Any]:
+    """The refresh's state after run 67 ended: the line describes it, a price refresh with its
+    repriced count, a full refresh or a revalue with the calibration of run 66, a run that did
+    not end done with its message."""
+    calibration: dict[str, Any] | None = LAST["last"]["calibration"]
+    if kind == "price":
+        calibration = {"repriced": MANY, "total": MANY, "failed": 0, "skipped": 0}
+    if status != "done" or symbols is not None:
+        calibration = None
+    last = LAST["last"] | {
+        "id": 67,
+        "kind": kind,
+        "symbols": symbols,
+        "status": status,
+        "calibration": calibration,
+        "message": None if status == "done" else "no company was admitted",
+    }
+    recent = [_run(67, kind, symbols, status), RUN_66]
+    body = {"refresh": None, "last": last, "shown": last, "error": None, "recent": recent}
+    return {"do": "answer", "url": CURRENT, "status": 200, "body": body}
+
+
+@pytest.mark.parametrize(
+    ("kind", "symbols", "status", "moved", "revalued", "words"),
+    [
+        ("price", None, "done", MANY, 0, "1,546 prices changed"),
+        ("full", None, "done", MANY, 37, "1,546 prices changed, 37 values changed"),
+        ("revalue", None, "done", 0, 1, "1 value changed"),
+        ("price", None, "done", 0, 0, "no price changed"),
+        ("full", None, "done", 0, 0, "no figure changed"),
+        ("scoped", ["T0000"], "done", 1, 0, None),
+        ("full", None, "failed", MANY, 0, None),
+    ],
+)
+def test_a_whole_run_that_ended_done_adds_its_count(
+    kind: str,
+    symbols: list[str] | None,
+    status: str,
+    moved: int,
+    revalued: int,
+    words: str | None,
+) -> None:
+    """4.2: after a run of the whole screen that ended done, the status line counts what the
+    page's own comparison found, in the tint the changed cells take; a price refresh that moved
+    nothing says no price changed. A run of named companies and a run that did not end done add
+    no sentence. The count stands after the marks are taken off (MARK_MS), until the next run."""
+    *_, landed, ticked = _trace(
+        [
+            LANDED,
+            _screen(_rows()),
+            TICK,
+            _ended_run(kind, symbols, status),
+            _screen(_rows(moved, revalued)),
+            TICK,
+        ]
+    )
+    for step in (landed, ticked):
+        if words is None:
+            assert step["changes"] is None and "changed" not in step["status"]
+        else:
+            assert step["status"].endswith(" · " + words)
+            assert step["changes"] == words
+
+
+def test_the_rows_a_run_changed_are_marked_until_the_marks_are_taken_off() -> None:
+    """4.2: the rows that land after a run ended are marked against those the page held, by
+    ticker, a new row not at all; 1.3 seconds on (MARK_MS), past the tint's 1.2, the marks are
+    taken off in one draw. A read of the rows that is not a run's end (a sort) marks nothing."""
+    before = [{"ticker": t, "price": 10.0, "watchlists": []} for t in ("AAA", "BBB")]
+    after = [
+        {"ticker": "AAA", "price": 10.0, "watchlists": []},
+        {"ticker": "BBB", "price": 9.0, "watchlists": []},
+        {"ticker": "CCC", "price": 30.0, "watchlists": []},
+    ]
+    dearer = [row | {"price": row["price"] + 1} for row in after]
+    desc = "/api/screen?sort=ticker&dir=desc"
+    *_, landed, ticked, _, sorted_ = _trace(
+        [
+            LANDED,
+            _screen(before),
+            TICK,
+            _idle(_run(67, "price"), RUN_66),
+            _screen(after),
+            TICK,
+            {"do": "sort", "column": "ticker"},
+            _screen(dearer, desc),
+        ]
+    )
+    assert landed["marked"] == [["BBB", -1]]
+    assert landed["waits"] == [30000, 1300]
+    assert ticked["marked"] == [] and ticked["waits"] == []
+    assert sorted_["marked"] == [] and sorted_["waits"] == []
+
+
+def test_the_list_s_own_read_marks_its_rows() -> None:
+    """The watchlist page reads its rows in its own sort where it differs from the Screen's (spec
+    2026-11-22 7.1): that read, after a run ended, marks them the same way."""
+    lists = [{"id": 1, "name": "Core", "symbols": [{"symbol": "AAA"}, {"symbol": "BBB"}]}]
+    before = [{"ticker": t, "price": 10.0, "watchlists": [1]} for t in ("BBB", "AAA")]
+    after = [
+        {"ticker": "BBB", "price": 12.0, "watchlists": [1]},
+        {"ticker": "AAA", "price": 10.0, "watchlists": [1]},
+    ]
+    desc = "/api/screen?sort=ticker&dir=desc"
+    trace = _trace(
+        [
+            LANDED,
+            _screen(list(reversed(before))),
+            {"do": "answer", "url": "/api/watchlists", "status": 200, "body": lists},
+            _show("watchlists"),
+            {"do": "list", "id": 1},
+            {"do": "sort", "column": "ticker"},
+            _screen(before, desc),
+            TICK,
+            _idle(_run(67, "price"), RUN_66),
+            _screen(after, desc),
+            TICK,
+        ]
+    )
+    sorted_, landed, ticked = trace[6], trace[9], trace[10]
+    assert sorted_["reads"] == [] and sorted_["marked"] == []
+    assert trace[8]["reads"] == [SCREEN_URL, desc]
+    assert landed["marked"] == [["BBB", 1]]
+    assert ticked["marked"] == []
+
+
 def test_a_failed_read_asks_again_on_the_cycle_and_says_when() -> None:
     """A read of the refresh's state that fails is asked again all the same: in 30 seconds with
     no run alive, in 2 while one is."""

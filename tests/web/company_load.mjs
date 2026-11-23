@@ -12,6 +12,7 @@
 // (company_investor.js), so a step can press its switch, and its Earnings calls view reads its
 // call's transcript through the driver's fetch, as the page does. An answer that carries `throws`
 // makes the tab's function throw an error of that message, as a fault in a tab's script would.
+// company.js's timers are held until a step fires them.
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "symbol", "tab", "id"?}  a link or a tab's button opens the company page there,
@@ -23,8 +24,11 @@
 //                                           reads it
 //   {"do": "scroll", "top"}                 the reader scrolls the company page's panel down to
 //                                           `top` pixels
-//   {"do": "again"}                         the loader runs on the company and tab shown, as a
-//                                           refresh's end and a note taken in the head run it
+//   {"do": "again", "mark"?}                the loader runs on the company and tab shown, handed
+//                                           `mark`, as a refresh's end runs it (true) and a note
+//                                           taken in the head (nothing)
+//   {"do": "tick"}                          the time comes for company.js's pending timers: each
+//                                           fires, in the order set
 //   {"do": "answer", "url", "status", "body"}  the oldest fetch in flight to `url` answers
 //   {"do": "fail", "url", "message"}        the oldest fetch in flight to `url` fails, as on the
 //                                           network
@@ -43,8 +47,10 @@
 // sentence of a failed read, the head's ticker and price, the tab selected and what the open
 // tab's function drew; then the data date at the tabs' row's right end (asOf, its words, null
 // for none), the view the Investor relations tab's switch selects (null where it is not drawn),
-// and how the last readVendor settled (vendor: { answer }, or { message, status } for a refusal;
-// null before one settles).
+// how the last readVendor settled (vendor: { answer }, or { message, status } for a refusal;
+// null before one settles), the mark of a price a run changed on the head's price (priceMark:
+// { changed, the arrow's words or null }, null with no head) and the delays of company.js's
+// pending timers.
 //
 //   node company_load.mjs <bundle.js> <app.js> <finder.js> <controls.js> <company.js>
 //     <company_investor.js>  < steps.json  > trace.json
@@ -107,6 +113,19 @@ const window = {
   React, ReactDOM, document, fetch, innerWidth: 1600, innerHeight: 1100,
   addEventListener(event, listener) { (listeners[event] = listeners[event] || []).push(listener); },
 };
+// company.js's timers, each held until a tick step fires it: { id, run, ms }, in the order set.
+const timers = [];
+let timerIds = 0;
+const clock = {
+  setTimeout(run, ms) {
+    timers.push({ id: ++timerIds, run, ms });
+    return timerIds;
+  },
+  clearTimeout(id) {
+    const at = timers.findIndex((timer) => timer.id === id);
+    if (at !== -1) timers.splice(at, 1);
+  },
+};
 new Function('window', 'React', bundle)(window, React);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app)(
   window, React, ReactDOM, window.Fairband, document, fetch);
@@ -118,7 +137,9 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location);
 for (const script of [company, investor]) {
   new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
-    script)(window, React, ReactDOM, window.Fairband, P, document, fetch);
+    'setTimeout', 'clearTimeout', script)(
+    window, React, ReactDOM, window.Fairband, P, document, fetch, clock.setTimeout,
+    clock.clearTimeout);
 }
 inFlight = []; fetched = []; headers = []; // the header's and the screen's own reads, unanswered
 
@@ -176,6 +197,19 @@ function page() {
     price: head ? textOf(classed(head, 'figure-lg')[0]) : null,
     tab: selected ? textOf(selected) : null,
     drawn: drawn ? handed : null,
+  };
+}
+
+// The head's price as a run's end marks it: whether it takes is-changed, and the arrow's words.
+function priceMark() {
+  const tree = companyRoot().drawn;
+  const [head] = tree ? classed(tree, 'app-company__head') : [];
+  if (!head) return null;
+  const [price] = classed(head, 'figure-lg');
+  const [move] = classed(price, 'fb-screen__move');
+  return {
+    changed: price.props.className.split(' ').includes('is-changed'),
+    move: move ? textOf(move) : null,
   };
 }
 
@@ -238,7 +272,8 @@ for (const step of steps) {
     location.hash = step.hash;
     for (const listener of listeners.hashchange || []) listener();
   } else if (step.do === 'scroll') panels.company.scrollTop = step.top;
-  else if (step.do === 'again') P.onShow.company();
+  else if (step.do === 'again') P.onShow.company(step.mark);
+  else if (step.do === 'tick') { for (const timer of timers.splice(0)) timer.run(); }
   else if (step.do === 'answer' || step.do === 'fail') answered(step);
   else if (step.do === 'notes') press('app-notes-open');
   else if (step.do === 'watch') P.watch({ ticker: P.company.symbol }, { name: 'Watchlists' });
@@ -263,6 +298,8 @@ for (const step of steps) {
     asOf: asOf(),
     view: view(),
     vendor,
+    priceMark: priceMark(),
+    waits: timers.map((timer) => timer.ms),
   });
 }
 process.stdout.write(JSON.stringify(trace));

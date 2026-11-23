@@ -28,7 +28,10 @@ Package in `src/fairband/`; tests in `tests/`, mirroring the package.
   the rule of an agent's report alone (`docs/method.md` 16). Vendor reference data on a page
   (a company's statistics, prices, estimates, news) is shown plain: no cite, no chip and no
   vendor's name on a figure or a block, and one data date for the page or the block. An owner's
-  moat class is saved without a reason (the founder, 2026-11-19).
+  moat class is saved without a reason (the founder, 2026-11-19). Motion is allowed in three
+  places and no other (the founder, 2026-11-23): the refresh layer's fade, the run bar's fill and
+  the highlight of a changed figure. The two fades run under the system's reduced-motion setting
+  too.
 
 ## Keys and data
 

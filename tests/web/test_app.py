@@ -3628,14 +3628,16 @@ def test_bundle_has_the_watch_mark_and_the_two_filters() -> None:
 def test_bundle_draws_the_mark_only_given_onWatch() -> None:
     """Spec 2026-11-04 9.4: the mark is a button at the left of the Ticker cell, named for its
     ticker, filled when the company is on a list; Enter and Space on it never open the row; a
-    table without onWatch draws none. The cells see the props, for the mark and the list names."""
+    table without onWatch draws none. The cells see the props, for the mark and the list names,
+    and a cell whose figure a run changed takes its tint (spec 2026-11-23 refresh experience,
+    4.2; tests/web/test_end_signal.py)."""
     bundle = _component_file("bundle.js")
     assert "p.onWatch ? h('button', {" in bundle
     assert "className: cx('fb-watch control', r.watched && 'fb-watch--on')," in bundle
     assert "'aria-label': 'Watchlists for ' + r.ticker," in bundle
     assert "if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();" in bundle
     assert "}, r.watched ? '▶' : '▸') : null," in bundle
-    assert "return h(React.Fragment, { key: c.key }, c.cell(r, p));" in bundle
+    assert "return h(React.Fragment, { key: c.key }, tinted(c.cell(r, p), r, c.key));" in bundle
     css = _component_file("bundle.css")
     assert ".fb-watch--on { color: var(--accent); }" in css
     ring = "outline: 2px solid var(--focus-ring); outline-offset: 2px;"

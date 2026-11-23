@@ -54,9 +54,11 @@
     reading: null, /* the company, tab and id the read out reads ({ symbol, tab, id }, as
                       FairbandPage.company named them, or as a change of the Investor relations
                       tab's word alone moved them since: redrawn), before it is shown */
-    request: null /* Request research for the page's company (FairbandPage.asking) */
+    request: null, /* Request research for the page's company (FairbandPage.asking) */
+    moved: null /* { symbol, move } while the head marks the price a run's end changed (marked) */
   };
   var latest = 0;
+  var markTimer = null;
 
   /* The key a tab's answer is held under, of `at`, { tab, id }: the tab, and for a report the
      Research tab names by its id, research/<id>, so each report read is a tab of its own. The
@@ -92,13 +94,18 @@
      an id, read or held (the Research tab's design, 7.3), since its section list stays in view
      while the report scrolls; the same report read again, another tab, and the same report on
      coming back keep the reader's place. The Investor relations tab's word is the page's own: the
-     tab's read takes no query, and a change of the word alone reads nothing (redrawn). */
-  function load() {
+     tab's read takes no query, and a change of the word alone reads nothing (redrawn). With
+     `mark` true, a run's end that covered the company (controls.js), where the page holds the
+     same company's detail, a detail that lands at another price has the head mark its price
+     (marked; spec 2026-11-23 refresh experience, 4.2). The loader is handed on as a callback
+     (the moat box, the Notes box, Request research), so any other argument marks nothing. */
+  function load(mark) {
     var want = P.company;
     var key = keyOf(want);
     if (redrawn(want, key)) return;
     var request = ++latest;
     var held = !!state.detail && !state.error && state.symbol === want.symbol;
+    var before = mark === true && held ? state.detail.result : null;
     if (want.tab === 'research' && state.symbol === want.symbol && state.report != null &&
       state.report !== key) {
       mount.scrollTop = 0;
@@ -149,6 +156,7 @@
         state.tab = want.tab;
         state.id = at.id;
         state.detail = found.detail;
+        if (before) marked(want.symbol, before.price, found.detail.result.price);
         state.failed = found.failed;
         state.error = null;
         state.loading = false;
@@ -220,6 +228,22 @@
     }
     P.followItem(state.request, state.detail.item, render, load);
     render();
+  }
+
+  /* The head's price as a run's end changed it, from `was` to `now` (spec 2026-11-23 refresh
+     experience, 4.2): where the two differ, the head marks `symbol`'s price, its tint and, where
+     it moved between two numbers, the arrow of its direction (move 1 up, -1 down, 0 none), for
+     FairbandPage.MARK_MS, as the table marks a changed cell; then a draw without the mark. */
+  function marked(symbol, was, now) {
+    if (was === now) return;
+    var numbers = typeof was === 'number' && typeof now === 'number';
+    clearTimeout(markTimer);
+    state.moved = { symbol: symbol, move: numbers ? (now > was ? 1 : -1) : 0 };
+    markTimer = setTimeout(function () {
+      markTimer = null;
+      state.moved = null;
+      render();
+    }, P.MARK_MS);
   }
 
   /* Newer news (10.5), once for each read of the Overview that lands: where the stored news of
@@ -311,8 +335,9 @@
      it, which, once a write is taken, reads the page again (FairbandPage.moatControl, load; spec
      2026-11-19 8.8); and one
      caption line, the exchange, the sector and the industry of the universe row, the parts it
-     has. Right: the latest snapshot's price in figure-lg, in US dollars, the day's change, and
-     the day of its close; then Notes with the count of the
+     has. Right: the latest snapshot's price in figure-lg, in US dollars, in the tint of a changed
+     figure and after ▲ or ▼ while a run's end marks it (marked; spec 2026-11-23 refresh
+     experience, 4.2), the day's change, and the day of its close; then Notes with the count of the
      company's notes (FairbandPage.notesControl, 11.1), whose box opens under it and, once a note
      is taken, reads the page again (load); the watchlists control, which opens the screen's
      popup for this company under itself, on the row watchRow gives, disabled without one; and
@@ -327,6 +352,7 @@
     var row = watchRow(r.symbol, P.rows(), P.watchlists());
     var ask = state.request && state.request.symbol === r.symbol ? state.request
       : P.asking(r.symbol);
+    var moved = state.moved && state.moved.symbol === r.symbol ? state.moved : null;
     return h('header', { className: 'app-company__head' },
       h('div', { className: 'app-company__id' },
         P.logo(d, 'app-company__logo'),
@@ -339,7 +365,10 @@
           line ? h('p', { className: 'caption app-company__sub' }, line) : null)),
       h('div', { className: 'app-company__side' },
         h('div', { className: 'app-company__quote' },
-          h('p', { className: 'figure-lg' }, money(dollars(r.price))),
+          h('p', { className: moved ? 'figure-lg is-changed' : 'figure-lg' },
+            moved && moved.move ? h('span', { className: 'fb-screen__move', 'aria-hidden': 'true' },
+              moved.move > 0 ? '▲' : '▼') : null,
+            money(dollars(r.price))),
           change(r.price, quote),
           r.price_date
             ? h('p', { className: 'caption app-company__at' }, 'close ' + day(r.price_date))

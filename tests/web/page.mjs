@@ -15,9 +15,11 @@
 // tests/web/test_watchlist_page.py).
 //
 // A bundle component is named as window names it ("Fairband.HistoryBars") and called with its
-// props, the one argument; the stub's hooks give it its first state, its refs and no effect, and
-// what comes back is the tree it draws, each component in it called with its props in turn, since
-// the stub draws nothing (tests/web/test_report_charts.py reads HistoryBars' bars).
+// props, the one argument; the stub's hooks give it its first state, its refs and no effect, its
+// cloneElement copies an element with the props given over its own, as ScreenTable marks a changed
+// cell (tests/web/test_end_signal.py), and what comes back is the tree it draws, each component in
+// it called with its props in turn, since the stub draws nothing (tests/web/test_report_charts.py
+// reads HistoryBars' bars).
 //
 // JSON holds no function, so an argument's value written {"$page": "<helper>"} is that helper of
 // window.FairbandPage, named as the helper is: a component can be handed one of the page's own
@@ -35,6 +37,11 @@ const React = {
   Fragment: Symbol('Fragment'),
   createElement(type, given, ...children) {
     return { type, props: Object.assign({}, given, { children }) };
+  },
+  cloneElement(element, given, ...children) {
+    const props = Object.assign({}, element.props, given);
+    if (children.length) props.children = children;
+    return { type: element.type, props };
   },
   forwardRef(render) { return (given) => render(given, null); },
   memo(component) { return component; },

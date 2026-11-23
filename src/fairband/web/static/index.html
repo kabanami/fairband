@@ -355,7 +355,11 @@
     font-family: var(--font-mono); font-size: 0.92em;
     text-decoration: underline dotted var(--ink-faint); text-underline-offset: 3px;
   }
-  .app-prose .is-changed { color: var(--accent); text-decoration-color: var(--accent); }
+  /* A setting that differs from its default, in accent; no figure a run changed, so it takes no
+     tint (spec 2026-11-23 refresh experience, 4.8). */
+  .app-prose .is-changed {
+    color: var(--accent); text-decoration-color: var(--accent); animation: none;
+  }
   .app-life { max-width: 960px; margin: var(--space-4) 0 var(--space-3); overflow-x: auto; }
   .app-life__svg { display: block; width: 100%; min-width: 800px; height: auto; }
   .app-prose .app-life__list {

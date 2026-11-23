@@ -16,8 +16,10 @@
    whole screen the tables keep their old figures at ink-faint, and under a run of named companies
    nothing fades (4.1). When any run ends, whoever started it, the rows load again, with the open
    drawer, the statistics when that view is open and the company page when the run covered its
-   company. The Statistics view, once named Groups, is one plain table from /api/statistics (spec
-   6.3; spec 2026-11-23 refresh experience, 4.5), with no chart, each group's name a link that
+   company; the figures the run changed are marked as they land, and after a run of the whole
+   screen that ended done the status line counts them (4.2). The Statistics view, once named
+   Groups, is one plain table from /api/statistics (spec 6.3; spec 2026-11-23 refresh experience,
+   4.5), with no chart, each group's name a link that
    opens the Screen on the group; #statistics names it, and the old #groups opens it. The company
    page (company.js) is a
    panel no header view names: #company/<symbol> opens its Overview, #company/<symbol>/financials
@@ -79,7 +81,9 @@
     detailsOpen: false, /* the last refresh's Details ▾ menu is open */
     open: 0, /* the open work items, pending and claimed: the Inbox view's count */
     seen: null, /* the id of the newest refresh the rows were read under; null before an answer */
-    ended: null /* { id, kind, status }: the newest whole run the last follow took in, or null */
+    ended: null, /* { id, kind, status }: the newest whole run the last follow took in, or null */
+    changes: null /* { id, kind, prices, values }: what the last whole run that ended done changed
+                     on the rows, as the page counted it (onChanged), or null */
   };
   var timer = null;
   var inboxTimer = null;
@@ -428,7 +432,9 @@
      valued, then · 3 failed when the run failed companies. A price refresh counts those
      repriced, and those skipped for want of a snapshot. A record without a calibration, a run
      that failed, was cancelled or was scoped, says its message instead. The finish reads in the
-     reader's local time. */
+     reader's local time. While the line describes the whole run whose changes the page counted
+     (state.changes), the count ends it, · 1,546 prices changed, in the tint a changed cell takes
+     (changed; spec 2026-11-23 refresh experience, 4.2). */
   function lastLine(last) {
     if (!last) return ['No refresh has run yet.'];
     var c = last.calibration;
@@ -437,14 +443,34 @@
       key: 'when', dateTime: finished, title: finished
     }, F.formatDate(finished)) : null;
     var line = [last.kind + ' ' + last.status + (when ? ' ' : ''), when];
-    if (!c) return line.concat(last.message ? [' · ' + last.message] : []);
+    if (!c) return line.concat(last.message ? [' · ' + last.message] : [], changed(last));
     line = line.concat(c.repriced != null
       ? [' · ', count(c.repriced), ' of ', count(c.total), ' repriced']
       : [' · ', count(c.valued), ' of ', count(c.total), ' valued']);
     var failed = failedOf(c);
     if (failed > 0) line = line.concat([' · ', count(failed), ' failed']);
     if (c.skipped > 0) line = line.concat([' · ', count(c.skipped), ' skipped']);
-    return line;
+    return line.concat(changed(last));
+  }
+
+  /* The count of what the run `last` changed, · and its words in a span of class is-changed,
+     where the page counted it for that run; else nothing. The count stands until the line
+     describes another run, or the page is loaded again: it is kept nowhere else (4.2). */
+  function changed(last) {
+    var c = state.changes;
+    if (!c || c.id !== last.id) return [];
+    return [' · ', h('span', { key: 'changes', className: 'is-changed' }, changeWords(c))];
+  }
+
+  /* The count's words: 1,546 prices changed, 37 values changed, both where both moved; where
+     none did, no price changed after a price refresh and no figure changed after another run. */
+  function changeWords(c) {
+    var p = c.prices ? count(c.prices) + (c.prices === 1 ? ' price changed' : ' prices changed')
+      : null;
+    var v = c.values ? count(c.values) + (c.values === 1 ? ' value changed' : ' values changed')
+      : null;
+    if (p && v) return p + ', ' + v;
+    return p || v || (c.kind === 'price' ? 'no price changed' : 'no figure changed');
   }
 
   /* The companies a run failed. A price refresh's calibration counts them; a full refresh's or a
@@ -683,7 +709,9 @@
      view's revalue) as the header follows its own: the run bar while it runs, the rows loaded
      again when it ends; countInbox(items) hands the header the Inbox view's own read, so its
      count follows; the Inbox view sets onInbox(items), which each of the header's own reads
-     calls. */
+     calls; onChanged({ prices, values }), which the screen's reload calls as the rows a run's
+     end read land, marked, keeps their count for the status line where the run followed was a
+     run of the whole screen that ended done (spec 2026-11-23 refresh experience, 4.2). */
   P.show = show;
   P.onShow = {};
   P.listId = null;
@@ -692,6 +720,14 @@
   P.running = function () { return state.running !== null; };
   P.followRefresh = function () { started = true; poll(); };
   P.countInbox = inboxRead;
+  P.onChanged = function (counts) {
+    var ended = state.ended;
+    if (!ended || ended.status !== 'done') return;
+    state.changes = {
+      id: ended.id, kind: ended.kind, prices: counts.prices, values: counts.values
+    };
+    render();
+  };
 
   window.addEventListener('hashchange', fromHash);
   /* The first view opens once the page's later scripts have run and registered their loaders. */

@@ -423,6 +423,63 @@ def test_a_tab_held_asked_for_while_the_detail_is_read_is_read_whole() -> None:
     }
 
 
+MARKED = {"do": "again", "mark": True}  # a refresh's end that covered the company (controls.js)
+UNMARKED = {"changed": False, "move": None}
+
+
+def test_the_head_marks_a_price_that_a_run_changed() -> None:
+    """Spec 2026-11-23 refresh experience, 4.2: a run's end reads the page again, and where the page
+    held the same company's detail at another price, the head's price takes the tint and the arrow
+    of its direction, ▼ lower, ▲ higher, for 1.3 seconds (MARK_MS), then neither. The same price
+    marks nothing; a read again with no mark (a note taken, the moat box's write), or with any
+    other argument than true, marks nothing; nor does a run's end that lands on another company
+    than the page held."""
+    trace = _drive(
+        OPEN
+        + [
+            MARKED,
+            _answer(LFOX, _detail(180.1)),
+            _answer(OVERVIEW, _tab("overview 2")),
+            {"do": "tick"},
+            MARKED,
+            _answer(LFOX, _detail(180.1)),
+            _answer(OVERVIEW, _tab("overview 3")),
+            MARKED,
+            _answer(LFOX, _detail(185.0)),
+            _answer(OVERVIEW, _tab("overview 4")),
+            {"do": "tick"},
+            AGAIN,
+            _answer(LFOX, _detail(186.0)),
+            _answer(OVERVIEW, _tab("overview 5")),
+            {"do": "again", "mark": 1},
+            _answer(LFOX, _detail(187.0)),
+            _answer(OVERVIEW, _tab("overview 6")),
+            _show("BRK.B", "overview"),
+            MARKED,  # the run ends while BRK.B's first read is out
+            _answer(BRK, _detail(190.0, "BRK.B")),
+            _answer(BRK, _detail(190.0, "BRK.B")),
+            _answer(BRK + "/page/overview", _tab("brk, dropped", "BRK.B")),
+            _answer(BRK + "/page/overview", _tab("brk", "BRK.B")),
+        ]
+    )
+    assert trace[2]["priceMark"] == UNMARKED and trace[2]["waits"] == []  # a first open
+    lower, ticked = trace[5], trace[6]
+    assert lower["page"]["price"] == "▼$180.10"
+    assert lower["priceMark"] == {"changed": True, "move": "▼"}
+    assert lower["waits"] == [1300]
+    assert ticked["page"]["price"] == "$180.10"
+    assert (ticked["priceMark"], ticked["waits"]) == (UNMARKED, [])
+    same, higher = trace[9], trace[12]
+    assert (same["priceMark"], same["waits"]) == (UNMARKED, [])
+    assert higher["priceMark"] == {"changed": True, "move": "▲"}
+    plain, other = trace[16], trace[19]
+    assert plain["page"]["price"] == "$186.00" and plain["priceMark"] == UNMARKED
+    assert other["page"]["price"] == "$187.00" and other["priceMark"] == UNMARKED
+    brk = trace[-1]
+    assert brk["page"]["ticker"] == "BRK.B" and brk["page"]["drawn"]["mark"] == "brk"
+    assert (brk["priceMark"], brk["waits"]) == (UNMARKED, [])
+
+
 def test_another_company_drops_the_first_company_s_late_landing() -> None:
     """The page turns to another company as it is asked for one: notesShown with it at the turn.
     A read of the first company that lands after the turn is dropped and hands notesShown

@@ -7,8 +7,8 @@
 // replace, the window's and the document's listeners, each panel's classes) and a fetch of the
 // driver's own, answered only when a step answers it. The reads the scripts start as they load
 // stay in flight, so a step can answer the first read of the refresh's state, or the screen's rows
-// (/api/screen?sort=ticker&dir=asc). controls.js's timers are held until a step fires them, and
-// the company page, which has no script here, reads its company's detail as it opens, as
+// (/api/screen?sort=ticker&dir=asc). app.js's and controls.js's timers are held until a step fires
+// them, and the company page, which has no script here, reads its company's detail as it opens, as
 // company.js's loader does first (/api/companies/<symbol>).
 //
 // The steps, a JSON list on stdin, each one object:
@@ -23,19 +23,25 @@
 //   {"do": "filter", "filter"}                   FairbandPage.filterScreen(filter) (app.js), as a
 //                                                group's name in Statistics calls it
 //   {"do": "follow", "name"}                     the Statistics table's link `name` is pressed
-//   {"do": "tick"}                               the time comes for controls.js's pending timers:
-//                                                each fires, in the order set
+//   {"do": "sort", "column"}                     the table's head `column` is pressed: the view
+//                                                that shows sorts by it (app.js's sortBy)
+//   {"do": "list", "id"}                         the watchlist page's head names the list `id`
+//                                                (FairbandPage.selectList, as watchlists.js does)
+//   {"do": "tick"}                               the time comes for app.js's and controls.js's
+//                                                pending timers: each fires, in the order set
 //   {"do": "visibility", "hidden"}               the page is hidden (true), as the browser's tab
 //                                                is left, or shown again (false)
 // After each step and the work it sets off, the trace on stdout gains the urls fetched since the
 // step before (the reads the scripts start as they load are not counted), whether a view's panel
-// holds is-recomputing, the delays of controls.js's pending timers, the view the header marks,
-// the header's views as [id, label], the hash, whether its right slot holds the finder, and what
-// the bar under it draws: its class, the status region's words, whether Details ▾ stands beside
-// them and whether its menu is open, whether the run's bar is drawn, and the notice; then the
-// FIND and the filters of the table the screen's root last drew (null before it draws one), the
-// Statistics table's names, each [name, the link's href, or null for plain text] (null before it
-// draws one), and, on a press of a link, whether the press kept the browser from following it.
+// holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
+// header marks, the header's views as [id, label], the hash, whether its right slot holds the
+// finder, and what the bar under it draws: its class, the status region's words, the words of the
+// count of what a run changed (the region's is-changed span, null for none), whether Details ▾
+// stands beside them and whether its menu is open, whether the run's bar is drawn, and the notice;
+// then the FIND and the filters of the table the screen's root last drew and its rows a run's end
+// marked, each [ticker, priceMove] (null before it draws one), the Statistics table's names, each
+// [name, the link's href, or null for plain text] (null before it draws one), and, on a press of a
+// link, whether the press kept the browser from following it.
 //
 //   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -114,7 +120,8 @@ const window = {
   React, ReactDOM, document, fetch, innerWidth: 1600, innerHeight: 1100,
   addEventListener(event, listener) { (listeners[event] = listeners[event] || []).push(listener); },
 };
-// controls.js's timers, each held until a tick step fires it: { id, run, ms }, in the order set.
+// app.js's and controls.js's timers, each held until a tick step fires it: { id, run, ms }, in the
+// order set.
 const timers = [];
 let timerIds = 0;
 const clock = {
@@ -129,8 +136,9 @@ const clock = {
 };
 
 new Function('window', 'React', bundle)(window, React);
-new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app)(
-  window, React, ReactDOM, window.Fairband, document, fetch);
+new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', 'setTimeout',
+  'clearTimeout', app)(
+  window, React, ReactDOM, window.Fairband, document, fetch, clock.setTimeout, clock.clearTimeout);
 const P = window.FairbandPage;
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   finder)(window, React, ReactDOM, window.Fairband, P, document, fetch);
@@ -210,7 +218,9 @@ for (const step of steps) {
       .filter((e) => e.type === 'a' && textOf(e) === step.name);
     prevented = false;
     link.props.onClick({ preventDefault() { prevented = true; } });
-  } else if (step.do === 'tick') {
+  } else if (step.do === 'sort') table().props.onSort(step.column);
+  else if (step.do === 'list') P.selectList(step.id);
+  else if (step.do === 'tick') {
     for (const timer of timers.splice(0)) timer.run();
   } else if (step.do === 'visibility') {
     document.hidden = step.hidden;
@@ -220,6 +230,8 @@ for (const step of steps) {
   const header = rootOn('header').drawn;
   const bar = [...elements(rootOn('controls').drawn)];
   const [status] = bar.filter((e) => e.props.role === 'status');
+  const [changes] = [...elements(status)]
+    .filter((e) => String(e.props.className || '').split(' ').includes('is-changed'));
   const [notice] = bar.filter((e) => e.type === 'p');
   const drawn = table();
   const cells = names();
@@ -238,12 +250,15 @@ for (const step of steps) {
       .map((e) => e.props['aria-label'] || textOf(e)),
     bar: rootOn('controls').drawn.props.className,
     status: status ? textOf(status) : null,
+    changes: changes ? textOf(changes) : null,
     details: bar.some((e) => e.type === window.Fairband.Button && textOf(e) === 'Details ▾'),
     menu: bar.some((e) => String(e.props.className || '').split(' ').includes('fb-menu--filters')),
     run: bar.some((e) => e.type === window.Fairband.RunProgress),
     notice: notice ? textOf(notice) : null,
     find: drawn ? drawn.props.query : null,
     filters: drawn ? drawn.props.filters : null,
+    marked: drawn ? drawn.props.rows.filter((r) => r.changed).map((r) => [r.ticker, r.priceMove])
+      : null,
     statistics: cells && cells.map((cell) => {
       const [link] = [...elements(cell)].filter((e) => e.type === 'a');
       return [textOf(cell), link ? link.props.href : null];

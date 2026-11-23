@@ -1393,8 +1393,16 @@
           r.expiredEarly ? h('span', { className: 'fb-mark fb-mark--expired',
             title: 'Expired early' }, FRESHNESS.expired.mark) : null);
       } },
+    // fairband: a price a run moved between two numbers, `priceMove` 1 or -1, has ▲ or ▼ before
+    // it, in ink-muted, which fades with the cell's tint; no colour of its own, since green and
+    // red read here as the price against the value (spec 2026-11-23 refresh experience, 4.2).
     { key: 'price', head: 'Price', num: true, locked: true,
-      cell: function (r) { return h('td', { className: 'fb-num figure' }, money(r.price)); } },
+      cell: function (r) {
+        return h('td', { className: 'fb-num figure' },
+          r.priceMove ? h('span', { className: 'fb-screen__move', 'aria-hidden': 'true' },
+            r.priceMove > 0 ? '▲' : '▼') : null,
+          money(r.price));
+      } },
     // fairband: the row's price-vs-value word as a chip in its band's colour (classifier-
     // designation spec 7.3, founder 2026-11-03); a row without one shows an em dash, never a
     // word from the levels.
@@ -1525,6 +1533,17 @@
   // fairband: the designation column ends the default list (classifier-designation spec 7.3).
   var DEFAULT_COLUMNS = ['ticker', 'name', 'phase', 'band', 'mechanical',
                          'reviewed', 'price', 'designation'];
+
+  // fairband: the cell `cell` of the column `key`, its class list given is-changed where the row's
+  // `changed` names the column's figure, the tint that fades as a run ends (spec 2026-11-23
+  // refresh experience, 4.2): the Fair band's for either end, `fairLow` or `fairHigh`, every other
+  // column's for its own key. A row with no `changed` draws its cells as they are.
+  function tinted(cell, r, key) {
+    var changed = r.changed;
+    if (!changed || !cell || cell.type !== 'td') return cell;
+    if (!(key === 'band' ? changed.fairLow || changed.fairHigh : changed[key])) return cell;
+    return React.cloneElement(cell, { className: cx(cell.props.className, 'is-changed') });
+  }
 
   // fairband: a column's catalog entry by its key; null for a key the catalog does not know.
   function columnOf(key) {
@@ -1910,7 +1929,7 @@
             } : null
           }, shown.map(function (c) {
             // fairband: the cell sees the props (spec 2026-11-04 9.4).
-            return h(React.Fragment, { key: c.key }, c.cell(r, p));
+            return h(React.Fragment, { key: c.key }, tinted(c.cell(r, p), r, c.key));
           }));
         }))
       )

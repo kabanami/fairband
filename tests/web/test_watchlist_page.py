@@ -103,7 +103,7 @@ def test_the_table_draws_a_list_with_its_own_find_filters_and_sort() -> None:
 
 def test_a_failed_read_of_the_list_leaves_the_screen_its_table() -> None:
     app = _static_file("app.js")
-    load_list = app[app.index("  function loadList() {") :]
+    load_list = app[app.index("  function loadList(mark) {") :]
     load_list = load_list[: load_list.index("\n  }\n")]
     assert "state.error" not in load_list  # the Screen keeps its table
     assert (

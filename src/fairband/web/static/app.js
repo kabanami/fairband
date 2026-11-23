@@ -49,6 +49,12 @@
     'the company and click Request research.';
   var OPEN_NOTE = 'Preliminary estimate only. To ask an agent for a reviewed valuation, click ' +
     'Request research.';
+  /* The figures a row shows that a run's end compares, by their keys (spec 2026-11-23 refresh
+     experience, 4.2), and how long a changed figure stays marked: past its tint's 1.2-second
+     fade, so the marks are taken off once it has ended. */
+  var CHANGE_KEYS = ['price', 'fairValue', 'fairLow', 'fairHigh', 'buyLevel', 'trimLevel',
+    'priceToValue', 'designation', 'reviewed', 'mechanical', 'phase'];
+  var MARK_MS = 1300;
 
   var mount = document.getElementById('screen');
   var root = ReactDOM.createRoot(mount);
@@ -82,6 +88,7 @@
   var latest = 0;
   var latestList = 0;
   var latestDetail = 0;
+  var markTimer = null; /* takes off the marks a run's end set (unmarkLater) */
 
   function loadColumns() {
     try {
@@ -220,9 +227,11 @@
     return launch.itemState === 'pending';
   }
 
-  /* What controls.js uses: the screen's reload when a refresh ends, the write helpers and a refused
-     write's sentence and its reason (refusalDetail), the GET helper, the local-time helper, whether
-     a launch is followed (following), the phase numbers, a work item's open states and
+  /* What controls.js uses: the screen's reload when a refresh ends, reload(true), which marks what
+     the run changed and hands its count to onChanged, which controls.js sets (spec 2026-11-23
+     refresh experience, 4.2), the write helpers and a refused write's sentence and its reason
+     (refusalDetail), the GET helper, the local-time helper, whether a launch is followed
+     (following), the phase numbers, a work item's open states and
      filterScreen, by which the Statistics view opens the Screen on a group's filter; and the
      later views, find, the lists (null until they load), their reload, which settles once they are
      in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
@@ -246,7 +255,8 @@
      the secondary valuation's rows and path, the guidance table, the phase evidence, pairs, a date,
      a total in a currency, an exchange rate and a count; the line that says what the figures are in
      (currencyLine) is the drawer's and the Research tab's, the same line in both. The company page
-     (company.js; the company page's design, 7) draws its head with the logo, the phase numbers, the
+     (company.js; the company page's design, 7) draws its head with the logo, the phase numbers, its
+     price marked for MARK_MS where a run's end changed it, as the table's cells are (4.2), the
      moat stamp (moatStamp), the chip of whose class it is (moatChip) and the control that opens the
      moat box (moatControl, spec 2026-11-19 8.8), the Notes control as the drawer's bar draws it
      (notesControl, 11.1) and Request research with a request of its own (asking), whose following
@@ -266,11 +276,12 @@
      The drawer with its bar (drawer), its parts (sections), the Notes box (notesBox), the moat box
      (moatBox), the open item's line (launchLine), an input's value (inputValue), a figure a share
      in a currency (money), a logo's ground (logoGround), the screen's narrowing (narrow), the
-     industries its menu lists (industriesOf), the filters it keeps (listedFilters) and a list's
-     rows (listRows) are here for the tests, which read them in node (tests/web/page.mjs and
-     tests/web/moat.mjs). */
+     industries its menu lists (industriesOf), the filters it keeps (listedFilters), a list's
+     rows (listRows) and the marks of a run's end (marks) are here for the tests, which read them
+     in node (tests/web/page.mjs and tests/web/moat.mjs). */
   window.FairbandPage = {
-    reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
+    reload: load, marks: marks, MARK_MS: MARK_MS,
+    api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
     find: find, finds: finds, filterScreen: filterScreen,
@@ -302,13 +313,25 @@
   };
 
   /* The screen's rows in the Screen's sort; only the newest read lands. The list follows every
-     reload (loadList). */
-  function load() {
+     reload (loadList). With `mark` true, a run's end (controls.js), the rows that land are marked
+     against those the page holds (marks), the count of what changed goes to onChanged, which
+     controls.js sets, where the page held rows to count against, and the marks come off after
+     MARK_MS (unmarkLater; spec 2026-11-23 refresh experience, 4.2). Any other argument marks
+     nothing. */
+  function load(mark) {
     var request = ++latest;
     getJson(screenPath(state.sort))
       .then(function (body) {
         if (request !== latest) return;
+        var held = state.rows;
         state.rows = body.rows.map(localRow);
+        if (mark === true && held) {
+          var got = marks(state.rows, held);
+          state.rows = got.rows;
+          unmarkLater();
+          var page = window.FairbandPage;
+          if (page.onChanged) page.onChanged({ prices: got.prices, values: got.values });
+        }
         state.error = null;
         render();
       })
@@ -317,7 +340,7 @@
         state.error = 'The screen did not load: ' + err.message + '. Reload the page to try again.';
         render();
       });
-    loadList();
+    loadList(mark);
   }
 
   /* The watchlist page's rows in the list's own sort (spec 2026-11-22 7.1), read only while that
@@ -325,8 +348,9 @@
      the Screen's rows (listSource): nothing is read, a read still out is dropped and a failed
      one's sentence goes. The newest read lands in list.rows; a failed one's sentence stands in
      list.error, which the list shows in its table's place and the Screen never does, until a
-     later read lands (onList reads again as the page shows again). */
-  function loadList() {
+     later read lands (onList reads again as the page shows again). With `mark` true, a run's end,
+     the rows that land are marked against the list's rows held, as the Screen's are (load). */
+  function loadList(mark) {
     var list = state.list;
     if (sameSort(list.sort, state.sort)) {
       latestList++;
@@ -338,7 +362,12 @@
     getJson(screenPath(list.sort))
       .then(function (body) {
         if (request !== latestList) return;
+        var held = list.rows;
         list.rows = body.rows.map(localRow);
+        if (mark === true && held) {
+          list.rows = marks(list.rows, held).rows;
+          unmarkLater();
+        }
         list.error = null;
         render();
       })
@@ -358,6 +387,59 @@
 
   /* Whether two sorts are the same order: the same column the same way. */
   function sameSort(a, b) { return a.column === b.column && a.direction === b.direction; }
+
+  /* The rows `fresh` marked against the rows `held`, by ticker, on the figures a row shows
+     (CHANGE_KEYS; spec 2026-11-23 refresh experience, 4.2), each compared as the row holds it: a
+     fresh row whose ticker `held` has and that differs on any of them is a copy that carries
+     `changed`, those keys each true, which ScreenTable tints, and, where its price moved between
+     two numbers, `priceMove`, 1 up or -1 down, the arrow before it. A row that is new, or the
+     same, is the fresh row itself; a row gone is not there. `prices` counts the rows whose price
+     changed, `values` those whose fair value did. With nothing held, nothing is marked and both
+     are 0. Pure: neither list is changed. */
+  function marks(fresh, held) {
+    var before = Object.create(null);
+    (held || []).forEach(function (r) { before[r.ticker] = r; });
+    var prices = 0;
+    var values = 0;
+    var rows = fresh.map(function (r) {
+      var was = before[r.ticker];
+      if (!was) return r;
+      var changed = {};
+      CHANGE_KEYS.forEach(function (key) { if (r[key] !== was[key]) changed[key] = true; });
+      if (!Object.keys(changed).length) return r;
+      var row = Object.assign({}, r, { changed: changed });
+      if (changed.price) prices++;
+      if (changed.fairValue) values++;
+      if (changed.price && typeof r.price === 'number' && typeof was.price === 'number') {
+        row.priceMove = r.price > was.price ? 1 : -1;
+      }
+      return row;
+    });
+    return { rows: rows, prices: prices, values: values };
+  }
+
+  /* The marks a run's end set, taken off the Screen's rows and the list's MARK_MS after the last
+     rows landed, in one draw: the tint and the arrow have faded by then. */
+  function unmarkLater() {
+    clearTimeout(markTimer);
+    markTimer = setTimeout(function () {
+      markTimer = null;
+      state.rows = unmarked(state.rows);
+      state.list.rows = unmarked(state.list.rows);
+      render();
+    }, MARK_MS);
+  }
+
+  /* `rows` without their marks; a row that carries none stays as it is. Null for null. */
+  function unmarked(rows) {
+    return rows && rows.map(function (r) {
+      if (!r.changed) return r;
+      var row = Object.assign({}, r);
+      delete row.changed;
+      delete row.priceMove;
+      return row;
+    });
+  }
 
   /* A row with its entered time in the reader's offset, so the Entered cell shows the local date
      (the local-offset ISO in datetime), and its report's time likewise, so the coverage mark's
