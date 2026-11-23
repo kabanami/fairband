@@ -198,7 +198,12 @@ export interface BandMeterProps {
   high: number;
   /** The market price, per share. fairband: no word is derived from it; see `designation`. */
   price: number;
-  /** The point estimate inside the band. Defaults to the band's midpoint. */
+  /**
+   * The point estimate inside the band. Defaults to the band's midpoint. fairband: it sets the
+   * scale, 0.45 to 1.55 times it, widened only so that each level keeps a tenth of it clear of
+   * either end; at or below zero the scale spans every point with 12% of padding (spec 2026-11-23
+   * refresh experience, 4.7).
+   */
   fairValue?: number;
   /** The thresholds that bound the buy and trim zones. */
   buyLevel?: number;
@@ -211,8 +216,9 @@ export interface BandMeterProps {
   designation?: Designation | null;
   /**
    * fairband: the reviewed value a share, a second marker on the track in ink, and "reviewed
-   * $283.00" after the caption; no word is derived from it (spec 2026-11-06 Tier 2, 18.2). `null`
-   * or absent draws none.
+   * $283.00" after the caption; no word is derived from it (spec 2026-11-06 Tier 2, 18.2). Like
+   * the price, it never sets the scale and is pinned at an end beyond it, with no break mark of
+   * its own (spec 2026-11-23 refresh experience, 4.7). `null` or absent draws none.
    */
   reviewedValue?: number | null;
   /**
@@ -837,6 +843,16 @@ export declare function PrincipalChip(props: PrincipalChipProps): unknown;
 export declare function BasisChip(props: BasisChipProps): unknown;
 export declare function ValueCell(props: ValueCellProps): unknown;
 export declare function ValueBridge(props: ValueBridgeProps): unknown;
+/**
+ * fairband: the scale comes from `fairValue`, never from the price (spec 2026-11-23 refresh
+ * experience, 4.7). A price inside it is drawn to scale; a price beyond an end is pinned 7px in
+ * from that end (`fb-band__price-mark--pinned`) behind one break mark on the track
+ * (`fb-band__break fb-band__break--low` or `--high`), its title and the head keeping the true
+ * price; the reviewed value's marker is pinned the same way, with no break mark. The tier says
+ * where the price lies against the band (`fb-band__tier--under`, `--in` or `--over`), and its two
+ * labels (`fb-band__tier-label--low` and `--high`) sit outside their ticks, each with `--tick`,
+ * `--price`, `--len` and `--other` (the other label's length in ch) for bundle.css.
+ */
 export declare function BandMeter(props: BandMeterProps): unknown;
 export declare function ValidityWindow(props: ValidityWindowProps): unknown;
 export declare function TaggedInput(props: TaggedInputProps): unknown;

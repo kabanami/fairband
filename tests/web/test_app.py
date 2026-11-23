@@ -2345,11 +2345,12 @@ def test_the_request_menu_asks_for_the_request_in_the_owners_words() -> None:
 
 def test_the_meter_takes_a_reviewed_value() -> None:
     """Spec 2026-11-06 Tier 2, 18.2, a `// fairband:` patch: BandMeter's ``reviewedValue`` is a
-    second marker on the track, in ink with the price marker's surface ring and no cap, within
-    the axis's range; the caption keeps the caller's sentence and adds "reviewed $283.00". No
-    word is derived from it: the head's word stays the caller's designation. Plan 3: the patch
-    stays in the bundle for the caller that passes it, the refused row's band from its review; a
-    valued row's meter draws the review's band itself and passes none."""
+    second marker on the track, in ink with the price marker's surface ring and no cap, placed as
+    the price is, pinned at an end beyond the scale (spec 2026-11-23 refresh experience, 4.7);
+    the caption keeps the caller's sentence and adds "reviewed $283.00". No word is derived from
+    it: the head's word stays the caller's designation. Plan 3: the patch stays in the bundle for
+    the caller that passes it, the refused row's band from its review; a valued row's meter draws
+    the review's band itself and passes none."""
     meter = _function(_static_file("app.js"), "meter")
     assert meter.count("reviewedValue") == 1
     refused = meter[meter.index("if (isReviewBanded(body)) {") : meter.index("if (!isBanded(")]
@@ -2361,12 +2362,11 @@ def test_the_meter_takes_a_reviewed_value() -> None:
     _in_order(
         meter,
         "var reviewed = p.reviewedValue == null ? null : Number(p.reviewedValue);",
-        "if (reviewed != null) pts.push(reviewed);",
-        "var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);",
         "var caption = [p.caption, reviewed == null ? null : 'reviewed ' + money(reviewed)]",
-        "className: 'fb-band__price-mark',",
+        "className: cx('fb-band__price-mark', pinned && 'fb-band__price-mark--pinned'),",
         "reviewed == null ? null : h('div', {",
         "className: 'fb-band__reviewed-mark',",
+        "style: { left: place(reviewed) },",
         "title: 'Reviewed value ' + money(reviewed)",
         # the caption's title is spec 2026-11-19 7.5's (tests/web/test_warning_mark.py)
         "caption ? h('div', {",
@@ -2826,24 +2826,85 @@ def test_a_cite_s_number_stays_with_its_figure_in_a_table() -> None:
 
 
 def test_a_tier_label_keeps_its_near_edge_off_the_price_marker() -> None:
-    """Spec 18.2 item 2 (plan 4): a label on the meter's tier is centred on its tick, unless that
-    brings its near edge within 8px of the price marker's centre line, where it stops, at any
-    width; the span gives its tick, the price and its length in ch (tests/web/test_band_meter.py
-    reads them)."""
+    """Spec 18.2 item 2 (plan 4), with spec 2026-11-23 refresh experience 4.7: the band's low
+    label ends 5px before its tick and the high one starts 5px after its, so they cannot overlap,
+    unless that brings a near edge within 8px of the price marker's centre line, where it stops,
+    at any width, and the other label moves on with 8px between the two. The tier says where the
+    price lies against the band; the span gives its tick, the price, its length and the other
+    label's in ch (tests/web/test_band_meter.py reads them)."""
     css = _component_file("bundle.css")
-    assert (
-        ".fb-band__tier > span.fb-band__tier-label--right { left: max(calc(var(--tick) -"
-        " var(--len) / 2), calc(var(--price) + 8px)); transform: none; }"
-    ) in css
-    assert (
-        ".fb-band__tier > span.fb-band__tier-label--left { left: min(calc(var(--tick) -"
-        " var(--len) / 2), calc(var(--price) - 8px - var(--len))); transform: none; }"
-    ) in css
-    comment = css[css.index("/* fairband: each tier label") :]
-    assert "its near edge 8px off the marker" in " ".join(comment[: comment.index("*/")].split())
+    for rule in (
+        (
+            ".fb-band__tier > span.fb-band__tier-label--low,\n"
+            ".fb-band__tier > span.fb-band__tier-label--high { transform: none; }"
+        ),
+        (
+            ".fb-band__tier--under > .fb-band__tier-label--low  { left: max(calc(var(--tick) - 5px"
+            " - var(--len)), calc(var(--price) + 8px)); }"
+        ),
+        (
+            ".fb-band__tier--under > .fb-band__tier-label--high { left: max(calc(var(--tick) +"
+            " 5px), calc(var(--price) + 16px + var(--other))); }"
+        ),
+        (
+            ".fb-band__tier--in > .fb-band__tier-label--low     { left: min(calc(var(--tick) - 5px"
+            " - var(--len)), calc(var(--price) - 8px - var(--len))); }"
+        ),
+        (
+            ".fb-band__tier--in > .fb-band__tier-label--high    { left: max(calc(var(--tick) +"
+            " 5px), calc(var(--price) + 8px)); }"
+        ),
+        (
+            ".fb-band__tier--over > .fb-band__tier-label--low   { left: min(calc(var(--tick) - 5px"
+            " - var(--len)), calc(var(--price) - 16px - var(--other) - var(--len))); }"
+        ),
+        (
+            ".fb-band__tier--over > .fb-band__tier-label--high  { left: min(calc(var(--tick) +"
+            " 5px), calc(var(--price) - 8px - var(--len))); }"
+        ),
+    ):
+        assert rule in css, rule
+    comment = css[css.index("/* fairband: the band's two labels") :]
+    comment = " ".join(comment[: comment.index("*/")].split())
+    assert "its near edge 8px off the price marker" in comment
+    assert "(spec 2026-11-23 refresh experience, 4.7)" in comment
     bundle = _function(_component_file("bundle.js"), "BandMeter")
-    for gone in ("tier-label--after", "tier-label--before", "var near"):
+    for gone in (
+        "tier-label--after",
+        "tier-label--before",
+        "var near",
+        "tier-label--left",
+        "tier-label--right",
+    ):
         assert gone not in bundle and gone not in css, gone
+
+
+def test_a_pinned_price_s_break_mark_is_two_strokes_of_the_ground() -> None:
+    """Spec 2026-11-23 refresh experience 4.7, as the approved mockup draws it: before a price
+    pinned at an end, two slanted strokes of the card's ground, 3px each and 3px apart, cross the
+    track 20px in from that end, so the marker's place does not read as true."""
+    css = _component_file("bundle.css")
+    comment = css[css.index("/* fairband: the break mark") :]
+    assert "(spec 2026-11-23 refresh experience, 4.7)" in comment[: comment.index("*/")]
+    rule = _rule(css, ".fb-band__break {")
+    for text in (
+        "box-sizing: border-box;",
+        "width: 9px;",
+        "border-left: 3px solid var(--surface-raised);",
+        "border-right: 3px solid var(--surface-raised);",
+        "transform: skewX(-18deg);",
+    ):
+        assert text in rule, text
+    assert "right: 20px;" in _rule(css, ".fb-band__break--high {")
+    assert "left: 20px;" in _rule(css, ".fb-band__break--low {")
+    bundle = _function(_component_file("bundle.js"), "BandMeter")
+    assert "// fairband: the scale comes from the value, never from the price" in bundle
+    _in_order(
+        bundle,
+        "className: 'fb-band__clip'",
+        "pinned ? h('div', { className: 'fb-band__break fb-band__break--' + pinned }) : null",
+        "className: cx('fb-band__price-mark', pinned && 'fb-band__price-mark--pinned'),",
+    )
 
 
 def test_the_print_stylesheet() -> None:

@@ -382,12 +382,21 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* The band's own numbers, on their own tier above the track. */
 .fb-band__tier { position: relative; height: 20px; }
 .fb-band__tier > span { position: absolute; transform: translateX(-50%); white-space: nowrap; color: var(--ink-faint); }
-/* fairband: each tier label on its side of the price marker, centred on its tick unless that
-   brings its near edge within 8px of the marker's centre line, where it stops: its near edge 8px
-   off the marker, 0.5px clear of the dot's 2px ring, at any width (spec 2026-11-06 Tier 2, 18.2
-   item 2, plan 4). The span gives its tick, the price and its length in ch. */
-.fb-band__tier > span.fb-band__tier-label--right { left: max(calc(var(--tick) - var(--len) / 2), calc(var(--price) + 8px)); transform: none; }
-.fb-band__tier > span.fb-band__tier-label--left { left: min(calc(var(--tick) - var(--len) / 2), calc(var(--price) - 8px - var(--len))); transform: none; }
+/* fairband: the band's two labels sit outside their ticks, 5px off them, the low one ending
+   before its tick and the high one starting after its, so they cannot overlap (spec 2026-11-23
+   refresh experience, 4.7). Each keeps its near edge 8px off the price marker's centre line,
+   0.5px clear of the dot's 2px ring, at any width (spec 2026-11-06 Tier 2, 18.2 item 2, plan 4);
+   where the marker pushes one label towards the other, the other moves on with 8px between the
+   two. The tier says where the price lies against the band; the span gives its tick, the
+   marker's place, its length and the other label's in ch. */
+.fb-band__tier > span.fb-band__tier-label--low,
+.fb-band__tier > span.fb-band__tier-label--high { transform: none; }
+.fb-band__tier--under > .fb-band__tier-label--low  { left: max(calc(var(--tick) - 5px - var(--len)), calc(var(--price) + 8px)); }
+.fb-band__tier--under > .fb-band__tier-label--high { left: max(calc(var(--tick) + 5px), calc(var(--price) + 16px + var(--other))); }
+.fb-band__tier--in > .fb-band__tier-label--low     { left: min(calc(var(--tick) - 5px - var(--len)), calc(var(--price) - 8px - var(--len))); }
+.fb-band__tier--in > .fb-band__tier-label--high    { left: max(calc(var(--tick) + 5px), calc(var(--price) + 8px)); }
+.fb-band__tier--over > .fb-band__tier-label--low   { left: min(calc(var(--tick) - 5px - var(--len)), calc(var(--price) - 16px - var(--other) - var(--len))); }
+.fb-band__tier--over > .fb-band__tier-label--high  { left: min(calc(var(--tick) + 5px), calc(var(--price) - 8px - var(--len))); }
 .fb-band__bracket {
   position: absolute;
   top: 15px;
@@ -421,6 +430,23 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
   margin-left: -1px;
   background: var(--ink-muted);
 }
+/* fairband: the break mark before a pinned price (spec 2026-11-23 refresh experience, 4.7), as
+   the approved mockup draws it: two strokes of the card's ground, 3px each and 3px apart,
+   slanted across the track 20px in from the end the price is pinned at, so the marker's place
+   does not read as true. */
+.fb-band__break {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  box-sizing: border-box;
+  width: 9px;
+  border-left: 3px solid var(--surface-raised);
+  border-right: 3px solid var(--surface-raised);
+  transform: skewX(-18deg);
+  z-index: 2;
+}
+.fb-band__break--high { right: 20px; }
+.fb-band__break--low { left: 20px; }
 
 /* The price marker overhangs the track so most of it sits on the ground, and
    carries a 2px surface ring so one design survives every zone beneath it.

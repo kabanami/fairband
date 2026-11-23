@@ -426,18 +426,39 @@
     var buy = p.buyLevel == null ? null : Number(p.buyLevel);
     var trim = p.trimLevel == null ? null : Number(p.trimLevel);
     // fairband: the reviewed value, a second marker when the caller passes one (spec 2026-11-06
-    // Tier 2, 18.2): on the track, in ink with the price marker's surface ring, inside the axis's
-    // range; the caption names it. No word is derived from it: the head's word stays the caller's.
+    // Tier 2, 18.2): on the track, in ink with the price marker's surface ring, placed as the
+    // price is; the caption names it. No word is derived from it: the head's word stays the
+    // caller's.
     var reviewed = p.reviewedValue == null ? null : Number(p.reviewedValue);
 
-    var pts = [low, high, price, fair];
-    if (buy != null) pts.push(buy);
-    if (trim != null) pts.push(trim);
-    if (reviewed != null) pts.push(reviewed);
-    var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
-    var pad = ((hi - lo) || Math.abs(hi) || 1) * 0.12;
-    var min = lo - pad, max = hi + pad;
+    // fairband: the scale comes from the value, never from the price (spec 2026-11-23 refresh
+    // experience, 4.7): 0.45 to 1.55 times the fair value, widened only for a level outside it,
+    // so the fair value sits in the centre of every meter. A value at or below zero has no such
+    // scale and keeps the rule before this one: every point with 12% of padding.
+    var levels = [low, high].concat(buy == null ? [] : [buy], trim == null ? [] : [trim]);
+    var min, max;
+    if (fair > 0) {
+      min = Math.min(fair * 0.45, Math.min.apply(null, levels) - fair * 0.10);
+      max = Math.max(fair * 1.55, Math.max.apply(null, levels) + fair * 0.10);
+    } else {
+      var pts = levels.concat([price, fair]);
+      if (reviewed != null) pts.push(reviewed);
+      var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
+      var pad = ((hi - lo) || Math.abs(hi) || 1) * 0.12;
+      min = lo - pad;
+      max = hi + pad;
+    }
     var at = function (v) { return ((v - min) / (max - min)) * 100; };
+    // fairband: a marker beyond an end of the scale, the price's or the reviewed value's, is
+    // pinned 7px in from that end; a pinned price draws a break mark on the track before it, so
+    // its place does not read as true (spec 2026-11-23 refresh experience, 4.7). Its title and the
+    // head keep the true price.
+    var beyond = function (v) { return v > max ? 'high' : v < min ? 'low' : null; };
+    var place = function (v) {
+      var end = beyond(v);
+      return end === 'high' ? 'calc(100% - 7px)' : end === 'low' ? '7px' : at(v) + '%';
+    };
+    var pinned = beyond(price);
 
     // fairband: the caller's price-vs-value word, never derived here from the levels
     // (classifier-designation spec 7.3); without one the head shows the price and its gap.
@@ -449,16 +470,22 @@
     var gap = p.gap === undefined
       ? pct(Math.abs(toFair) * 100) + (toFair >= 0 ? ' below' : ' above') + ' fair value'
       : p.gap;
-    // fairband: each tier label on its side of the price marker (on the marker's own position, the
-    // right), centred on its tick unless that brings its near edge within 8px of the marker's
-    // centre line, where it stops, at any width: its near edge 8px off the marker (spec 2026-11-06
-    // Tier 2, 18.2 item 2, plan 4: on QCOM the marker's dot covered "$179.11"). The span gives
-    // bundle.css its tick, the price and its length in ch (the tier is mono).
-    var label = function (v) {
+    // fairband: the band's two labels sit outside their ticks, the low one ending at its tick and
+    // the high one starting at its, so they cannot overlap (spec 2026-11-23 refresh experience,
+    // 4.7); each keeps its near edge 8px off the price marker, at any width, and the other moves
+    // on 8px past it (spec 2026-11-06 Tier 2, 18.2 item 2, plan 4: on QCOM the marker's dot
+    // covered "$179.11"). The tier says where the price lies against the band, under it, in it or
+    // over it; each span gives bundle.css its tick, the marker's place, its length in ch and the
+    // other label's (the tier is mono).
+    var side = price < low ? 'under' : price > high ? 'over' : 'in';
+    var label = function (v, end, other) {
       var text = money(v);
       return h('span', {
-        className: at(v) >= at(price) ? 'fb-band__tier-label--right' : 'fb-band__tier-label--left',
-        style: { '--tick': at(v) + '%', '--price': at(price) + '%', '--len': text.length + 'ch' }
+        className: 'fb-band__tier-label--' + end,
+        style: {
+          '--tick': at(v) + '%', '--price': place(price), '--len': text.length + 'ch',
+          '--other': money(other).length + 'ch'
+        }
       }, text);
     };
 
@@ -482,9 +509,9 @@
       ),
 
       /* the band's own numbers, on their own tier above the track */
-      h('div', { className: 'fb-band__tier figure-sm' },
-        label(low),
-        label(high),
+      h('div', { className: 'fb-band__tier fb-band__tier--' + side + ' figure-sm' },
+        label(low, 'low', high),
+        label(high, 'high', low),
         /* a div, not a span: the tier's span rule centres its labels on their
            own position, which would drag the bracket half its width left */
         h('div', {
@@ -516,18 +543,24 @@
           h('div', {
             className: 'fb-band__fairmark', style: { left: at(fair) + '%' },
             title: p.fairTitle || null
-          })
+          }),
+          // fairband: the break mark before a pinned price, two strokes of the ground across the
+          // track (spec 2026-11-23 refresh experience, 4.7).
+          pinned ? h('div', { className: 'fb-band__break fb-band__break--' + pinned }) : null
         ),
         h('div', {
-          className: 'fb-band__price-mark',
-          style: { left: at(price) + '%' },
+          // fairband: a price beyond the scale is pinned at its end (spec 2026-11-23 refresh
+          // experience, 4.7).
+          className: cx('fb-band__price-mark', pinned && 'fb-band__price-mark--pinned'),
+          style: { left: place(price) },
           // fairband: the price and its word, when the caller gave one.
           title: 'Price ' + money(price) + (word ? ' — ' + word : '')
         }),
-        // fairband: the reviewed value's marker, under the price's (spec 2026-11-06 Tier 2, 18.2).
+        // fairband: the reviewed value's marker, under the price's (spec 2026-11-06 Tier 2, 18.2),
+        // pinned as the price is (spec 2026-11-23 refresh experience, 4.7).
         reviewed == null ? null : h('div', {
           className: 'fb-band__reviewed-mark',
-          style: { left: at(reviewed) + '%' },
+          style: { left: place(reviewed) },
           title: 'Reviewed value ' + money(reviewed)
         })
       ),
