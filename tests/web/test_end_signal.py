@@ -2,7 +2,7 @@
 its rows again and compares each with the row it held, by ticker, on the figures a row shows
 (``FairbandPage.marks``, app.js): a row that differs carries the keys that changed, a price that
 moved between two numbers its direction, and the comparison counts the prices and the values that
-changed. ScreenTable gives each cell of a changed figure the class ``is-changed``, a grey tint
+changed. ScreenTable gives each cell of a changed figure the class ``fb-changed``, a grey tint
 that fades to none in 1.2 seconds, and sets ▲ or ▼ before a price that moved, in ink-muted, which
 fades with it. The helper and the table run in node (``tests/web/page.mjs``); the page's reads
 and the status line's count are ``tests/web/test_header.py``'s, the company page's head
@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from support.page import NODE, classed, elements, node, text
-from support.web import _component_file, _static_file
+from support.web import _component_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
@@ -58,11 +58,11 @@ def _cells(marked: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _tinted(marked: dict[str, Any]) -> list[str]:
-    """The columns whose cell carries ``is-changed``, in the table's order."""
+    """The columns whose cell carries ``fb-changed``, in the table's order."""
     return [
         key
         for key, cell in _cells(marked).items()
-        if "is-changed" in str(cell["props"].get("className") or "").split()
+        if "fb-changed" in str(cell["props"].get("className") or "").split()
     ]
 
 
@@ -114,7 +114,7 @@ def test_without_held_rows_nothing_is_marked() -> None:
 def test_the_table_tints_only_the_changed_cells(
     changed: dict[str, bool] | None, tinted: list[str]
 ) -> None:
-    """A changed figure's cell takes ``is-changed`` beside its own classes; the Fair band's cell
+    """A changed figure's cell takes ``fb-changed`` beside its own classes; the Fair band's cell
     reads the band's two ends; price ÷ value has no cell of its own."""
     marked = row("MGCO") | ({"changed": changed} if changed else {})
     assert _tinted(marked) == tinted
@@ -150,7 +150,7 @@ def test_the_tint_fades_in_1_2_seconds_and_only_the_bar_stops_under_reduced_moti
             "45%, transparent); } to { background-color: transparent; } }"
         ),
         "@keyframes fb-gone { from { opacity: 1; } to { opacity: 0; } }",
-        ".is-changed { animation: fb-changed 1.2s ease-out; }",
+        ".fb-changed { animation: fb-changed 1.2s ease-out; }",
         (
             ".fb-screen__move { color: var(--ink-muted); font-size: 10px; margin-right: 4px; "
             "animation: fb-gone 1.2s ease-out forwards; }"
@@ -164,12 +164,12 @@ def test_the_tint_fades_in_1_2_seconds_and_only_the_bar_stops_under_reduced_moti
     ]
 
 
-def test_a_setting_the_reader_changed_does_not_flash() -> None:
-    """The Methodology page marks a setting that differs from the default with the same class, in
-    accent; that is no figure a run changed, so it takes no tint (4.8: three motions and no
-    other)."""
-    page = " ".join(_static_file("index.html").split())
-    assert (
-        ".app-prose .is-changed { color: var(--accent); text-decoration-color: var(--accent); "
-        "animation: none; }"
-    ) in page
+def test_no_rule_of_the_bundle_selects_the_methodology_page_s_class() -> None:
+    """The Methodology page marks a setting that differs from its default with a class of its own,
+    ``is-changed``, in accent (methodology.js, index.html). The tint's class is ``fb-changed``, so
+    no rule of the bundle selects the page's, and the page's settings never flash (4.8: three
+    motions and no other)."""
+    css = _component_file("bundle.css")
+    selectors = re.findall(r"([^{};]+)\{", re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL))
+    assert selectors and any(".fb-changed" in s for s in selectors)
+    assert [s for s in selectors if ".is-changed" in s] == []

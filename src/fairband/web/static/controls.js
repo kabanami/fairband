@@ -82,11 +82,13 @@
     open: 0, /* the open work items, pending and claimed: the Inbox view's count */
     seen: null, /* the id of the newest refresh the rows were read under; null before an answer */
     ended: null, /* { id, kind, status }: the newest whole run the last follow took in, or null */
-    changes: null /* { id, kind, prices, values }: what the last whole run that ended done changed
-                     on the rows, as the page counted it (onChanged), or null */
+    changes: null /* { id, kind, prices, values, fresh }: what the last whole run that ended done
+                     changed on the rows, as the page counted it (onChanged), fresh for MARK_MS
+                     after it was counted; or null */
   };
   var timer = null;
   var inboxTimer = null;
+  var freshTimer = null; /* ends the count's freshness (onChanged) */
   var latestPoll = 0;
   var latestInbox = 0;
   var latestGroups = 0;
@@ -434,7 +436,7 @@
      that failed, was cancelled or was scoped, says its message instead. The finish reads in the
      reader's local time. While the line describes the whole run whose changes the page counted
      (state.changes), the count ends it, · 1,546 prices changed, in the tint a changed cell takes
-     (changed; spec 2026-11-23 refresh experience, 4.2). */
+     while the count is fresh (changed; spec 2026-11-23 refresh experience, 4.2). */
   function lastLine(last) {
     if (!last) return ['No refresh has run yet.'];
     var c = last.calibration;
@@ -453,13 +455,17 @@
     return line.concat(changed(last));
   }
 
-  /* The count of what the run `last` changed, · and its words in a span of class is-changed,
-     where the page counted it for that run; else nothing. The count stands until the line
-     describes another run, or the page is loaded again: it is kept nowhere else (4.2). */
+  /* The count of what the run `last` changed, · and its words in a span, where the page counted
+     it for that run; else nothing. The span takes the tint's class, fb-changed, only while the
+     count is fresh, so the tint plays once, as the rows land, and not again when the line is
+     drawn anew (back from the company page, which draws none). The words stand until the line
+     describes another run, or the page is loaded again: they are kept nowhere else (4.2). */
   function changed(last) {
     var c = state.changes;
     if (!c || c.id !== last.id) return [];
-    return [' · ', h('span', { key: 'changes', className: 'is-changed' }, changeWords(c))];
+    return [' · ', h('span', {
+      key: 'changes', className: c.fresh ? 'fb-changed' : null
+    }, changeWords(c))];
   }
 
   /* The count's words: 1,546 prices changed, 37 values changed, both where both moved; where
@@ -711,7 +717,8 @@
      count follows; the Inbox view sets onInbox(items), which each of the header's own reads
      calls; onChanged({ prices, values }), which the screen's reload calls as the rows a run's
      end read land, marked, keeps their count for the status line where the run followed was a
-     run of the whole screen that ended done (spec 2026-11-23 refresh experience, 4.2). */
+     run of the whole screen that ended done, fresh for MARK_MS, as the rows' marks are, then
+     drawn once more without its tint (spec 2026-11-23 refresh experience, 4.2). */
   P.show = show;
   P.onShow = {};
   P.listId = null;
@@ -723,9 +730,16 @@
   P.onChanged = function (counts) {
     var ended = state.ended;
     if (!ended || ended.status !== 'done') return;
-    state.changes = {
-      id: ended.id, kind: ended.kind, prices: counts.prices, values: counts.values
+    var changes = {
+      id: ended.id, kind: ended.kind, prices: counts.prices, values: counts.values, fresh: true
     };
+    state.changes = changes;
+    clearTimeout(freshTimer);
+    freshTimer = setTimeout(function () {
+      freshTimer = null;
+      changes.fresh = false;
+      render();
+    }, P.MARK_MS);
     render();
   };
 

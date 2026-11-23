@@ -556,8 +556,10 @@ def test_a_whole_run_that_ended_done_adds_its_count(
     """4.2: after a run of the whole screen that ended done, the status line counts what the
     page's own comparison found, in the tint the changed cells take; a price refresh that moved
     nothing says no price changed. A run of named companies and a run that did not end done add
-    no sentence. The count stands after the marks are taken off (MARK_MS), until the next run."""
-    *_, landed, ticked = _trace(
+    no sentence. The count's words stand after the marks are taken off (MARK_MS), until the next
+    run; its tint goes with the marks, so it plays once: drawn again, back from the company page,
+    which draws no line, the count has none."""
+    *_, landed, ticked, page, back = _trace(
         [
             LANDED,
             _screen(_rows()),
@@ -565,14 +567,20 @@ def test_a_whole_run_that_ended_done_adds_its_count(
             _ended_run(kind, symbols, status),
             _screen(_rows(moved, revalued)),
             TICK,
+            _show("company", "MGCO"),
+            _show("screen"),
         ]
     )
-    for step in (landed, ticked):
+    assert page["changes"] is None
+    for step in (landed, ticked, back):
         if words is None:
-            assert step["changes"] is None and "changed" not in step["status"]
+            assert step["changes"] is None and step["tinted"] is None
+            assert "changed" not in step["status"]
         else:
             assert step["status"].endswith(" · " + words)
             assert step["changes"] == words
+    if words is not None:
+        assert (landed["tinted"], ticked["tinted"], back["tinted"]) == (True, False, False)
 
 
 def test_the_rows_a_run_changed_are_marked_until_the_marks_are_taken_off() -> None:
@@ -600,7 +608,7 @@ def test_the_rows_a_run_changed_are_marked_until_the_marks_are_taken_off() -> No
         ]
     )
     assert landed["marked"] == [["BBB", -1]]
-    assert landed["waits"] == [30000, 1300]
+    assert landed["waits"] == [30000, 1300, 1300]  # the marks, then the count's tint
     assert ticked["marked"] == [] and ticked["waits"] == []
     assert sorted_["marked"] == [] and sorted_["waits"] == []
 

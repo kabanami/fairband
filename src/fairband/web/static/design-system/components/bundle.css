@@ -1155,7 +1155,7 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* fairband: the end signal (spec 2026-11-23 refresh experience, 4.2 and 4.8) */
 @keyframes fb-changed { from { background-color: color-mix(in srgb, var(--border) 45%, transparent); } to { background-color: transparent; } }
 @keyframes fb-gone { from { opacity: 1; } to { opacity: 0; } }
-.is-changed { animation: fb-changed 1.2s ease-out; }
+.fb-changed { animation: fb-changed 1.2s ease-out; }
 .fb-screen__move { color: var(--ink-muted); font-size: 10px; margin-right: 4px; animation: fb-gone 1.2s ease-out forwards; }
 .fb-run__seg { transition: width 200ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .fb-run__seg { transition: none; } }

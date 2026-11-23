@@ -200,7 +200,7 @@ function page() {
   };
 }
 
-// The head's price as a run's end marks it: whether it takes is-changed, and the arrow's words.
+// The head's price as a run's end marks it: whether it takes fb-changed, and the arrow's words.
 function priceMark() {
   const tree = companyRoot().drawn;
   const [head] = tree ? classed(tree, 'app-company__head') : [];
@@ -208,7 +208,7 @@ function priceMark() {
   const [price] = classed(head, 'figure-lg');
   const [move] = classed(price, 'fb-screen__move');
   return {
-    changed: price.props.className.split(' ').includes('is-changed'),
+    changed: price.props.className.split(' ').includes('fb-changed'),
     move: move ? textOf(move) : null,
   };
 }

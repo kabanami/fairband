@@ -36,8 +36,9 @@
 // holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
 // header marks, the header's views as [id, label], the hash, whether its right slot holds the
 // finder, and what the bar under it draws: its class, the status region's words, the words of the
-// count of what a run changed (the region's is-changed span, null for none), whether Details ▾
-// stands beside them and whether its menu is open, whether the run's bar is drawn, and the notice;
+// count of what a run changed (the region's span keyed `changes`, null for none) and whether that
+// span takes the tint's class, fb-changed (null for no span), whether Details ▾ stands beside
+// them and whether its menu is open, whether the run's bar is drawn, and the notice;
 // then the FIND and the filters of the table the screen's root last drew and its rows a run's end
 // marked, each [ticker, priceMove] (null before it draws one), the Statistics table's names, each
 // [name, the link's href, or null for plain text] (null before it draws one), and, on a press of a
@@ -230,8 +231,7 @@ for (const step of steps) {
   const header = rootOn('header').drawn;
   const bar = [...elements(rootOn('controls').drawn)];
   const [status] = bar.filter((e) => e.props.role === 'status');
-  const [changes] = [...elements(status)]
-    .filter((e) => String(e.props.className || '').split(' ').includes('is-changed'));
+  const [changes] = [...elements(status)].filter((e) => e.props.key === 'changes');
   const [notice] = bar.filter((e) => e.type === 'p');
   const drawn = table();
   const cells = names();
@@ -251,6 +251,8 @@ for (const step of steps) {
     bar: rootOn('controls').drawn.props.className,
     status: status ? textOf(status) : null,
     changes: changes ? textOf(changes) : null,
+    tinted: changes ? String(changes.props.className || '').split(' ').includes('fb-changed')
+      : null,
     details: bar.some((e) => e.type === window.Fairband.Button && textOf(e) === 'Details ▾'),
     menu: bar.some((e) => String(e.props.className || '').split(' ').includes('fb-menu--filters')),
     run: bar.some((e) => e.type === window.Fairband.RunProgress),

@@ -1534,7 +1534,7 @@
   var DEFAULT_COLUMNS = ['ticker', 'name', 'phase', 'band', 'mechanical',
                          'reviewed', 'price', 'designation'];
 
-  // fairband: the cell `cell` of the column `key`, its class list given is-changed where the row's
+  // fairband: the cell `cell` of the column `key`, its class list given fb-changed where the row's
   // `changed` names the column's figure, the tint that fades as a run ends (spec 2026-11-23
   // refresh experience, 4.2): the Fair band's for either end, `fairLow` or `fairHigh`, every other
   // column's for its own key. A row with no `changed` draws its cells as they are.
@@ -1542,7 +1542,7 @@
     var changed = r.changed;
     if (!changed || !cell || cell.type !== 'td') return cell;
     if (!(key === 'band' ? changed.fairLow || changed.fairHigh : changed[key])) return cell;
-    return React.cloneElement(cell, { className: cx(cell.props.className, 'is-changed') });
+    return React.cloneElement(cell, { className: cx(cell.props.className, 'fb-changed') });
   }
 
   // fairband: a column's catalog entry by its key; null for a key the catalog does not know.

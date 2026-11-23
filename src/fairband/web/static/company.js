@@ -365,7 +365,7 @@
           line ? h('p', { className: 'caption app-company__sub' }, line) : null)),
       h('div', { className: 'app-company__side' },
         h('div', { className: 'app-company__quote' },
-          h('p', { className: moved ? 'figure-lg is-changed' : 'figure-lg' },
+          h('p', { className: moved ? 'figure-lg fb-changed' : 'figure-lg' },
             moved && moved.move ? h('span', { className: 'fb-screen__move', 'aria-hidden': 'true' },
               moved.move > 0 ? '▲' : '▼') : null,
             money(dollars(r.price))),

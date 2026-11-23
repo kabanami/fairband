@@ -586,7 +586,7 @@ export interface ScreenRow {
   covered?: { at: string; actor: string; expired: boolean } | null;
   /**
    * fairband: the figures a run changed on the row, by their keys, each `true` (spec 2026-11-23
-   * refresh experience, 4.2): the cell of each changed column takes the class `is-changed`, a
+   * refresh experience, 4.2): the cell of each changed column takes the class `fb-changed`, a
    * tint that fades in 1.2 seconds; the Fair band's cell takes it for `fairLow` or `fairHigh`.
    * `priceMove` is the price's direction where it moved between two numbers, `1` up and `-1`
    * down: ▲ or ▼ before the price, which fades with the tint. The page sets both as the rows a
