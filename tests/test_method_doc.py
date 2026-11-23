@@ -820,6 +820,25 @@ def test_a_review_is_made_held_and_read_again() -> None:
     assert REVIEW_METHOD == "fairband-review/2"
 
 
+def test_review_again_is_the_third_act() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.6: 14.6 names Review again as the third act that
+    makes a review, an agent's (``review_again``) or the owner's, says it runs the recompute of an
+    override's write with its refusals, and that with no override applied it clears the held
+    review."""
+    reviews = _section(14)
+    held = reviews[reviews.index("### 14.6") : reviews.index("### 14.7")]
+    for words in (
+        "Three acts make one",
+        "makes the review again with no change of an input",
+        "the agents' `review_again` tool",
+        '"review made again on snapshot <id>"',
+        '"review cleared: no override applies"',
+        '"no review for <symbol>"',
+    ):
+        assert words in held, words
+    assert "Two acts make one" not in held
+
+
 def test_a_held_value_s_state_and_its_sentences() -> None:
     """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
     sentences, says which stay and which can end, and what the row and the detail carry; 4.10

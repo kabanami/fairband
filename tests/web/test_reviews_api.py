@@ -38,10 +38,10 @@ from fairband.policy import Policy
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
 from fairband.policy.tax import TaxTable
 from fairband.store.db import connect
-from fairband.store.ledger import Writer
+from fairband.store.ledger import Writer, entries
 from fairband.store.overrides import drop_override, insert_override, set_review
 from fairband.store.refreshes import create_refresh, finish_refresh, latest_deciles, save_deciles
-from fairband.store.reviews import insert_review
+from fairband.store.reviews import held_row, insert_review, latest_review, set_held_state
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 from fairband.web import reviews_api
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, PRINCIPAL_HEADER
@@ -530,6 +530,107 @@ def test_the_reviews_list_gives_the_held_state_and_each_kind(client: TestClient)
         None,
     )
     assert held["reviewId"] == review["id"] and held["readAgainAt"] is None
+
+
+def _again(client: TestClient, headers: dict[str, str] = AGENT, symbol: str = "AAPL") -> Any:
+    return client.post(f"/api/companies/{symbol}/review", headers=headers)
+
+
+@pytest.mark.parametrize(("headers", "who"), [(AGENT, "agent"), (HEADER, "owner")])
+def test_review_again_makes_the_review_on_the_latest_snapshot(
+    client: TestClient, db_path: Path, headers: dict[str, str], who: str
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.6: an agent or the owner makes the review again
+    with no change of an input. It is the review over the overrides still applied on the latest
+    snapshot: a made review, which the company holds from there with an empty state, so what the
+    review gives today takes the held value's place. The ledger names who did it, and the answer
+    is an override write's."""
+    made = _post(client, BELIEF_8)["review"]
+    snapshot_id = client.get("/api/companies/AAPL").json()["snapshot"]["id"]
+    with closing(connect(db_path)) as conn:  # a refresh read it again, and the held value is old
+        held = held_row(conn, "AAPL")
+        assert held is not None
+        read = replace(
+            held,
+            read_again_at=NOW,
+            newer_period=date(2026, 12, 26),
+            reading_value=made["value"],
+            early_at=NOW.date(),
+        )
+        set_held_state(conn, read)
+        conn.execute("UPDATE reviews SET value = '1.0' WHERE id = ?", (made["id"],))
+        conn.commit()
+    assert client.get("/api/companies/AAPL/reviews/latest").json()["value"] == 1.0
+    r = _again(client, headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert set(body) == {"review", "bridge", "dropped"}
+    review = body["review"]
+    assert review["id"] != made["id"] and review["value"] == made["value"]
+    assert (review["kind"], review["snapshotId"], body["dropped"]) == ("made", snapshot_id, [])
+    assert [line["tag"] for line in body["bridge"]] == ["growth.belief"]
+    with closing(connect(db_path)) as conn:
+        held = held_row(conn, "AAPL")
+        newest = entries(conn, "AAPL")[0]
+    assert held is not None
+    assert (held.review_id, held.read_again_at, held.newer_period, held.early_at) == (
+        review["id"],
+        None,
+        None,
+        None,
+    )
+    assert held.reading_value is None
+    assert (newest.kind, newest.principal, newest.ref_table, newest.ref_id) == (
+        "review",
+        who,
+        "reviews",
+        review["id"],
+    )
+    assert newest.summary == f"review made again on snapshot {snapshot_id}"
+    assert client.get("/api/companies/AAPL/reviews/latest").json()["id"] == review["id"]
+    held_state = client.get("/api/companies/AAPL/reviews").json()["held"]
+    assert (held_state["state"], held_state["reasons"]) == ("current", [])
+
+
+def test_review_again_with_no_override_clears_the_review(client: TestClient, db_path: Path) -> None:
+    """Spec 5.6, Review Focus 4: after a refresh dropped its last override a company still holds
+    its review. Review again finds no override applied and clears the held review, with its
+    ledger row: the row is mechanical again, and a second call finds no review."""
+    override = _post(client, BELIEF_8)["override"]["id"]
+    with closing(connect(db_path)) as conn:  # as a refresh drops one: the held review stays
+        drop_override(conn, override, "the input the override corrected changed", NOW)
+        assert latest_review(conn, "AAPL") is not None
+    r = _again(client, HEADER)
+    assert (r.status_code, r.json()) == (200, {"review": None, "bridge": [], "dropped": []})
+    with closing(connect(db_path)) as conn:
+        assert latest_review(conn, "AAPL") is None and held_row(conn, "AAPL") is None
+        newest = entries(conn, "AAPL")[0]
+    assert (newest.kind, newest.principal, newest.summary) == (
+        "review",
+        "owner",
+        "review cleared: no override applies",
+    )
+    assert client.get("/api/companies/AAPL/reviews/latest").status_code == 404
+    again = _again(client, HEADER)
+    assert (again.status_code, again.json()) == (404, {"detail": "no review for AAPL"})
+
+
+def test_review_again_is_refused_without_a_review_and_under_changed_settings(
+    client: TestClient, db_path: Path
+) -> None:
+    """Spec 5.6: Review again is refused for a company that holds no review, and it runs the
+    recompute of an override's write with its refusals: under changed settings the held review
+    stays as it is."""
+    r = _again(client)
+    assert (r.status_code, r.json()) == (404, {"detail": "no review for AAPL"})
+    made = _post(client, BELIEF_8)["review"]
+    saved = client.put("/api/settings", json={"changes": {"required_return": 0.1}}, headers=HEADER)
+    assert saved.status_code == 200
+    r = _again(client)
+    assert (r.status_code, r.json()) == (409, {"detail": "settings changed: run a revalue"})
+    with closing(connect(db_path)) as conn:
+        held = held_row(conn, "AAPL")
+    assert held is not None and held.review_id == made["id"]
 
 
 def test_a_drop_recomputes_or_clears_the_review(client: TestClient) -> None:

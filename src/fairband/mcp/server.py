@@ -121,6 +121,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "moat_set",  # spec 2026-11-19 8.6
     "override_add",
     "override_drop",
+    "review_again",  # spec 2026-11-23 held reviewed value, 5.6
     "secondary_valuation",
     "sensitivity",
     "derive",
@@ -599,6 +600,14 @@ def build_server(client: FairbandClient) -> MCPServer:
     )
     def override_drop(override_id: int, reason: str) -> dict[str, Any]:
         return write(lambda: client.delete(f"/api/overrides/{override_id}", {"reason": reason}))
+
+    @server.tool(
+        description="Make the company's review again on its latest snapshot, over the overrides"
+        " still applied and with no change of an input; with none applied the held review is"
+        " cleared."
+    )
+    def review_again(symbol: str) -> dict[str, Any]:
+        return write(lambda: client.post(_company(symbol, "review"), {}))
 
     @server.tool(
         description="Value the company a second way by a standard discounted cash flow where"

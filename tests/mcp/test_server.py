@@ -94,6 +94,7 @@ SPEC_TOOLS = (
     "moat_set",  # spec 2026-11-19 8.6, before the overrides
     "override_add",
     "override_drop",
+    "review_again",  # spec 2026-11-23 held reviewed value, 5.6
     "secondary_valuation",
     "sensitivity",
     "derive",
@@ -211,6 +212,7 @@ WRITES: dict[str, dict[str, Any]] = {
         "lifetime": "lasting",
     },
     "override_drop": {"override_id": 99, "reason": "the filing was restated"},
+    "review_again": {"symbol": "AAPL"},
     "secondary_valuation": {
         "symbol": "AAL",  # refused: the secondary valuation is the fallback (plan 3)
         "parts": [
@@ -321,8 +323,9 @@ def test_every_spec_tool_is_registered(api: FairbandClient) -> None:
     # GuruFocus's series and its tool went (spec 2026-11-19 6.3): multiples_history serves the
     # series Fairband builds from FMP's data.
     assert "pe_history" not in TOOL_NAMES
-    # the agent's moat verdict (spec 2026-11-19 8.6): 55 tools again
-    assert len(TOOL_NAMES) == 55
+    # the agent's moat verdict (spec 2026-11-19 8.6): 55 tools again; Review again (spec
+    # 2026-11-23 held reviewed value, 5.6): 56
+    assert len(TOOL_NAMES) == 56
     for tool in tools:  # one sentence each
         description = tool.description or ""
         assert description.endswith(".") and ". " not in description, tool.name
@@ -744,6 +747,11 @@ def test_a_refusal_is_the_api_s_sentence(api: FairbandClient) -> None:
     assert locked["override"]["state"] == "refused-locked"  # the rest of the answer, beside it
     assert _call(server, "override_drop", WRITES["override_drop"]) == {
         "refused": "no override 99",
+        "status": 404,
+    }
+    # Review again posts to the company's review route: the API's sentence for one that holds none
+    assert _call(server, "review_again", WRITES["review_again"]) == {
+        "refused": "no review for AAPL",
         "status": 404,
     }
 

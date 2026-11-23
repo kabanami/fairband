@@ -367,6 +367,12 @@ and store nothing:
   the rest, or cleared when none is left. It answers `{override, review, bridge, dropped}`,
   `dropped` as `override_add`'s: dropping a `phase` override drops the overrides only its route
   read.
+- `review_again(symbol)`: make the company's review again on its latest snapshot, over the
+  overrides still applied and with no change of an input. The review it writes is the one the
+  company holds from there, so what the review gives today takes the held value's place. It
+  answers `{review, bridge, dropped}`, as `override_add` does without the override. With no
+  override applied it clears the held review and answers `review` none: the row is mechanical
+  again. Refused, "no review for <symbol>", for a company that holds none.
 - `secondary_valuation(symbol, reason, evidence, drivers?, parts?, debt?, cash?)`: the fallback
   where neither the route nor your review values the company: value the company by the standard
   discounted cash flow from your `drivers`, or from your own free-cash-flow path in `parts`,

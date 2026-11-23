@@ -576,6 +576,57 @@ def add_review_routes(
             review_id, dropped = recompute(conn, found.symbol, snapshot, current)
             return answer(conn, override_id, reviewed=review_id is not None, dropped=dropped)
 
+    @app.post("/api/companies/{symbol}/review")
+    def review_again(symbol: str, writer: WriterOf) -> dict[str, Any]:
+        """Make the company's review again on its latest snapshot, over the overrides still
+        applied and with no change of an input (spec 2026-11-23 held reviewed value, 5.6): an
+        agent's write or the owner's. It runs the recompute of an override's write, with its
+        refusals, and writes a made review, which the company holds from there, with the ledger
+        row of who did it; with no override applied it clears the held review, and the row is
+        mechanical again. The answer is an override write's, without the override. 404 for a
+        company that holds no review."""
+        at = clock()
+        with closing(conn_factory()) as conn, transaction(conn, immediate=True):
+            symbol = exchange_symbol(symbol)
+            snapshot = snapshot_of(conn, symbol)
+            if held_row(conn, symbol) is None:
+                raise HTTPException(404, f"no review for {symbol}")
+            current = effective(conn, policy)
+            require_current(current, snapshot)
+            review_id, dropped = recompute(conn, symbol, snapshot, current)
+            if review_id is None:
+                summary = "review cleared: no override applies"
+                record(
+                    conn,
+                    writer,
+                    at,
+                    "review",
+                    symbol,
+                    None,
+                    None,
+                    snapshot_id=snapshot.id,
+                    summary=summary,
+                )
+            else:
+                summary = f"review made again on snapshot {snapshot.id}"
+                record(
+                    conn,
+                    writer,
+                    at,
+                    "review",
+                    symbol,
+                    "reviews",
+                    review_id,
+                    snapshot_id=snapshot.id,
+                    summary=summary,
+                )
+            review = None if review_id is None else latest_review(conn, symbol)
+            return {
+                "review": None if review is None else review_json(review),
+                "bridge": [] if review is None else bridge_json(review),
+                "dropped": [{"id": o.id, "tag": o.tag, "reason": why} for o, why in dropped],
+            }
+
     @app.get("/api/companies/{symbol}/overrides")
     def overrides(symbol: str) -> dict[str, Any]:
         with closing(conn_factory()) as conn:
