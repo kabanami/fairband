@@ -1372,7 +1372,12 @@ def test_controls_js_one_line_status_and_details_menu() -> None:
     # the popover follows the bundle's menu markup, and a run closes it
     assert "className: 'fb-screen__cols app-details'" in script
     assert "'aria-expanded': state.detailsOpen ? 'true' : 'false'" in script
-    assert "if (body.refresh !== null) {\n          state.detailsOpen = false;" in script
+    assert (
+        "if (body.refresh !== null) {\n"
+        "          /* the rows as the run began, which its end's marks are set against (4.2) */\n"
+        "          if (!alive) P.baseline();\n"
+        "          state.detailsOpen = false;"
+    ) in script
     # the line starts at the kind, as spec 6.1 writes it
     assert "Last refresh: " not in script
     assert "var line = [last.kind + ' ' + last.status + (when ? ' ' : ''), when];" in script

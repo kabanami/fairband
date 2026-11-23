@@ -128,8 +128,10 @@
      none is; never while the page is hidden but as it loads, and at once as it shows again. The
      read as the page loads goes while it is hidden too, a tab the browser restored in the
      background, so the page knows the run its rows were read under and follows a run that ends
-     before it is first shown. An answer with a run alive draws its bar; where it is the page's
-     first answer, the rows were read under the run before, so the run's end is followed. An
+     before it is first shown. An answer with a run alive draws its bar; where no run was alive at
+     the answer before, the run is first seen, and the rows are kept as its baseline
+     (FairbandPage.baseline), against which its end is marked (4.2); where it is the page's first
+     answer, the rows were read under the run before, so the run's end is followed. An
      answer with none alive follows the runs that ended (followRuns). A read that fails keeps the
      run it knew, and so the lock, with Keep reading in the layer (keeps) until a read answers
      again (4.1). */
@@ -145,6 +147,8 @@
         if (state.notice && state.notice.fromPoll) state.notice = null; /* it answers again */
         state.running = body.refresh;
         if (body.refresh !== null) {
+          /* the rows as the run began, which its end's marks are set against (4.2) */
+          if (!alive) P.baseline();
           state.detailsOpen = false; /* the run bar replaces the line */
           if (state.seen === null) state.seen = body.refresh.id - 1;
         } else {

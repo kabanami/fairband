@@ -89,6 +89,13 @@
   var latestList = 0;
   var latestDetail = 0;
   var markTimer = null; /* takes off the marks a run's end set (unmarkLater) */
+  /* The rows held as a run was first seen alive, { screen, list }, against which the rows its end
+     reads are marked, each part dropped as its marked rows land; null while none is held
+     (baseline). */
+  var before = null;
+  /* A marked read of the Screen's rows, or of the list's, is out or was overtaken by a newer one:
+     the next rows of that part to land are marked (load, loadList). */
+  var marking = { screen: false, list: false };
 
   function loadColumns() {
     try {
@@ -228,8 +235,9 @@
   }
 
   /* What controls.js uses: the screen's reload when a refresh ends, reload(true), which marks what
-     the run changed and hands its count to onChanged, which controls.js sets (spec 2026-11-23
-     refresh experience, 4.2), the write helpers and a refused write's sentence and its reason
+     the run changed and hands its count to onChanged, which controls.js sets, and baseline, which
+     keeps the rows as a run is first seen alive for the marks of its end (spec 2026-11-23 refresh
+     experience, 4.2), the write helpers and a refused write's sentence and its reason
      (refusalDetail), the GET helper, the local-time helper, whether a launch is followed
      (following), the phase numbers, a work item's open states and
      filterScreen, by which the Statistics view opens the Screen on a group's filter; and the
@@ -280,7 +288,7 @@
      rows (listRows) and the marks of a run's end (marks) are here for the tests, which read them
      in node (tests/web/page.mjs and tests/web/moat.mjs). */
   window.FairbandPage = {
-    reload: load, marks: marks, MARK_MS: MARK_MS,
+    reload: load, marks: marks, MARK_MS: MARK_MS, baseline: baseline,
     api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
@@ -314,19 +322,23 @@
 
   /* The screen's rows in the Screen's sort; only the newest read lands. The list follows every
      reload (loadList). With `mark` true, a run's end (controls.js), the rows that land are marked
-     against those the page holds (marks), the count of what changed goes to onChanged, which
-     controls.js sets, where the page held rows to count against, and the marks come off after
-     MARK_MS (unmarkLater; spec 2026-11-23 refresh experience, 4.2). Any other argument marks
-     nothing. */
+     (marks) against the baseline, the rows held as the run was first seen alive, where one is
+     held, else against those the page holds (against); the count of what changed goes to
+     onChanged, which controls.js sets, where there were rows to count against, and the marks come
+     off after MARK_MS (unmarkLater; spec 2026-11-23 refresh experience, 4.2). A marked read that a
+     newer read overtakes (a sort just after the run's end) hands its mark on: the next rows to
+     land are marked. Any other argument marks nothing of its own. */
   function load(mark) {
     var request = ++latest;
+    if (mark === true) marking.screen = true;
     getJson(screenPath(state.sort))
       .then(function (body) {
         if (request !== latest) return;
         var held = state.rows;
         state.rows = body.rows.map(localRow);
-        if (mark === true && held) {
-          var got = marks(state.rows, held);
+        var base = marking.screen ? against('screen', held) : null;
+        if (base) {
+          var got = marks(state.rows, base);
           state.rows = got.rows;
           unmarkLater();
           var page = window.FairbandPage;
@@ -349,23 +361,31 @@
      one's sentence goes. The newest read lands in list.rows; a failed one's sentence stands in
      list.error, which the list shows in its table's place and the Screen never does, until a
      later read lands (onList reads again as the page shows again). With `mark` true, a run's end,
-     the rows that land are marked against the list's rows held, as the Screen's are (load). */
+     the rows that land are marked against the baseline's list rows, else the list's rows held, as
+     the Screen's are (load), and a marked read overtaken hands its mark on. Where no read of its
+     own goes, the list drawn from the Screen's rows or not shown, its mark and its baseline go. */
   function loadList(mark) {
     var list = state.list;
+    if (mark === true) marking.list = true;
     if (sameSort(list.sort, state.sort)) {
       latestList++;
       list.error = null;
+      if (marking.list) against('list', null);
       return;
     }
-    if (!state.onList) return;
+    if (!state.onList) {
+      if (marking.list) against('list', null);
+      return;
+    }
     var request = ++latestList;
     getJson(screenPath(list.sort))
       .then(function (body) {
         if (request !== latestList) return;
         var held = list.rows;
         list.rows = body.rows.map(localRow);
-        if (mark === true && held) {
-          list.rows = marks(list.rows, held).rows;
+        var base = marking.list ? against('list', held) : null;
+        if (base) {
+          list.rows = marks(list.rows, base).rows;
           unmarkLater();
         }
         list.error = null;
@@ -418,8 +438,30 @@
     return { rows: rows, prices: prices, values: values };
   }
 
+  /* The baseline of a run's marks (spec 2026-11-23 refresh experience, 4.2): the Screen's rows
+     and the list's as they are now, kept where none is held. controls.js calls it as a run is
+     first seen alive, so a read of the rows in the run's middle (a sort, a watchlist write, after
+     Keep reading or under a run the page did not start), which brings in rows the run already
+     rewrote, takes nothing from the marks and the count at its end. */
+  function baseline() {
+    if (before === null) before = { screen: state.rows, list: state.list.rows };
+  }
+
+  /* The rows the marked rows of `part`, 'screen' or 'list', are set against as they land: the
+     baseline's, where it holds that part's rows, else `held`, the rows the page held (4.2). The
+     part's marking ends, and its baseline is dropped; the baseline goes with its last part. */
+  function against(part, held) {
+    marking[part] = false;
+    if (before === null) return held;
+    var rows = before[part];
+    delete before[part];
+    if (!('screen' in before) && !('list' in before)) before = null;
+    return rows || held;
+  }
+
   /* The marks a run's end set, taken off the Screen's rows and the list's MARK_MS after the last
-     rows landed, in one draw: the tint and the arrow have faded by then. */
+     rows landed, in one draw: the tint and the arrow have faded by then (spec 2026-11-23 refresh
+     experience, 4.2). */
   function unmarkLater() {
     clearTimeout(markTimer);
     markTimer = setTimeout(function () {

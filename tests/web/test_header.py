@@ -639,6 +639,60 @@ def test_the_rows_a_run_changed_are_marked_until_the_marks_are_taken_off() -> No
     assert sorted_["marked"] == [] and sorted_["waits"] == []
 
 
+PRICED = [{"ticker": t, "price": 10.0, "watchlists": []} for t in ("AAA", "BBB", "CCC")]
+DESC = "/api/screen?sort=ticker&dir=desc"
+
+
+def _priced(**prices: float) -> list[dict[str, Any]]:
+    """The three rows of PRICED, newest sort first (ticker desc), with ``prices`` over theirs."""
+    return [row | {"price": prices.get(row["ticker"], row["price"])} for row in PRICED[::-1]]
+
+
+def test_a_run_s_end_marks_against_the_rows_from_before_the_run() -> None:
+    """4.2, the final review's round: a read of the rows in a run's middle (here a sort, which
+    Keep reading or a run the page did not start leaves open, as does a watchlist write) brings in
+    rows the run already rewrote. The end marks and counts against the rows the page held as the
+    run was first seen alive (FairbandPage.baseline), not against those, so the count is the
+    run's whole."""
+    *_, middle, _, _, landed = _trace(
+        [
+            LANDED,
+            _screen(PRICED),
+            TICK,
+            _alive(67, "price", None),
+            {"do": "sort", "column": "ticker"},
+            _screen(_priced(BBB=9.0), DESC),
+            TICK,
+            _ended_run("price", None, "done"),
+            _screen(_priced(BBB=9.0, CCC=12.0), DESC),
+        ]
+    )
+    assert middle["marked"] == []
+    assert landed["marked"] == [["CCC", 1], ["BBB", -1]]
+    assert landed["changes"] == "2 prices changed"
+
+
+def test_a_read_started_just_after_a_run_s_end_lands_marked() -> None:
+    """A read of the rows started in the moment between a run's end and its rows landing (a sort)
+    overtakes the marked read, whose answer is dropped: the mark is handed on, so the rows that
+    land are marked, with the count."""
+    *_, ended, _, dropped, landed = _trace(
+        [
+            LANDED,
+            _screen(PRICED),
+            TICK,
+            _ended_run("price", None, "done"),
+            {"do": "sort", "column": "ticker"},
+            _screen(PRICED, SCREEN_URL),
+            _screen(_priced(BBB=9.0, CCC=12.0), DESC),
+        ]
+    )
+    assert ended["reads"] == [SCREEN_URL]
+    assert dropped["marked"] == [] and dropped["changes"] is None
+    assert landed["marked"] == [["CCC", 1], ["BBB", -1]]
+    assert landed["changes"] == "2 prices changed"
+
+
 def test_the_list_s_own_read_marks_its_rows() -> None:
     """The watchlist page reads its rows in its own sort where it differs from the Screen's (spec
     2026-11-22 7.1): that read, after a run ended, marks them the same way."""
