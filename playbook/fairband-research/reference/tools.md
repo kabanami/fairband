@@ -39,7 +39,9 @@ be left out.
   follow the reviewed value where `reviewed` is filled; `mechanical` is the engine's value. Where
   `reviewed` is a review's value, the row's `flags` and `flagCount` are the review's flags too;
   where it is a secondary valuation's, they stay the snapshot's, since a secondary valuation has
-  none. A row's `warnings` are the plain words of the snapshot's quality warnings, never the
+  none. Where `reviewed` is filled, `freshness` and `validUntil` are the held record's, and
+  `expiredEarly` is true while it expired early; `freshness` then reads `expired`. A row's
+  `warnings` are the plain words of the snapshot's quality warnings, never the
   review's, and `marked` is whether the page marks the mechanical value: `warning_mark_min`
   warnings or more and no reviewed value. Every money column is in US dollars, on a company in
   another currency too: its EPV, cross-check value and required revenue are the route's figures
@@ -53,9 +55,14 @@ be left out.
   `actor`); the day it was judged; on a class the user or an agent set, the class before it and
   the reason; and `fileClass`, the class Fairband's file holds for the company, `null` where it
   holds none. `moatClass` is `null` for a company with no class, which the engine refuses "no
-  moat class"; `moat` is the class in force. `review`: the current review on the latest
-  snapshot, or on one a price refresh repriced,
-  `null` without one; where it has a value, its `flags` are the review's own, each with its `code`,
+  moat class"; `moat` is the class in force. `review`: the review the company holds, on the
+  latest snapshot, `null` without one. Its `held` is the state of that review: `state`
+  (`current`, `aging`, `expired`, `expired-early`), `earlyAt`, `reasons`, the sentences of the
+  reasons it expired early for, `reading` and `readingRefusal`, what the review gives on today's
+  data, `readingLine`, that reading's sentence where it is no reason, and `validUntil`, the end
+  of the review's own window. A `secondary` that holds its row carries `held` the same way,
+  with no reading. Where the review has a value, its `flags` are the review's own, each with
+  its `code`,
   `word` and `sentence`, as the screen's row shows them, so you read what your inputs settled; on a
   refused review `flags` is `null`. The `result`'s flags stay the snapshot's. `priceNeeds`: where
   the price is well above the value, one or two sentences on what the price needs of the business
@@ -133,8 +140,14 @@ be left out.
   any; cite one's figures as `guidance:<id>/midpoint` and its siblings. A record that names a
   currency other than that of the year before's statement has no step.
 - `overrides(symbol)`: the company's overrides, newest first, each with its state.
-- `reviews(symbol)`: the company's reviews, newest first, each with its bridge and without its
-  result. The review's intermediates, cited as `review:<id>/intermediates/<path>`, are in the
+- `reviews(symbol)`: `held`, the state of the review the company holds (as `company` gives it,
+  with `reviewId`, `madeAt` and `readAgainAt`, the time a refresh first read it again; `null`
+  for a company that holds none), and `reviews`, the company's reviews, newest first, each with
+  its `kind`, `made`, `held` or `reading`, its bridge and without its result. A `made` review is
+  an act's: an override written or dropped, a moat class written, or `review_again`. A `held`
+  one is a copy a refresh carried onto a newer snapshot. A `reading` is what the review gives on
+  a newer snapshot, which replaces nothing. The review's intermediates, cited as
+  `review:<id>/intermediates/<path>`, are in the
   `result` of the review that `override_add` and `override_drop` answer.
 - `secondary(symbol)`: the company's secondary valuations, newest first, each with `fxRate`, the
   rate it ran at, 1 for a company in US dollars: its totals are in the reporting currency, its

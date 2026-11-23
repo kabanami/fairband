@@ -358,7 +358,22 @@ A snapshot refused "no moat class" has no route result to read: no value, no lev
 flags and no `priceNeeds`. Judge the moat now and record your verdict, as the first two paragraphs
 of step 10 say, then read the valuation below on the new snapshot. In step 10, record it again only
 where the thesis changes it. The overrides this step names are written in step 10, after the moat
-verdict; one written earlier stays applied, and its review follows the new snapshot.
+verdict; one written earlier stays applied, and the moat write makes the review again on the
+new snapshot.
+
+Start from the review the company holds. `company` gives it as `review`, with `held`: its `state`
+(`current`, `aging`, `expired` or `expired-early`), `earlyAt`, the day a refresh first found a
+reason, the `reasons` as sentences, and `reading`, what the review gives on today's data. A
+reviewed value holds until the next review: a refresh does not change it, so the figure you read
+is the one the last review made. Where the state is `expired-early`, read each reason. For an
+override that no longer applies, decide again from the filing: write it again for the new period
+where the judgment still holds, or leave it out and say why in the report. Where a newer period is
+on file, read the new filing before you keep a period-tied input. Where the reading is outside
+the held value's fair band, find what moved it before you accept it. End the step with a review
+made on the latest snapshot: each applied `override_add` and each `override_drop` makes one, and
+where you change no input `review_again` makes it over the overrides still applied. A report and
+a sensitivity reading are refused on a review that a refresh read again since it was made, "the
+review was made before the latest refresh: make it again".
 
 Read the engine's result in the answer of `company`: the value, the levels (the buy level, the fair
 band and the trim level), the inputs with their tags (DATA, RULE or JUDGMENT), the intermediates,

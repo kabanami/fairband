@@ -573,10 +573,8 @@ def test_a_reviewed_rows_flags_follow_the_review() -> None:
     ) in _tool_entry("screen")
     company = _tool_entry("company")
     for words in (
-        (
-            "`review`: the current review on the latest snapshot, or on one a price refresh"
-            " repriced, `null` without one;"
-        ),
+        "`review`: the review the company holds, on the latest snapshot, `null` without one.",
+        "Where the review has a value, its `flags` are the review's own",
         (
             "its `flags` are the review's own, each with its `code`, `word` and `sentence`, as the"
             " screen's row shows them"
@@ -1020,7 +1018,7 @@ def test_the_valuation_is_read_on_the_class_the_verdict_set() -> None:
     # verdict writes (the final review, M8)
     written = (
         "The overrides this step names are written in step 10, after the moat verdict; one written"
-        " earlier stays applied, and its review follows the new snapshot."
+        " earlier stays applied, and the moat write makes the review again on the new snapshot."
     )
     assert written in steps[8]
     assert steps[8].index(written) < steps[8].index("Read the engine's result in the answer of")
@@ -3330,3 +3328,34 @@ def _shape(text: str) -> str:
     """The summary page's shape: the fenced block after ``## The summary page``."""
     after = text[text.index("## The summary page") :]
     return re.search(r"^```\n(.*?)^```", after, re.MULTILINE | re.DOTALL)[1]
+
+
+def test_the_valuation_starts_from_the_held_review_s_state() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.8: the valuation step starts by reading the state
+    of the review the company holds and its reasons, decides again from the filing for each
+    override that no longer applies, and ends with a review made on the latest snapshot. The
+    references say what ``company`` and ``reviews`` give, and how a cite of a review a refresh
+    read again is refused. No line says a review follows its snapshot."""
+    skill = " ".join(SKILL.read_text(encoding="utf-8").split())
+    step = skill[skill.index("### 8. The valuation") : skill.index("### 9. The debate")]
+    for words in (
+        "Start from the review the company holds.",
+        "A reviewed value holds until the next review",
+        "For an override that no longer applies, decide again from the filing",
+        "End the step with a review made on the latest snapshot",
+        "`review_again` makes it over the overrides still applied",
+        '"the review was made before the latest refresh: make it again"',
+    ):
+        assert words in step, words
+    assert "its review follows the new snapshot" not in skill
+    assert "the next review asks again" in skill  # the period-tied sentence stays true
+    cites = " ".join((SKILL.parent / "reference" / "citations.md").read_text("utf-8").split())
+    assert "A `review:` cite must be of the review the company holds" in cites
+    assert '"the review was made before the latest refresh: make it again"' in cites
+    tools = " ".join(TOOLS.read_text(encoding="utf-8").split())
+    for words in (
+        "`held`, the state of the review the company holds",
+        "each with its `kind`, `made`, `held` or `reading`",
+        "`expiredEarly`",
+    ):
+        assert words in tools, words

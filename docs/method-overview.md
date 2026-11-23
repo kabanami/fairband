@@ -88,8 +88,10 @@ An agent, an AI model the user connects, changes the method's inputs through ove
 one of twenty-four inputs, with a reason and evidence. The moat class is not one: an agent records
 its verdict on the class, with its reasons, in each review, and the company is valued again. The
 hurdle rate, terminal growth and reported figures are locked. The engine computes the reviewed
-value beside the mechanical one. Where neither exists, it can compute a secondary valuation from
-the agent's inputs. (method 4.9, 14, 14.1 to 14.5, 15)
+value beside the mechanical one. A reviewed value holds until the next review: a refresh reads
+the review again and does not change it, and a held value that no longer fits the data reads
+Expired early, with its reasons. Where neither exists, the engine can compute a secondary
+valuation from the agent's inputs. (method 4.9, 14, 14.1 to 14.6, 15)
 
 ## Limits
 

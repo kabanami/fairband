@@ -904,6 +904,18 @@ def test_the_page_s_line_and_the_research_tab_s_list() -> None:
         assert words in held, words
 
 
+def test_the_overview_says_a_reviewed_value_holds() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.11: the overview's part on what an agent can change
+    says the reviewed value holds until the next review, and points at 14.6."""
+    overview = " ".join((METHOD.parent / "method-overview.md").read_text(encoding="utf-8").split())
+    assert (
+        "A reviewed value holds until the next review: a refresh reads the review again and does "
+        "not change it"
+    ) in overview
+    assert "reads Expired early, with its reasons" in overview
+    assert "(method 4.9, 14, 14.1 to 14.6, 15)" in overview
+
+
 def test_a_held_value_s_state_and_its_sentences() -> None:
     """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
     sentences, says which stay and which can end, and what the row and the detail carry; 4.10

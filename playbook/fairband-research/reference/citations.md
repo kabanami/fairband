@@ -200,10 +200,13 @@ those derivations again, and the secondary valuation too where neither the route
 values the company; where either does, the server refuses one. A `finding:`, a `guidance:`, a
 `kill:` and a `multiple:` ref rest on none, and so does a fixed number.
 
-A `review:` cite must be the company's current review: the newest review on the latest snapshot,
-or the one that snapshot reprices. Each applied override and each drop makes a new review; a
-refused override makes none. Cite the review your last applied `override_add` or your last
-`override_drop` answered. When a drop leaves no override applied, the
+A `review:` cite must be of the review the company holds: the review your last applied
+`override_add`, your last `override_drop` or your `review_again` answered, or the copy of it that
+a price refresh carried onto the latest snapshot. Each applied override, each drop and each
+`review_again` makes a new review; a refused override makes none. Where a refresh that values
+ran after the review was made, the cite is refused, "the review was made before the latest
+refresh: make it again": call `review_again`, or write the override you came to write, and cite
+the review it answers. When a drop leaves no override applied, the
 company has no review: cite the snapshot. A `sensitivity:` cite goes stale the same way: a reading
 taken before your last applied override or drop is `wrong snapshot`, "the review moved". Take the
 reading again after your last override, and cite the new one.
