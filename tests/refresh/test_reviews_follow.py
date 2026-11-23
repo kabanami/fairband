@@ -276,13 +276,14 @@ def test_a_price_refresh_at_a_new_rate_moves_the_review_s_bridge_with_it(env_val
     assert after.value == pytest.approx(after.result.intermediates["value_in_currency"] / 10.0)
 
 
-def test_a_failed_review_at_a_new_rate_shows_the_repriced_snapshot_s_value(
+def test_a_failed_review_at_a_new_rate_keeps_the_mechanical_value_of_its_day(
     env_valued: Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """KRON's review failed at the revalue: a refusal with no intermediates, so it names no rate,
-    over the snapshot valued at USDSEK's 10.52. The price refresh reprices the snapshot at the
-    pair's 10.0, so its USD value moves; the refusal review on it shows that value as its
-    mechanical value, the snapshot's rate deciding, not the review's."""
+    """KRON holds no review when its review fails at the revalue: the refusal, with no
+    intermediates and so no rate, is the review KRON then holds, over the snapshot valued at
+    USDSEK's 10.52. The price refresh reprices the snapshot at the pair's 10.0, so its USD value
+    moves; the held refusal's copy takes the new price alone and keeps the mechanical value of
+    the day it was made (spec 2026-11-23 held reviewed value, 5.2)."""
     env = env_valued
     _override(env, "KRON", "growth.belief", 0.08)
 

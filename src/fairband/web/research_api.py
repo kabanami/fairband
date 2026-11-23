@@ -125,7 +125,7 @@ def agent_records(
     cited = snapshot_rows(conn, rested_on(snapshot, review, secondary, report))
     item = open_item(conn, symbol)
     table_moat = _moat(conn, symbol)
-    counted = review if review is not None and counts_on(snapshot, cited, review) else None
+    counted = review  # the review the company holds, whatever snapshot its copy stands on
     # A secondary valuation made where the route refused holds (spec 2026-11-23 held reviewed
     # value, 5.9), with its state. One made on a valued snapshot, from before the secondary route
     # refused such a call, is served while it counts on the latest snapshot, as before.

@@ -49,9 +49,9 @@ snapshot is ``skipped`` at once ("no snapshot to reprice") and never quoted. The
   is ``failed``, "reprice failed: <class>: <message>". In the repriced snapshot's transaction,
   ``multiples.log_snapshot`` logs its multiples at the quote's price as of the quote's date, the
   day's row replaced by a later reprice of the same day (spec 2026-11-06 Tier 2, 13.7), and
-  ``reviews.reprice_review`` reprices the company's current review on the snapshot repriced, if
-  it has one, at the same quote and writes it on the new snapshot (spec 2026-11-06 Tier 2, 10.5);
-  a review that cannot be repriced becomes a refusal review and the snapshot stands.
+  ``held.carry_held`` carries the review the company holds onto the new snapshot, at the same
+  quote (spec 2026-11-23 held reviewed value, 5.2); a copy whose figures cannot be rebuilt takes
+  the plain move, and the snapshot stands.
 - ``done``: the totals, and the calibration ``{"total", "repriced", "failed", "skipped"}`` saved
   with the record.
 

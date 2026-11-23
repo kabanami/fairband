@@ -148,3 +148,26 @@ def test_the_row_s_mark_reads_expired_early() -> None:
     the vendored design system, reads the row's ``expiredEarly`` for its words."""
     bundle = BUNDLE.read_text(encoding="utf-8")
     assert "r.expiredEarly ? 'Expired early' : FRESHNESS[f].word" in bundle
+
+
+def test_the_reviewed_cell_carries_the_mark_of_a_value_expired_early() -> None:
+    """Spec 2, the anti-goals: each reason must show on the row on the day it holds. The table's
+    Entered column, which carries the freshness mark, is not among the columns the screen opens
+    with, so the Reviewed cell carries Expired's glyph, in its colour, with the words "Expired
+    early", beside the figure of a value that expired early."""
+    bundle = BUNDLE.read_text(encoding="utf-8")
+    assert (
+        "r.expiredEarly ? h('span', { className: 'fb-mark fb-mark--expired', "
+        "title: 'Expired early' }, FRESHNESS.expired.mark) : null"
+    ) in " ".join(bundle.split())
+
+
+def test_the_line_is_set_in_the_caption_s_type() -> None:
+    """The line is a caption, as the levels' names above it are: the button takes the design
+    system's caption type, not the browser's own for a button, nor the body's."""
+    css = (STATIC / "index.html").read_text(encoding="utf-8")
+    start = css.index(".app-held__line {")
+    rule = " ".join(css[start : css.index("}", start)].split())
+    assert "font: inherit" not in rule and "font-size" not in rule
+    script = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "className: 'app-held__line caption'" in script

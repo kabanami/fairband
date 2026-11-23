@@ -270,7 +270,10 @@ def agent_fields(
     ``today`` and on ``policy`` (``held_block``), from ``held``, the company's row of the held
     reviews; ``None`` where no review fills the row."""
     fields = dict(NO_AGENT_FIELDS)
-    if review is not None and review.value is not None and counts_on(snapshot, cited, review):
+    # the review is the one the company holds (``store.reviews.latest_review``): it fills the
+    # row whatever snapshot its newest copy stands on, so a snapshot no refresh carried it onto
+    # does not hide a held value (spec 2026-11-23 held reviewed value, section 2)
+    if review is not None and review.value is not None:
         fields |= {
             "reviewed": review.value,
             "overrides": len(review.override_ids),

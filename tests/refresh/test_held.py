@@ -31,6 +31,7 @@ from fairband.engine.levels import levels_for
 from fairband.engine.overrides import Lifetime, OverrideTag, current_reading
 from fairband.engine.route import value_company
 from fairband.policy import Policy
+from fairband.refresh import reviews
 from fairband.refresh.reviews import follow_snapshot
 from fairband.store.ledger import Writer
 from fairband.store.overrides import insert_override, override_row
@@ -307,6 +308,69 @@ def test_a_failed_company_keeps_its_held_review_and_its_state(env_valued: Env) -
     assert after.price_to_value == pytest.approx(20.0 / made.value)
 
 
+def test_a_failure_while_storing_the_state_leaves_the_snapshot_and_the_held_review(
+    env_valued: Env, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The whole-branch review of 2026-11-23: an error while the facts of the state are stored
+    must not undo the company's snapshot. The refresh values the company, carries the held
+    review, logs a warning, and leaves the stored state as it was."""
+    env = env_valued
+    _override(env, "ACME", "growth.belief", 0.08)
+    made = _made(env, "ACME")
+    with closing(env.connect()) as conn:
+        before = held_row(conn, "ACME")
+
+    def falls_over(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("the facts fell over")
+
+    monkeypatch.setattr(reviews, "read_again", falls_over)
+    refresh_id = env.refresh().run("revalue")
+    snapshot = env.snapshot("ACME")
+    assert (snapshot.refresh_id, snapshot.refusal) == (refresh_id, None)
+    assert ("ACME", "valued", None) in env.items(refresh_id)
+    with closing(env.connect()) as conn:
+        current, held = latest_review(conn, "ACME"), held_row(conn, "ACME")
+    assert current is not None and held == before
+    assert (current.kind, current.snapshot_id, current.value) == ("held", snapshot.id, made.value)
+    assert any("ACME" in m and "the facts fell over" in m for m in caplog.messages)
+
+
+def test_a_failed_reading_still_marks_the_review_read_again(
+    env_valued: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole-branch review of 2026-11-23: a reading the engine cannot compute is no reason
+    and no reading, and the last good one stands; but the refresh did value the company on new
+    figures. It still stores that it read the review again, so a report is not taken on it, and
+    the newer period it found."""
+    env = env_valued
+    _override(env, "ACME", "growth.belief", 0.08)
+    made = _made(env, "ACME")
+    on_file = env.snapshot("ACME").result.intermediates["trailing_end"]
+    earlier = date.fromisoformat(on_file).replace(year=date.fromisoformat(on_file).year - 1)
+    with closing(env.connect()) as conn, conn:
+        conn.execute(
+            "UPDATE snapshots SET result = json_set(result, '$.intermediates.trailing_end', ?)"
+            " WHERE id = ?",
+            (earlier.isoformat(), made.snapshot_id),
+        )
+
+    def falls_over(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("the engine fell over")
+
+    monkeypatch.setattr(reviews, "review_company", falls_over)
+    env.refresh().run("revalue")
+    at = env.clock()
+    with closing(env.connect()) as conn:
+        current, held = latest_review(conn, "ACME"), held_row(conn, "ACME")
+        [reading] = [r for r in reviews_for(conn, "ACME") if r.kind == "reading"]
+    assert current is not None and held is not None
+    assert (current.kind, current.value) == ("held", made.value)
+    assert reading.refusal is not None and reading.refusal.startswith("review failed")
+    assert (held.read_again_at, held.newer_period) == (at, date.fromisoformat(on_file))
+    assert (held.reading_value, held.reading_refusal) == (None, None)  # no good reading yet
+    assert held.early_at == at.date()  # by the newer period
+
+
 def test_a_price_refresh_carries_the_held_review_and_rebuilds_what_follows_the_price(
     env_valued: Env,
 ) -> None:
@@ -433,6 +497,18 @@ def test_a_foreign_held_review_moves_with_the_rate(env_valued: Env) -> None:
     assert (line["old"], line["new"]) == (was["old"], was["new"])  # the readings stay
     assert line["delta"] == pytest.approx(was["delta"] * 10.52 / 9.5)
     sums(plain)
+    # at a refresh that values, the copy stands at the new snapshot's own rate too
+    env.clock.now += timedelta(days=1)
+    env.refresh().run("revalue")
+    snapshot = env.snapshot("KRON")
+    with closing(env.connect()) as conn:
+        revalued = latest_review(conn, "KRON")
+    assert revalued is not None and revalued.snapshot_id == snapshot.id
+    rate = snapshot.result.intermediates["fx_rate"]
+    assert revalued.result.intermediates["value_in_currency"] == in_sek
+    assert revalued.result.intermediates["fx_rate"] == rate
+    assert revalued.value == pytest.approx(in_sek / rate)
+    sums(revalued)
 
 
 def test_a_two_for_one_split_halves_the_held_value_and_changes_no_word(

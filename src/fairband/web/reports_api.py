@@ -127,6 +127,7 @@ from fairband.refresh.inputs_statements import (
 from fairband.refresh.peers import peer_figures
 from fairband.reports.charts import chart_tables
 from fairband.reports.check import (
+    READ_AGAIN,
     check_judgments,
     check_sections,
     cited_records,
@@ -159,7 +160,7 @@ from fairband.store.reports import (
     reports_for,
 )
 from fairband.store.research import add_kill_criterion, add_news_item
-from fairband.store.reviews import latest_review
+from fairband.store.reviews import held_row, latest_review
 from fairband.store.secondary import latest_secondary, no_secondary
 from fairband.store.settings import read_overlay
 from fairband.store.snapshots import latest_snapshot
@@ -375,6 +376,13 @@ def add_report_routes(
             review = latest_review(conn, symbol)
             if review is not None and not same_snapshot(conn, review.snapshot_id, latest.id):
                 review = None
+            held = held_row(conn, symbol)
+            if held is not None and (held.read_again_at is not None or review is None):
+                # the report's judgments and its Appendix A rest on the review the company
+                # holds, cited or not: one a refresh read again, or one that does not stand on
+                # the latest snapshot, is made again first (spec 2026-11-23 held reviewed value,
+                # 5.8)
+                raise HTTPException(409, READ_AGAIN)
             secondary = latest_secondary(conn, symbol)
             if secondary is not None and not same_snapshot(conn, secondary.snapshot_id, latest.id):
                 secondary = None

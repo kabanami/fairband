@@ -73,8 +73,9 @@ record with it.
 
 A symbol's failure never stops the run: an exception from its fetch, assembly or valuation gives it
 a refusal snapshot ("data fetch failed: <class>: <message>" or "valuation failed: <class>:
-<message>", the keys scrubbed), marks it ``failed`` and is logged as a warning. A company with an
-applied override gets that refusal as its review too (``reviews.review_refusal``). A failure
+<message>", the keys scrubbed), marks it ``failed`` and is logged as a warning. A company that
+holds a review has it carried onto the refusal snapshot, its state as it was; one with an applied
+override and no held review gets that refusal as its review (``reviews.review_refusal``). A failure
 logs nothing: its price is a stored quote or a quote the run fetched, and a day without a valued
 snapshot has no multiples to log.
 

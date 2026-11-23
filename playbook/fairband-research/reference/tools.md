@@ -67,6 +67,9 @@ be left out.
   refused review `flags` is `null`. The `result`'s flags stay the snapshot's. `priceNeeds`: where
   the price is well above the value, one or two sentences on what the price needs of the business
   beside what the route holds, read under your review when it has a value; `null` otherwise.
+  `priceNeeds` is also `null` for a held review whose result holds `held_as_made`: a refresh
+  carried it under another method or policy version, or after a split, and its figures that
+  follow the price are those of the day it was made; make the review again to read it.
   `warnings`: the plain words of the snapshot's quality warnings, never the review's; `marked`:
   whether the page marks the mechanical value, `warning_mark_min` warnings or more and no
   reviewed value. An input scaled for a split is an estimate under the method `split-scaled` with a

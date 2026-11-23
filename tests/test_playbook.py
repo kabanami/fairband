@@ -3359,3 +3359,14 @@ def test_the_valuation_starts_from_the_held_review_s_state() -> None:
         "`expiredEarly`",
     ):
         assert words in tools, words
+
+
+def test_the_tools_reference_says_when_a_held_review_has_no_price_needs() -> None:
+    """The whole-branch review of 2026-11-23: ``priceNeeds`` is none for a held review whose
+    figures that follow the price are kept as made, which an agent must not read as a price that
+    needs nothing; the reference says so and how to get the sentence."""
+    tools = " ".join(TOOLS.read_text(encoding="utf-8").split())
+    assert (
+        "`priceNeeds` is also `null` for a held review whose result holds `held_as_made`" in tools
+    )
+    assert "make the review again to read it" in tools

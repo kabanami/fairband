@@ -1352,8 +1352,13 @@
       } },
     { key: 'reviewed', head: 'Reviewed', num: true, basis: true,
       cell: function (r) {
+        // fairband: a held reviewed value that expired early (spec 2026-11-23 held reviewed
+        // value, 5.3 and 5.7) shows on the row in the columns the screen opens with: Expired's
+        // glyph and colour beside the figure, with the words in its title.
         return h('td', { className: 'fb-num figure' },
-          r.reviewed == null ? h('span', { className: 'fb-screen__none' }, '—') : money(r.reviewed));
+          r.reviewed == null ? h('span', { className: 'fb-screen__none' }, '—') : money(r.reviewed),
+          r.expiredEarly ? h('span', { className: 'fb-mark fb-mark--expired',
+            title: 'Expired early' }, FRESHNESS.expired.mark) : null);
       } },
     { key: 'price', head: 'Price', num: true, locked: true,
       cell: function (r) { return h('td', { className: 'fb-num figure' }, money(r.price)); } },

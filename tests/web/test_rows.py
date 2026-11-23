@@ -330,9 +330,11 @@ def test_an_owners_report_names_the_owner(client: TestClient, db_path: Path) -> 
     assert covered == {"at": "2026-11-01T08:00:00+00:00", "actor": "owner", "expired": False}
 
 
-def test_a_review_on_an_older_snapshot_is_not_the_rows_reviewed_value(
+def test_a_review_on_an_older_snapshot_is_still_the_rows_reviewed_value(
     client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
+    """The review the company holds fills the row through a reprice and through a revalue alike
+    (spec 2026-11-23 held reviewed value, section 2), with the new mechanical value beside it."""
     _, value = _review(db_path, policy, results)
     cited = results["AAPL"]
     assert cited.value is not None
@@ -342,7 +344,11 @@ def test_a_review_on_an_older_snapshot_is_not_the_rows_reviewed_value(
     assert (aapl["reviewed"], aapl["overrides"], aapl["price"]) == (value, 1, 160.0)  # a reprice
     _snapshot(db_path, replace(repriced, value=cited.value + 1.0))  # a revalue
     aapl = _rows(client)["AAPL"]
-    assert (aapl["reviewed"], aapl["overrides"], aapl["mechanical"]) == (None, 0, cited.value + 1.0)
+    assert (aapl["reviewed"], aapl["overrides"], aapl["mechanical"]) == (
+        value,
+        1,
+        cited.value + 1.0,
+    )
 
 
 def test_a_cleared_review_leaves_no_reviewed_value(
@@ -396,6 +402,25 @@ def test_a_held_row_reads_expired_early_and_keeps_its_number(
         "readingLine": None,
         "validUntil": row["validUntil"],
     }
+
+
+def test_a_held_review_shows_whatever_snapshot_its_newest_copy_stands_on(
+    client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 held reviewed value, section 2: the Reviewed column shows the value of the
+    company's last made review, whatever a refresh computes. A snapshot of other figures written
+    with no copy of the held review on it, as before the first refresh after the migration or
+    after a carry that failed, does not hide the held value: the row and the detail show it, at
+    the latest price, beside the new mechanical value."""
+    _, value = _review(db_path, policy, results)
+    cited = results["AAPL"]
+    assert cited.value is not None
+    _snapshot(db_path, replace(cited, value=cited.value + 1.0, price=140.0))
+    row = _rows(client)["AAPL"]
+    assert (row["reviewed"], row["mechanical"], row["price"]) == (value, cited.value + 1.0, 140.0)
+    assert row["priceToValue"] == pytest.approx(140.0 / value)
+    detail = client.get("/api/companies/AAPL").json()
+    assert detail["review"]["value"] == value and detail["review"]["held"]["reasons"] == []
 
 
 def test_a_reviewed_row_s_window_is_its_held_review_s(
@@ -676,9 +701,8 @@ def test_a_revalued_row_returns_to_the_engines_levels(
 ) -> None:
     """AAL's secondary valuation fills its refused row; a revalue then values the row, its mature
     peers found. The secondary still fills Reviewed, expired early (spec 2026-11-23 held reviewed
-    value, 5.9), with its own band, and Mechanical shows the engine's new value. A snapshot of
-    other data written with no refresh, which carries no review, leaves AAPL's review on the
-    older snapshot: the row shows the engine's value and levels."""
+    value, 5.9), with its own band, and Mechanical shows the engine's new value. AAPL's held
+    review keeps its row the same way through a snapshot of other data."""
     assert _rows(client)["AAL"]["reviewed"] is not None
     inputs = replace(young_growth_inputs(), symbol="AAL")
     valued = value_company(inputs, universe_deciles(), policy, TODAY)
@@ -699,11 +723,9 @@ def test_a_revalued_row_returns_to_the_engines_levels(
     assert cited.value is not None
     _snapshot(db_path, replace(cited, value=cited.value + 1.0))  # a revalue
     aapl = _rows(client)["AAPL"]
-    assert (aapl["reviewed"], aapl["mechanical"]) == (None, cited.value + 1.0)
-    # the engine's value, with the levels and the word read on it (the stored levels are the
-    # older value's here, which this stand-in for a revalue kept)
-    assert _levels(aapl) == _mechanical(_newest(db_path, "AAPL"), policy)
-    assert aapl["fairLow"] == pytest.approx((cited.value + 1.0) * policy.fair_band[0])
+    # the held review keeps the row: its value and band, with the engine's new value beside it
+    assert (aapl["reviewed"], aapl["mechanical"]) == (value, cited.value + 1.0)
+    assert aapl["fairLow"] == pytest.approx(value * policy.fair_band[0])
 
 
 def _in_force(value: float, moat: Moat, price: float | None, policy: Policy) -> dict[str, Any]:

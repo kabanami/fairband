@@ -134,11 +134,14 @@ def read_again(
     trailing_end: date | None,
     policy: Policy,
     at: datetime,
+    failed: bool = False,
 ) -> None:
     """Store the facts of the state of the review ``symbol`` holds after a refresh that values
     wrote ``mechanical``, the new snapshot's result, whose trailing period ends on
     ``trailing_end`` (module docstring). ``reading`` is the refresh's review over the overrides
-    still applied, ``None`` with none left. Nothing for a company that holds none."""
+    still applied, ``None`` with none left. ``failed`` says the reading could not be computed:
+    it is no reading, whatever was written, and the last good one stands, while the other facts
+    are stored all the same. Nothing for a company that holds none."""
     held = held_row(conn, symbol)
     made = None if held is None else review_row(conn, held.review_id)
     if held is None or made is None:
@@ -150,7 +153,9 @@ def read_again(
         newer = trailing_end
     dropped = _system_drops(conn, made.override_ids)
     value, refusal, when = held.reading_value, held.reading_refusal, held.reading_at
-    if reading is None:
+    if failed:
+        pass  # no reading: the last good one stands
+    elif reading is None:
         value, refusal, when = mechanical.value, mechanical.refusal, at
     elif not (reading.refusal or "").startswith(READING_FAILED):
         value, refusal, when = reading.value, reading.refusal, at

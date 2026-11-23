@@ -217,11 +217,17 @@ def follow_snapshot(
                 clear_held(conn, symbol)
             return written
         carry_held(conn, symbol, snapshot_id, policy, refresh_id, clock)
-        if not failed:
-            reading = None if written is None else review_row(conn, written)
-            trailing = inputs.trailing
-            trailing_end = None if trailing is None else trailing.period_end
-            read_again(conn, symbol, reading, result, trailing_end, policy, clock())
+        trailing = inputs.trailing
+        trailing_end = None if trailing is None else trailing.period_end
+        try:
+            # in a savepoint, as the carry is: an error here must not undo the snapshot. A
+            # reading that failed is passed too: it is no reading and no reason, but the refresh
+            # did read the review again, and the newer period it found is a fact.
+            with savepoint(conn, "held"):
+                reading = None if written is None else review_row(conn, written)
+                read_again(conn, symbol, reading, result, trailing_end, policy, clock(), failed)
+        except Exception as exc:  # noqa: BLE001 - the snapshot and the held review stand
+            logger.warning("%s: the held review's state was not stored: %r", symbol, exc)
         current = latest_review_on(conn, snapshot_id)
         return None if current is None else current.id
 

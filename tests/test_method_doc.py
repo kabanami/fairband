@@ -916,6 +916,25 @@ def test_the_overview_says_a_reviewed_value_holds() -> None:
     assert "(method 4.9, 14, 14.1 to 14.6, 15)" in overview
 
 
+def test_the_rules_the_whole_branch_review_added() -> None:
+    """The whole-branch review and the acceptance of the held reviewed value, 2026-11-23: the
+    held review shows whatever snapshot its copy stands on; a failed reading still marks the
+    review read again; the facts are stored in a savepoint; a report is refused whole on a
+    review a refresh read again; and the Reviewed cell carries the mark."""
+    text = METHOD.read_text(encoding="utf-8")
+    reviews = _section(14)
+    held = reviews[reviews.index("### 14.6") : reviews.index("### 14.7")]
+    for words in (
+        "whatever snapshot its newest copy stands on",
+        "The refresh still stores that it read the review again, and the newer period it found",
+        "each run in a savepoint of the snapshot's transaction",
+        "The Reviewed cell of the screen's row carries Expired's glyph",
+    ):
+        assert words in held, words
+    cite = next(x for x in text.splitlines() if x.startswith("- `wrong snapshot`:"))
+    assert "is refused whole, 409, with the same sentence, cite or no cite" in cite
+
+
 def test_a_held_value_s_state_and_its_sentences() -> None:
     """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
     sentences, says which stay and which can end, and what the row and the detail carry; 4.10

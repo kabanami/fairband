@@ -511,8 +511,11 @@ def test_records_on_an_older_snapshot_leave_the_detail(
     results: dict[str, ValuationResult],
     secondaries: dict[str, int],
 ) -> None:
-    """The screen's rule (``rows.counts_on``): a reprice keeps the review and the secondary, a
-    revalue leaves both on the snapshot they were made on; the report stays the company's."""
+    """A reprice keeps the review and the secondary valuation. A snapshot of other figures keeps
+    the review, which the company holds whatever snapshot its copy stands on (spec 2026-11-23
+    held reviewed value, section 2), and leaves this secondary valuation, made on a valued
+    snapshot, on the snapshot it was made on (``rows.counts_on``); the report stays the
+    company's."""
     _review(db_path, policy, results)
     _report(db_path, "AAPL", "hold", _cited_sections(_latest(db_path, "AAPL")))
     cited = results["AAPL"]
@@ -526,7 +529,7 @@ def test_records_on_an_older_snapshot_leave_the_detail(
     with closing(connect(db_path)) as conn:
         insert_snapshot(conn, replace(repriced, value=cited.value + 1.0), 1, clock=lambda: NOW)
     body = _detail(client, "AAPL")
-    assert (body["review"], body["secondary"]) == (None, None)
+    assert body["review"] is not None and body["secondary"] is None
     assert body["report"] is not None and body["report"]["stance"] == "hold"
 
 

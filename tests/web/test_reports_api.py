@@ -44,7 +44,7 @@ from fairband.store.ledger import Writer
 from fairband.store.moat import file_moat, set_moat, set_snapshot
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import latest_refresh
-from fairband.store.reviews import insert_review
+from fairband.store.reviews import held_row, hold_review, insert_review, set_held_state
 from fairband.store.snapshots import insert_snapshot, snapshot_row
 
 pytestmark = pytest.mark.usefixtures("secondaries", "verdicts")
@@ -87,6 +87,9 @@ def _refused_body(sid: int) -> dict[str, Any]:
 def _ledger(client: TestClient, symbol: str = "AAPL") -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = client.get(f"/api/companies/{symbol}/ledger").json()["entries"]
     return found
+
+
+READ_AGAIN = "the review was made before the latest refresh: make it again"
 
 
 def test_a_clean_submission_publishes_and_completes_the_item(
@@ -770,6 +773,36 @@ def test_a_refused_row_the_review_values_needs_no_secondary(
     assert (a["secondary"], a["noSecondary"]) == (None, REVIEW_VALUES)
     text = client.get(f"/api/reports/{report['id']}/markdown").text
     assert text.split("### Secondary valuation\n\n", 1)[1].split("\n", 1)[0] == REVIEW_VALUES
+
+
+def test_a_report_on_a_review_a_refresh_read_again_is_refused_whole(
+    client: TestClient,
+    db_path: Path,
+    policy: Policy,
+    results: dict[str, ValuationResult],
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.8, and the whole-branch review of 2026-11-23: a
+    report needs a held review that no refresh has read again, whether or not it cites the
+    review, since its judgments and its Appendix A rest on that review. Read again, the submit is
+    refused whole and nothing is stored; once the review is made again it publishes."""
+    sid = _snapshot_id(client, "AAL")
+    with closing(connect(db_path)) as conn:
+        cited = snapshot_row(conn, sid)
+        assert cited is not None
+        revalued = replace(results["AAL"], data_date=results["AAL"].data_date + timedelta(days=1))
+        latest = insert_snapshot(conn, revalued, cited.refresh_id, clock=lambda: NOW)
+    record_verdict(db_path, "AAL", latest, "None")
+    review_id = _aal_review(db_path, policy, results, latest, 0.2)
+    with closing(connect(db_path)) as conn:
+        held = held_row(conn, "AAL")
+        assert held is not None
+        set_held_state(conn, replace(held, read_again_at=NOW))
+    refused = _submit(client, _refused_body(latest), "AAL")
+    assert (refused.status_code, refused.json()) == (409, {"detail": READ_AGAIN})
+    assert client.get("/api/companies/AAL/reports").json()["reports"] == []
+    with closing(connect(db_path)) as conn:
+        hold_review(conn, "AAL", review_id, NOW)  # made again: the state starts empty
+    assert _published(client, _refused_body(latest), "AAL")["reviewId"] == review_id
 
 
 def test_an_older_secondary_on_a_refused_row_the_review_values_is_the_reports_only_when_cited(
