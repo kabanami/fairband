@@ -232,3 +232,31 @@ other: the refresh layer's fade, the run bar's fill, and the highlight of a chan
 | 2026-11-23 | The founder: the two bugs (4.3, 4.4) are built with the rest of the plan, not ahead of it. |
 | 2026-11-23 | On the mockup (version 3) the founder asked that the highlight fade out, asked about green and red for a price's direction, and chose: "grey with the arrow looks good, and the new scale looks good". The mockup is `refresh-and-meter-v3.html` under `.superpowers/brainstorm/`, not committed: it shows real prices. |
 | 2026-11-23 | Claude's calls: the layer for a whole run whoever started it; the 30-second cycle; the count kept on the page alone; a company page left alone by a run that did not cover it; Statistics on the shown value; `#groups` kept; the scale at 0.45 to 1.55 times the value; the labels anchored outward; the three motions of 4.8. |
+
+## 8. What the build changed
+
+Rulings made while the plan was built (2026-11-23 and 24), each a reading of a section above; no
+figure moves.
+
+- 4.1: the focus goes to the panel, not to a button, so a key pressed by reflex neither cancels a
+  run nor lifts the lock; Tab reaches the buttons. The address put back while locked is the one
+  the page held as the lock began. Keep reading also stands on any run after a status read that
+  failed, so the reader is never held behind the layer while the server does not answer.
+- 4.2: a company valued for the first time, its price none before, is tinted and counted, with no
+  arrow. The count's own tint plays once, as the rows land.
+- 4.2: the arrow takes no room: a box of no width and no height on the price's baseline, its
+  glyph 4px before the price. Set in the line, it widened the price's column, and every column of
+  the Screen moved about 11px as the arrows came and went (the look in a browser, 2026-11-24).
+- 4.3: a run the server lists as running while it reports no run alive (one of the command-line
+  tool) is not followed until its record says it ended. It draws no bar and no layer.
+- 4.3: with no run alive, a status read that failed says "The page asks again every 30 seconds."
+- 4.5: an industry group none of whose rows has a sector has no link.
+- 4.7: the scale also widens for a level within 0.10 times the value of an end, so an outer zone
+  keeps a width. Under policy v19 no meter widens.
+- 4.7: a pinned reviewed marker takes no break mark; the break is for a pinned price alone. No
+  caller passes a reviewed value beyond the scale.
+- 4.7: a marker inside the scale stands where its figure lies, but never nearer an end than the
+  7px a pinned one takes. A price at 0.45 or 1.55 times the value stood on the track's end, its
+  dot 6.5px off the meter (the look, 2026-11-24).
+
+The look of section 5 is `2026-11-23-refresh-experience-mockup/` (`README.md`, `look.mjs`).

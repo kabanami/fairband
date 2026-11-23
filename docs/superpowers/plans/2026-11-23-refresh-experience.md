@@ -349,3 +349,15 @@ def test_cancel_in_the_layer_asks_the_server_and_is_disabled_after()
 - [ ] **Step 5: Run the full check, then commit.**
 
 After Task 8: ask the founder, in one message, for the merge, the restart of the live server, the push, and the word to leave the worktree.
+
+---
+
+## Corrections from the build
+
+Where the build differs from the steps above; the design's section 8 holds the rulings.
+
+1. Task 6: the tint's class is `fb-changed`, not `is-changed`, which the Methodology page already uses for a setting that differs from its default.
+2. Task 7: the focus goes to the panel, not to its first enabled button; `show` keeps no address (the address is kept as the lock begins); the layer keeps its last panel when off, so the panel fades out with the scrim.
+3. Review Focus 3: a row whose price was none is marked and counted, with no arrow; spec 4.2 leaves out only a row that is new or gone.
+4. Task 6, from the look (Task 8): `.fb-screen__move` is `display: inline-block; width: 0; direction: rtl; text-indent: 4px; line-height: 0`, with no margin. The rule of Step 3 widened the price's column as the arrows came, and every column of the Screen moved about 11px.
+5. Task 2, from the look (Task 8): a marker inside the scale is placed at `clamp(7px, X%, calc(100% - 7px))`, not at `X%`, so a price at an end of the scale keeps its dot on the meter.
