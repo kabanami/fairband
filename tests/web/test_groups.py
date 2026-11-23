@@ -1,9 +1,9 @@
 """The groups, ``GET /api/groups``, which the Methodology page counts by phase, on a temporary
 migrated database: the screen's rows grouped by sector, phase or cap band, with each group's count,
 the companies with a value, the median price ÷ value and the share below value (price ÷ value
-under the second designation edge, 0.85). The phase is the classifier's, whatever phase a review
-shows on the row (spec 2026-11-23 refresh experience, 4.4). The Statistics view reads its own
-route, on the figures the Screen shows (``test_statistics.py``).
+under the second designation edge, 0.90 under policy v19). The phase is the classifier's,
+whatever phase a review shows on the row (spec 2026-11-23 refresh experience, 4.4). The Statistics
+view reads its own route, on the figures the Screen shows (``test_statistics.py``).
 
 The universe of one full refresh admits six companies:
 

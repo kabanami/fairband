@@ -157,12 +157,18 @@
   /* A group's filter from the Statistics view (controls.js; spec 2026-11-23 refresh experience,
      4.5): the Screen's filters cleared and `filter` set over them, keeping the industries the
      menu lists from the loaded rows (listedFilters), the Screen's own FIND cleared, and the Screen
-     view open; the watchlist page's FIND and filters stay as they are. */
+     view open at its top; the watchlist page's FIND and filters stay as they are. Both places the
+     Screen was left at go to 0: the one kept as the list took the table (screenTop), which the
+     Screen's table takes as it mounts again, and the one the browser keeps on the scroller while
+     the Statistics view hides it, which it gives back as the Screen shows. */
   function filterScreen(filter) {
     state.query = '';
     state.filters = listedFilters(Object.assign({}, F.EMPTY_FILTERS, filter), state.rows || []);
+    state.screenTop = 0;
     render();
     window.FairbandPage.show('screen');
+    var main = document.querySelector('.app-main');
+    if (main) main.scrollTop = 0;
   }
 
   function getJson(url) {
@@ -472,7 +478,8 @@
     }, MARK_MS);
   }
 
-  /* `rows` without their marks; a row that carries none stays as it is. Null for null. */
+  /* `rows` without their marks, `changed` and `priceMove`, once their tint has faded (spec
+     2026-11-23 refresh experience, 4.2); a row that carries none stays as it is. Null for null. */
   function unmarked(rows) {
     return rows && rows.map(function (r) {
       if (!r.changed) return r;
@@ -1101,13 +1108,13 @@
      screen's row shows, a review's where the review has a value (spec 2026-11-23 refresh
      experience, 4.4), the moat stamp (moatStamp) and the chip of the owner's or an agent's class
      (moatChip), with no control (spec 2026-11-19 8.8), the name and, for a company in another
-     currency or an ADR, the line that says what its figures are in
-     (currencyLine, spec 2026-11-10 7.4); one caption, the sector and the industry (sectorLine);
-     the company brief whole, which the page's style cuts at six lines; the value band, the meter
-     and under it the four levels in the screen's words (levelRows), or where the meter draws no
-     band a refused row's sentence in its place; then Company page, a link to the company page,
-     and Request research with its menu, the server's refusal under it and the open item's line.
-     The rest of what a company has is on its page. */
+     currency or an ADR, the line that says what its figures are in (currencyLine, spec 2026-11-10
+     7.4); one caption, the sector and the industry (sectorLine); the company brief whole, which
+     the page's style cuts at six lines; the value band, the meter and under it the four levels in
+     the screen's words (levelRows), or where the meter draws no band a refused row's sentence in
+     its place; then Company page, a link to the company page, and Request research with its
+     menu, the server's refusal under it and the open item's line. The rest of what a company has
+     is on its page. */
   function sections(body) {
     var r = body.result;
     var phase = PHASE_NUMBER[body.phase];

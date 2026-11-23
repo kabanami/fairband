@@ -119,13 +119,15 @@
   }
   /* Over the whole page, the header included; it fades in and out over 150 ms with its panel,
      which it keeps as the lock lifts, under the system's reduced-motion setting too, a fade of
-     colour being no movement (4.8). Hidden, it takes no pointer. */
+     colour being no movement (4.8). Off, it takes no pointer, while it fades out too, so a press
+     as the lock lifts reaches the page under it. */
   .app-layer {
     position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center;
     justify-content: center; background: var(--app-scrim); opacity: 0; visibility: hidden;
     transition: opacity 150ms, visibility 0s 150ms;
   }
   .app-layer.is-on { opacity: 1; visibility: visible; transition: opacity 150ms; }
+  .app-layer:not(.is-on) { pointer-events: none; }
   /* The panel on the raised surface, 400px wide, or the window's width less a 16px gutter each
      side, its border and padding inside that width. It takes the focus as the layer turns on,
      with no ring: its edge already shows where the focus is. */

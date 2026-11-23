@@ -432,9 +432,12 @@
     var reviewed = p.reviewedValue == null ? null : Number(p.reviewedValue);
 
     // fairband: the scale comes from the value, never from the price (spec 2026-11-23 refresh
-    // experience, 4.7): 0.45 to 1.55 times the fair value, widened only for a level outside it,
-    // so the fair value sits in the centre of every meter. A value at or below zero has no such
-    // scale and keeps the rule before this one: every point with 12% of padding.
+    // experience, 4.7): 0.45 to 1.55 times the fair value, widened for a level outside it or
+    // within 0.10 times the value of an end, so each level keeps a tenth of the value clear of
+    // either end and an outer zone keeps a width; under policy v19's levels none widens, and the
+    // fair value sits in the centre of every meter. A value at or below zero has no such scale
+    // and keeps the rule before this one: every point, the price and the reviewed value among
+    // them, with 12% of padding.
     var levels = [low, high].concat(buy == null ? [] : [buy], trim == null ? [] : [trim]);
     var min, max;
     if (fair > 0) {
@@ -1931,7 +1934,8 @@
               p.onOpen(r);
             } : null
           }, shown.map(function (c) {
-            // fairband: the cell sees the props (spec 2026-11-04 9.4).
+            // fairband: the cell sees the props (spec 2026-11-04 9.4); fairband: a changed figure's
+            // cell takes the tint (tinted; spec 2026-11-23 refresh experience, 4.2).
             return h(React.Fragment, { key: c.key }, tinted(c.cell(r, p), r, c.key));
           }));
         }))

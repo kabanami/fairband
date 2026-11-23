@@ -532,16 +532,18 @@ def create_app(
         refresh's record, the record the page's status line describes (``shown``: the last one,
         passing over a finished revalue of named companies, which a moat write records), the
         error the last run raised, if any, and the 20 newest runs, the newest first (``recent``,
-        by which the page follows a run that ended between two of its reads; 4.3)."""
+        by which the page follows a run that ended between two of its reads; 4.3). The records
+        only the answer with no run alive holds are read only then, not on the reads every 2
+        seconds under a run."""
         progress = None if worker is None else worker.status()
         with closing(conn_factory()) as conn:
             last = latest_refresh(conn)
+            if progress is not None:
+                run = last if last is not None and last.id == progress.refresh_id else None
+                kind, symbols = (None, None) if run is None else (run.kind, run.symbols)
+                return {"refresh": progress_json(progress, kind, symbols)}
             shown = latest_shown_refresh(conn)
             recent = recent_refreshes(conn)
-        if progress is not None:
-            run = last if last is not None and last.id == progress.refresh_id else None
-            kind, symbols = (None, None) if run is None else (run.kind, run.symbols)
-            return {"refresh": progress_json(progress, kind, symbols)}
         return {
             "refresh": None,
             "last": None if last is None else refresh_json(last),

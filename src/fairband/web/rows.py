@@ -280,17 +280,17 @@ def agent_fields(
     four levels, price ÷ value and word at the snapshot's price on ``policy``, the effective one
     (``record_standing``), on the record's own moat class: a review's result's (``moat_of``), and
     ``table_moat``, the class of the company's row of the moat table, for a secondary valuation
-    and for a review whose result holds none; ``None`` when ``reviewed`` is. ``flags`` are the review's flags when
-    the review fills ``reviewed``, else ``None``: a secondary valuation has none, and a row it
-    fills keeps the snapshot's (spec 2026-11-13 8a). ``phase`` is the name of the phase the row
-    shows (``shown_phase``) when the review fills ``reviewed``, else ``None``: a secondary
-    valuation has none, and a row it fills keeps the snapshot's (spec 2026-11-23 refresh
+    and for a review whose result holds none; ``None`` when ``reviewed`` is. ``flags`` are the
+    review's flags when the review fills ``reviewed``, else ``None``: a secondary valuation has
+    none, and a row it fills keeps the snapshot's (spec 2026-11-13 8a). ``phase`` is the name of
+    the phase the row shows (``shown_phase``) when the review fills ``reviewed``, else ``None``: a
+    secondary valuation has none, and a row it fills keeps the snapshot's (spec 2026-11-23 refresh
     experience, 4.4). ``agentStance`` is the report's word and ``covered`` its time, its actor
-    (its principal where it names none, an owner's report) and
-    whether the window of the snapshot it rests on ended before ``today`` (``window_ended``); both
-    ``None`` without a report. ``held`` is the state of the review that fills ``reviewed``, on
-    ``today`` and on ``policy`` (``held_block``), from ``held``, the company's row of the held
-    reviews; ``None`` where no review fills the row."""
+    (its principal where it names none, an owner's report) and whether the window of the snapshot
+    it rests on ended before ``today`` (``window_ended``); both ``None`` without a report.
+    ``held`` is the state of the review that fills ``reviewed``, on ``today`` and on ``policy``
+    (``held_block``), from ``held``, the company's row of the held reviews; ``None`` where no
+    review fills the row."""
     fields = dict(NO_AGENT_FIELDS)
     # the review is the one the company holds (``store.reviews.latest_review``): it fills the
     # row whatever snapshot its newest copy stands on, so a snapshot no refresh carried it onto
@@ -672,10 +672,10 @@ def group_rows(rows: Sequence[dict[str, Any]], by: str, below_value: float) -> l
     the Methodology page's count of the companies in each phase describes the classifier (spec
     2026-11-23 refresh experience, 4.4). Each group gives its row count, the rows with a value
     (``valued``), the median of price ÷ value over the valued rows with a positive price, and the
-    share of the valued rows
-    whose price ÷ value is below ``below_value``, the fair band's low end, every class's second
-    designation edge (the ``below`` and ``well-below`` bands); ``None`` for the last two when
-    they cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
+    share of the valued rows whose price ÷ value is below ``below_value``, the fair band's low
+    end, every class's second designation edge (the ``below`` and ``well-below`` bands); ``None``
+    for the last two when they cover no row. Every figure reads the engine's (mechanical) value
+    (``_group``)."""
     named = _named(rows, by, "mechanicalPhase")
     return [_group(name, members, below_value) for name, members in sorted(named.items())]
 

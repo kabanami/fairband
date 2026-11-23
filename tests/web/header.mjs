@@ -51,6 +51,13 @@
 //   {"do": "storage", "set", "clear", "throws"}  the tab's session storage takes the entries `set`,
 //                                                is emptied (`clear` true), or starts or stops
 //                                                refusing every access (`throws`)
+//   {"do": "scroll", "top"}                      the reader scrolls the table's scroller,
+//                                                .app-main, to `top`
+//   {"do": "focus", "name"}                      a control on the page named `name` (a row, a
+//                                                link) takes the focus
+//   {"do": "remove", "name"}                     the control `name` leaves the document (its row
+//                                                narrowed away); holding the focus, it hands it to
+//                                                the body, as the browser does
 // After each step and the work it sets off, the trace on stdout gains the urls fetched since the
 // step before (the reads the scripts start as they load are not counted), whether a view's panel
 // holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
@@ -72,7 +79,11 @@
 // none); whether each child of the body but the layer's mount is inert, main.app-page first; the
 // times FairbandPage.closePopups ran in the step; whether a panel the step drew took the focus
 // as it mounted: as React does, the driver hands a panel's ref a node of its own when a panel of
-// another key than the last is drawn; and the tab's session storage, its entries or "throws".
+// another key than the last is drawn; the tab's session storage, its entries or "throws"; the
+// root's own overflow style (document.documentElement.style.overflow); the element that holds
+// the focus, "body", "panel" or a control's name, the focus going from a panel to the body as
+// the layer turns inert, as the browser moves it; the place the table's scroller stands at; and
+// the place the table the screen's root last drew is handed (its `top`, null before it draws).
 //
 //   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -124,25 +135,43 @@ function classList() {
 const panels = {}; // the page's elements by id, each made once
 const documentListeners = {}; // the document's listeners by event
 const captured = new Set(); // those of them registered for the capture phase
+const scroller = { scrollTop: 0 }; // the table's scroller, .app-main
+const onPage = {}; // the controls the steps focus, by name
 const document = {
   hidden,
+  documentElement: { style: { overflow: '' } },
+  activeElement: null,
   body: {
+    name: 'body',
+    isConnected: true,
     children: [],
     appendChild(node) { document.body.children.push(node); return node; },
+    focus() {},
   },
   createElement() { return { appended: true, inert: false }; },
   getElementById(id) {
     return panels[id] || (panels[id] = { id, hidden: false, classList: classList() });
   },
-  querySelector() { return null; },
+  querySelector(selector) { return selector === '.app-main' ? scroller : null; },
   addEventListener(event, listener, options) {
     (documentListeners[event] = documentListeners[event] || []).push(listener);
     if (options === true || (options && options.capture)) captured.add(listener);
   },
 };
-// The body as index.html writes it: main.app-page, then the layer's mount after it.
+// The body as index.html writes it: main.app-page, then the layer's mount after it. The focus is
+// on the body until a step moves it.
 const main = { tag: 'main', inert: false };
 document.body.children.push(main, document.getElementById('layer'));
+document.activeElement = document.body;
+// A focusable element named `name`, in the document until a step removes it.
+function focusable(name) {
+  const element = {
+    name,
+    isConnected: true,
+    focus() { if (element.isConnected) document.activeElement = element; },
+  };
+  return element;
+}
 const location = { hash: '', pathname: '/' };
 const history = {
   replaceState(state, title, url) {
@@ -296,7 +325,13 @@ function mount() {
   mountedKey = panel.props.key;
   let focused = false;
   if (panel.props.ref) {
-    panel.props.ref({ focus() { focused = true; }, querySelector() { return null; } });
+    const node = focusable('panel');
+    node.focus = () => {
+      focused = true;
+      document.activeElement = node;
+    };
+    node.querySelector = () => null;
+    panel.props.ref(node);
   }
   return focused && panel.props.tabIndex === -1;
 }
@@ -381,6 +416,14 @@ for (const step of steps) {
     if (step.set) Object.assign(session.entries, step.set);
     if (step.clear) session.entries = {};
     if ('throws' in step) session.throws = step.throws;
+  } else if (step.do === 'scroll') scroller.scrollTop = step.top;
+  else if (step.do === 'focus') {
+    onPage[step.name] = onPage[step.name] || focusable(step.name);
+    onPage[step.name].focus();
+  } else if (step.do === 'remove') {
+    const control = onPage[step.name];
+    control.isConnected = false;
+    if (document.activeElement === control) document.activeElement = document.body;
   }
   else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
@@ -391,6 +434,12 @@ for (const step of steps) {
   const [notice] = bar.filter((e) => e.type === 'p');
   const drawn = table();
   const cells = names();
+  const focused = mount();
+  const drawnLayer = layer();
+  // the browser moves the focus off an element that turns inert: the panel of a layer drawn off
+  if (drawnLayer && drawnLayer.inert && document.activeElement.name === 'panel') {
+    document.activeElement = document.body;
+  }
   trace.push({
     do: step.do,
     reads: asked.splice(0),
@@ -422,12 +471,16 @@ for (const step of steps) {
       return [textOf(cell), link ? link.props.href : null];
     }),
     prevented,
-    layer: layer(),
+    layer: drawnLayer,
     inert: document.body.children.filter((child) => child !== panels.layer)
       .map((child) => Boolean(child.inert)),
     closed,
-    focused: mount(),
+    focused,
     storage: session.throws ? 'throws' : Object.assign({}, session.entries),
+    rootOverflow: document.documentElement.style.overflow,
+    active: document.activeElement.name,
+    scrolled: scroller.scrollTop,
+    top: drawn ? drawn.props.top : null,
   });
 }
 process.stdout.write(JSON.stringify(trace));

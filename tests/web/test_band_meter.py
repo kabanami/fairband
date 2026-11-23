@@ -1,10 +1,12 @@
 """The band meter's head says price ÷ value and the value's name in one form, as the caller gives
 it, and its caption only what the head does not (spec 2026-11-06 Tier 2, 18.2 item 2, plan 4); a
 label on the tier above the track keeps its near edge 8px off the price marker (on QCOM the
-marker's dot covered "$179.11"). The scale runs from 0.45 to 1.55 times the value, widened only for
-a level outside it; a price beyond it is pinned at its end behind a break mark, and the band's two
-labels sit outside their ticks (spec 2026-11-23 refresh experience, 4.7). The bundle runs in node
-with a stub React (``render.mjs``), so the test reads the HTML ``BandMeter`` builds."""
+marker's dot covered "$179.11"). The scale runs from 0.45 to 1.55 times the value, widened for a
+level outside it or within 0.10 times the value of an end, so each level keeps a tenth of the
+value clear of either end and an outer zone keeps a width; a price beyond it is pinned at its end
+behind a break mark, and the band's two labels sit outside their ticks (spec 2026-11-23 refresh
+experience, 4.7). The bundle runs in node with a stub React (``render.mjs``), so the test reads
+the HTML ``BandMeter`` builds."""
 
 import json
 import re

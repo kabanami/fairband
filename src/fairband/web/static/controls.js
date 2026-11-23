@@ -1,41 +1,38 @@
 /* The page's header, its status line and the Statistics view, loaded after app.js and finder.js.
    The header is the design system's AppHeader: the six views in the founder's order (Screen,
    Watchlists, Statistics, Methodology, Settings, Inbox; spec 2026-11-23 refresh experience, 4.6),
-   then in its right slot the finder (finder.js) on every view but the Screen, the refresh
-   controls and the engine stamp; the URL hash names the open view, and on the Watchlists view
-   its list, whose table is the Screen's, shown under the list's head (spec 2026-11-22 7.3).
-   Inbox carries the count of the open work items, read every thirty seconds while the page is
-   shown (spec 2026-11-06 Tier 2, 18.5). Under the header, the status
-   line: the running refresh's one run bar (the design system's RunProgress), or how the last one
-   ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the
-   company page draws the run bar and a notice alone, not the last refresh's line or Details ▾
-   (the company page's design, the decision log of 2026-11-17). The page asks
-   /api/refresh/current as it loads, hidden or not, then every 30 seconds while no refresh runs
-   and every 2 seconds while one does, never while the page is hidden (spec 2026-11-23 refresh
-   experience, 4.3). While a refresh runs, one Cancel stands where the Refresh buttons were and
-   the stamp is gone; under a run of the whole screen the tables keep their old figures at
-   ink-faint, and under a run of named companies nothing fades (4.1). A run of the whole screen
-   this page started, the reader's own press, also locks the page under the refresh layer, its
-   run bar and Cancel in a panel over a dark scrim: nothing under it answers, a change of the
-   address is put back and Escape does nothing, until the run ends or, on a long run, the reader
-   keeps reading (4.1); a whole run the page did not start, an agent's or another tab's, locks
-   nothing. When any run ends, whoever started it, the rows load again, with the open drawer, the
-   statistics when that view is open and the company page when the run covered its company; the
-   figures the run changed are marked as they land, and after a run of the whole screen that
-   ended done the status line counts them (4.2). The
-   Statistics view, once named Groups, is one plain table from /api/statistics (spec 6.3; spec
-   2026-11-23 refresh experience, 4.5), with no chart, each group's name a link that opens the
-   Screen on the group; #statistics names it, and the old #groups opens it. The company
-   page (company.js) is a
-   panel no header view names: #company/<symbol> opens its Overview, #company/<symbol>/financials
-   its Financials tab, #company/<symbol>/estimates its Estimates tab,
-   #company/<symbol>/investor-relations its Investor relations tab, with a call (/2026Q4) or
-   /filings after it, #company/<symbol>/research its Research tab on the company's latest report
-   and #company/<symbol>/research/<id> on the report with that id (the company page's design,
-   7.1; the Financials tab's design, 7.1; the Investor relations tab's design, 7.1; the Research
-   tab's design, 7.1). The report page left (the Research tab's design, 9): its
-   addresses, #report/<symbol> and #report/<symbol>/<id>, open the Research tab on the same
-   report, the hash replaced by the tab's. */
+   then in its right slot the finder (finder.js) on every view but the Screen, the refresh controls
+   and the engine stamp; the URL hash names the open view, and on the Watchlists view its list,
+   whose table is the Screen's, shown under the list's head (spec 2026-11-22 7.3). Inbox carries
+   the count of the open work items, read every thirty seconds while the page is shown (spec
+   2026-11-06 Tier 2, 18.5). Under the header, the status line: the running refresh's one run bar
+   (the design system's RunProgress), or how the last one ended in one line, its calibration's
+   breakdown behind Details ▾ (growth-routes spec 6.1); the company page draws the run bar and a
+   notice alone, not the last refresh's line or Details ▾ (the company page's design, the decision
+   log of 2026-11-17). The page asks /api/refresh/current as it loads, hidden or not, then every 30
+   seconds while no refresh runs and every 2 seconds while one does, never while the page is hidden
+   (spec 2026-11-23 refresh experience, 4.3). While a refresh runs, one Cancel stands where the
+   Refresh buttons were and the stamp is gone; under a run of the whole screen the tables keep
+   their old figures at ink-faint, and under a run of named companies nothing fades (4.1). A run of
+   the whole screen this page started, the reader's own press, also locks the page under the
+   refresh layer, its run bar and Cancel in a panel over a dark scrim: nothing under it answers, a
+   change of the address is put back and Escape does nothing, until the run ends or, on a long run,
+   the reader keeps reading (4.1); a whole run the page did not start, an agent's or another tab's,
+   locks nothing. When any run ends, whoever started it, the rows load again, with the open drawer,
+   the statistics when that view is open and the company page when the run covered its company; the
+   figures the run changed are marked as they land, and after a run of the whole screen that ended
+   done the status line counts them (4.2). The Statistics view, once named Groups, is one plain
+   table from /api/statistics (spec 6.3; spec 2026-11-23 refresh experience, 4.5), with no chart,
+   each group's name a link that opens the Screen on the group; #statistics names it, and the old
+   #groups opens it. The company page (company.js) is a panel no header view names:
+   #company/<symbol> opens its Overview, #company/<symbol>/financials its Financials tab,
+   #company/<symbol>/estimates its Estimates tab, #company/<symbol>/investor-relations its Investor
+   relations tab, with a call (/2026Q4) or /filings after it, #company/<symbol>/research its
+   Research tab on the company's latest report and #company/<symbol>/research/<id> on the report
+   with that id (the company page's design, 7.1; the Financials tab's design, 7.1; the Investor
+   relations tab's design, 7.1; the Research tab's design, 7.1). The report page left (the Research
+   tab's design, 9): its addresses, #report/<symbol> and #report/<symbol>/<id>, open the Research
+   tab on the same report, the hash replaced by the tab's. */
 (function () {
   'use strict';
 
@@ -112,6 +109,7 @@
   var shut = false; /* the page was locked at the last draw (lockPage) */
   var locks = 0; /* the locks so far: each draws a panel of its own (layerView) */
   var lastPanel = null; /* the panel the layer last drew, which it keeps as the lock lifts */
+  var focusKept = null; /* the element that held the focus as the lock began (lockPage) */
   var viewed = false; /* a view has opened (show) */
   var timer = null;
   var inboxTimer = null;
@@ -212,11 +210,13 @@
     if (state.tab === 'company' && (missing || runs.some(covers))) P.onShow.company(true);
   }
 
-  /* A run of the whole screen: a price refresh, a full refresh or a revalue, naming no company
-     (spec 2026-11-23 refresh experience, 4.1). A scoped refresh and a revalue of named companies
-     (an agent's, a moat write's) are not, nor a run whose kind the server cannot say yet. */
+  /* A run of the whole screen: a price refresh, a full refresh or a revalue, naming no company,
+     its `symbols` null (spec 2026-11-23 refresh experience, 4.1). A scoped refresh and a revalue
+     of named companies (an agent's, a moat write's) are not, nor a run whose kind the server
+     cannot say yet, nor one whose answer has no `symbols` at all, as the server sends before its
+     restart. */
   function whole(run) {
-    return run.symbols == null && WHOLE_KINDS.indexOf(run.kind) !== -1;
+    return run.symbols === null && WHOLE_KINDS.indexOf(run.kind) !== -1;
   }
 
   /* A run that ended covered the company page's company where it is a run of the whole screen or
@@ -557,8 +557,9 @@
     }, changeWords(c))];
   }
 
-  /* The count's words: 1,546 prices changed, 37 values changed, both where both moved; where
-     none did, no price changed after a price refresh and no figure changed after another run. */
+  /* The count's words (spec 2026-11-23 refresh experience, 4.2): 1,546 prices changed, 37
+     values changed, both where both moved; where none did, no price changed after a price
+     refresh and no figure changed after another run. */
   function changeWords(c) {
     var p = c.prices ? count(c.prices) + (c.prices === 1 ? ' price changed' : ' prices changed')
       : null;
@@ -707,7 +708,8 @@
      panel it last drew (lastPanel), so the scrim and the panel fade out together over 150 ms
      (index.html); before the first lock it holds none. Each lock draws a panel of its own, keyed
      by the count of locks, so the panel a lock draws mounts, and takes the focus, as it turns
-     on. */
+     on. `inert: ''` is React 18's form for an attribute it does not know, which it writes as
+     given; a later React, which knows `inert`, reads `''` as false. */
   function layerView(on) {
     if (!on) {
       return h('div', { className: 'app-layer', 'aria-hidden': 'true', inert: '' }, lastPanel);
@@ -768,11 +770,17 @@
      mount is inert: main.app-page and the mounts the scripts add beside it (the watchlist
      popup's, the Notes box's, the moat box's), so no pointer, key or focus reaches what is under
      the layer. It is set at each draw while locked, so a mount added under the lock is covered
-     too, and taken off once as the lock lifts. As the lock turns on, the page's address is kept
-     for the lock (state.address, which fromHash puts back), the lock is counted, so the layer
-     draws a panel of its own, and the open popups close (FairbandPage.closePopups): they would
-     stand under the layer, out of reach. */
+     too, and taken off once as the lock lifts. As the lock turns on, the element that held the
+     focus is kept (focusKept), before it turns inert and the layer's panel takes the focus; the
+     page's address is kept for the lock (state.address, which fromHash puts back); the lock is
+     counted, so the layer draws a panel of its own; the root's overflow is hidden, so the page
+     under the layer cannot be dragged sideways where the status line's run bar is wider than a
+     narrow window (B-305); and the open popups close (FairbandPage.closePopups): they would stand
+     under the layer, out of reach. As the lock lifts, the root's overflow is the stylesheet's
+     again, and the focus goes back to the element kept, where it is still in the document; gone,
+     the focus stays where the browser puts it. */
   function lockPage(on) {
+    if (on && !shut) focusKept = document.activeElement;
     if (on || shut) {
       Array.prototype.forEach.call(document.body.children, function (child) {
         if (child !== layerMount) child.inert = on;
@@ -781,7 +789,14 @@
     if (on && !shut) {
       state.address = address();
       locks += 1;
+      document.documentElement.style.overflow = 'hidden';
       P.closePopups();
+    }
+    if (!on && shut) {
+      document.documentElement.style.overflow = '';
+      var kept = focusKept;
+      focusKept = null;
+      if (kept && kept !== document.body && kept.isConnected) kept.focus();
     }
     shut = on;
   }

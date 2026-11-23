@@ -433,11 +433,12 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
 /* fairband: the break mark before a pinned price (spec 2026-11-23 refresh experience, 4.7), as
    the approved mockup draws it: two strokes of the card's ground, 3px each and 3px apart,
    slanted across the track 20px in from the end the price is pinned at, so the marker's place
-   does not read as true. */
+   does not read as true. It stands in the track's clip, which cuts off anything past the track,
+   so it fills the track's height. */
 .fb-band__break {
   position: absolute;
-  top: -3px;
-  bottom: -3px;
+  top: 0;
+  bottom: 0;
   box-sizing: border-box;
   width: 9px;
   border-left: 3px solid var(--surface-raised);
@@ -1161,5 +1162,8 @@ button.fb-run__failed .fb-run__n { color: var(--critical); }
    as it comes and goes: a box of no width and no height on the price's baseline, its glyph set
    from the box's right edge, 4px before the price, into the cell's padding. */
 .fb-screen__move { display: inline-block; width: 0; direction: rtl; text-indent: 4px; line-height: 0; color: var(--ink-muted); font-size: 10px; animation: fb-gone 1.2s ease-out forwards; }
+/* fairband: the run bar's fill eases to each new count, in the status line and in the refresh
+   layer's panel, and under the system's reduced-motion setting does not, since it moves (spec
+   2026-11-23 refresh experience, 4.1 and 4.8). */
 .fb-run__seg { transition: width 200ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .fb-run__seg { transition: none; } }

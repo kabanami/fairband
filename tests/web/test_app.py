@@ -402,16 +402,20 @@ def test_aging_fraction_from_the_overlay_changes_freshness(
 
 def test_groups_and_the_drawer_read_the_edges_of_the_settings(client: TestClient) -> None:
     """HGCO sits at 0.63 × its value and AAPL at 1.175. Under a fair band from 0.6, with every
-    margin of safety at 45% so each class's edges still ascend, HGCO is no longer below the band."""
-    [before] = client.get("/api/groups?by=sector").json()["groups"]
-    assert before["shareBelowValue"] == 0.5  # HGCO below 0.90, AAPL not
+    margin of safety at 45% so each class's edges still ascend, HGCO is no longer below the band,
+    in the groups the Methodology page reads and in the Statistics view's, which the page now
+    shows (spec 2026-11-23 refresh experience, 4.5)."""
+    for route in ("/api/groups?by=sector", "/api/statistics?by=sector"):
+        [before] = client.get(route).json()["groups"]
+        assert before["shareBelowValue"] == 0.5, route  # HGCO below 0.90, AAPL not
     safety = {"None": 0.45, "Narrow": 0.45, "Wide": 0.45}
     changes = {"fair_band": [0.6, 1.15], "margin_of_safety": safety}
     assert client.put("/api/settings", json={"changes": changes}, headers=HEADER).status_code == 200
     edges = client.get("/api/companies/AAPL").json()["designationEdges"]
     assert edges == [1 - 0.45, 0.6, 1.15, 1.35]
-    [after] = client.get("/api/groups?by=sector").json()["groups"]
-    assert after["shareBelowValue"] == 0.0
+    for route in ("/api/groups?by=sector", "/api/statistics?by=sector"):
+        [after] = client.get(route).json()["groups"]
+        assert after["shareBelowValue"] == 0.0, route
 
 
 def test_a_changed_threshold_shows_on_the_screen_and_in_the_detail_with_no_revalue(
@@ -2896,12 +2900,17 @@ def test_a_tier_label_keeps_its_near_edge_off_the_price_marker() -> None:
 def test_a_pinned_price_s_break_mark_is_two_strokes_of_the_ground() -> None:
     """Spec 2026-11-23 refresh experience 4.7, as the approved mockup draws it: before a price
     pinned at an end, two slanted strokes of the card's ground, 3px each and 3px apart, cross the
-    track 20px in from that end, so the marker's place does not read as true."""
+    track 20px in from that end, so the marker's place does not read as true. The mark stands in
+    the track's clip (``fb-band__clip``), which cuts off anything past the track, so it fills the
+    track's height and no more."""
     css = _component_file("bundle.css")
     comment = css[css.index("/* fairband: the break mark") :]
     assert "(spec 2026-11-23 refresh experience, 4.7)" in comment[: comment.index("*/")]
     rule = _rule(css, ".fb-band__break {")
+    assert "-3px" not in rule
     for text in (
+        "top: 0;",
+        "bottom: 0;",
         "box-sizing: border-box;",
         "width: 9px;",
         "border-left: 3px solid var(--surface-raised);",

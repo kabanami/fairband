@@ -377,6 +377,22 @@ def test_a_group_s_name_is_a_link_and_none_is_plain_text() -> None:
     assert followed["filters"] == EMPTY_FILTERS | {"sector": ["Technology"]}
 
 
+def test_a_group_s_name_opens_the_screen_at_its_top() -> None:
+    """4.5: the Screen opens on a group's filter at its top, wherever the reader left it: the
+    place kept as the watchlist page took the table, which the Screen's table takes back as it
+    mounts again, and the place the browser keeps on the scroller while Statistics hides the
+    Screen both go to 0."""
+    technology = {"do": "filter", "filter": {"sector": ["Technology"]}}
+    down = {"do": "scroll", "top": 5000}
+    *_, left, _, _, opened = _trace(
+        [SCREEN, down, _show("watchlists"), _show("statistics"), technology]
+    )
+    assert (left["top"], left["scrolled"]) == (0, 5000)
+    assert (opened["view"], opened["top"], opened["scrolled"]) == ("screen", 0, 0)
+    *_, opened = _trace([SCREEN, down, _show("statistics"), technology])
+    assert (opened["view"], opened["top"], opened["scrolled"]) == ("screen", 0, 0)
+
+
 def test_a_run_the_page_did_not_start_is_followed() -> None:
     """An agent's research revalues its company after a scoped refresh of it, and neither run is
     alive at any of the page's reads. The page asks every 30 seconds while no run is alive; an
@@ -927,6 +943,80 @@ def test_a_run_the_page_asked_for_and_did_not_start_locks_nothing() -> None:
     assert refused["layer"]["on"] is False and refused["storage"] == {}
 
 
+def test_a_run_whose_progress_has_no_symbols_key_is_not_whole() -> None:
+    """The server as it runs before its restart sends a run's progress with no ``symbols`` key.
+    Only ``null`` names a run of the whole screen (4.1): a progress with no such key is not one,
+    the page's own run included, so it fades nothing and locks nothing."""
+    old = _alive(67, "price", None)
+    del old["body"]["refresh"]["symbols"]
+    *_, alive = _trace([LANDED, *_mine(67, "price"), old])
+    assert alive["run"] is True and alive["recomputing"] is False
+    assert alive["layer"]["on"] is False and alive["inert"] == FREE
+
+
+def test_the_root_does_not_scroll_while_locked() -> None:
+    """The status line's run bar is wider than a narrow window (B-305), so the root could be
+    dragged sideways under the scrim: while the page is locked the root's overflow is hidden, and
+    as the lock lifts it is the stylesheet's again (4.1)."""
+    landed, *_, locked, kept = _trace([LANDED, *_mine(67, "full"), _alive(67, "full", None), KEEP])
+    assert landed["rootOverflow"] == ""
+    assert locked["layer"]["on"] is True and locked["rootOverflow"] == "hidden"
+    assert kept["layer"]["on"] is False and kept["rootOverflow"] == ""
+    *_, ended = _trace(
+        [
+            LANDED,
+            *_mine(67, "price"),
+            _alive(67, "price", None),
+            TICK,
+            _idle(_run(67, "price"), RUN_66),
+        ]
+    )
+    assert ended["layer"]["on"] is False and ended["rootOverflow"] == ""
+
+
+def test_the_focus_goes_back_as_the_lock_lifts() -> None:
+    """As the lock turns on the page keeps the element that held the focus, and the layer's panel
+    takes it; as the lock lifts, on Keep reading or at the run's end, the focus goes back to that
+    element where it is still in the document. Gone (its row narrowed away), nothing is focused:
+    the focus stays where the browser puts it as the layer turns inert (4.1)."""
+    *_, held, locked, kept = _trace(
+        [
+            LANDED,
+            *_mine(67, "full"),
+            {"do": "focus", "name": "row"},
+            _alive(67, "full", None),
+            KEEP,
+        ]
+    )
+    assert held["active"] == "row"
+    assert locked["active"] == "panel" and locked["focused"] is True
+    assert kept["active"] == "row"
+    *_, ended = _trace(
+        [
+            LANDED,
+            *_mine(67, "price"),
+            {"do": "focus", "name": "row"},
+            _alive(67, "price", None),
+            TICK,
+            _idle(_run(67, "price"), RUN_66),
+        ]
+    )
+    assert ended["layer"]["on"] is False and ended["active"] == "row"
+    *_, gone, _, ended = _trace(
+        [
+            LANDED,
+            *_mine(67, "price"),
+            {"do": "focus", "name": "row"},
+            _alive(67, "price", None),
+            {"do": "remove", "name": "row"},
+            TICK,
+            _idle(_run(67, "price"), RUN_66),
+        ]
+    )
+    assert gone["active"] == "panel"
+    assert ended["layer"]["on"] is False and ended["active"] == "body"
+
+
 def test_the_layer_draws_the_stage_word_alone_while_the_total_is_0() -> None:
     """As the status line does, where the run bar would draw nothing."""
     begun = _alive(67, "price", None)
@@ -1117,6 +1207,9 @@ def test_the_layer_s_mount_and_rules_stand() -> None:
     assert (
         ".app-layer.is-on { opacity: 1; visibility: visible; transition: opacity 150ms; }" in page
     )
+    # off, it takes no pointer, while it fades out too, so a press as the lock lifts reaches the
+    # page under it
+    assert ".app-layer:not(.is-on) { pointer-events: none; }" in page
 
 
 def test_cancel_in_the_layer_asks_the_server_and_is_disabled_after() -> None:

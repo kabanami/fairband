@@ -217,8 +217,10 @@ export interface BandMeterProps {
   /**
    * fairband: the reviewed value a share, a second marker on the track in ink, and "reviewed
    * $283.00" after the caption; no word is derived from it (spec 2026-11-06 Tier 2, 18.2). Like
-   * the price, it never sets the scale and is pinned at an end beyond it, with no break mark of
-   * its own (spec 2026-11-23 refresh experience, 4.7). `null` or absent draws none.
+   * the price, it never sets the scale of a value above zero and is pinned at an end beyond it,
+   * with no break mark of its own; for a value at or below zero, the price and it are among the
+   * points the scale spans (spec 2026-11-23 refresh experience, 4.7). `null` or absent draws
+   * none.
    */
   reviewedValue?: number | null;
   /**

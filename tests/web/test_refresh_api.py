@@ -39,6 +39,7 @@ from fairband.vendors import fmp as fmp_api
 from fairband.vendors.fmp import Fmp
 from fairband.vendors.http import VendorHttp
 from fairband.vendors.limiter import RateLimiter
+from fairband.web import app as app_module
 from fairband.web.app import create_app
 
 NOW = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
@@ -422,6 +423,38 @@ def test_a_run_names_its_companies_while_it_runs_and_after(
         {"id": 2, "kind": "revalue", "symbols": symbols, "status": "done"},
         {"id": 1, "kind": "price", "symbols": None, "status": "done"},
     ]
+
+
+def test_the_newest_runs_are_read_with_no_run_alive_alone(
+    client_with_worker: TestClient, gate: Gate, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The route reads the newest runs only with no run alive, where it answers them: the reads
+    every 2 seconds under a run answer the progress alone (spec 2026-11-23 refresh experience,
+    4.3), and the answers are as before."""
+    client = client_with_worker
+    read: list[int] = []
+    recent = app_module.recent_refreshes
+
+    def counted(conn: sqlite3.Connection) -> list[Any]:
+        read.append(1)
+        return recent(conn)
+
+    assert start(client, kind="price").json() == {"refreshId": 1}
+    join_runs()
+    monkeypatch.setattr(app_module, "recent_refreshes", counted)
+    monkeypatch.setattr(run_module, "load_moat_file", gate.holding(run_module.load_moat_file))
+    assert start(client, kind="revalue").json() == {"refreshId": 2}
+    gate.wait_entered(1)
+    alive = current(client)["refresh"]
+    assert (alive["id"], alive["kind"], alive["symbols"]) == (2, "revalue", None)
+    assert read == []
+    gate.release.set()
+    join_runs()
+    assert current(client)["recent"] == [
+        {"id": 2, "kind": "revalue", "symbols": None, "status": "done"},
+        {"id": 1, "kind": "price", "symbols": None, "status": "done"},
+    ]
+    assert read == [1]
 
 
 def test_recent_holds_the_twenty_newest_runs(

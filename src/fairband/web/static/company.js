@@ -333,17 +333,17 @@
      experience, 4.4), the moat stamp (FairbandPage.moatStamp), the chip where the class is the
      owner's or an agent's (FairbandPage.moatChip) and the control that opens the moat box under
      it, which, once a write is taken, reads the page again (FairbandPage.moatControl, load; spec
-     2026-11-19 8.8); and one
-     caption line, the exchange, the sector and the industry of the universe row, the parts it
-     has. Right: the latest snapshot's price in figure-lg, in US dollars, in the tint of a changed
-     figure and after ▲ or ▼ while a run's end marks it (marked; spec 2026-11-23 refresh
-     experience, 4.2), the day's change, and the day of its close; then Notes with the count of the
-     company's notes (FairbandPage.notesControl, 11.1), whose box opens under it and, once a note
-     is taken, reads the page again (load); the watchlists control, which opens the screen's
-     popup for this company under itself, on the row watchRow gives, disabled without one; and
-     Request research, the drawer's: its menu, its line and the following of its launch, with
-     the request the page keeps for its company (shown), or, where it keeps none for it, as in
-     the tests, which draw a head with no read, a new one it keeps nowhere. */
+     2026-11-19 8.8); and one caption line, the exchange, the sector and the industry of the
+     universe row, the parts it has. Right: the latest snapshot's price in figure-lg, in US
+     dollars, in the tint of a changed figure and after ▲ or ▼ while a run's end marks it (marked;
+     spec 2026-11-23 refresh experience, 4.2), the day's change, and the day of its close; then
+     Notes with the count of the company's notes (FairbandPage.notesControl, 11.1), whose box
+     opens under it and, once a note is taken, reads the page again (load); the watchlists
+     control, which opens the screen's popup for this company under itself, on the row watchRow
+     gives, disabled without one; and Request research, the drawer's: its menu, its line and the
+     following of its launch, with the request the page keeps for its company (shown), or, where
+     it keeps none for it, as in the tests, which draw a head with no read, a new one it keeps
+     nowhere. */
   function head(d, quote) {
     var r = d.result;
     var c = d.company || {};
