@@ -1015,6 +1015,14 @@ founder's ruling of 2026-11-11, its mid-cycle margin the ten-year median since s
 - Where `earnings.ntm` sets the anchor, measure the gap on that figure in the same way.
 - Where `earnings.ntm_nri` takes a one-time item out of the NTM EPS, measure the gap on the figure
   less the item in the same way, so the item is not cut twice.
+- Where an override of yours changes the charge for stock pay (`earnings.sbc_basis`,
+  `earnings.sbc`, or an `earnings.nri_gap` that changes the basis the test reads), the snapshot's
+  `ntm_eps` and `ntm_net_income` do not hold the charge in force. Apply those overrides first,
+  then measure the gap in the same way on your current review: the NTM EPS is
+  `review:<id>/intermediates/anchor/ntm_eps` and the NTM net income
+  `review:<id>/intermediates/ntm_net_income`, so stock pay is not cut twice. Where that review
+  already holds a cycle gap, its anchor is net of it and the formula gives the full gap less the
+  gap on file: add `review:<id>/intermediates/cycle_gap` back with a `derive` `sum`.
 - On Mature Stable the anchor is the trailing earnings. Where the `margin-flag` fired, the gap is
   only what the median misses, as above. Where it did not, use the same form on the trailing
   figures: the trailing earnings a share, and the trailing net income over the trailing revenue.

@@ -1916,6 +1916,37 @@ def test_the_cycle_gap_reads_the_trailing_figures_less_the_one_time_items() -> N
     ) in bullet
 
 
+def test_the_cycle_gap_reads_the_review_where_an_override_changes_the_stock_pay_charge() -> None:
+    """QCOM's review of 2026-11-22 (the founder, 2026-11-23): the snapshot's `ntm_eps` holds the
+    charge for stock pay only as the engine's own test set it, so a gap measured on it after an
+    agent's `earnings.sbc_basis` turned the charge on cut stock pay twice: $9.61 against the $7.09
+    in force, a cut of $0.68 where the formula gives a lift of $1.85. There the formula reads the
+    current review's anchor, and a gap already on file is added back; the formula itself does not
+    change."""
+    skill = _read(SKILL)
+    start = skill.index("- Where an override of yours changes the charge for stock pay")
+    assert skill.index("- Where `earnings.ntm_nri` takes a one-time item out") < start
+    assert start < skill.index("- On Mature Stable the anchor is the trailing earnings.")
+    bullet = _flat(skill[start:].split("\n\n", 1)[0].split("\n- ", 1)[0])
+    for words in (
+        (
+            "(`earnings.sbc_basis`, `earnings.sbc`, or an `earnings.nri_gap` that changes the"
+            " basis the test reads)"
+        ),
+        "the snapshot's `ntm_eps` and `ntm_net_income` do not hold the charge in force",
+        "Apply those overrides first, then measure the gap in the same way on your current review",
+        "the NTM EPS is `review:<id>/intermediates/anchor/ntm_eps`",
+        "the NTM net income `review:<id>/intermediates/ntm_net_income`",
+        "so stock pay is not cut twice",
+        (
+            "Where that review already holds a cycle gap, its anchor is net of it and the formula"
+            " gives the full gap less the gap on file: add"
+            " `review:<id>/intermediates/cycle_gap` back with a `derive` `sum`."
+        ),
+    ):
+        assert words in bullet, words
+
+
 def test_the_ntm_one_time_item_advice_stays_with_no_flag() -> None:
     """Spec 2026-11-19 7.5: the entry of `consensus-basis-unknown` goes; its advice for Mature
     Growth, to read whether the NTM consensus carries a one-time item and take it out through
