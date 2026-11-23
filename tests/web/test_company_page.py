@@ -667,17 +667,19 @@ def test_the_view_is_one_of_controls_js_s() -> None:
 
 
 def test_the_page_reads_again_when_a_refresh_ends() -> None:
-    """When a run ends while the company page shows, the page reads the company shown again: its
-    loader on the same company and tab reads the detail and the open tab's answer afresh, the
-    page shown staying, faded, until they land. While that read is out, a tab the page holds from
-    before the run is not shown at once: the page reads the detail and that tab, so the reread is
-    never dropped for the figures of before the run. A tab whose read is out, not yet shown, asked
-    for again (a run that ends while the reader's tab loads) is read whole too, so the detail and
-    the other tab do not keep the figures of before the run."""
-    js = _static_file("controls.js")
-    ended = js[js.index("if (ended) {") :]
-    ended = ended[: ended.index("\n        }\n")]
-    _in_order(ended, "P.reload();", "if (state.tab === 'company') P.onShow.company();")
+    """When a run that covered its company ends while the company page shows (spec 2026-11-23
+    refresh experience, 4.3), the page reads the company shown again: its loader on the same
+    company and tab reads the detail and the open tab's answer afresh, the page shown staying,
+    faded, until they land. While that read is out, a tab the page holds from before the run is
+    not shown at once: the page reads the detail and that tab, so the reread is never dropped for
+    the figures of before the run. A tab whose read is out, not yet shown, asked for again (a run
+    that ends while the reader's tab loads) is read whole too, so the detail and the other tab do
+    not keep the figures of before the run."""
+    _in_order(
+        _function(_static_file("controls.js"), "followRuns"),
+        "P.reload(true);",
+        "if (state.tab === 'company' && (missing || runs.some(covers))) P.onShow.company(true);",
+    )
     script = _static_file("company.js")
     load = _function(script, "load")
     landed, failed = load.split(".catch(function (err) {")

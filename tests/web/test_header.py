@@ -5,9 +5,11 @@ of one company, draws neither: the header's stamp already says when the engine r
 that runs still draws its bar there, and a notice its sentence, since the header has neither.
 The header's finder stands in its right slot on every view but the Screen, whose table has a
 field of its own. The menu is in the founder's order, and a group's name in Statistics opens the
-Screen on its filter (spec 2026-11-23 refresh experience, 4.5 and 4.6). The bundle, app.js,
-finder.js and controls.js run in node (``tests/web/header.mjs``) on steps the test gives, and the
-tests read the trace."""
+Screen on its filter (spec 2026-11-23 refresh experience, 4.5 and 4.6). The page follows every
+run that ends, whoever started it: it asks the refresh's state every 30 seconds while no run is
+alive, and reads again what a run that ended may have changed; only a run of the whole screen
+fades the panels (4.1 and 4.3). The bundle, app.js, finder.js and controls.js run in node
+(``tests/web/header.mjs``) on steps the test gives, and the tests read the trace."""
 
 import json
 import subprocess
@@ -27,6 +29,7 @@ LAST: dict[str, Any] = {
     "last": {
         "id": 66,
         "kind": "full",
+        "symbols": None,
         "status": "done",
         "stage": "done",
         "startedAt": "2026-11-17T04:07:47+00:00",
@@ -44,10 +47,13 @@ LAST: dict[str, Any] = {
     "error": None,
 }
 LAST["shown"] = LAST["last"]  # the run the line describes: the last one, but after a moat write
+# The 20 newest runs, the newest first: here the one.
+LAST["recent"] = [{"id": 66, "kind": "full", "symbols": None, "status": "done"}]
 RUNNING: dict[str, Any] = {
     "refresh": {
         "id": 67,
         "kind": "full",
+        "symbols": None,
         "stage": "fetch",
         "done": 40,
         "failed": 0,
@@ -56,6 +62,7 @@ RUNNING: dict[str, Any] = {
     }
 }
 LANDED = {"do": "answer", "url": CURRENT, "status": 200, "body": LAST}
+RUN_ALIVE = {"do": "answer", "url": CURRENT, "status": 200, "body": RUNNING}
 LINE_END = " · 1,371 of 1,569 valued · 1 failed"
 # The screen's rows, the few keys the Screen's filters read, and its first read's address.
 ROWS = [
@@ -121,6 +128,42 @@ def _trace(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _show(view: str, section: str | None = None) -> dict[str, Any]:
     return {"do": "show", "view": view, "section": section}
+
+
+TICK = {"do": "tick"}
+RUN_66 = LAST["recent"][0]
+DETAIL = "/api/companies/MGCO"  # the company page's read as it opens, MGCO shown
+
+
+def _run(
+    run_id: int, kind: str, symbols: list[str] | None = None, status: str = "done"
+) -> dict[str, Any]:
+    """One entry of the refresh state's ``recent``, as the server answers it."""
+    return {"id": run_id, "kind": kind, "symbols": symbols, "status": status}
+
+
+def _idle(*recent: dict[str, Any]) -> dict[str, Any]:
+    """The refresh state with no run alive, after the runs ``recent``, the newest first: the last
+    run is the newest of them, and the line describes run 66 (``shown``)."""
+    newest = {key: recent[0][key] for key in ("id", "kind", "symbols", "status")}
+    body = {
+        "refresh": None,
+        "last": LAST["last"] | newest,
+        "shown": LAST["last"],
+        "error": None,
+        "recent": list(recent),
+    }
+    return {"do": "answer", "url": CURRENT, "status": 200, "body": body}
+
+
+def _alive(run_id: int, kind: str, symbols: list[str] | None) -> dict[str, Any]:
+    """The refresh state while the run ``run_id`` is alive."""
+    body = {"refresh": RUNNING["refresh"] | {"id": run_id, "kind": kind, "symbols": symbols}}
+    return {"do": "answer", "url": CURRENT, "status": 200, "body": body}
+
+
+def _visible(shown: bool) -> dict[str, Any]:
+    return {"do": "visibility", "hidden": not shown}
 
 
 def test_the_screen_keeps_the_last_refreshs_line_its_details_and_no_finder() -> None:
@@ -192,7 +235,8 @@ def test_a_notice_still_draws_on_the_company_page_and_before_any_refresh_the_lin
 def _ended(status: str, message: str) -> dict[str, Any]:
     """The refresh's state after a run that did not end done: its message and no calibration."""
     last = LAST["last"] | {"status": status, "message": message, "calibration": None}
-    body = {"refresh": None, "last": last, "shown": last, "error": None}
+    recent = [LAST["recent"][0] | {"status": status}]
+    body = {"refresh": None, "last": last, "shown": last, "error": None, "recent": recent}
     return {"do": "answer", "url": CURRENT, "status": 200, "body": body}
 
 
@@ -247,11 +291,13 @@ def test_after_a_moat_write_the_line_details_and_the_stamp_stay_the_run_before()
     write = LAST["last"] | {
         "id": 67,
         "kind": "revalue",
+        "symbols": ["MGCO"],
         "startedAt": "2026-11-17T09:00:00+00:00",
         "finishedAt": "2026-11-17T09:00:01+00:00",
         "calibration": None,
     }
-    body = {"refresh": None, "last": write, "shown": LAST["last"], "error": None}
+    recent = [_run(67, "revalue", ["MGCO"]), *LAST["recent"]]
+    body = {"refresh": None, "last": write, "shown": LAST["last"], "error": None, "recent": recent}
     [plain] = _trace([LANDED])
     [written] = _trace([{"do": "answer", "url": CURRENT, "status": 200, "body": body}])
     assert written["status"] == plain["status"]
@@ -319,3 +365,135 @@ def test_a_group_s_name_is_a_link_and_none_is_plain_text() -> None:
     assert followed["prevented"] is True
     assert (followed["view"], followed["find"]) == ("screen", "")
     assert followed["filters"] == EMPTY_FILTERS | {"sector": ["Technology"]}
+
+
+def test_a_run_the_page_did_not_start_is_followed() -> None:
+    """An agent's research revalues its company after a scoped refresh of it, and neither run is
+    alive at any of the page's reads. The page asks every 30 seconds while no run is alive; an
+    answer with runs newer than the one its rows were read under reads the rows again, and the
+    next, with none newer, reads nothing (spec 2026-11-23 refresh experience, 4.3). A run of
+    named companies fades nothing (4.1)."""
+    ended = _idle(_run(68, "revalue", ["MSCO"]), _run(67, "scoped", ["MSCO"]), RUN_66)
+    landed, asked, followed, _, again = _trace([LANDED, TICK, ended, TICK, ended])
+    assert (landed["reads"], landed["waits"]) == ([], [30000])
+    assert asked["reads"] == [CURRENT]
+    assert (followed["reads"], followed["waits"]) == ([SCREEN["url"]], [30000])
+    assert followed["run"] is False and followed["recomputing"] is False
+    assert again["reads"] == []
+
+
+def test_the_first_answer_follows_no_run() -> None:
+    """The rows the page reads as it loads already hold the runs that ended before: its first
+    answer only sets the run they were read under."""
+    ended = _idle(_run(68, "revalue", ["MSCO"]), _run(67, "price"), RUN_66)
+    first, _, second = _trace([ended, TICK, ended])
+    assert (first["reads"], first["waits"]) == ([], [30000])
+    assert second["reads"] == []
+
+
+def test_a_run_alive_as_the_page_loads_is_followed_at_its_end() -> None:
+    *_, ended = _trace([RUN_ALIVE, TICK, _idle(_run(67, "full"), RUN_66)])
+    assert ended["reads"] == [SCREEN["url"]]
+
+
+def test_the_statistics_are_read_again_where_that_view_shows() -> None:
+    *_, followed = _trace([LANDED, _show("statistics"), TICK, _idle(_run(67, "price"), RUN_66)])
+    assert followed["reads"] == [SCREEN["url"], STATISTICS]
+
+
+def test_a_company_page_is_read_again_only_for_its_own_company() -> None:
+    """4.3: a run covers the company page's company where it names it or is a run of the whole
+    screen; a page whose company the run did not cover is left as it is, so a reader is not
+    moved. The rows are read again all the same."""
+    other = _run(67, "scoped", ["MSCO"])
+    own = _run(68, "revalue", ["MGCO"])
+    whole = _run(69, "price")
+    _, page, _, after_other, _, after_own, _, after_whole = _trace(
+        [
+            LANDED,
+            _show("company", "MGCO"),
+            TICK,
+            _idle(other, RUN_66),
+            TICK,
+            _idle(own, other, RUN_66),
+            TICK,
+            _idle(whole, own, other, RUN_66),
+        ]
+    )
+    assert page["reads"] == [DETAIL]
+    assert after_other["reads"] == [SCREEN["url"]]
+    assert after_own["reads"] == [SCREEN["url"], DETAIL]
+    assert after_whole["reads"] == [SCREEN["url"], DETAIL]
+
+
+@pytest.mark.parametrize(("kind", "symbols"), [("scoped", ["MSCO"]), ("revalue", ["MGCO"])])
+def test_a_run_of_named_companies_fades_nothing(kind: str, symbols: list[str]) -> None:
+    """4.1: a scoped refresh and a revalue of named companies (an agent's, a moat write's) fade
+    no panel. The run bar and Cancel stand as for any run, and the page asks every 2 seconds
+    while it is alive, then every 30 again."""
+    *_, alive, _, ended = _trace(
+        [LANDED, TICK, _alive(67, kind, symbols), TICK, _idle(_run(67, kind, symbols), RUN_66)]
+    )
+    assert alive["run"] is True and alive["actions"] == ["Cancel"]
+    assert (alive["recomputing"], alive["waits"]) == (False, [2000])
+    assert (ended["reads"], ended["waits"]) == ([SCREEN["url"]], [30000])
+
+
+@pytest.mark.parametrize("kind", ["price", "full", "revalue"])
+def test_a_run_of_the_whole_screen_fades_the_panels_until_it_ends(kind: str) -> None:
+    *_, alive, _, ended = _trace(
+        [LANDED, TICK, _alive(67, kind, None), TICK, _idle(_run(67, kind), RUN_66)]
+    )
+    assert alive["recomputing"] is True and alive["run"] is True
+    assert ended["recomputing"] is False and ended["reads"] == [SCREEN["url"]]
+
+
+def test_a_hidden_page_does_not_ask_and_asks_at_once_when_shown() -> None:
+    """4.3: no read while the page is hidden; shown again, it reads at once, the refresh's state
+    and the Inbox's count, and the 30-second cycle runs again from the answer."""
+    _, hidden, ticked, shown, landed = _trace(
+        [LANDED, _visible(False), TICK, _visible(True), LANDED]
+    )
+    assert (hidden["reads"], hidden["waits"]) == ([], [30000])
+    assert (ticked["reads"], ticked["waits"]) == ([], [])
+    assert shown["reads"] == [CURRENT, "/api/inbox"]
+    assert landed["waits"] == [30000]
+
+
+@pytest.mark.parametrize(("seen", "missing"), [(10, True), (20, False)])
+def test_runs_past_the_list_read_everything_again(seen: int, missing: bool) -> None:
+    """4.3, and the plan's review focus 2: ``recent`` holds the 20 newest runs. Read under run
+    10, the page finds runs 40 to 21, each naming another company than the one it shows: runs 11
+    to 20 are missing and may have covered it, so they are followed as one run of the whole
+    screen, and the company page is read again. Read under run 20, none is missing."""
+    named = [_run(run_id, "scoped", ["MSCO"]) for run_id in range(40, 20, -1)]
+    *_, followed = _trace(
+        [_idle(_run(seen, "full")), _show("company", "MGCO"), TICK, _idle(*named)]
+    )
+    assert followed["reads"] == [SCREEN["url"], *([DETAIL] if missing else [])]
+
+
+@pytest.mark.parametrize("at_load", [True, False])
+def test_a_run_another_process_runs_is_followed_at_its_end(at_load: bool) -> None:
+    """A run of the command-line tool, in another process, has no progress on the server: the
+    state answers no run alive, and the run's entry in ``recent`` says ``running``. Such an entry
+    is not followed, nor passed: it reads nothing, draws no bar and fades nothing, and the next
+    answer, where it is done, reads the Screen again; so too where it ran as the page loaded."""
+    running = _idle(_run(67, "full", status="running"), RUN_66)
+    ended = _idle(_run(67, "full"), RUN_66)
+    *_, during, _, after = _trace(
+        [running, TICK, ended] if at_load else [LANDED, TICK, running, TICK, ended]
+    )
+    assert during["reads"] == [] and during["run"] is False and during["recomputing"] is False
+    assert after["reads"] == [SCREEN["url"]]
+
+
+def test_a_failed_read_asks_again_on_the_cycle_and_says_when() -> None:
+    """A read of the refresh's state that fails is asked again all the same: in 30 seconds with
+    no run alive, in 2 while one is."""
+    failed = {"do": "answer", "url": CURRENT, "status": 500, "body": {"detail": "locked"}}
+    idle, _, _, _, alive = _trace([failed, TICK, RUN_ALIVE, TICK, failed])
+    assert idle["waits"] == [30000]
+    assert idle["notice"].endswith(". The page asks again every 30 seconds.")
+    assert alive["waits"] == [2000]
+    assert alive["notice"].endswith(". The page asks again every 2 seconds.")

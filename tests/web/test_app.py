@@ -1108,18 +1108,18 @@ def test_header_has_the_six_views() -> None:
 
 def test_the_count_follows_the_poll() -> None:
     """Spec 18.5: the header's Inbox count is the open work items, pending and claimed. The page
-    reads /api/inbox as it loads and every thirty seconds after, whether a refresh runs or not
-    (the refresh's own poll runs only while one does), but not while the page is hidden: each read
-    takes the server's write lock for the expiry rule, and shown again the page reads at once. The
-    read runs the expiry rule, so a watched company whose window ended counts on the next read
-    without a reload. The header draws again only when the count moves; a failed read keeps the
-    count and the next read comes all the same; the Inbox view hands its own reads over, so the
-    count matches the table it shows, and while it shows, its table takes each of the header's
-    reads (onInbox). At 0 the bundle draws no count."""
+    reads /api/inbox as it loads and every thirty seconds after, whether a refresh runs or not,
+    on a cycle of its own, but not while the page is hidden: each read takes the server's write
+    lock for the expiry rule, and shown again the page reads at once. The read runs the expiry
+    rule, so a watched company whose window ended counts on the next read without a reload. The
+    header draws again only when the count moves; a failed read keeps the count and the next read
+    comes all the same; the Inbox view hands its own reads over, so the count matches the table
+    it shows, and while it shows, its table takes each of the header's reads (onInbox). At 0 the
+    bundle draws no count."""
     js = _static_file("controls.js")
     assert "var INBOX_MS = 30000;" in js
     assert "var OPEN = P.OPEN_STATES;" in js
-    assert "open: 0 /* the open work items, pending and claimed: the Inbox view's count */" in js
+    assert "open: 0, /* the open work items, pending and claimed: the Inbox view's count */" in js
     read = _function(js, "pollInbox")
     _in_order(
         read,
@@ -1245,9 +1245,11 @@ def test_page_opens_the_view_the_hash_names() -> None:
     assert "document.addEventListener('DOMContentLoaded', fromHash);" in js
     assert "P.show = show;" in js and "P.onShow = {};" in js and "P.section = null;" in js
     assert "P.running = function () { return state.running !== null; };" in js
-    # every panel but the Methodology view's, whose examples are figures as of a named date
+    # every panel but the Methodology view's, whose examples are figures as of a named date, and
+    # only under a run of the whole screen (spec 2026-11-23 refresh experience, 4.1)
     assert "VIEWS.forEach(function (id) {\n" in js
-    assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);" in js
+    assert "var faded = alive && whole(state.running);" in js
+    assert "if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, faded);" in js
     # a faded panel's tables keep their old figures at ink-faint, a phase number its colour on its
     # fill; the Research tab's, a report's appendixes on the report's own snapshot, which no
     # refresh changes, are not faded
@@ -1370,7 +1372,7 @@ def test_controls_js_one_line_status_and_details_menu() -> None:
     # the popover follows the bundle's menu markup, and a run closes it
     assert "className: 'fb-screen__cols app-details'" in script
     assert "'aria-expanded': state.detailsOpen ? 'true' : 'false'" in script
-    assert "if (body.refresh !== null) state.detailsOpen = false;" in script
+    assert "if (body.refresh !== null) {\n          state.detailsOpen = false;" in script
     # the line starts at the kind, as spec 6.1 writes it
     assert "Last refresh: " not in script
     assert "var line = [last.kind + ' ' + last.status + (when ? ' ' : ''), when];" in script
@@ -2238,11 +2240,10 @@ def test_the_meter_says_the_ratio_and_the_values_name_once() -> None:
 def test_the_drawer_is_read_again_when_a_run_ends() -> None:
     """A run may follow the drawer's company's review, post its expiry item or drop an override
     (method 14.6): when a run ends, the drawer's company is read again in place, as the report
-    page is (controls.js's run-end branch)."""
-    js = _static_file("controls.js")
-    ended = js[js.index("if (ended) {") :]
-    ended = ended[: ended.index("\n        }\n")]
-    _in_order(ended, "P.reload();", "P.reloadDrawer();")
+    page is (controls.js's followRuns)."""
+    _in_order(
+        _function(_static_file("controls.js"), "followRuns"), "P.reload(true);", "P.reloadDrawer();"
+    )
     script = _static_file("app.js")
     assert "reloadDetail: reloadDetail, reloadDrawer: reloadDrawer," in script
     drawer = _function(script, "reloadDrawer")

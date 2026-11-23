@@ -9,13 +9,17 @@
    line: the running refresh's one run bar (the design system's RunProgress), or how the last one
    ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the
    company page draws the run bar and a notice alone, not the last refresh's line or Details ▾
-   (the company page's design, the decision log of 2026-11-17). While a refresh runs, the page
-   asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were, the
-   stamp is gone and the tables keep their old figures at ink-faint; when it ends, the rows (and
-   the statistics or the company page, when that view is open) load again. The Statistics view,
-   once named Groups, is one plain table from /api/statistics (spec 6.3; spec 2026-11-23 refresh
-   experience, 4.5), with no chart, each group's name a link that opens the Screen on the group;
-   #statistics names it, and the old #groups opens it. The company page (company.js) is a
+   (the company page's design, the decision log of 2026-11-17). The page asks
+   /api/refresh/current every 30 seconds while no refresh runs and every 2 seconds while one does,
+   never while the page is hidden (spec 2026-11-23 refresh experience, 4.3). While a refresh runs,
+   one Cancel stands where the Refresh buttons were and the stamp is gone; under a run of the
+   whole screen the tables keep their old figures at ink-faint, and under a run of named companies
+   nothing fades (4.1). When any run ends, whoever started it, the rows load again, with the open
+   drawer, the statistics when that view is open and the company page when the run covered its
+   company. The Statistics view, once named Groups, is one plain table from /api/statistics (spec
+   6.3; spec 2026-11-23 refresh experience, 4.5), with no chart, each group's name a link that
+   opens the Screen on the group; #statistics names it, and the old #groups opens it. The company
+   page (company.js) is a
    panel no header view names: #company/<symbol> opens its Overview, #company/<symbol>/financials
    its Financials tab, #company/<symbol>/estimates its Estimates tab,
    #company/<symbol>/investor-relations its Investor relations tab, with a call (/2026Q4) or
@@ -32,7 +36,12 @@
   var F = Fairband;
   var P = FairbandPage;
   var POLL_MS = 2000;
+  var IDLE_MS = 30000;
   var INBOX_MS = 30000;
+  /* The kinds of a run of the whole screen where it names no company (spec 2026-11-23 refresh
+     experience, 4.1), and the newest runs the refresh's state answers while none runs (4.3). */
+  var WHOLE_KINDS = ['price', 'full', 'revalue'];
+  var RECENT = 20;
   var OPEN = P.OPEN_STATES;
   var BY = { sector: 'Sector', industry: 'Industry', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
@@ -68,7 +77,9 @@
     notice: null, /* { text, caution }: what the last request came to */
     cancelAsked: false, /* Cancel was accepted: it stays disabled until the run ends */
     detailsOpen: false, /* the last refresh's Details ▾ menu is open */
-    open: 0 /* the open work items, pending and claimed: the Inbox view's count */
+    open: 0, /* the open work items, pending and claimed: the Inbox view's count */
+    seen: null, /* the id of the newest refresh the rows were read under; null before an answer */
+    ended: null /* { id, kind, status }: the newest whole run the last follow took in, or null */
   };
   var timer = null;
   var inboxTimer = null;
@@ -79,42 +90,95 @@
 
   /* ------------------------------------------------------------------ polling */
 
+  /* The refresh's state (spec 2026-11-23 refresh experience, 4.3), read as the page loads, after
+     each request (post), every 2 seconds while a run is alive and every 30 while none is; never
+     while the page is hidden, and at once as it shows again. An answer with a run alive draws its
+     bar; where it is the page's first answer, the rows were read under the run before, so the
+     run's end is followed. An answer with none alive follows the runs that ended (followRuns). */
   function poll() {
-    var request = ++latestPoll;
     clearTimeout(timer);
+    if (document.hidden) return;
+    var request = ++latestPoll;
     P.getJson('/api/refresh/current')
       .then(function (body) {
         if (request !== latestPoll) return;
-        var ended = (state.running !== null || started) && body.refresh === null;
+        var alive = state.running !== null; /* a run was alive at the answer before */
         if (state.notice && state.notice.fromPoll) state.notice = null; /* it answers again */
         state.running = body.refresh;
-        if (body.refresh !== null) state.detailsOpen = false; /* the run bar replaces the line */
-        /* `shown` is the run the line, Details and the header's stamp describe: the last one,
-           but for a moat write's revalue of one company, which the server passes over, so they
-           stay about the last run of the whole screen (the founder, 2026-11-22). */
-        if (body.refresh === null) state.last = body.shown;
-        if (ended) { /* the notice (already running, cancel asked) no longer holds */
-          started = false;
-          state.notice = null;
-          state.cancelAsked = false;
-          P.reload();
-          P.reloadDrawer(); /* its review, secondary valuation and item may have moved */
-          if (state.tab === 'statistics') loadGroups();
-          if (state.tab === 'company') P.onShow.company();
+        if (body.refresh !== null) {
+          state.detailsOpen = false; /* the run bar replaces the line */
+          if (state.seen === null) state.seen = body.refresh.id - 1;
+        } else {
+          /* `shown` is the run the line, Details and the header's stamp describe: the last one,
+             but for a moat write's revalue of one company, which the server passes over, so
+             they stay about the last run of the whole screen (the founder, 2026-11-22). */
+          state.last = body.shown;
+          followRuns(body, alive);
         }
-        if (body.refresh !== null) timer = setTimeout(poll, POLL_MS);
+        timer = setTimeout(poll, body.refresh !== null ? POLL_MS : IDLE_MS);
         render();
       })
       .catch(function (err) {
         if (request !== latestPoll) return;
-        /* While a run is alive, ask again: the buttons and the faded tables recover once the
-           server answers. With none alive there is nothing to follow. */
+        /* Ask again all the same, so the buttons and the faded tables recover once the server
+           answers: on a run's cycle while one was alive, else on the idle one. */
         var alive = state.running !== null || started;
-        if (alive) timer = setTimeout(poll, POLL_MS);
+        timer = setTimeout(poll, alive ? POLL_MS : IDLE_MS);
         notify('The refresh status did not load: ' + err.message + (alive
-          ? '. The page asks again every 2 seconds.' : '. Reload the page to try again.'), true,
-          true);
+          ? '. The page asks again every 2 seconds.' : '. The page asks again every 30 seconds.'),
+          true, true);
       });
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) poll();
+  });
+
+  /* The runs an answer with none alive gives to follow, whoever started them (spec 2026-11-23
+     refresh experience, 4.3): those of `recent` newer than state.seen, the run the rows were read
+     under, but a run still running, which another process runs (the command-line tool) and whose
+     end is followed when it comes. Where `recent` is full and does not reach back to the run after
+     state.seen, runs are missing: they are followed as one run of the whole screen. The first
+     answer follows none, since the rows the page read as it loaded hold them. Runs are followed
+     where there are some, or a run was alive at the answer before (`alive`), or the page started
+     one: the rows are read again, the open drawer, the statistics where that view shows, and the
+     company page where a run covered its company (covers); a company page no run covered is left
+     as it is, so its reader is not moved. state.ended is the newest whole run among them, else
+     null. state.seen then stops before the oldest run still running, else at the last run. */
+  function followRuns(body, alive) {
+    var recent = body.recent || [];
+    var first = state.seen === null;
+    var runs = first ? [] : recent.filter(function (run) {
+      return run.id > state.seen && run.status !== 'running';
+    });
+    var missing = !first && recent.length >= RECENT &&
+      recent[recent.length - 1].id > state.seen + 1;
+    var running = recent.filter(function (run) { return run.status === 'running'; });
+    /* the oldest running is the last, `recent` being the newest first */
+    state.seen = running.length ? running[running.length - 1].id - 1
+      : body.last ? body.last.id : 0;
+    if (!runs.length && !missing && !alive && !started) return;
+    var ended = runs.filter(whole)[0];
+    started = false;
+    state.notice = null; /* the notice (already running, cancel asked) no longer holds */
+    state.cancelAsked = false;
+    state.ended = ended ? { id: ended.id, kind: ended.kind, status: ended.status } : null;
+    P.reload(true);
+    P.reloadDrawer(); /* its review, secondary valuation and item may have moved */
+    if (state.tab === 'statistics') loadGroups();
+    if (state.tab === 'company' && (missing || runs.some(covers))) P.onShow.company(true);
+  }
+
+  /* A run of the whole screen: a price refresh, a full refresh or a revalue, naming no company
+     (spec 2026-11-23 refresh experience, 4.1). A scoped refresh and a revalue of named companies
+     (an agent's, a moat write's) are not, nor a run whose kind the server cannot say yet. */
+  function whole(run) {
+    return run.symbols == null && WHOLE_KINDS.indexOf(run.kind) !== -1;
+  }
+
+  /* A run that ended covered the company page's company where it is a run of the whole screen or
+     names the company (4.3). */
+  function covers(run) {
+    return whole(run) || (run.symbols || []).indexOf(P.company.symbol) !== -1;
   }
 
   /* A notice under the status line; one from a failed poll clears when a poll answers. */
@@ -124,13 +188,13 @@
   }
 
   /* The header's Inbox count (spec 2026-11-06 Tier 2, 18.5): the work items read as the page
-     loads and every thirty seconds after, whether a refresh runs or not, since the refresh's poll
-     runs only while one does. Each read takes the write lock on the server, since it runs the
-     expiry rule, and a full refresh writes all the while, so the cycle is slow and pauses while
-     the page is hidden; shown again, the page reads at once. A watched company whose window ended
-     counts on the next read without a reload, as does an item an agent or another view posted.
-     While the Inbox view shows, its table follows each read too (onInbox). A failed read keeps
-     the count it had; the next read comes all the same. */
+     loads and every thirty seconds after, whether a refresh runs or not, on a cycle of their own.
+     Each read takes the write lock on the server, since it runs the expiry rule, and a full
+     refresh writes all the while, so the cycle is slow and pauses while the page is hidden; shown
+     again, the page reads at once. A watched company whose window ended counts on the next read
+     without a reload, as does an item an agent or another view posted. While the Inbox view
+     shows, its table follows each read too (onInbox). A failed read keeps the count it had; the
+     next read comes all the same. */
   function pollInbox() {
     clearTimeout(inboxTimer);
     if (document.hidden) return;
@@ -171,8 +235,8 @@
     inboxTimer = setTimeout(pollInbox, INBOX_MS);
   }
 
-  /* A POST, then the status, which polls while a run lives. 409 and 503 have their own words; any
-     other refusal (a 403, a 400) and a request that never arrived read in caution. */
+  /* A POST, then the status read at once. 409 and 503 have their own words; any other refusal
+     (a 403, a 400) and a request that never arrived read in caution. */
   function post(url, body, onOk) {
     notify(null);
     P.api.post(url, body)
@@ -448,11 +512,14 @@
 
   function render() {
     var alive = state.running !== null;
-    /* Every panel's tables fade while a run is alive, but the Methodology view's: its examples
-       are figures as of a named date, not the running refresh's. The Research tab's appendixes
-       keep theirs (index.html): they are the records of the snapshot the report rests on. */
+    /* Every panel's tables fade while a run of the whole screen is alive, but the Methodology
+       view's: its examples are figures as of a named date, not the running refresh's. The
+       Research tab's appendixes keep theirs (index.html): they are the records of the snapshot
+       the report rests on. A run of named companies fades nothing (spec 2026-11-23 refresh
+       experience, 4.1). */
+    var faded = alive && whole(state.running);
     VIEWS.forEach(function (id) {
-      if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, alive);
+      if (id !== 'methodology') panels[id].classList.toggle(RECOMPUTING, faded);
     });
     /* The stamp is the latest refresh's finish, whatever its status (the status line says how it
        ended; on a page of one company, only where it did not end done). While a run is alive, or

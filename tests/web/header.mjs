@@ -4,9 +4,12 @@
 // last drew, the few browser objects the scripts touch (each view's panel one object whose
 // `hidden` controls.js sets, a query that finds no element, as app.js asks for the table's
 // scroller when the Watchlists view turns the table to its list, the hash, the history the views
-// replace, the window's listeners) and a fetch of the driver's own, answered only when a step
-// answers it. The reads the scripts start as they load stay in flight, so a step can answer the
-// first read of the refresh's state, or the screen's rows (/api/screen?sort=ticker&dir=asc).
+// replace, the window's and the document's listeners, each panel's classes) and a fetch of the
+// driver's own, answered only when a step answers it. The reads the scripts start as they load
+// stay in flight, so a step can answer the first read of the refresh's state, or the screen's rows
+// (/api/screen?sort=ticker&dir=asc). controls.js's timers are held until a step fires them, and
+// the company page, which has no script here, reads its company's detail as it opens, as
+// company.js's loader does first (/api/companies/<symbol>).
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "view", "section"}            a header view, a link or a hash opens `view`
@@ -20,7 +23,13 @@
 //   {"do": "filter", "filter"}                   FairbandPage.filterScreen(filter) (app.js), as a
 //                                                group's name in Statistics calls it
 //   {"do": "follow", "name"}                     the Statistics table's link `name` is pressed
-// After each step and the work it sets off, the trace on stdout gains the view the header marks,
+//   {"do": "tick"}                               the time comes for controls.js's pending timers:
+//                                                each fires, in the order set
+//   {"do": "visibility", "hidden"}               the page is hidden (true), as the browser's tab
+//                                                is left, or shown again (false)
+// After each step and the work it sets off, the trace on stdout gains the urls fetched since the
+// step before (the reads the scripts start as they load are not counted), whether a view's panel
+// holds is-recomputing, the delays of controls.js's pending timers, the view the header marks,
 // the header's views as [id, label], the hash, whether its right slot holds the finder, and what
 // the bar under it draws: its class, the status region's words, whether Details ▾ stands beside
 // them and whether its menu is open, whether the run's bar is drawn, and the notice; then the
@@ -60,16 +69,32 @@ const ReactDOM = {
     return root;
   },
 };
+// An element's classes, as the browser's classList: toggle with a force sets or clears one.
+function classList() {
+  const held = new Set();
+  return {
+    toggle(name, force) {
+      const on = force === undefined ? !held.has(name) : Boolean(force);
+      if (on) held.add(name);
+      else held.delete(name);
+      return on;
+    },
+    contains(name) { return held.has(name); },
+  };
+}
 const panels = {}; // the page's elements by id, each made once
+const documentListeners = {}; // the document's listeners by event
 const document = {
   hidden: false,
   body: { appendChild(node) { return node; } },
   createElement() { return { appended: true }; },
   getElementById(id) {
-    return panels[id] || (panels[id] = { id, hidden: false, classList: { toggle() {} } });
+    return panels[id] || (panels[id] = { id, hidden: false, classList: classList() });
   },
   querySelector() { return null; },
-  addEventListener() {},
+  addEventListener(event, listener) {
+    (documentListeners[event] = documentListeners[event] || []).push(listener);
+  },
 };
 const location = { hash: '', pathname: '/' };
 const history = {
@@ -79,14 +104,29 @@ const history = {
   },
 };
 const inFlight = []; // the fetches not yet answered, oldest first: { url, resolve }
-const fetch = (url) => new Promise((resolve) => { inFlight.push({ url, resolve }); });
+const asked = []; // the urls fetched since the step before
+const fetch = (url) => new Promise((resolve) => {
+  asked.push(url);
+  inFlight.push({ url, resolve });
+});
 const listeners = {}; // the window's listeners by event
-// The page's timers never fire: the driver follows no poll.
 const window = {
   React, ReactDOM, document, fetch, innerWidth: 1600, innerHeight: 1100,
   addEventListener(event, listener) { (listeners[event] = listeners[event] || []).push(listener); },
 };
-const quiet = { setTimeout() { return 0; }, clearTimeout() {} };
+// controls.js's timers, each held until a tick step fires it: { id, run, ms }, in the order set.
+const timers = [];
+let timerIds = 0;
+const clock = {
+  setTimeout(run, ms) {
+    timers.push({ id: ++timerIds, run, ms });
+    return timerIds;
+  },
+  clearTimeout(id) {
+    const at = timers.findIndex((timer) => timer.id === id);
+    if (at !== -1) timers.splice(at, 1);
+  },
+};
 
 new Function('window', 'React', bundle)(window, React);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app)(
@@ -97,9 +137,12 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   'history', 'location', 'setTimeout', 'clearTimeout', controls)(
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location,
-  quiet.setTimeout, quiet.clearTimeout);
-// The view that reads as it opens, the company page, has no script here: its loader does nothing.
-P.onShow.company = P.onShow.company || (() => {});
+  clock.setTimeout, clock.clearTimeout);
+// The view that reads as it opens, the company page, has no script here: its loader reads the
+// detail of the company the address names, which no step answers.
+P.onShow.company = P.onShow.company ||
+  (() => { P.getJson('/api/companies/' + encodeURIComponent(P.company.symbol)); });
+asked.length = 0;
 
 function* elements(tree) {
   if (Array.isArray(tree)) { for (const child of tree) yield* elements(child); return; }
@@ -167,6 +210,11 @@ for (const step of steps) {
       .filter((e) => e.type === 'a' && textOf(e) === step.name);
     prevented = false;
     link.props.onClick({ preventDefault() { prevented = true; } });
+  } else if (step.do === 'tick') {
+    for (const timer of timers.splice(0)) timer.run();
+  } else if (step.do === 'visibility') {
+    document.hidden = step.hidden;
+    for (const listener of documentListeners.visibilitychange || []) listener();
   } else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
   const header = rootOn('header').drawn;
@@ -177,6 +225,9 @@ for (const step of steps) {
   const cells = names();
   trace.push({
     do: step.do,
+    reads: asked.splice(0),
+    recomputing: Object.values(panels).some((e) => e.classList.contains('is-recomputing')),
+    waits: timers.map((timer) => timer.ms),
     view: header.props.view,
     views: header.props.views.map((v) => [v.id, v.label]),
     hash: location.hash,
