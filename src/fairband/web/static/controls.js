@@ -1,18 +1,21 @@
-/* The page's header, its status line and the group view, loaded after app.js and finder.js. The
-   header is the design system's AppHeader: the six views (Screen, Groups, Watchlists,
-   Methodology, Settings, Inbox), then in its right slot the finder (finder.js) on every view but
-   the Screen, the refresh controls and the engine stamp; the URL hash names the open view, and
-   on the Watchlists view its list, whose table is the Screen's, shown under the list's head
-   (spec 2026-11-22 7.3). Inbox carries the count of the open work items, read every thirty
-   seconds while the page is shown (spec 2026-11-06 Tier 2, 18.5). Under the header, the status
+/* The page's header, its status line and the Statistics view, loaded after app.js and finder.js.
+   The header is the design system's AppHeader: the six views in the founder's order (Screen,
+   Watchlists, Statistics, Methodology, Settings, Inbox; spec 2026-11-23 refresh experience, 4.6),
+   then in its right slot the finder (finder.js) on every view but the Screen, the refresh
+   controls and the engine stamp; the URL hash names the open view, and on the Watchlists view
+   its list, whose table is the Screen's, shown under the list's head (spec 2026-11-22 7.3).
+   Inbox carries the count of the open work items, read every thirty seconds while the page is
+   shown (spec 2026-11-06 Tier 2, 18.5). Under the header, the status
    line: the running refresh's one run bar (the design system's RunProgress), or how the last one
    ended in one line, its calibration's breakdown behind Details ▾ (growth-routes spec 6.1); the
    company page draws the run bar and a notice alone, not the last refresh's line or Details ▾
    (the company page's design, the decision log of 2026-11-17). While a refresh runs, the page
    asks /api/refresh/current every 2 seconds, one Cancel stands where the Refresh buttons were, the
    stamp is gone and the tables keep their old figures at ink-faint; when it ends, the rows (and
-   the groups or the company page, when that view is open) load again. The group view is one
-   plain table from /api/groups (spec 6.3), with no chart. The company page (company.js) is a
+   the statistics or the company page, when that view is open) load again. The Statistics view,
+   once named Groups, is one plain table from /api/statistics (spec 6.3; spec 2026-11-23 refresh
+   experience, 4.5), with no chart, each group's name a link that opens the Screen on the group;
+   #statistics names it, and the old #groups opens it. The company page (company.js) is a
    panel no header view names: #company/<symbol> opens its Overview, #company/<symbol>/financials
    its Financials tab, #company/<symbol>/estimates its Estimates tab,
    #company/<symbol>/investor-relations its Investor relations tab, with a call (/2026Q4) or
@@ -47,7 +50,7 @@
   /* The views in the header's order, each with its panel, a section of the page; then the company
      page's panel, which no header view names: the drawer's Company page and a ticker's link open
      it. */
-  var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox', 'company'];
+  var VIEWS = ['screen', 'watchlists', 'statistics', 'methodology', 'settings', 'inbox', 'company'];
   /* The company page's tabs in the row's order, the Overview first: the tab of a hash that names
      none, or one the page does not know. */
   var COMPANY_TABS = ['overview', 'financials', 'estimates', 'investor-relations', 'research'];
@@ -55,7 +58,7 @@
   VIEWS.forEach(function (id) { panels[id] = document.getElementById(id); });
   var header = ReactDOM.createRoot(document.getElementById('header'));
   var bar = ReactDOM.createRoot(document.getElementById('controls'));
-  var groupsRoot = ReactDOM.createRoot(panels.groups);
+  var groupsRoot = ReactDOM.createRoot(panels.statistics);
   var state = {
     tab: 'screen',
     by: 'sector',
@@ -96,7 +99,7 @@
           state.cancelAsked = false;
           P.reload();
           P.reloadDrawer(); /* its review, secondary valuation and item may have moved */
-          if (state.tab === 'groups') loadGroups();
+          if (state.tab === 'statistics') loadGroups();
           if (state.tab === 'company') P.onShow.company();
         }
         if (body.refresh !== null) timer = setTimeout(poll, POLL_MS);
@@ -200,13 +203,15 @@
     });
   }
 
-  /* --------------------------------------------------------------- the groups */
+  /* ----------------------------------------------------------- the statistics */
 
+  /* The Statistics view's groups by the grouping chosen (spec 2026-11-23 refresh experience,
+     4.5); only the newest read lands. */
   function loadGroups() {
     var request = ++latestGroups;
     state.groupsLoading = true;
     render();
-    P.getJson('/api/groups?by=' + encodeURIComponent(state.by))
+    P.getJson('/api/statistics?by=' + encodeURIComponent(state.by))
       .then(function (body) {
         if (request !== latestGroups) return;
         state.groups = body;
@@ -217,15 +222,15 @@
       .catch(function (err) {
         if (request !== latestGroups) return;
         state.groupsLoading = false;
-        state.groupsError = 'The groups did not load: ' + err.message +
+        state.groupsError = 'The statistics did not load: ' + err.message +
           '. Choose the grouping again to retry.';
         render();
       });
   }
 
   /* Opens a view: its panel shows and the others hide, the hash names it (the Screen has none)
-     and its loader runs, the groups' here and each later view's through P.onShow. A view the page
-     does not know is the Screen. A section of the Methodology view stays in P.section for that
+     and its loader runs, the statistics' here and each later view's through P.onShow. A view the
+     page does not know is the Screen. A section of the Methodology view stays in P.section for that
      view's script to scroll to; one named while the view is open runs its loader again
      (spec 2026-11-04 6). The company page takes a company's symbol, a tab and, on the Research
      tab, a report's id, `report`, on the Investor relations tab its word (keepCompany), kept in
@@ -259,7 +264,7 @@
       panels[id].hidden = id !== tab && !(id === 'screen' && tab === 'watchlists');
     });
     if (tab === 'screen' || tab === 'watchlists') P.onList(tab === 'watchlists');
-    if (tab === 'groups') loadGroups();
+    if (tab === 'statistics') loadGroups();
     if (P.onShow[tab]) P.onShow[tab]();
     render();
   }
@@ -309,7 +314,9 @@
   }
 
   /* The view a hash names, on load and when a link changes it: #watchlists, the watchlist page
-     on the default list, or the first by name, #watchlists/<id>, on the list with that id,
+     on the default list, or the first by name, #watchlists/<id>, on the list with that id;
+     #statistics, the Statistics view, and #groups, its old address, which a bookmark may still
+     name, the hash replaced by the view's (spec 2026-11-23 refresh experience, 4.5);
      #methodology, #settings, #methodology/<section-id>, the Methodology view at that section;
      #company/<symbol>, the company page's Overview, #company/<symbol>/financials, its Financials
      tab, #company/<symbol>/estimates, its Estimates tab, #company/<symbol>/investor-relations,
@@ -323,6 +330,7 @@
      7.1). */
   function fromHash() {
     var parts = location.hash.slice(1).split('/');
+    if (parts[0] === 'groups') parts[0] = 'statistics';
     if (parts[0] === 'report') show('company', parts[1], 'research', parts[2]);
     else show(parts[0], parts[1], parts[2], parts[3]);
   }
@@ -451,8 +459,8 @@
        before any refresh finished, there is none: an absent stamp, never a placeholder. */
     var ran = alive || !state.last ? null : state.last.finishedAt;
     header.render(h(F.AppHeader, {
-      views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },
-        { id: 'watchlists', label: 'Watchlists' }, { id: 'methodology', label: 'Methodology' },
+      views: [{ id: 'screen', label: 'Screen' }, { id: 'watchlists', label: 'Watchlists' },
+        { id: 'statistics', label: 'Statistics' }, { id: 'methodology', label: 'Methodology' },
         { id: 'settings', label: 'Settings' }, { id: 'inbox', label: 'Inbox', count: state.open }],
       /* the company page is no header view: none is marked while it shows */
       view: state.tab === 'company' ? '' : state.tab,
@@ -492,7 +500,7 @@
       notice ? h('p', {
         className: 'caption app-status' + (notice.caution ? ' app-status--caution' : '')
       }, notice.text) : null));
-    if (state.tab === 'groups') groupsRoot.render(groupsView());
+    if (state.tab === 'statistics') groupsRoot.render(groupsView());
   }
 
   /* A refresh button's words: the full ones, and the short ones index.html shows in their place
@@ -525,9 +533,10 @@
     return h('div', { key: 'actions', className: 'app-actions' }, buttons);
   }
 
-  /* The table of the groups last loaded; while others load, it stays, faded. Its figures read
-     the engine's (mechanical) value, as rows.group_rows counts them, never a row's own value and
-     word, which follow the reviewed value where Reviewed is filled (plan 3). */
+  /* The Statistics view: the table of the groups last loaded; while others load, it stays,
+     faded. Its figures read what the Screen shows, as rows.statistics_rows counts them: the
+     row's shown phase and its own value, the reviewed one where Reviewed is filled, so a group's
+     count is the Screen's under the group's filter (spec 2026-11-23 refresh experience, 4.5). */
   function groupsView() {
     var g = state.groups;
     var picker = h('label', { className: 'label app-by' }, 'Group by ',
@@ -544,13 +553,24 @@
       h('div', { className: 'app-groups__bar' }, picker),
       body,
       g && g.groups.length ? h('p', { className: 'caption app-muted app-groups__note' },
-        'The median and the share read the mechanical value, the engine\'s, over the companies ' +
-        'it values; below value is a price in its Below or Well below band.') : null);
+        'The median and the share read the value the Screen shows, the reviewed one where a ' +
+        'company has it, over the companies with a value; below value is a price in its ' +
+        'Below or Well below band.') : null);
   }
 
+  /* Each group's name is a link to the page's own path, whose press stays on the page and opens
+     the Screen with the group's filter alone (FairbandPage.filterScreen, app.js); a group with no
+     filter, none or unclassified, names a field its rows lack and is plain text (4.5). */
   function groupsTable(g) {
     function figure(v, text) {
       return h('td', { className: 'figure fb-num' + (v == null ? ' app-muted' : '') }, text);
+    }
+    function name(row) {
+      var word = g.by === 'phase' ? phaseName(row.name) : row.name;
+      return row.filter ? h('a', {
+        className: 'app-link', href: location.pathname,
+        onClick: function (event) { event.preventDefault(); P.filterScreen(row.filter); }
+      }, word) : word;
     }
     return h('table', { className: 'fb-table app-groups__table' },
       h('thead', null, h('tr', null,
@@ -561,7 +581,7 @@
         h('th', { className: 'label fb-num' }, 'Below value'))),
       h('tbody', null, g.groups.map(function (row) {
         return h('tr', { key: row.name },
-          h('td', { className: 'body' }, g.by === 'phase' ? phaseName(row.name) : row.name),
+          h('td', { className: 'body' }, name(row)),
           figure(row.count, count(row.count)),
           figure(row.valued, count(row.valued)),
           figure(row.medianPriceToValue, F.formatPercent(row.medianPriceToValue)),

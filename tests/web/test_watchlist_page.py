@@ -215,7 +215,7 @@ def test_the_old_view_is_gone() -> None:
     assert "function openRow(" not in _static_file("app.js")
     page = _static_file("index.html")
     assert "#watchlists .fb-screen { --bar-height: 0px; }" not in page
-    assert "#groups, #methodology, #settings, #inbox { overflow: auto; }" in page
+    assert "#statistics, #methodology, #settings, #inbox { overflow: auto; }" in page
     assert "On a watchlist, it posts" not in _static_file("methodology.html")
 
 

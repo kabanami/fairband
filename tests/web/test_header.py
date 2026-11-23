@@ -4,8 +4,10 @@ universe, so the Screen and the other views of many companies keep them; the com
 of one company, draws neither: the header's stamp already says when the engine ran. A refresh
 that runs still draws its bar there, and a notice its sentence, since the header has neither.
 The header's finder stands in its right slot on every view but the Screen, whose table has a
-field of its own. The bundle, app.js, finder.js and controls.js run in node
-(``tests/web/header.mjs``) on steps the test gives, and the tests read the trace."""
+field of its own. The menu is in the founder's order, and a group's name in Statistics opens the
+Screen on its filter (spec 2026-11-23 refresh experience, 4.5 and 4.6). The bundle, app.js,
+finder.js and controls.js run in node (``tests/web/header.mjs``) on steps the test gives, and the
+tests read the trace."""
 
 import json
 import subprocess
@@ -55,6 +57,52 @@ RUNNING: dict[str, Any] = {
 }
 LANDED = {"do": "answer", "url": CURRENT, "status": 200, "body": LAST}
 LINE_END = " · 1,371 of 1,569 valued · 1 failed"
+# The screen's rows, the few keys the Screen's filters read, and its first read's address.
+ROWS = [
+    {"ticker": "AAA", "name": "AAA Co", "sector": "Technology", "industry": "Software"},
+    {"ticker": "BBB", "name": "BBB Co", "sector": "Technology", "industry": "Hardware"},
+    {"ticker": "CCC", "name": "CCC Co", "sector": "Energy", "industry": "Oil"},
+    {"ticker": "DDD", "name": "DDD Co", "sector": None, "industry": None},
+]
+SCREEN = {
+    "do": "answer",
+    "url": "/api/screen?sort=ticker&dir=asc",
+    "status": 200,
+    "body": {"rows": [row | {"phase": 4, "capBand": "Mid", "watchlists": []} for row in ROWS]},
+}
+# The design system's EMPTY_FILTERS: nothing narrowed.
+EMPTY_FILTERS: dict[str, Any] = {
+    "designation": [],
+    "stance": [],
+    "phase": [],
+    "cap": [],
+    "sector": [],
+    "industry": [],
+    "watchlist": [],
+    "reviewedOnly": False,
+    "hideExpired": False,
+}
+# The reader's own FIND and filters on the Screen, which a group's filter clears.
+CHOSEN = {
+    "do": "table",
+    "query": "aa",
+    "filters": EMPTY_FILTERS | {"phase": [5], "hideExpired": True},
+}
+STATISTICS = "/api/statistics?by=sector"
+GROUP = {"valued": 0, "medianPriceToValue": None, "shareBelowValue": None}
+BY_SECTOR = {
+    "do": "answer",
+    "url": STATISTICS,
+    "status": 200,
+    "body": {
+        "by": "sector",
+        "groups": [
+            GROUP | {"name": "Energy", "count": 1, "filter": {"sector": ["Energy"]}},
+            GROUP | {"name": "Technology", "count": 2, "filter": {"sector": ["Technology"]}},
+            GROUP | {"name": "none", "count": 1, "filter": None},
+        ],
+    },
+}
 
 
 def _trace(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -98,7 +146,7 @@ def test_a_page_of_one_company_draws_no_last_line_and_no_details() -> None:
     assert screen["finder"] is False
 
 
-@pytest.mark.parametrize("view", ["groups", "watchlists", "methodology", "settings", "inbox"])
+@pytest.mark.parametrize("view", ["statistics", "watchlists", "methodology", "settings", "inbox"])
 def test_a_view_of_many_companies_keeps_the_line_and_has_the_finder(view: str) -> None:
     _, shown = _trace([LANDED, _show(view)])
     assert shown["view"] == view
@@ -210,3 +258,64 @@ def test_after_a_moat_write_the_line_details_and_the_stamp_stay_the_run_before()
     assert written["status"].startswith("full done ") and written["status"].endswith(LINE_END)
     assert written["details"] is True
     assert written["ran"] is not None and written["ran"] == plain["ran"]
+
+
+def test_the_menu_is_in_the_founders_order() -> None:
+    """Spec 2026-11-23 refresh experience, 4.6: Screen, Watchlists, Statistics, Methodology,
+    Settings, Inbox. Statistics is the view Groups was, at its own address (4.5)."""
+    _, shown = _trace([LANDED, _show("statistics")])
+    assert shown["views"] == [
+        ["screen", "Screen"],
+        ["watchlists", "Watchlists"],
+        ["statistics", "Statistics"],
+        ["methodology", "Methodology"],
+        ["settings", "Settings"],
+        ["inbox", "Inbox"],
+    ]
+    assert (shown["view"], shown["hash"]) == ("statistics", "#statistics")
+
+
+def test_the_old_groups_address_opens_statistics() -> None:
+    """4.5: a bookmark or a link to #groups opens Statistics, which reads its groups, and the
+    address is put right."""
+    opened, read = _trace([{"do": "hash", "hash": "#groups"}, BY_SECTOR])
+    assert (opened["view"], opened["hash"]) == ("statistics", "#statistics")
+    assert [name for name, _ in read["statistics"]] == ["Energy", "Technology", "none"]
+
+
+def test_a_group_s_name_opens_the_screen_on_its_filter() -> None:
+    """4.5: FairbandPage.filterScreen opens the Screen with the group's filter over the empty
+    filters, the reader's other filters and FIND cleared. An industry comes with its sectors; one
+    the chosen sectors' rows do not list goes, as the Filters menu drops it (listedFilters)."""
+    loaded, chosen, _, technology, software, unlisted = _trace(
+        [
+            SCREEN,
+            CHOSEN,
+            _show("statistics"),
+            {"do": "filter", "filter": {"sector": ["Technology"]}},
+            {"do": "filter", "filter": {"sector": ["Technology"], "industry": ["Software"]}},
+            {"do": "filter", "filter": {"sector": ["Energy"], "industry": ["Software"]}},
+        ]
+    )
+    assert (loaded["find"], loaded["filters"]) == ("", EMPTY_FILTERS)
+    assert (chosen["find"], chosen["filters"]) == ("aa", CHOSEN["filters"])
+    assert (technology["view"], technology["hash"]) == ("screen", "")
+    assert technology["find"] == ""
+    assert technology["filters"] == EMPTY_FILTERS | {"sector": ["Technology"]}
+    assert software["filters"] == EMPTY_FILTERS | {
+        "sector": ["Technology"],
+        "industry": ["Software"],
+    }
+    assert unlisted["filters"] == EMPTY_FILTERS | {"sector": ["Energy"]}
+
+
+def test_a_group_s_name_is_a_link_and_none_is_plain_text() -> None:
+    """4.5: each name with a filter is a link to the page's own path, whose press stays on the
+    page and opens the Screen on the group; ``none`` has no filter and is plain text."""
+    *_, read, followed = _trace(
+        [SCREEN, CHOSEN, _show("statistics"), BY_SECTOR, {"do": "follow", "name": "Technology"}]
+    )
+    assert read["statistics"] == [["Energy", "/"], ["Technology", "/"], ["none", None]]
+    assert followed["prevented"] is True
+    assert (followed["view"], followed["find"]) == ("screen", "")
+    assert followed["filters"] == EMPTY_FILTERS | {"sector": ["Technology"]}

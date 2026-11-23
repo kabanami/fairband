@@ -1,12 +1,12 @@
-"""The FastAPI app: the screen page, the static files, the screen's JSON API, the group view, the
-refresh routes (spec 6.10), the settings and watchlist routes (``settings_api``,
-``watchlists_api``), the agent routes of the work inbox, the research records and the ledger
-(``agents_api``), the guidance routes (``guidance_api``), the override and review routes
-(``reviews_api``), the moat class's write (``moat_api``), the sensitivity reading's routes
-(``sensitivity_api``), the company reads, the Methodology section read and the report routes
-(``reports_api``), the company page's four reads (``company_api``), the research read
-(``research_api``), the multiples history read (``multiples_api``), the band's history read
-(``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
+"""The FastAPI app: the screen page, the static files, the screen's JSON API, the Statistics view's
+read and the groups the Methodology page counts, the refresh routes (spec 6.10), the settings and
+watchlist routes (``settings_api``, ``watchlists_api``), the agent routes of the work inbox, the
+research records and the ledger (``agents_api``), the guidance routes (``guidance_api``), the
+override and review routes (``reviews_api``), the moat class's write (``moat_api``), the
+sensitivity reading's routes (``sensitivity_api``), the company reads, the Methodology section
+read and the report routes (``reports_api``), the company page's four reads (``company_api``),
+the research read (``research_api``), the multiples history read (``multiples_api``), the band's
+history read (``history_api``), the vendor pass-through route (``vendor_api``), the filing reads
 (``filings_api``), the company logo's read (``logo_api``), and the policy values and growth
 deciles the Methodology page cites (spec 2026-11-04 7.4). The
 Agents section's settings routes (``launch_api``) read and write ``launch.json`` in the config
@@ -38,19 +38,20 @@ The screen's rows are the latest universe's admitted companies, each with its la
 or a placeholder row "not yet valued" before its first; a company the latest universe does not
 admit has no row. The latest universe is the newest that admitted a company
 (``latest_companies``), so a refresh whose screener admitted nobody leaves the screen as it was.
-Before any universe exists, every company with a snapshot has its row. The group view groups the
-same rows. Each row carries the ids of the watchlists the company is on, and the agents' fields
-(``rows.agent_fields``) from the companies' current reviews, newest secondary valuations and latest
-published reports and the snapshots those rest on, with the moat table's classes where a company
-has such a record (``store.moat.moat_classes``): five reads at most for all the rows, whatever
-their number, the fields computed for the companies that have a row.
+Before any universe exists, every company with a snapshot has its row. The Statistics view's read
+and the groups group the same rows. Each row carries the ids of the watchlists the company is on,
+and the agents' fields (``rows.agent_fields``) from the companies' current reviews, newest
+secondary valuations and latest published reports and the snapshots those rest on, with the moat
+table's classes where a company has such a record (``store.moat.moat_classes``): five reads at
+most for all the rows, whatever their number, the fields computed for the companies that have a
+row.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
 the rows' freshness and of the company detail, and the margin of safety, the fair band and the
 trim multiple, on which every row's levels, price ÷ value and word are read, a mechanical row's
-too (``rows.record_standing``; spec 2026-11-23 thresholds, 5.3), with the groups' share below
-value and the drawer's edges. A stored setting
+too (``rows.record_standing``; spec 2026-11-23 thresholds, 5.3), with the share below value of
+the groups and of the statistics and the drawer's edges. A stored setting
 the policy refuses makes those routes answer 409 naming it, until it is reset (``settings_api``).
 
 When the app starts, it marks ``interrupted`` every refresh left ``running`` by a server or a
@@ -177,6 +178,7 @@ from fairband.web.rows import (
     screen_row,
     snapshot_json,
     sort_rows,
+    statistics_rows,
 )
 from fairband.web.sensitivity_api import add_sensitivity_routes
 from fairband.web.settings_api import add_settings_routes, effective
@@ -389,11 +391,22 @@ def create_app(
 
     @app.get("/api/groups")
     def groups(by: str) -> dict[str, Any]:
-        """The screen's rows grouped by sector, industry, phase or cap band (``group_rows``)."""
+        """The screen's rows grouped by sector, industry, phase or cap band (``group_rows``), on
+        the classifier's phase and the engine's value: the Methodology page counts it by phase."""
         if by not in GROUP_BY:
             raise HTTPException(400, f"by must be sector, industry, phase or cap, not {by}")
         rows, _, read_under = screen_rows(clock().date())
         return {"by": by, "groups": group_rows(rows, by, read_under.fair_band[0])}
+
+    @app.get("/api/statistics")
+    def statistics(by: str) -> dict[str, Any]:
+        """The Statistics view's read (spec 2026-11-23 refresh experience, 4.5): the screen's rows
+        grouped by sector, industry, phase or cap band on the figures the Screen shows, each group
+        with the Screen's filter that leaves it (``statistics_rows``)."""
+        if by not in GROUP_BY:
+            raise HTTPException(400, f"by must be sector, industry, phase or cap, not {by}")
+        rows, _, read_under = screen_rows(clock().date())
+        return {"by": by, "groups": statistics_rows(rows, by, read_under.fair_band[0])}
 
     @app.get("/api/companies/{symbol}")
     def company(symbol: str) -> dict[str, Any]:

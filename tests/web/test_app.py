@@ -1087,11 +1087,12 @@ def test_controls_js_mounts_app_header() -> None:
 
 def test_header_has_the_six_views() -> None:
     """Spec 2026-11-06 Tier 2, 18.5: a sixth header view, Inbox, after Settings, its count the
-    open work items; the company page stays a panel no header view names."""
+    open work items; the company page stays a panel no header view names. The views stand in the
+    founder's order, Groups under its name Statistics (spec 2026-11-23 refresh experience, 4.6)."""
     js = _static_file("controls.js")
     assert (
-        "views: [{ id: 'screen', label: 'Screen' }, { id: 'groups', label: 'Groups' },\n"
-        "        { id: 'watchlists', label: 'Watchlists' }, "
+        "views: [{ id: 'screen', label: 'Screen' }, { id: 'watchlists', label: 'Watchlists' },\n"
+        "        { id: 'statistics', label: 'Statistics' }, "
         "{ id: 'methodology', label: 'Methodology' },\n"
         "        { id: 'settings', label: 'Settings' }, "
         "{ id: 'inbox', label: 'Inbox', count: state.open }],"
@@ -1099,7 +1100,7 @@ def test_header_has_the_six_views() -> None:
     assert "view: state.tab === 'company' ? '' : state.tab," in js
     assert "location.hash" in js and "history.replaceState" in js
     html = _static_file("index.html")
-    for panel in ("watchlists", "methodology", "settings", "inbox"):
+    for panel in ("watchlists", "statistics", "methodology", "settings", "inbox"):
         assert f'<section id="{panel}" hidden' in html
     _in_order(html, '<section id="settings" hidden>', '<section id="inbox" hidden>')
 
@@ -1220,7 +1221,7 @@ def test_page_opens_the_view_the_hash_names() -> None:
     tests/web/test_watchlist_page.py's."""
     js = _static_file("controls.js")
     assert (
-        "var VIEWS = ['screen', 'groups', 'watchlists', 'methodology', 'settings', 'inbox',"
+        "var VIEWS = ['screen', 'watchlists', 'statistics', 'methodology', 'settings', 'inbox',"
         " 'company'];"
     ) in js
     show = js[js.index("function show(tab, section, id, report) {") :]
@@ -1266,14 +1267,14 @@ def test_page_opens_the_view_the_hash_names() -> None:
 
 
 def test_index_scrolls_the_new_panels_and_the_header_wraps_at_phone_width() -> None:
-    """The new panels scroll as the groups' does; under 980px, where the one-line header with the
-    six views and the Inbox count no longer fits (measured in a browser: about 970px with a
+    """The new panels scroll as the statistics' does; under 980px, where the one-line header with
+    the six views and the Inbox count no longer fits (measured in a browser: about 970px with a
     two-figure count before the refresh buttons' words wrap), the views take a line of their own
     under the lockup and the header grows by it, so the page never scrolls sideways (spec
     2026-11-04 6; 2026-11-06 Tier 2, 18.5)."""
     page = _static_file("index.html")
-    assert "#screen, #groups, #methodology, #settings, #inbox {" in page
-    assert "#groups, #methodology, #settings, #inbox { overflow: auto; }" in page
+    assert "#screen, #statistics, #methodology, #settings, #inbox {" in page
+    assert "#statistics, #methodology, #settings, #inbox { overflow: auto; }" in page
     # the watchlist page's head, its own height, over the Screen's panel (spec 2026-11-22)
     assert "#watchlists { flex: none; padding: var(--space-2) var(--space-6); }" in page
     css = _component_file("bundle.css")

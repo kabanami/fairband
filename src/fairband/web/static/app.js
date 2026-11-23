@@ -18,7 +18,7 @@
    a class or returns to Fairband's (spec 2026-11-19 8.8). The same table and drawer draw the
    watchlist page's one list (spec 2026-11-22 7.1 and 7.2), with a FIND, filters and a sort of
    its own: controls.js says which of the two views shows (onList), watchlists.js which list
-   (selectList). The header, the status line and the group view are controls.js, loaded after
+   (selectList). The header, the status line and the Statistics view are controls.js, loaded after
    this script; it reaches the screen through window.FairbandPage. */
 (function () {
   'use strict';
@@ -140,6 +140,17 @@
     window.FairbandPage.show('screen');
   }
 
+  /* A group's filter from the Statistics view (controls.js; spec 2026-11-23 refresh experience,
+     4.5): the Screen's filters cleared and `filter` set over them, keeping the industries the
+     menu lists from the loaded rows (listedFilters), the Screen's own FIND cleared, and the Screen
+     view open; the watchlist page's FIND and filters stay as they are. */
+  function filterScreen(filter) {
+    state.query = '';
+    state.filters = listedFilters(Object.assign({}, F.EMPTY_FILTERS, filter), state.rows || []);
+    render();
+    window.FairbandPage.show('screen');
+  }
+
   function getJson(url) {
     return fetch(url).then(function (response) {
       if (!response.ok) throw new Error('the server answered ' + response.status);
@@ -211,7 +222,8 @@
 
   /* What controls.js uses: the screen's reload when a refresh ends, the write helpers and a refused
      write's sentence and its reason (refusalDetail), the GET helper, the local-time helper, whether
-     a launch is followed (following), the phase numbers and a work item's open states; and the
+     a launch is followed (following), the phase numbers, a work item's open states and
+     filterScreen, by which the Statistics view opens the Screen on a group's filter; and the
      later views, find, the lists (null until they load), their reload, which settles once they are
      in, and watch, the marks' onWatch, which opens the popup, under the element it is handed
      where it is handed one (the company page's Watchlists ▾); closePopups, which closes the popup,
@@ -261,7 +273,7 @@
     reload: load, api: api, refusal: refusal, refusalDetail: refusalDetail, getJson: getJson,
     localIso: localIso, following: following,
     PHASE_NUMBER: PHASE_NUMBER, OPEN_STATES: OPEN_STATES,
-    find: find, finds: finds,
+    find: find, finds: finds, filterScreen: filterScreen,
     narrow: narrow, industriesOf: industriesOf, listedFilters: listedFilters,
     listRows: listRows, onList: onList, selectList: selectList,
     watchlists: function () { return state.watchlists; },
@@ -823,9 +835,9 @@
      --scroller-width, the scroller's width less its scrollbar, which follows the window and the
      drawer; a scroller made taller can leave Top's threshold behind without a scroll, so the
      observer asks again. The observer lives as long as the table; without ResizeObserver the
-     header takes the bar's one-line height and the bar the screen's width. The Groups view hides
-     the screen, whose scroller then measures 0 wide: the observer keeps the last measures, and
-     takes new ones when the screen shows again. The Screen and the watchlist page share the
+     header takes the bar's one-line height and the bar the screen's width. The Statistics view
+     hides the screen, whose scroller then measures 0 wide: the observer keeps the last measures,
+     and takes new ones when the screen shows again. The Screen and the watchlist page share the
      scroller, and the table mounts afresh as the view changes (its key): mounted, it puts the
      scroller at `top`, the list's top or the place the Screen's was left at (onList). The root
      draws after render returns, so onList cannot set the place itself; the effect runs with the

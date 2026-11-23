@@ -1,8 +1,9 @@
-"""The group view, ``GET /api/groups``, on a temporary migrated database: the screen's rows grouped
-by sector, phase or cap band, with each group's count, the companies with a value, the median
-price ÷ value and the share below value (price ÷ value under the second designation edge, 0.85).
-The phase is the classifier's, whatever phase a review shows on the row (spec 2026-11-23 refresh
-experience, 4.4).
+"""The groups, ``GET /api/groups``, which the Methodology page counts by phase, on a temporary
+migrated database: the screen's rows grouped by sector, phase or cap band, with each group's count,
+the companies with a value, the median price ÷ value and the share below value (price ÷ value
+under the second designation edge, 0.85). The phase is the classifier's, whatever phase a review
+shows on the row (spec 2026-11-23 refresh experience, 4.4). The Statistics view reads its own
+route, on the figures the Screen shows (``test_statistics.py``).
 
 The universe of one full refresh admits six companies:
 
@@ -23,7 +24,6 @@ from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -295,18 +295,6 @@ def test_share_below_value_reads_the_second_edge(tmp_path: Path, policy: Policy)
     }
 
 
-def test_the_groups_page_reads_the_share_below_value() -> None:
-    script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
-    assert "figure(row.shareBelowValue, F.formatPercent(row.shareBelowValue))" in script
-    assert "'Below value'" in script
-    # the figures read the engine's value, never a row's own, which can be the reviewed (plan 3)
-    assert (
-        "'The median and the share read the mechanical value, the engine\\'s, over the companies '"
-        " +\n        'it values; below value is a price in its Below or Well below band.')"
-    ) in script
-    assert "shareBelowBuy" not in script and "Below buy" not in script
-
-
 def test_groups_null_when_no_values(
     tmp_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:
@@ -368,14 +356,6 @@ def test_groups_by_industry(
             },
             {"name": "none", "count": 1, **EMPTY},
         ]
-
-
-def test_the_groups_page_offers_the_industry() -> None:
-    script = resources.files("fairband.web").joinpath("static", "controls.js").read_text("utf-8")
-    assert (
-        "var BY = { sector: 'Sector', industry: 'Industry', phase: 'Phase', cap: 'Cap band' };"
-        in script
-    )
 
 
 def test_groups_unknown_by_400(client: TestClient) -> None:

@@ -31,7 +31,7 @@ SECTIONS = [
     "your-settings",
 ]
 # The page's own panels: no id in the fragment may repeat one (controller ruling, task 10 review).
-PANELS = {"header", "controls", "screen", "groups", "watchlists", "methodology", "settings"}
+PANELS = {"header", "controls", "screen", "statistics", "watchlists", "methodology", "settings"}
 # Idioms the review found, and their kin; spec 7.1 asks for plain words.
 IDIOMS = [
     "asks a lot",

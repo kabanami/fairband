@@ -4,19 +4,29 @@
 // last drew, the few browser objects the scripts touch (each view's panel one object whose
 // `hidden` controls.js sets, a query that finds no element, as app.js asks for the table's
 // scroller when the Watchlists view turns the table to its list, the hash, the history the views
-// replace) and a fetch of the driver's own, answered only when a step answers it. The reads the
-// scripts start as they load stay in flight, so a step can answer the first read of the
-// refresh's state.
+// replace, the window's listeners) and a fetch of the driver's own, answered only when a step
+// answers it. The reads the scripts start as they load stay in flight, so a step can answer the
+// first read of the refresh's state, or the screen's rows (/api/screen?sort=ticker&dir=asc).
 //
 // The steps, a JSON list on stdin, each one object:
 //   {"do": "show", "view", "section"}            a header view, a link or a hash opens `view`
 //                                                (FairbandPage.show, controls.js)
+//   {"do": "hash", "hash"}                       the browser's Back or Forward, or a link, moves
+//                                                the hash to `hash`: controls.js reads it
 //   {"do": "answer", "url", "status", "body"}    the oldest fetch in flight to `url` answers
 //   {"do": "details"}                            Details ▾ is pressed
+//   {"do": "table", "query", "filters"}          the reader types `query` in the Screen's FIND and
+//                                                chooses `filters` in its Filters menu
+//   {"do": "filter", "filter"}                   FairbandPage.filterScreen(filter) (app.js), as a
+//                                                group's name in Statistics calls it
+//   {"do": "follow", "name"}                     the Statistics table's link `name` is pressed
 // After each step and the work it sets off, the trace on stdout gains the view the header marks,
-// whether its right slot holds the finder, and what the bar under it draws: its class, the status
-// region's words, whether Details ▾ stands beside them and whether its menu is open, whether the
-// run's bar is drawn, and the notice.
+// the header's views as [id, label], the hash, whether its right slot holds the finder, and what
+// the bar under it draws: its class, the status region's words, whether Details ▾ stands beside
+// them and whether its menu is open, whether the run's bar is drawn, and the notice; then the
+// FIND and the filters of the table the screen's root last drew (null before it draws one), the
+// Statistics table's names, each [name, the link's href, or null for plain text] (null before it
+// draws one), and, on a press of a link, whether the press kept the browser from following it.
 //
 //   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -70,9 +80,11 @@ const history = {
 };
 const inFlight = []; // the fetches not yet answered, oldest first: { url, resolve }
 const fetch = (url) => new Promise((resolve) => { inFlight.push({ url, resolve }); });
+const listeners = {}; // the window's listeners by event
 // The page's timers never fire: the driver follows no poll.
 const window = {
-  React, ReactDOM, document, fetch, innerWidth: 1600, innerHeight: 1100, addEventListener() {},
+  React, ReactDOM, document, fetch, innerWidth: 1600, innerHeight: 1100,
+  addEventListener(event, listener) { (listeners[event] = listeners[event] || []).push(listener); },
 };
 const quiet = { setTimeout() { return 0; }, clearTimeout() {} };
 
@@ -108,6 +120,21 @@ function textOf(tree) {
 
 const rootOn = (id) => roots.find((root) => root.mount === panels[id]);
 
+// The table the screen's root last drew (app.js's Screen, ScreenTable's props), else null.
+function table() {
+  const root = rootOn('screen');
+  return [...elements(root && root.drawn)].find((e) => 'onFiltersChange' in e.props) || null;
+}
+
+// The Statistics table's name cells, the first of each row, else null before it draws one.
+function names() {
+  const root = rootOn('statistics');
+  if (!root || !root.drawn) return null;
+  const cells = [...elements(root.drawn)]
+    .filter((e) => e.type === 'td' && e.props.className === 'body');
+  return cells.length ? cells : null;
+}
+
 function answered(step) {
   const at = inFlight.findIndex((call) => call.url === step.url);
   if (at === -1) throw new Error('no fetch in flight to ' + step.url);
@@ -121,21 +148,38 @@ function answered(step) {
 
 const trace = [];
 for (const step of steps) {
+  let prevented = null;
   if (step.do === 'show') P.show(step.view, step.section);
-  else if (step.do === 'answer') answered(step);
+  else if (step.do === 'hash') {
+    location.hash = step.hash;
+    for (const listener of listeners.hashchange || []) listener();
+  } else if (step.do === 'answer') answered(step);
   else if (step.do === 'details') {
     const [button] = [...elements(rootOn('controls').drawn)]
       .filter((e) => e.type === window.Fairband.Button && textOf(e) === 'Details ▾');
     button.props.onClick();
+  } else if (step.do === 'table') {
+    table().props.onQueryChange(step.query);
+    table().props.onFiltersChange(step.filters);
+  } else if (step.do === 'filter') P.filterScreen(step.filter);
+  else if (step.do === 'follow') {
+    const [link] = [...elements(names())]
+      .filter((e) => e.type === 'a' && textOf(e) === step.name);
+    prevented = false;
+    link.props.onClick({ preventDefault() { prevented = true; } });
   } else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
   const header = rootOn('header').drawn;
   const bar = [...elements(rootOn('controls').drawn)];
   const [status] = bar.filter((e) => e.props.role === 'status');
   const [notice] = bar.filter((e) => e.type === 'p');
+  const drawn = table();
+  const cells = names();
   trace.push({
     do: step.do,
     view: header.props.view,
+    views: header.props.views.map((v) => [v.id, v.label]),
+    hash: location.hash,
     ran: header.props.engineRanAt,
     finder: [...elements(header.props.children)].some((e) => e.type === P.finder.view),
     actions: [...elements(header.props.children)]
@@ -147,6 +191,13 @@ for (const step of steps) {
     menu: bar.some((e) => String(e.props.className || '').split(' ').includes('fb-menu--filters')),
     run: bar.some((e) => e.type === window.Fairband.RunProgress),
     notice: notice ? textOf(notice) : null,
+    find: drawn ? drawn.props.query : null,
+    filters: drawn ? drawn.props.filters : null,
+    statistics: cells && cells.map((cell) => {
+      const [link] = [...elements(cell)].filter((e) => e.type === 'a');
+      return [textOf(cell), link ? link.props.href : null];
+    }),
+    prevented,
   });
 }
 process.stdout.write(JSON.stringify(trace));

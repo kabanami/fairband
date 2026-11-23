@@ -1,5 +1,6 @@
 """The API's JSON shapes: a snapshot and its company as one screen row, an admitted company not yet
-valued as a placeholder row, the rows grouped for the group view, and the company, snapshot,
+valued as a placeholder row, the rows grouped for the Statistics view on the figures the Screen
+shows and for the Methodology page's counts on the classifier's phase, and the company, snapshot,
 refresh and progress records as the routes send them.
 
 A screen row carries the ``ScreenRow`` keys of the design system's ``index.d.ts`` (``ticker`` to
@@ -38,7 +39,8 @@ Where a review fills it, the row's ``phase`` is the review's result's phase (``s
 2026-11-23 refresh experience, 4.4), the one a ``phase`` override set; elsewhere the snapshot's. A
 secondary valuation has no phase and changes none. The field ``mechanicalPhase`` is always the
 snapshot's, the classifier's, which the groups by phase count; no column draws it and nothing
-sorts by it, so it is no row key.
+sorts by it, so it is no row key. Statistics by phase counts the shown ``phase``, as the Screen's
+phase filter reads it (spec 4.5).
 
 Every row also has the mark's two fields (spec 2026-11-19 7.5), which no column draws and nothing
 sorts by, so neither is a row key: ``warnings``, the plain words of the snapshot's quality warnings
@@ -674,18 +676,80 @@ def group_rows(rows: Sequence[dict[str, Any]], by: str, below_value: float) -> l
     whose price ÷ value is below ``below_value``, the fair band's low end, every class's second
     designation edge (the ``below`` and ``well-below`` bands); ``None`` for the last two when
     they cover no row. Every figure reads the engine's (mechanical) value (``_group``)."""
-    named: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        named.setdefault(_group_name(row, by), []).append(row)
+    named = _named(rows, by, "mechanicalPhase")
     return [_group(name, members, below_value) for name, members in sorted(named.items())]
 
 
-def _group_name(row: dict[str, Any], by: str) -> str:
+def statistics_rows(
+    rows: Sequence[dict[str, Any]], by: str, below_value: float
+) -> list[dict[str, Any]]:
+    """The rows grouped by ``by`` (``GROUP_BY``) as the Statistics view shows them (spec
+    2026-11-23 refresh experience, 4.5), ordered by group name, each named as ``group_rows``
+    names it but by phase, where the group is the row's shown ``phase``, the review's where a
+    review fills the row. Every figure reads what the Screen shows, so that a group's count is the
+    count of the rows its filter leaves there: ``valued`` counts the rows with a ``fairValue``, the
+    row's own value, the reviewed one where Reviewed is filled; ``medianPriceToValue`` is the
+    median of their ``priceToValue`` that are not ``None``, and ``shareBelowValue`` the share of
+    them whose ``priceToValue`` is under ``below_value``, the fair band's low end, so in its
+    Below or Well below band; ``None`` for the last two when they cover no row. ``filter`` is the
+    Screen's filter that leaves the group (``_screen_filter``)."""
+    named = _named(rows, by, "phase")
+    return [_statistic(name, members, by, below_value) for name, members in sorted(named.items())]
+
+
+def _named(
+    rows: Sequence[dict[str, Any]], by: str, phase_key: str
+) -> dict[str, list[dict[str, Any]]]:
+    """The rows by their group's name (``_group_name``), a row's phase read from its key
+    ``phase_key``, in the rows' order within each group."""
+    named: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        named.setdefault(_group_name(row, by, phase_key), []).append(row)
+    return named
+
+
+def _group_name(row: dict[str, Any], by: str, phase_key: str) -> str:
     if by == "phase":
-        phase = row["mechanicalPhase"]
+        phase = row[phase_key]
         return UNCLASSIFIED if phase is None else _PHASE_NAMES[phase]
     name = row["capBand"] if by == "cap" else row[by]
     return NONE if name is None else str(name)
+
+
+def _statistic(
+    name: str, rows: list[dict[str, Any]], by: str, below_value: float
+) -> dict[str, Any]:
+    """One group of ``statistics_rows``, read on each row's own value and price ÷ value."""
+    valued = [r for r in rows if r["fairValue"] is not None]
+    ratios = [r["priceToValue"] for r in valued if r["priceToValue"] is not None]
+    below = [x for x in ratios if x < below_value]
+    return {
+        "name": name,
+        "count": len(rows),
+        "valued": len(valued),
+        "medianPriceToValue": statistics.median(ratios) if ratios else None,
+        "shareBelowValue": len(below) / len(valued) if valued else None,
+        "filter": _screen_filter(name, rows, by),
+    }
+
+
+def _screen_filter(name: str, rows: list[dict[str, Any]], by: str) -> dict[str, Any] | None:
+    """The Screen's filter that leaves the group ``name`` of ``rows`` by ``by``, in the Filters
+    menu's keys and ids: the sector; the industry with the sorted sectors of its rows, since the
+    menu lists an industry under its chosen sectors alone; the phase as the menu's number; the
+    cap band lower-cased, as the menu's id. ``None`` for the groups ``none`` and
+    ``unclassified``, and for an industry none of whose rows has a sector: no filter matches a
+    field a row lacks."""
+    if by == "phase":
+        return None if name == UNCLASSIFIED else {"phase": [rows[0]["phase"]]}
+    if name == NONE:
+        return None
+    if by == "cap":
+        return {"cap": [name.lower()]}
+    if by == "industry":
+        sectors = sorted({r["sector"] for r in rows if r["sector"] is not None})
+        return {"sector": sectors, "industry": [name]} if sectors else None
+    return {"sector": [name]}
 
 
 def _group(name: str, rows: list[dict[str, Any]], below_value: float) -> dict[str, Any]:

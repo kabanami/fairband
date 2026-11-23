@@ -20,10 +20,10 @@
   .app-page { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; }
   #header { flex: none; }
   #controls { padding: var(--space-2) var(--space-6) 0; }
-  #screen, #groups, #methodology, #settings, #inbox {
+  #screen, #statistics, #methodology, #settings, #inbox {
     flex: 1; min-height: 0; padding: 0 var(--space-6) var(--space-4);
   }
-  #groups, #methodology, #settings, #inbox { overflow: auto; }
+  #statistics, #methodology, #settings, #inbox { overflow: auto; }
   #watchlists { flex: none; padding: var(--space-2) var(--space-6); }
 
   /* The header's finder (finder.js), first in the header's right slot on every view but the
@@ -121,7 +121,9 @@
   .app-select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .app-groups__table { width: auto; min-width: 50%; }
   .app-groups__note { margin: var(--space-2) 0 0; }
-  .app-groups.is-loading .fb-table tbody td { color: var(--ink-faint); }
+  /* Statistics while another grouping loads: the old table at ink-faint, a group's link too. */
+  .app-groups.is-loading .fb-table tbody td,
+  .app-groups.is-loading .fb-table tbody td a { color: var(--ink-faint); }
   .app-layout {
     position: relative; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr);
     gap: var(--space-4);
@@ -1619,7 +1621,7 @@
   <div id="controls"></div>
   <section id="watchlists" hidden></section>
   <section id="screen"></section>
-  <section id="groups" hidden></section>
+  <section id="statistics" hidden></section>
   <section id="methodology" hidden></section>
   <section id="settings" hidden></section>
   <section id="inbox" hidden></section>
