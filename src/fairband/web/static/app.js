@@ -272,6 +272,8 @@
     rows: function () { return state.rows; },
     reloadDetail: reloadDetail, reloadDrawer: reloadDrawer,
     meter: meter, gapText: gapText, levelRows: levelRows, bandBasis: bandBasis,
+    heldOf: heldOf, heldLine: heldLine, heldPart: heldPart,
+    reviewAgainUrl: reviewAgainUrl,
     inputsTable: inputsTable, figuresTable: figuresTable, inputFigure: inputFigure,
     inputValue: inputValue,
     secondaryRows: secondaryRows, secondaryPath: secondaryPath, guidanceTable: guidanceTable,
@@ -990,7 +992,8 @@
       body.brief ? h('p', { key: 'brief', className: 'body app-drawer__brief' }, body.brief)
         : null,
       rows ? h('section', { key: 'band', className: 'app-drawer__band' }, meter(body),
-        pairs(rows.map(function (row) { return [row[0], row[1], true]; })))
+        pairs(rows.map(function (row) { return [row[0], row[1], true]; })),
+        heldPart(body, render, function () { load(); reloadDetail(r.symbol); }))
         : r.refusal ? h('section', { key: 'band', className: 'app-drawer__band' },
           h('p', { className: 'body app-refusal' }, r.refusal)) : null,
       h('div', { key: 'actions', className: 'app-drawer__actions' },
@@ -1030,6 +1033,20 @@
           fairValue: review.value, buyLevel: review.levels.buy, trimLevel: review.levels.trim,
           designation: review.designation, showScale: false,
           gap: gapText(review.priceToValue, body.designationEdges, 'the reviewed value'),
+          caption: 'mechanical ' + F.formatMoney(r.value), hero: hero,
+          captionTitle: mechanicalHover(body)
+        });
+      }
+      if (isBanded(body)) {
+        /* a secondary valuation that holds the row after the route values the company (spec
+           2026-11-23 held reviewed value, 5.9): its band, as the screen's row shows it, with the
+           mechanical value in the caption */
+        return h(F.BandMeter, {
+          low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,
+          fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,
+          trimLevel: secondary.levels.trim, designation: secondary.designation,
+          showScale: false,
+          gap: gapText(secondary.priceToValue, body.designationEdges, 'the secondary valuation'),
           caption: 'mechanical ' + F.formatMoney(r.value), hero: hero,
           captionTitle: mechanicalHover(body)
         });
@@ -1091,15 +1108,92 @@
       r.price != null;
   }
 
-  /* A refused row whose review has no value there and whose secondary valuation, which the detail
-     carries only while it counts on the latest snapshot, has levels, and a price to draw them
-     against: its meter is the secondary's. */
+  /* A row whose review has no value there and whose secondary valuation has levels, and a price
+     to draw them against: its meter is the secondary's. The secondary valuation holds the row
+     (its `held`, spec 2026-11-23 held reviewed value, 5.9), on a refused row or on one the route
+     now values; one the detail carries with no `held`, made on a valued snapshot before the
+     secondary route refused such a call, bands a refused row alone, as before. */
   function isBanded(body) {
     var r = body.result;
     var s = body.secondary;
     var v = body.review;
-    return !isValued(r) && !!r.refusal && !(v && v.value != null) && !!s && !!s.levels &&
-      r.price != null;
+    if ((v && v.value != null) || !s || !s.levels || r.price == null) return false;
+    return s.held ? true : !isValued(r) && !!r.refusal;
+  }
+
+  /* The held record whose value the meter draws (spec 2026-11-23 held reviewed value, 5.7): the
+     review's state where the band is a review's, the secondary valuation's where it is a
+     secondary's; null on a mechanical band and where the server sent none. */
+  function heldOf(body) {
+    if (isReviewed(body) || isReviewBanded(body)) return body.review.held || null;
+    return isBanded(body) ? body.secondary.held || null : null;
+  }
+
+  /* The one line a value expired early adds under its levels (5.7), and nothing for a value that
+     is current, aging or expired by its date: Expired's glyph and colour, "Expired early", the
+     day a refresh first found a reason where one is stored, and the count of the reasons, as a
+     button that says whether its detail is open. `view` is { open, error, busy }. Opened, the
+     detail lists the reasons, one a line, then the reading's line where it is no reason, a
+     refusal's sentence, and Review again where `again` is given: a review's, never a secondary
+     valuation's, which an agent makes again. Nothing else on the page shows the reading. */
+  function heldLine(held, view, toggle, again) {
+    if (!held || held.state !== 'expired-early') return null;
+    var at = view || {};
+    var count = held.reasons.length;
+    var lines = held.reasons.concat(held.readingLine ? [held.readingLine] : []);
+    return h('div', { key: 'held', className: 'app-held' },
+      h('button', {
+        type: 'button', className: 'app-held__line caption', 'aria-expanded': !!at.open,
+        onClick: toggle
+      },
+      h('span', { className: 'fb-mark fb-mark--expired' }, '×'),
+      ' Expired early' + (held.earlyAt ? ' ' + F.formatDate(held.earlyAt) : '') + ' · ' + count +
+        (count === 1 ? ' reason ' : ' reasons '),
+      h('span', { 'aria-hidden': 'true' }, at.open ? '▾' : '▸')),
+      at.open ? h('div', { className: 'app-held__detail' },
+        lines.map(function (line, i) {
+          return h('p', { key: i, className: 'caption app-held__reason' }, line);
+        }),
+        at.error ? h('p', { className: 'caption app-refusal' }, at.error) : null,
+        again ? h(F.Button, {
+          variant: 'quiet', size: 'sm', disabled: !!at.busy, onClick: again
+        }, 'Review again') : null) : null);
+  }
+
+  /* Each company's line as the reader left it, by symbol: open or closed, the refusal of its
+     last Review again, and whether one is out. */
+  var heldViews = {};
+
+  function reviewAgainUrl(symbol) {
+    return '/api/companies/' + encodeURIComponent(symbol) + '/review';
+  }
+
+  /* The held value's line for the detail `body` (heldLine), with its state on this page: `redraw`
+     draws the view again, and `after` reads the company again once a review is made. Review
+     again posts the owner's act (5.6); a refusal stays in the opened detail. */
+  function heldPart(body, redraw, after) {
+    var held = heldOf(body);
+    if (!held) return null;
+    var symbol = body.result.symbol;
+    var view = heldViews[symbol] || {};
+    function set(changes) {
+      heldViews[symbol] = Object.assign({}, heldViews[symbol], changes);
+      redraw();
+    }
+    function again() {
+      set({ busy: true, error: null });
+      api.post(reviewAgainUrl(symbol)).then(function (answer) {
+        if (answer.ok) {
+          delete heldViews[symbol];
+          after();
+        } else {
+          set({ busy: false, error: refusalDetail(answer) });
+        }
+      });
+    }
+    var isReview = isReviewed(body) || isReviewBanded(body);
+    return heldLine(held, view, function () { set({ open: !view.open }); },
+      isReview ? again : null);
   }
 
   /* The four levels under the meter in the screen's words, as [name, text] pairs (the company
@@ -1118,13 +1212,14 @@
     var s = body.secondary;
     var band = isReviewed(body) || isReviewBanded(body)
       ? Object.assign({ value: v.value }, v.levels)
-      : isValued(r) ? {
-        value: r.value, buy: r.levels.buy, fairLow: r.levels.fair_low,
-        fairHigh: r.levels.fair_high, trim: r.levels.trim
-      } : isBanded(body) ? Object.assign({ value: s.valuePerShare }, s.levels) : null;
+      : isBanded(body) ? Object.assign({ value: s.valuePerShare }, s.levels)
+        : isValued(r) ? {
+          value: r.value, buy: r.levels.buy, fairLow: r.levels.fair_low,
+          fairHigh: r.levels.fair_high, trim: r.levels.trim
+        } : null;
     if (!band) return null;
     var fair = F.formatMoney(band.value);
-    if (isValued(r) && !isReviewed(body)) {
+    if (isValued(r) && !isReviewed(body) && !isBanded(body)) {
       fair = h('span', { title: mechanicalHover(body) },
         body.marked ? h(F.WarningMark, { words: body.warnings || [] }) : null, fair);
     }

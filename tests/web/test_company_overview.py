@@ -340,6 +340,33 @@ def test_the_report_s_line_of_an_expired_report_and_a_symbol_to_encode() -> None
     assert link["props"]["href"] == "#company/A%26B/research" == node("researchHref", ["A&B"])
 
 
+def test_the_value_block_adds_one_line_for_a_value_expired_early() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.7: the Overview adds nothing for a reviewed value
+    that is current, and one line under the levels, before the report's line, for one that
+    expired early: the drawer's line (``FairbandPage.heldPart``)."""
+    held = {
+        "state": "expired-early",
+        "earlyAt": "2026-11-14",
+        "reasons": ["The company has reported a newer period (to 26 Dec 2026)."],
+        "reading": None,
+        "readingRefusal": None,
+        "readingLine": None,
+        "validUntil": "2027-02-01",
+    }
+    current = answers.reviewed_detail()
+    current["review"] = current["review"] | {"held": held | {"state": "current", "reasons": []}}
+    assert classed(_page("value", current), "app-held") == []
+    early = answers.reviewed_detail()
+    early["review"] = early["review"] | {"held": held}
+    tree = _page("value", early)
+    [line] = classed(tree, "app-held")
+    words = [text(e) for e in elements(line) if e.get("type") == "button"]
+    assert words == ["× Expired early 14 Nov 2026 · 1 reason ▸"]
+    order = [e for e in elements(tree) if e.get("type") is not None]
+    [levels] = classed(tree, "app-company__two")
+    assert order.index(levels) < order.index(line)
+
+
 def test_the_value_block_of_a_refused_row() -> None:
     """A refused row with no band shows its refusal's sentence in the meter's place, and no
     levels; its chip stays mechanical, the engine's."""

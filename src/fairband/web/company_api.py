@@ -404,9 +404,13 @@ def add_company_page_routes(
             overrides = {o.id: o for o in overrides_for(conn, symbol)}
             records = {
                 **research_records(conn, symbol),
+                # the made reviews and the copies a refresh carried; a reading shows nowhere on
+                # the page but the opened detail of a value expired early (spec 2026-11-23 held
+                # reviewed value, 5.7)
                 "reviews": [
                     review_json(r, with_result=False) | {"bridge": bridge_lines(r, overrides)}
                     for r in reviews_for(conn, symbol)
+                    if r.kind != "reading"
                 ],
                 "secondaryValuations": [secondary_json(s) for s in secondaries_for(conn, symbol)],
                 "ledgerCount": entry_count(conn, symbol),

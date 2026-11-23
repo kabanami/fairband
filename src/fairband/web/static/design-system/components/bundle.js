@@ -375,7 +375,10 @@
         h('tbody', null,
           h('tr', null,
             h('td', { className: 'fb-bridge__g fb-bridge__g--f', 'aria-hidden': 'true' }, GLYPH_DERIVED),
-            h('td', { className: 'body' }, 'Mechanical value'),
+            // fairband: a held review keeps the mechanical value of the day it was made (spec
+            // 2026-11-23 held reviewed value, 5.7), so the line says that day where it is given.
+            h('td', { className: 'body' }, 'Mechanical value' +
+              (p.mechanicalDay ? ' of ' + readable(String(p.mechanicalDay).slice(0, 10)) : '')),
             h('td', null, h(BasisChip, { basis: 'mechanical', showGlyph: false })),
             h('td', { className: 'fb-num figure' }, money(p.mechanical))
           ),
@@ -1394,8 +1397,11 @@
         return h('td', { className: 'fb-screen__when caption' },
           iso ? h('time', { dateTime: iso, title: iso }, readable(iso.slice(0, 10)))
             : h(DateText, { value: iso }),
+          // fairband: a held reviewed value that expired early (spec 2026-11-23 held reviewed
+          // value, 5.7) takes Expired's glyph and colour, and says so in the mark's words.
           f === 'current' ? null : h('span', {
-            className: 'fb-mark fb-mark--' + f, title: FRESHNESS[f].word
+            className: 'fb-mark fb-mark--' + f,
+            title: r.expiredEarly ? 'Expired early' : FRESHNESS[f].word
           }, FRESHNESS[f].mark));
       } },
     // fairband: the extra columns of spec 6.3, each a plain figure, word or date from the row.

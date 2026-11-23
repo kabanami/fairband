@@ -74,7 +74,7 @@
       panel('Notes', ['When', 'The note'], r.notes, note),
       panel('Reviews',
         ['When', 'Value', 'Mechanical value', 'Overrides inside', 'Price vs value, or the refusal'],
-        r.reviews, review),
+        r.reviews, reviewOf(r.reviews)),
       panel('Secondary valuations', ['When', 'Form', 'Value a share', 'The reason'],
         r.secondaryValuations, secondary),
       panel('News items', ['Date', 'Headline', 'What happened'], newest(r.newsItems), news),
@@ -142,10 +142,21 @@
     return { key: n.id, cells: [time(n.at), cell(n.text, 'text')] };
   }
 
+  /* The row builder of the company's reviews (review), each given the time its review was made:
+     a copy a refresh carried onto a newer snapshot (its madeId) keeps the bridge of the made
+     review, with the mechanical value of that day (spec 2026-11-23 held reviewed value, 5.2 and
+     5.7), so its bridge names the made review's day; a made review's is its own. */
+  function reviewOf(reviews) {
+    var madeAt = {};
+    (reviews || []).forEach(function (r) { if (r.madeId == null) madeAt[r.id] = r.createdAt; });
+    return function (r) { return review(r, madeAt[r.madeId] || r.createdAt); };
+  }
+
   /* A review: when, its value and the mechanical value it starts from, the count of the
      overrides inside it, and its word against the price it was stored at, or its refusal; with
-     its bridge, ValueBridge's props, or its refusal where it has no value. */
-  function review(r) {
+     its bridge, ValueBridge's props, its first line naming the day of the mechanical value, the
+     local day of `madeAt`, or its refusal where it has no value. */
+  function review(r, madeAt) {
     var said = r.value == null && r.refusal ? cell(r.refusal, 'refusal')
       : r.designation ? cell(F.DESIGNATION[r.designation] || r.designation, 'designation',
         { designation: r.designation })
@@ -158,6 +169,7 @@
       ],
       bridge: r.value == null ? { refusal: r.refusal || DASH } : {
         mechanical: r.mechanicalValue, reviewed: r.value, hero: false,
+        mechanicalDay: madeAt ? P.localIso(madeAt).slice(0, 10) : undefined,
         overrides: (r.bridge || []).map(function (line) {
           return {
             tag: line.label, from: P.inputFigure(line.old, line.unit),

@@ -568,6 +568,31 @@ def test_the_records_carry_the_reviews_the_secondary_valuations_and_the_ledger_s
     assert (records["ledgerCount"], len(records["ledger"])) == (25, 20)
 
 
+def test_the_research_tab_lists_no_reading(
+    client: TestClient, db_path: Path, results: dict[str, ValuationResult]
+) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.7: nothing on the page shows a reading but the
+    opened detail of a value expired early. The Research tab's reviews are the made review and
+    the copies a refresh carried, each with its kind; the reviews read, which an agent's tool
+    reads, lists the readings too."""
+    sid = snapshot_id(client)
+    mechanical = results["AAPL"]
+    review = Review(mechanical, mechanical.value, (), ())
+    with closing(connect(db_path)) as conn:
+        made = insert_review(conn, review, "AAPL", sid, None, clock=lambda: NOW)
+        insert_review(conn, review, "AAPL", sid, 1, kind="reading", made_id=made, clock=lambda: NOW)
+        copy = insert_review(
+            conn, review, "AAPL", sid, 1, kind="held", made_id=made, clock=lambda: NOW
+        )
+    listed = _page(client)["records"]["reviews"]
+    assert [(r["id"], r["kind"], r["madeId"]) for r in listed] == [
+        (copy, "held", made),
+        (made, "made", None),
+    ]
+    served = client.get("/api/companies/AAPL/reviews").json()["reviews"]
+    assert [r["kind"] for r in served] == ["held", "reading", "made"]
+
+
 def test_a_review_s_bridge_lines_carry_their_label_and_unit(
     client: TestClient, db_path: Path, policy: Policy, results: dict[str, ValuationResult]
 ) -> None:

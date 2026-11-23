@@ -116,6 +116,7 @@
         : refusal ? h('p', { key: 'refusal', className: 'body app-refusal' }, refusal) : null,
       rows ? h('div', { key: 'levels', className: 'app-company__two' },
         C.kv(rows.slice(0, 2)), C.kv(rows.slice(2))) : null,
+      rows ? P.heldPart(d, C.redraw, P.onShow.company) : null,
       d.report ? reportLine(d.result.symbol, d.report) : null
     ]);
   }

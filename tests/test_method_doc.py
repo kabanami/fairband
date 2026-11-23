@@ -889,6 +889,21 @@ def test_the_inbox_reads_the_held_record_s_state() -> None:
         assert words in held, words
 
 
+def test_the_page_s_line_and_the_research_tab_s_list() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.7: 14.6 says what the page adds for a value
+    expired early, that Review again is its button, that the Research tab lists no reading and
+    that a bridge's first line says the day of its mechanical value."""
+    reviews = _section(14)
+    held = reviews[reviews.index("### 14.6") : reviews.index("### 14.7")]
+    for words in (
+        "one line under the value's levels",
+        "the page's Review again button",
+        "The Research tab's reviews list no reading",
+        '"Mechanical value of 8 Nov 2026"',
+    ):
+        assert words in held, words
+
+
 def test_a_held_value_s_state_and_its_sentences() -> None:
     """Spec 2026-11-23 held reviewed value, 5.3 and 5.7: 14.6 gives the three reasons with their
     sentences, says which stay and which can end, and what the row and the detail carry; 4.10

@@ -2116,22 +2116,28 @@ def test_a_refused_row_draws_its_secondarys_band() -> None:
     banded = _function(script, "isBanded")
     assert "var s = body.secondary;" in banded
     assert "var v = body.review;" in banded
+    # a review with a value leads; the secondary valuation needs its levels and a price; one
+    # that holds the row (spec 2026-11-23 held reviewed value, 5.9) bands a valued row too
     assert (
-        "return !isValued(r) && !!r.refusal && !(v && v.value != null) && !!s && !!s.levels &&"
-        " r.price != null;"
+        "if ((v && v.value != null) || !s || !s.levels || r.price == null) return false;"
+        " return s.held ? true : !isValued(r) && !!r.refusal;"
     ) in " ".join(banded.split())
     meter = _function(script, "meter")
     _in_order(
         meter,
         "if (isValued(r)) {",
+        "if (isBanded(body)) {",  # a held secondary valuation on a row the route values
         "if (isReviewBanded(body)) {",
         "if (!isBanded(body)) return null;",
+    )
+    band = meter[meter.index("if (!isBanded(body)) return null;") :]
+    _in_order(
+        band,
         "low: secondary.levels.fairLow, high: secondary.levels.fairHigh, price: r.price,",
         "fairValue: secondary.valuePerShare, buyLevel: secondary.levels.buy,",
         "trimLevel: secondary.levels.trim, designation: secondary.designation, showScale: false,",
         "gap: gapText(secondary.priceToValue, body.designationEdges, 'the secondary valuation'),",
     )
-    band = meter[meter.index("if (!isBanded(body)) return null;") :]
     assert "reviewedValue" not in band
     assert "caption:" not in band
 
@@ -2212,7 +2218,9 @@ def test_the_meter_says_the_ratio_and_the_values_name_once() -> None:
         in meter
     )
     assert "caption: 'mechanical ' + F.formatMoney(r.value)" in meter
-    assert meter.count("caption:") == 1  # the other three branches pass none
+    # the reviewed band's, and the held secondary valuation's on a row the route values (spec
+    # 2026-11-23 held reviewed value, 5.9); the other three branches pass none
+    assert meter.count("caption:") == 2
     gap = _function(script, "gapText")
     assert "ratioFigure(ratio, edges) + ' × ' + of" in gap
     assert "mechanicalCaption" not in script and "secondaryCaption" not in script
@@ -2602,7 +2610,7 @@ def test_the_meter_and_the_bridge_take_figure_under_a_headline_figure() -> None:
     meter = _function(_static_file("app.js"), "meter")
     # each of the four bands, the review's on a valued row, the mechanical, the review's on a
     # refused row and the secondary's; the drawer passes none: its meter keeps figure-lg
-    assert meter.count("hero: hero") == 4
+    assert meter.count("hero: hero") == 5  # one for each of the meter's five branches
 
 
 def test_the_reader_numbers_its_footnotes() -> None:

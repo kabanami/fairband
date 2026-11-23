@@ -479,6 +479,9 @@ def test_a_press_on_a_review_draws_its_bridge() -> None:
         "mechanical": 196.5,
         "reviewed": 182.0,
         "hero": False,
+        # the day of the mechanical value: the day the review was made (spec 2026-11-23 held
+        # reviewed value, 5.7), here its own
+        "mechanicalDay": node("localIso", [answers.REVIEWS[0]["createdAt"]])[:10],
         "overrides": [
             {
                 "tag": "moat",
@@ -493,6 +496,7 @@ def test_a_press_on_a_review_draws_its_bridge() -> None:
     }
     assert bridge == node("Fairband.ValueBridge", [expected])
     assert "Override — moat Wide → Narrow" in text(bridge)
+    assert f"Mechanical value of {_day(answers.REVIEWS[0]['createdAt'])}" in text(bridge)
     under = _one(opened["tree"], "app-research__bridge")
     body = [e for e in elements(_one(opened["tree"], "app-research__records")) if e["type"] == "tr"]
     assert body.index(under) == body.index(rows[0]) + 1
@@ -507,6 +511,23 @@ def test_a_press_on_a_review_draws_its_bridge() -> None:
     assert _expanded(refused) == ["false", "false", "true"]
     assert _expanded(other) == ["false", "true", "false"]
     assert len(classed(other["tree"], "fb-bridge")) == 1
+
+
+def test_a_held_copy_s_bridge_says_the_day_the_review_was_made() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.2 and 5.7: a copy a refresh carried keeps the bridge
+    with the mechanical value of the day the review was made, and its bridge's first line says
+    that day, not the copy's own. A bridge given no day says "Mechanical value" alone."""
+    made = answers.REVIEWS[1] | {"kind": "made", "madeId": None}
+    copy = answers.REVIEWS[0] | {"kind": "held", "madeId": made["id"]}
+    records = answers.answer()["records"] | {"reviews": [copy, made]}
+    rows = node("researchRecords.panels", [records], *SCRIPTS)[REVIEWS]["rows"]
+    day = node("localIso", [made["createdAt"]])[:10]
+    assert [row["bridge"]["mechanicalDay"] for row in rows] == [day, day]
+    assert copy["createdAt"][:10] != made["createdAt"][:10]
+    plain = node(
+        "Fairband.ValueBridge", [{"mechanical": 196.5, "reviewed": 182.0, "overrides": []}]
+    )
+    assert "Mechanical value196.5" not in text(plain) and "Mechanical value of" not in text(plain)
 
 
 def test_the_view_writes_nothing() -> None:

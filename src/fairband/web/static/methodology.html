@@ -1175,10 +1175,16 @@ agent adds and drops overrides; you read them. A refresh also drops a period-tie
 that corrects a single period's figure) once the company reports a newer period or that figure
 changes. When the company's phase moves, an override that only the old route read drops too.
 After a stock split, an earlier override in dollars a share or in shares is scaled to
-the new shares, and the review says so. The review (the overrides and the value they give) moves
-to each new snapshot, the
-company's figures from a refresh. An overridden input is tagged JUDGMENT, beside DATA (a figure
+the new shares, and the review says so. An overridden input is tagged JUDGMENT, beside DATA (a figure
 from the vendor) and RULE (a value from the policy).</p>
+<p class="body">A reviewed value holds until the next review. A refresh does not change it. An
+agent's override, a moat class you or an agent set, or Review again makes a new one. A refresh
+still computes what the review gives on the new figures. That figure is a reading, and it
+replaces nothing. When the held value no longer fits the data, the row reads Expired early. That
+happens when the company reports a newer period, or when an override inside the review no longer
+applies. It also happens when the reading is outside the value's fair band. The drawer then shows
+one line under the value. A click on it lists the reasons and the reading, with a Review again
+button. A secondary valuation holds its row the same way, with no reading and no button.</p>
 
 <h3 class="heading">The bridge</h3>
 <p class="body">The bridge leads from the mechanical value to the reviewed value, one line for each

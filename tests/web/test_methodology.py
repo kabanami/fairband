@@ -916,6 +916,23 @@ def _sentences(html: str) -> list[str]:
     return sentences
 
 
+def test_the_page_says_a_reviewed_value_holds() -> None:
+    """Spec 2026-11-23 held reviewed value, 5.11: the page says in plain words that a reviewed
+    value holds until the next review and what "Expired early" means, and no longer says a
+    review moves to each new snapshot."""
+    page = " ".join(_static_file("methodology.html").split())
+    for words in (
+        "A reviewed value holds until the next review.",
+        "A refresh does not change it.",
+        "That figure is a reading, and it replaces nothing.",
+        "the row reads Expired early",
+        "with a Review again button",
+        "A secondary valuation holds its row the same way",
+    ):
+        assert words in page, words
+    assert "moves to each new snapshot" not in page
+
+
 def test_prose_sentences_are_short() -> None:
     """Spec 7.1: one idea a sentence, 25 words or fewer."""
     sentences = _sentences(_static_file("methodology.html"))
