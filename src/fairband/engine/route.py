@@ -477,8 +477,12 @@ def reprice(
     observed_at: datetime | None = None,
     entered_at: datetime | None = None,
 ) -> ValuationResult:
-    """The result at a new price: the same value, levels and validity; the designation, the
-    price-dependent intermediates and the long-runway flag recomputed from the intermediates.
+    """The result at a new price: the same value and validity; the designation, the
+    price-dependent intermediates and the long-runway flag recomputed from the intermediates, and
+    the levels written again on the value under ``policy`` (``levels_for``), the same figures
+    unless a margin of safety, the fair band or the trim multiple changed since the valuation: the
+    three are in no settings hash (spec 2026-11-23 thresholds 5.3), and the stored levels must be
+    those the stored word was read on.
     A result with no value only takes the new price and date, except that a revenue-growth
     refusal whose intermediates hold ``revenue_path`` also moves its ``implied_margin``, the
     margin the price needs; a Start-up row, whose intermediates hold ``requirement``, moves
@@ -570,12 +574,14 @@ def reprice(
             gr = cross_check_at_price(im["growth_route"], target, im["shares"], local)
             return replace(moved, intermediates=im | {"growth_route": gr})
         return moved
-    value, levels = result.value, result.levels
+    value = result.value
     in_currency_value = value
     if foreign:
         in_currency_value = im["value_in_currency"]
         value = in_currency_value / rate
-        levels = levels_for(value, im["moat"], policy)
+    # the levels of the policy this reprice runs under, as its word is (spec 2026-11-23 thresholds
+    # 5.3): a threshold is in no settings hash, so a row valued before a change of one reprices
+    levels = levels_for(value, im["moat"], policy)
     im = dict(im)
     if result.route == "mature-growth":
         im |= growth_at_price(im, in_local, in_currency_value, local)

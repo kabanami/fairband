@@ -751,6 +751,37 @@ def test_the_levels_and_the_word_follow_the_settings_in_force() -> None:
     assert "Method 1.9 (23 Nov 2026" in page and "so the figures stand under 1.9" in page
 
 
+def test_a_price_refresh_stores_the_levels_of_the_settings_in_force() -> None:
+    """The whole-branch review of the thresholds plan, 2026-11-23: a threshold is in no settings
+    hash, so a price refresh reprices a row valued before a change of one, and it writes the levels
+    of the policy in force beside the word read on them (`engine.route.reprice`). 4.10 and section
+    10 say so, and 4.10 names the agents' tools that list records, which give stored figures."""
+    four = _section(4)
+    levels = four[four.index("### 4.10") : four.index("### 4.11")]
+    for words in (
+        (
+            "The levels are computed at valuation and again at each price refresh, on the policy "
+            "then in force (section 10)"
+        ),
+        (
+            "the agents' `screen` and `company` tools and a cited level (16.3) show the levels of "
+            "the settings in force"
+        ),
+        (
+            "the tools that list records (`reviews`, `secondary`, `review_log`) give each record's "
+            "stored figures"
+        ),
+    ):
+        assert words in levels, words
+    ten = _section(10)
+    assert (
+        "the value and the validity window stay, and the levels are written again on the value "
+        "under the policy in force"
+    ) in ten
+    assert "the value, the levels and the validity window stay" not in ten
+    assert "the next price refresh stores them on each repriced snapshot and review" in ten
+
+
 def test_no_page_or_ref_calls_the_ratio_the_ordinary_shares_an_ads_stands_for() -> None:
     """Spec 2026-11-19 6.2: the counts cannot say which way a depositary's ratio runs, so 7.4's line
     under the drawer's head names no ratio, the Research tab's being the same line; 16.2 and 16.6

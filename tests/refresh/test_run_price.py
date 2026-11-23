@@ -30,6 +30,8 @@ from vendor_double import FIXTURES, FMP_KEY
 
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Settings
+from fairband.engine.designation import designation_for
+from fairband.engine.levels import levels_for
 from fairband.engine.route import reprice, value_company
 from fairband.engine.types import Provenance
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
@@ -549,6 +551,50 @@ def test_price_refresh_refuses_another_settings_hash_and_reprices_the_empty_one(
         row = env.snapshot(symbol)
         assert (row.refresh_id, row.price) == (refresh_id, NEW_PRICES[symbol])
         assert row.settings_hash == row.result.settings_hash == EMPTY_SETTINGS_HASH
+
+
+def test_a_price_refresh_after_a_changed_threshold_stores_the_levels_in_force(
+    env_valued: Env,
+) -> None:
+    """The margin of safety, the fair band and the trim multiple are in no settings hash (spec
+    2026-11-23 thresholds 5.3), so a price refresh reprices a snapshot valued before a change of
+    one. The snapshot it writes holds the levels of the policy in force, on which its word is
+    read: the stored levels and the stored word agree, and no value moves."""
+    env = env_valued
+    before = snapshots_of(env)
+    env.policy = replace(
+        env.policy,
+        margin_of_safety={"None": 0.45, "Narrow": 0.35, "Wide": 0.15},
+        fair_band=(0.95, 1.05),
+        trim_multiple=1.2,
+    )
+    assert env.policy.settings_hash == EMPTY_SETTINGS_HASH
+    env.router.bodies["batch-quote"] = batch(NEW_PRICES)
+    serve_pair(env, 10.6)
+
+    env.refresh().run("price")
+
+    assert env.last().calibration == {"total": 5, "repriced": 5, "failed": 0, "skipped": 0}
+    moved = []
+    for symbol, row in snapshots_of(env).items():
+        old = before[symbol]
+        if row.value is None or symbol == "KRON":  # a refusal has no levels; KRON moves at its rate
+            continue
+        moat = row.result.intermediates["moat"]
+        levels = levels_for(row.value, moat, env.policy)
+        assert row.value == old.value
+        assert (row.buy_level, row.fair_low, row.fair_high, row.trim_level) == (
+            levels.buy,
+            levels.fair_low,
+            levels.fair_high,
+            levels.trim,
+        )
+        assert row.result.levels == levels and row.price is not None
+        assert (row.price_to_value, row.designation) == designation_for(
+            row.price, row.value, env.policy.edges_for(moat)
+        )
+        moved.append(row.trim_level != old.trim_level)
+    assert moved and all(moved)
 
 
 def test_price_refresh_checks_the_policy_then_the_settings_then_the_method(

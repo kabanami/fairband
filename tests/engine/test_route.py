@@ -3431,6 +3431,24 @@ def test_reprice_moves_the_designation_and_leaves_the_levels(
     assert after.value == 100.0
 
 
+def test_a_reprice_stores_the_levels_of_the_policy_it_runs_under(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """A threshold is in no settings hash (spec 2026-11-23 thresholds 5.3), so a price refresh
+    reprices a row valued before a change of one. The row it stores holds the levels of the policy
+    it ran under, as it holds that policy's word: on a Wide value of 100 with the trim multiple
+    changed to 1.2, a price of 125 stores a trim level of 120 beside "well-above", not the 135 of
+    the valuation, against which 125 would read "above". The value does not move."""
+    r = value_company(mg_inputs, deciles, policy, TODAY)
+    at_100 = replace(r, value=100.0, levels=levels_for(100.0, "Wide", policy))
+    changed = replace(policy, trim_multiple=1.2)
+    p = reprice(at_100, 125.0, date(2026, 11, 2), changed)
+    assert at_100.levels is not None and at_100.levels.trim == pytest.approx(135.0)
+    assert p.levels is not None and p.levels == levels_for(100.0, "Wide", changed)
+    assert p.levels.trim == pytest.approx(120.0)
+    assert (p.value, p.price_to_value, p.designation) == (100.0, 1.25, "well-above")
+
+
 def test_the_designation_reads_the_policy_edges(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

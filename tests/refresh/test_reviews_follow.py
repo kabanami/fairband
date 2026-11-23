@@ -43,6 +43,7 @@ from support.splits import (
 from vendor_double import FIXTURES
 
 from fairband.engine import METHOD_VERSION
+from fairband.engine.levels import levels_for
 from fairband.engine.overrides import TAGS, Lifetime, OverrideTag, current_reading
 from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.types import TaggedInput, ValuationResult
@@ -189,6 +190,35 @@ def test_a_price_refresh_reprices_the_review(env_valued: Env) -> None:
         (refresh_id, after.id, 20.0),
         (before.refresh_id, before.id, before.result.price),
     ]
+
+
+def test_a_price_refresh_after_a_changed_threshold_stores_the_review_s_levels_in_force(
+    env_valued: Env,
+) -> None:
+    """A threshold is in no settings hash (spec 2026-11-23 thresholds 5.3), so a price refresh
+    reprices a review made before a change of one. The review it writes holds the levels of the
+    policy in force on its own value, beside the word read on them; its value does not move."""
+    env = env_valued
+    _override(env, "ACME", "growth.belief", 0.08)
+    env.refresh().run("revalue")
+    with closing(env.connect()) as conn:
+        before = latest_review(conn, "ACME")
+    env.policy = replace(env.policy, fair_band=(0.95, 1.05), trim_multiple=1.2)
+    env.router.bodies["batch-quote"] = _quotes({"ACME": 20.0, "AXLE": 30.0, "MILD": 10.0})
+    env.refresh().run("price")
+    with closing(env.connect()) as conn:
+        after = latest_review(conn, "ACME")
+    assert before is not None and after is not None and after.id > before.id
+    assert after.value is not None and after.value == before.value
+    levels = levels_for(after.value, after.result.intermediates["moat"], env.policy)
+    assert (after.buy_level, after.fair_low, after.fair_high, after.trim_level) == (
+        levels.buy,
+        levels.fair_low,
+        levels.fair_high,
+        levels.trim,
+    )
+    assert after.result.levels == levels and after.trim_level != before.trim_level
+    assert after.designation == after.result.designation
 
 
 def test_a_price_refresh_at_a_new_rate_moves_the_review_s_bridge_with_it(env_valued: Env) -> None:
