@@ -16,7 +16,12 @@ from fairband.store.db import transaction
 from fairband.store.ledger import Writer
 from fairband.store.overrides import drop_override, insert_override
 from fairband.store.reviews import (
+    HeldRow,
     LogRow,
+    clear_held,
+    held_row,
+    held_rows,
+    hold_review,
     insert_review,
     latest_review,
     latest_reviews,
@@ -25,6 +30,7 @@ from fairband.store.reviews import (
     log_review,
     review_log,
     reviews_for,
+    set_held_state,
 )
 
 TODAY = date(2026, 10, 31)
@@ -132,6 +138,86 @@ def test_latest_reviews_with_two_companies(conn: sqlite3.Connection) -> None:
     assert (found["AAPL"].id, found["MSFT"].id) == (newest, other)
 
 
+def test_a_made_review_is_held_and_a_reading_is_not(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-23 held reviewed value, 5.1: a made review becomes the one the company holds,
+    its state empty. A refresh's reading and its copy of the held review name the made review and
+    do not take its place; a newer made review does, and starts with an empty state."""
+    assert held_row(conn, "AAPL") is None
+    override_id = _applied(conn, "AAPL")
+    review = _review("AAPL", override_id)
+    made = insert_review(conn, review, "AAPL", 4, None, clock=lambda: NOW)
+    assert held_row(conn, "AAPL") == HeldRow(
+        "AAPL", made, NOW, None, None, (), None, None, None, None
+    )
+    reading = insert_review(
+        conn, review, "AAPL", 5, 3, kind="reading", made_id=made, clock=lambda: LATER
+    )
+    copy = insert_review(conn, review, "AAPL", 5, 3, kind="held", made_id=made, clock=lambda: LATER)
+    held = held_row(conn, "AAPL")
+    assert held is not None and (held.review_id, held.made_at) == (made, NOW)
+    rows = {r.id: r for r in reviews_for(conn, "AAPL")}
+    assert (rows[made].kind, rows[made].made_id, rows[made].held_id) == ("made", None, made)
+    assert (rows[reading].kind, rows[reading].made_id, rows[reading].held_id) == (
+        "reading",
+        made,
+        made,
+    )
+    assert (rows[copy].kind, rows[copy].made_id, rows[copy].held_id) == ("held", made, made)
+    set_held_state(conn, replace(held, early_at=date(2026, 11, 14), reading_value=41.5))
+    again = insert_review(conn, review, "AAPL", 6, None, clock=lambda: LATER)
+    assert held_row(conn, "AAPL") == HeldRow(
+        "AAPL", again, LATER, None, None, (), None, None, None, None
+    )
+    assert not conn.in_transaction
+
+
+def test_clearing_the_held_review_leaves_no_row(conn: sqlite3.Connection) -> None:
+    apple, micro = _applied(conn, "AAPL"), _applied(conn, "MSFT")
+    insert_review(conn, _review("AAPL", apple), "AAPL", 1, None, clock=lambda: NOW)
+    other = insert_review(conn, _review("MSFT", micro), "MSFT", 2, None, clock=lambda: NOW)
+    assert list(held_rows(conn)) == ["AAPL", "MSFT"]
+    clear_held(conn, "AAPL")
+    clear_held(conn, "NONE")  # a company that holds none: no change
+    assert held_row(conn, "AAPL") is None
+    assert {s: h.review_id for s, h in held_rows(conn).items()} == {"MSFT": other}
+    assert len(reviews_for(conn, "AAPL")) == 1  # the history stays
+    hold_review(conn, "AAPL", 1, LATER)  # holding an earlier review again names it
+    found = held_row(conn, "AAPL")
+    assert found is not None and (found.review_id, found.made_at) == (1, LATER)
+
+
+def test_the_state_reads_back_exactly(conn: sqlite3.Connection) -> None:
+    """The facts a refresh stores for a held review (spec 5.3): the day a refresh first read it
+    again, the newer period's end, the overrides the system dropped, the newest good reading or
+    its refusal, and the day a refresh first found a reason."""
+    override_id = _applied(conn, "AAPL")
+    made = insert_review(conn, _review("AAPL", override_id), "AAPL", 4, None, clock=lambda: NOW)
+    dropped = {
+        "id": 36,
+        "tag": "earnings.nri_gap",
+        "reason": "the input the override corrected changed",
+        "at": LATER.isoformat(),
+    }
+    state = HeldRow(
+        symbol="AAPL",
+        review_id=made,
+        made_at=NOW,
+        read_again_at=LATER,
+        newer_period=date(2026, 12, 26),
+        dropped=(dropped,),
+        reading_value=291.62000000000006,
+        reading_refusal=None,
+        reading_at=LATER,
+        early_at=date(2026, 11, 14),
+    )
+    set_held_state(conn, state)
+    assert held_row(conn, "AAPL") == state
+    refused = replace(state, reading_value=None, reading_refusal="no positive trailing earnings")
+    set_held_state(conn, refused)
+    assert held_row(conn, "AAPL") == refused
+    assert not conn.in_transaction
+
+
 def test_review_log_by_symbol(conn: sqlite3.Connection) -> None:
     # at, symbol, refresh, snapshot, review, the mechanical phase and value, the reviewed phase
     # and value, the secondary value, the price, the designation and the stance
@@ -150,6 +236,9 @@ def test_review_log_by_symbol(conn: sqlite3.Connection) -> None:
     ]
     assert [row.id for row in review_log(conn)] == ids[::-1]
     assert review_log(conn, "NONE") == []
+    assert {row.kind for row in review_log(conn)} == {None}  # a row written with no kind
+    read = log_review(conn, *refused, "above", None, kind="reading")
+    assert review_log(conn, "AAPL")[0] == LogRow(read, *refused, "above", None, "reading")
 
 
 def test_the_latest_secondary_value_and_stance(conn: sqlite3.Connection) -> None:

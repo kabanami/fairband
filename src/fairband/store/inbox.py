@@ -74,6 +74,8 @@ class WorkItem:
     reason: str | None
     finished_at: datetime | None
     expiry_valid_until: date | None
+    expiry_review_id: int | None = None
+    expiry_secondary_id: int | None = None
 
 
 def post_item(
@@ -280,4 +282,6 @@ def _item(row: sqlite3.Row) -> WorkItem:
         reason=row["reason"],
         finished_at=load_stamp(row["finished_at"]),
         expiry_valid_until=load_date(row["expiry_valid_until"]),
+        expiry_review_id=row["expiry_review_id"],
+        expiry_secondary_id=row["expiry_secondary_id"],
     )

@@ -69,6 +69,8 @@ def test_post_and_list_inbox(client: TestClient) -> None:
         "reason": None,
         "finishedAt": None,
         "expiryValidUntil": None,
+        "expiryReviewId": None,  # the held record an expiry item stands for (spec 2026-11-23
+        "expirySecondaryId": None,  # held reviewed value, 5.10); none on an owner's item
     }
     # the list's own fields: the report's revision (18.5, plan 4) and the open item's newest
     # launch, with whether launching is set up beside the items (B-210)

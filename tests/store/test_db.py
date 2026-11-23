@@ -51,6 +51,7 @@ _ALL = [
     "008_record_currency.sql",
     "009_launches.sql",
     "010_moat_classes.sql",
+    "011_held_reviews.sql",
 ]
 # The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
 # fields in order, as 005 made them and 006, 007 and 008 changed them: a judgment without its
@@ -66,7 +67,8 @@ _AGENT_COLUMNS = {
     "work_items": [
         *("id", "symbol", "mode", "note", "snapshot_id", "origin", "posted_by", "posted_actor"),
         *("posted_client", "posted_at", "state", "claimed_by", "claimed_at", "report_id"),
-        *("reason", "finished_at", "expiry_valid_until"),
+        *("reason", "finished_at", "expiry_valid_until", "expiry_review_id"),
+        "expiry_secondary_id",
     ],
     "notes": ["id", "symbol", "text", "principal", "actor", "client", "at", "override_id"],
     "findings": [
@@ -91,12 +93,12 @@ _AGENT_COLUMNS = {
         *("id", "symbol", "snapshot_id", "refresh_id", "created_at", "value", "buy_level"),
         *("fair_low", "fair_high", "trim_level", "price_to_value", "designation", "refusal"),
         *("mechanical_value", "bridge", "override_ids", "policy_version", "method_version"),
-        *("review_method", "settings_hash", "deciles_refresh_id", "result"),
+        *("review_method", "settings_hash", "deciles_refresh_id", "result", "kind", "made_id"),
     ],
     "review_log": [
         *("id", "at", "symbol", "refresh_id", "snapshot_id", "review_id", "mechanical_phase"),
         *("mechanical_value", "reviewed_phase", "reviewed_value", "secondary_value", "price"),
-        *("designation", "stance"),
+        *("designation", "stance", "kind"),
     ],
     "secondary_valuations": [
         *("id", "symbol", "snapshot_id", "created_at", "principal", "actor", "client", "parts"),
@@ -164,7 +166,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -207,7 +209,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -399,7 +401,7 @@ def test_migration_008_gives_a_record_its_currency(
 
     assert migrate(conn) == _ALL[7:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     at = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
     by_agent = {"principal": "agent", "actor": "claude-opus-5-5", "client": "claude-code/2.1"}
     assert finding_row(conn, 1) == FindingRow(
@@ -479,7 +481,7 @@ def test_migration_009_adds_the_launch_record(
 
     assert migrate(conn) == _ALL[8:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     recorded = conn.execute("select filename, checksum from schema_versions where version = 9")
     assert tuple(recorded.fetchone()) == (
         "009_launches.sql",
@@ -575,10 +577,10 @@ def test_migration_010_moves_the_applied_moat_overrides(
     before = {i: override_row(conn, i) for i in (replaced, moved, refused, runway)}
 
     started = datetime.now(UTC)
-    assert migrate(conn) == ["010_moat_classes.sql"]
+    assert migrate(conn) == _ALL[9:]
     finished = datetime.now(UTC)
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     columns = [
         (r["name"], r["type"], r["notnull"], r["pk"])
         for r in conn.execute("pragma table_info(moat_classes)")
@@ -628,6 +630,139 @@ def test_migration_010_moves_the_applied_moat_overrides(
     for i in (replaced, refused, runway):
         assert override_row(conn, i) == before[i]
     assert conn.execute("select count(*) from ledger").fetchone()[0] == 0
+
+
+def test_migration_011_marks_the_made_reviews_and_seeds_the_held_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 010 holds six reviews of ACME, which has an applied override: one an
+    override's write made (no refresh), one a moat write's revalue wrote, one a full refresh wrote
+    that a report cites, one a price refresh wrote, one a revalue naming ACME wrote with no moat
+    write before it, and one of the revalue that ACME's row of the moat table names. 011 (spec
+    2026-11-23 held reviewed value, 5.1 and 5.12) marks the first three and the last made, leaves
+    the other two readings, and names ACME's newest made review as the one it holds. BETA's
+    override was dropped: its review is a reading and BETA holds none. GAMA has an applied
+    override and one review, a full refresh's that no report cites: the migration marks it made
+    and GAMA holds it, so no company with an applied override is left without a review. The log
+    gains a kind, none on the rows before, and a work item the two ids of a held record."""
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:10]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:10]
+    agent = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    at = datetime(2026, 11, 12, 10, 0, 0, 500000, tzinfo=UTC)
+
+    def override(symbol: str) -> int:
+        evidence = [{"kind": "filing", "ref": "10-K 2025", "note": ""}]
+        return insert_override(
+            conn,
+            symbol,
+            "growth.belief",
+            *(0.1, 0.08, "ratio", "why", evidence, "lasting", None, None, 7, agent, at),
+            "applied",
+            "",
+        )
+
+    def refresh(kind: str, symbols: str | None, started: str) -> int:
+        cursor = conn.execute(
+            "insert into refreshes (kind, symbols, status, started_at, policy_version,"
+            " method_version, settings_hash) values (?, ?, 'done', ?, 'p', 'm', 'h')",
+            (kind, symbols, started),
+        )
+        return int(cursor.lastrowid or 0)
+
+    def review(symbol: str, snapshot_id: int, refresh_id: int | None) -> int:
+        cursor = conn.execute(
+            "insert into reviews (symbol, snapshot_id, refresh_id, created_at, value, bridge,"
+            " override_ids, policy_version, method_version, review_method, settings_hash, result)"
+            " values (?, ?, ?, ?, '41.25', '[]', '[1]', 'p', 'm', 'fairband-review/1', 'h', '{}')",
+            (symbol, snapshot_id, refresh_id, f"2026-11-12T10:0{snapshot_id}:00+00:00"),
+        )
+        return int(cursor.lastrowid or 0)
+
+    override("ACME")
+    drop_override(conn, override("BETA"), "wrong", at)
+    override("GAMA")
+    moat_revalue = refresh("revalue", '["ACME"]', "2026-11-12T10:00:01.250000+00:00")
+    full = refresh("full", None, "2026-11-12T11:00:00+00:00")
+    price = refresh("price", None, "2026-11-12T12:00:00+00:00")
+    plain_revalue = refresh("revalue", '["ACME"]', "2026-11-12T13:00:00+00:00")
+    table_revalue = refresh("revalue", '["ACME"]', "2026-11-10T09:00:00+00:00")
+    conn.execute(
+        "insert into ledger (at, principal, kind, symbol, summary)"
+        " values ('2026-11-12T10:00:00.500000+00:00', 'agent', 'moat', 'ACME', 'Narrow to Wide')"
+    )
+    conn.execute(
+        "insert into moat_classes (symbol, class, source, judged_on, principal, at, snapshot_id)"
+        " values ('ACME', 'Wide', 'agent', '2026-11-10', 'agent', '2026-11-10T09:00:00+00:00', 1)"
+    )
+    of_table = review("ACME", 1, table_revalue)
+    written = review("ACME", 2, None)
+    of_moat = review("ACME", 3, moat_revalue)
+    cited = review("ACME", 4, full)
+    repriced = review("ACME", 5, price)
+    revalued = review("ACME", 6, plain_revalue)
+    dropped = review("BETA", 7, None)
+    lone = review("GAMA", 8, full)
+    conn.execute(
+        "insert into reports (symbol, revision, mode, stance, sections, snapshot_id, review_id,"
+        " principal, created_at) values ('ACME', 1, 'full report', 'hold', '[]', 4, ?, 'agent',"
+        " '2026-11-12T11:30:00+00:00')",
+        (cited,),
+    )
+    conn.execute(
+        "insert into review_log (at, symbol, snapshot_id, review_id)"
+        " values ('2026-11-12T10:02:00+00:00', 'ACME', 2, ?)",
+        (written,),
+    )
+    conn.execute(
+        "insert into work_items (symbol, mode, note, origin, posted_by, posted_at, state,"
+        " expiry_valid_until) values ('ACME', 'valuation review', 'expired 2026-11-01', 'expiry',"
+        " 'system', '2026-11-12T09:00:00+00:00', 'pending', '2026-11-01')"
+    )
+    conn.commit()
+
+    assert migrate(conn) == ["011_held_reviews.sql"]
+
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    kinds = {r["id"]: (r["kind"], r["made_id"]) for r in conn.execute("select * from reviews")}
+    assert kinds == {
+        of_table: ("made", None),
+        written: ("made", None),
+        of_moat: ("made", None),
+        cited: ("made", None),
+        repriced: ("reading", None),
+        revalued: ("reading", None),
+        dropped: ("made", None),  # an override's write made it; BETA holds none now
+        lone: ("made", None),
+    }
+    held = {r["symbol"]: dict(r) for r in conn.execute("select * from held_reviews")}
+    assert set(held) == {"ACME", "GAMA"}
+    assert held["ACME"] == {
+        "symbol": "ACME",
+        "review_id": cited,
+        "made_at": "2026-11-12T10:04:00+00:00",
+        "read_again_at": None,
+        "newer_period": None,
+        "dropped": "[]",
+        "reading_value": None,
+        "reading_refusal": None,
+        "reading_at": None,
+        "early_at": None,
+    }
+    assert (held["GAMA"]["review_id"], held["GAMA"]["made_at"]) == (
+        lone,
+        "2026-11-12T10:08:00+00:00",
+    )
+    assert [r["kind"] for r in conn.execute("select kind from review_log")] == [None]
+    item = work_item(conn, 1)
+    assert (item.expiry_valid_until, item.expiry_review_id, item.expiry_secondary_id) == (
+        date(2026, 11, 1),
+        None,
+        None,
+    )
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -742,6 +877,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 008_record_currency.sql",
         "Applied 009_launches.sql",
         "Applied 010_moat_classes.sql",
+        "Applied 011_held_reviews.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()
