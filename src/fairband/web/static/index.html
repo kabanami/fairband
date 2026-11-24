@@ -457,7 +457,9 @@
   .app-drawer__name { margin: 0; flex-basis: 100%; color: var(--ink-muted); }
   .app-drawer__currency { margin: 0; flex-basis: 100%; }
   /* The drawer's form A (the company page's design, 11): under the head the sector's caption and
-     the company brief, cut at six lines with an ellipsis, the whole of it on the company page;
+     the company brief in six lines' room whatever its length (the founder, 2026-11-24), a longer
+     one cut there with an ellipsis and a shorter one with clear lines under it, so the value band
+     does not move with the brief's length, the whole of it on the company page;
      the value band under a rule, the levels clear of the meter's caption, or a refused row's
      sentence in its place; then Company page and Request research on one line, the server's
      refusal and the open item's line under them. Request research's box stands from the row's
@@ -469,7 +471,8 @@
   .app-drawer__sector { margin: var(--space-2) 0 0; }
   .app-drawer__brief {
     margin: var(--space-1) 0 0; color: var(--ink-muted); display: -webkit-box;
-    -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden;
+    -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; min-height: 6lh;
+    overflow: hidden;
   }
   .app-drawer__band {
     margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--hairline);

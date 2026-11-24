@@ -671,7 +671,9 @@ export interface ScreenTableProps {
   /**
    * fairband: the address of the row's company page. Given it, the ticker's text in the Ticker
    * cell is a link to it, whose click, or Enter on it, stops at the link and never opens the row;
-   * without it the ticker is the cell's text (spec 2026-11-16 company page, 12).
+   * without it the ticker is the cell's text (spec 2026-11-16 company page, 12). Given it, the
+   * company's name in the Company cell is a link to the same address, out of the Tab order, on a
+   * row that has a name (the founder, 2026-11-24).
    */
   companyHref?: (row: ScreenRow) => string;
   /**

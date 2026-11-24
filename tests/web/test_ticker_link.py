@@ -6,6 +6,11 @@ its own click. The link is ScreenTable's ``companyHref``, a ``fairband:`` patch 
 bundle, and without it the cell is drawn as it was. It reads as the ticker does, takes an underline
 on hover and the focus ring on focus.
 
+The company's name in the Company cell is a link to the same address (the founder, 2026-11-24):
+a click on the name goes to the company page and does not open the drawer. It is out of the Tab
+order, since the ticker's link before it is the keyboard's stop for the address, and a row with
+no name has no link.
+
 And the report's charts (13): no Tables button, no state for one and no ``tableView`` handed to a
 chart; the vendored components keep the prop, unset.
 
@@ -150,7 +155,7 @@ def test_the_cell_without_the_prop_is_as_before() -> None:
         "props": {"className": "fb-screen__ticker ticker", "children": [MARK, "BRK.B", COVERED]},
     }
     linked = _table([ROW, ROW | {"ticker": "ACME", "watched": False, "covered": None}], True)
-    assert len(classed(linked, LINK)) == 2
+    assert len(classed(linked, LINK)) == 4  # each row's ticker and its name
     assert _unlinked(linked) == _table(
         [ROW, ROW | {"ticker": "ACME", "watched": False, "covered": None}], linked=False
     )
@@ -211,10 +216,92 @@ def test_the_link_reads_as_the_ticker() -> None:
     )
     assert LINK not in _component_file("bundle.css")
     token = re.compile(r"(?<![\w-])" + re.escape(LINK) + r"(?![\w-])")
-    assert len(token.findall(_component_file("bundle.js"))) == 1
+    assert len(token.findall(_component_file("bundle.js"))) == 2  # the ticker's and the name's
     scripts: list[Path] = sorted(STATIC.glob("*.js"))
     for script in scripts:
         assert not token.findall(script.read_text(encoding="utf-8")), script.name
+
+
+# --------------------------------------------------------------------------------- the name's link
+
+
+def _name_cell(tree: Any) -> dict[str, Any]:
+    [cell] = classed(tree, "fb-screen__name")
+    return cell
+
+
+def _name_column(bundle: str) -> str:
+    """The bundle's Company column, its cell and its patch."""
+    return bundle[bundle.index("{ key: 'name', head:") : bundle.index("{ key: 'phase', head:")]
+
+
+def test_the_name_is_a_link_given_the_prop() -> None:
+    """Given companyHref, the company's name is a link to the address the ticker's link names,
+    the cell's one child, in the ticker's link's class and out of the Tab order. Without the prop
+    the name is the cell's text, as it was."""
+    cell = _name_cell(_table([ROW], linked=True))
+    assert cell["type"] == "td"
+    assert cell["props"]["className"] == "fb-screen__name body"
+    assert cell["props"]["children"] == [
+        {
+            "type": "a",
+            "props": {
+                "className": LINK,
+                "href": "#company/BRK.B",
+                "tabIndex": -1,
+                "children": ["Brookhaven Kettle Holdings"],
+            },
+        }
+    ]
+    plain = _name_cell(_table([ROW], linked=False))
+    assert plain["props"]["children"] == ["Brookhaven Kettle Holdings"]
+    odd = _name_cell(_table([ROW | {"ticker": "KT/A B"}], linked=True))
+    assert odd["props"]["children"][0]["props"]["href"] == "#company/KT%2FA%20B"
+
+
+@pytest.mark.parametrize("name", [None, ""])
+def test_a_row_with_no_name_has_no_link(name: str | None) -> None:
+    """The cell holds no element, so it stays empty and the page's em dash stands in it; it is
+    the cell drawn without the prop."""
+    row = ROW | {"name": name}
+    cell = _name_cell(_table([row], linked=True))
+    assert [e for e in elements(cell["props"]["children"]) if e.get("type") == "a"] == []
+    assert cell == _name_cell(_table([row], linked=False))
+
+
+def test_the_name_s_link_stops_its_click_and_its_enter() -> None:
+    """A click on the name stops at the link, so the row's onOpen does not run and the drawer
+    does not open; the browser follows the address in the tab. Enter on the link, which a click
+    can focus, stops there too. The patch is marked and names its source, and index.d.ts says the
+    prop links the name."""
+    column = _name_column(_component_file("bundle.js"))
+    patch = column[column.index("// fairband: given companyHref") :]
+    assert "(the founder, 2026-11-24)" in patch[: patch.index("p.companyHref && r.name ?")]
+    start = patch.index("p.companyHref && r.name ?")
+    link = patch[start : patch.index(": r.name);") + len(": r.name);")]
+    assert link == (
+        "p.companyHref && r.name ? h('a', {\n"
+        "            className: 'fb-screen__company', href: p.companyHref(r), tabIndex: -1,\n"
+        "            onClick: function (e) { e.stopPropagation(); },\n"
+        "            onKeyDown: function (e) { if (e.key === 'Enter') e.stopPropagation(); }\n"
+        "          }, r.name) : r.name);"
+    )
+    declarations = _component_file("index.d.ts")
+    declared = declarations.index("  companyHref?: (row: ScreenRow) => string;")
+    doc = declarations[declarations.rindex("/**", 0, declared) : declared]
+    assert "the company's name in the Company cell" in " ".join(doc.replace("*", " ").split())
+    assert "(the founder, 2026-11-24)" in doc
+
+
+def test_the_name_s_link_reads_as_the_name() -> None:
+    """The link takes the cell's colour, the name's muted ink, by the rule the ticker's link has,
+    and the cell cuts a long name with an ellipsis as before: no rule of the name's own."""
+    rule = _rule(".fb-screen__company {")
+    assert "color: inherit;" in rule and "text-decoration: none;" in rule
+    name = re.search(r"(?m)^\.fb-screen__name \{([^}]*)\}", _component_file("bundle.css"))
+    assert name is not None
+    assert "overflow: hidden;" in name.group(1) and "text-overflow: ellipsis;" in name.group(1)
+    assert "fb-screen__name a" not in _static_file("index.html")
 
 
 # ------------------------------------------------------------------------------- the report's charts

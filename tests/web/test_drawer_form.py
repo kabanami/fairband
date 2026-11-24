@@ -123,9 +123,10 @@ def test_the_caption_is_the_sector_and_the_industry() -> None:
         assert classed(_drawn(answers.detail(company=unnamed)), "app-drawer__sector") == []
 
 
-def test_the_brief_is_whole_and_cut_to_six_lines_by_the_style() -> None:
-    """The whole stored brief, in body text; the style cuts it at six lines with an ellipsis. A
-    company with no stored brief has none."""
+def test_the_brief_is_whole_and_takes_six_lines_by_the_style() -> None:
+    """The whole stored brief, in body text; the style cuts it at six lines with an ellipsis and
+    keeps six lines' room for a shorter one (the founder, 2026-11-24), so the value band under it
+    does not move with the brief's length. A company with no stored brief has none."""
     brief = _one(_drawn(answers.DETAIL), "app-drawer__brief")
     assert brief["type"] == "p"
     assert brief["props"]["className"] == "body app-drawer__brief"
@@ -137,6 +138,7 @@ def test_the_brief_is_whole_and_cut_to_six_lines_by_the_style() -> None:
         "-webkit-box-orient: vertical;",
         "-webkit-line-clamp: 6;",
         "line-clamp: 6;",
+        "min-height: 6lh;",
         "overflow: hidden;",
         "color: var(--ink-muted);",
     ):

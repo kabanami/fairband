@@ -5,10 +5,11 @@
    order, narrows the loaded rows to the reader's find and filters and lays out what the engine
    produced, rounded for display only. Each row's watchlist mark opens a popup that puts the
    company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4); its ticker is a link
-   to the company's page, and the rest of the row opens the drawer (the company page's design,
-   12). The drawer is a short card under its bar, the company, its value and two buttons: Company
-   page, which opens the company's page, and Request research, which posts a research request to
-   the work inbox (the company page's design, 11; spec 2026-11-06 Tier 2, 18.2). Where launching
+   to the company's page, and its name too (the founder, 2026-11-24), and the rest of the row
+   opens the drawer (the company page's design, 12). The drawer is a short card under its bar,
+   the company, its value and two buttons: Company page, which opens the company's page, and
+   Request research, which posts a research request to the work inbox (the company page's
+   design, 11; spec 2026-11-06 Tier 2, 18.2). Where launching
    is set up, a request also opens the window where Claude Code starts, and the line under the
    button follows its launch (spec 2026-11-16 agent launch, 10). At the bar's left, Notes opens a
    box of the company's notes, from /api/companies/{symbol}/notes, which takes a new one (the
@@ -500,7 +501,8 @@
   }
 
   /* The address a ticker links to (spec 2026-11-16 company page, 12): in the table, on the Screen
-     and on the watchlist page (ScreenTable's companyHref), in the header's finder (finder.js) and
+     and on the watchlist page (ScreenTable's companyHref), where the company's name links to it
+     too (the founder, 2026-11-24), in the header's finder (finder.js) and
      in the Inbox view's rows (inbox.js); the company's page, the symbol encoded as the drawer's
      Company page encodes it. */
   function companyHref(row) {
@@ -1110,7 +1112,8 @@
      (moatChip), with no control (spec 2026-11-19 8.8), the name and, for a company in another
      currency or an ADR, the line that says what its figures are in (currencyLine, spec 2026-11-10
      7.4); one caption, the sector and the industry (sectorLine); the company brief whole, which
-     the page's style cuts at six lines; the value band, the meter and under it the four levels in
+     the page's style cuts at six lines and gives six lines' room where it is shorter (the
+     founder, 2026-11-24); the value band, the meter and under it the four levels in
      the screen's words (levelRows), or where the meter draws no band a refused row's sentence in
      its place; then Company page, a link to the company page, and Request research with its
      menu, the server's refusal under it and the open item's line. The rest of what a company has

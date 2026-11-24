@@ -1360,7 +1360,20 @@
           }, GLYPH_INPUT) : null);
       } },
     { key: 'name', head: 'Company',
-      cell: function (r) { return h('td', { className: 'fb-screen__name body' }, r.name); } },
+      cell: function (r, p) {
+        return h('td', { className: 'fb-screen__name body' },
+          // fairband: given companyHref, the company's name is a link to the company page too, at
+          // the address the ticker's link names (the founder, 2026-11-24). A click on it stops at
+          // the link, so the row does not open and the browser follows it, and Enter on it, which
+          // a click can focus, likewise. It is out of the Tab order: the ticker's link before it
+          // is the keyboard's stop for the address. A row with no name has no link, so its cell
+          // stays empty.
+          p.companyHref && r.name ? h('a', {
+            className: 'fb-screen__company', href: p.companyHref(r), tabIndex: -1,
+            onClick: function (e) { e.stopPropagation(); },
+            onKeyDown: function (e) { if (e.key === 'Enter') e.stopPropagation(); }
+          }, r.name) : r.name);
+      } },
     { key: 'phase', head: 'Phase',
       cell: function (r) { return h('td', null, h(PhaseBadge, { phase: r.phase, size: 'sm' })); } },
     { key: 'band', head: 'Fair band', num: true,
