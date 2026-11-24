@@ -13,7 +13,8 @@ the page and on the two routes that feed it. One rule of the brand book gets a n
 
 Six parts, built in one plan.
 
-1. **The refresh layer.** A refresh of the whole screen darkens and locks the page until it ends.
+1. **The refresh layer.** A refresh of the whole screen the reader starts darkens and locks the
+   page until it ends.
 2. **The end signal.** When new figures land, the figures that changed are highlighted, and the
    status line counts them.
 3. **The page follows any refresh.** A bug: the open page does not show the figures of a refresh
@@ -36,8 +37,8 @@ had changed. Nothing marks the end of a run, and a run started elsewhere does no
 
 Goals:
 
-- A run of the whole screen cannot be missed, and nothing on the page can be used under it,
-  except by the reader's own choice on a long run.
+- A run of the whole screen cannot be missed, and nothing on the page can be used under one the
+  reader started, except by his own choice on a long run.
 - The end of any run shows what changed, in the table and in one count.
 - The page never shows figures older than the server's for more than 30 seconds.
 - A meter reads the same on every company: the zones in the same places, the labels apart.
@@ -75,9 +76,14 @@ says less than its cells.
 
 ### 4.1 The refresh layer
 
-- It shows while a run of the whole screen is alive: kind `price`, kind `full`, and a `revalue`
-  that names no company. It shows whoever started the run: this page, another browser tab, a
-  change in Settings. *My call.*
+- It shows while a run of the whole screen that this page started is alive: kind `price`, kind
+  `full`, and a `revalue` that names no company, started by the reader's press of Refresh prices,
+  Refresh all or Settings' Revalue now. The page keeps the run's id for the browser tab, so a
+  reload during that run locks again. A whole run the page did not start (an agent's, another
+  browser tab's) draws no layer and locks nothing: the page is as under a run before this work,
+  the figures faint, the run bar in the status line and Cancel in the header, and its end is
+  followed and marked, with the count (4.2, 4.3). *Claude's ruling at the final review,
+  2026-11-24* (the decision log).
 - It never shows for a run of named companies: a `scoped` refresh, a `revalue` of one company
   (an agent's, a moat write's). Under such a run nothing darkens, nothing fades and nothing
   locks. The progress the server sends must say which of the two a run is; today it gives the
@@ -231,7 +237,8 @@ other: the refresh layer's fade, the run bar's fill, and the highlight of a chan
 | 2026-11-23 | The founder on the meter: "if there is a price too high for trim, just have the price at the end of the spectrum, regardless if its correct equal spacing to the fair value", for a price too high or too low. He agreed that every meter then has the same spacing. |
 | 2026-11-23 | The founder: the two bugs (4.3, 4.4) are built with the rest of the plan, not ahead of it. |
 | 2026-11-23 | On the mockup (version 3) the founder asked that the highlight fade out, asked about green and red for a price's direction, and chose: "grey with the arrow looks good, and the new scale looks good". The mockup is `refresh-and-meter-v3.html` under `.superpowers/brainstorm/`, not committed: it shows real prices. |
-| 2026-11-23 | Claude's calls: the layer for a whole run whoever started it; the 30-second cycle; the count kept on the page alone; a company page left alone by a run that did not cover it; Statistics on the shown value; `#groups` kept; the scale at 0.45 to 1.55 times the value; the labels anchored outward; the three motions of 4.8. |
+| 2026-11-23 | Claude's calls: the layer for a whole run whoever started it (set aside at the final review, 2026-11-24, below); the 30-second cycle; the count kept on the page alone; a company page left alone by a run that did not cover it; Statistics on the shown value; `#groups` kept; the scale at 0.45 to 1.55 times the value; the labels anchored outward; the three motions of 4.8. |
+| 2026-11-24 | Claude's ruling at the final review: the lock is for the reader's own press. The layer shows for a run of the whole screen this page started, and for no other (4.1). The research playbook tells an agent to start runs of the whole screen (`refresh_start("price")` on `fx-stale`, `refresh_start("revalue")` with no company on "settings changed" and "the store moved"), and a refresh's record does not say who started it, so a layer for every whole run would darken and lock the founder's page on an agent's routine step: the anti-goal of section 2 ("a lock or a darkening he did not start") and against the founder's "no lock and no darkening for an agent's refresh". |
 
 ## 8. What the build changed
 
@@ -242,11 +249,32 @@ figure moves.
   run nor lifts the lock; Tab reaches the buttons. The address put back while locked is the one
   the page held as the lock began. Keep reading also stands on any run after a status read that
   failed, so the reader is never held behind the layer while the server does not answer.
+- 4.1, at the final review: the layer shows only for a run of the whole screen this page started
+  (the decision log, 2026-11-24). The page takes the run's id from the answer to its own start,
+  the header's or Settings' Revalue now, and keeps it in the tab's session storage, read as the
+  page loads, so a reload during the reader's own run locks again; where the browser refuses the
+  storage the id lives in memory. A whole run the page did not start draws no layer; its end is
+  followed and marked, with the count.
+- 4.1: the scrim is a value of the page's own, one for each theme (`--app-scrim`, `index.html`),
+  not a token: the archive's tokens are fixed.
+- 4.1, at the final review: as the lock lifts, the focus goes back to the element that held it
+  as the lock began, where that element is still in the document; the page under the lock does
+  not scroll, the root's overflow hidden while it holds; and the layer takes no pointer as it
+  fades out.
 - 4.2: a company valued for the first time, its price none before, is tinted and counted, with no
   arrow. The count's own tint plays once, as the rows land.
 - 4.2: the arrow takes no room: a box of no width and no height on the price's baseline, its
   glyph 4px before the price. Set in the line, it widened the price's column, and every column of
   the Screen moved about 11px as the arrows came and went (the look in a browser, 2026-11-24).
+- 4.2, at the final review: a run's end marks and counts against the rows the page held as the
+  run was first seen alive, its baseline, not against the rows it holds as the end's rows land:
+  a read in the run's middle (a sort, a watchlist write, after Keep reading or under a run the
+  page did not start) brings in rows the run already rewrote and takes nothing from the count.
+  A marked read that a newer read overtakes (a sort just after the end) hands its mark on, so
+  the rows that land are marked, with the count.
+- 4.3, at the final review: the read as the page loads goes even while the page is hidden, so a
+  page restored in a background tab knows the run its rows were read under and follows a run
+  that ends before it is first shown; only the later reads wait for the page to show.
 - 4.3: a run the server lists as running while it reports no run alive (one of the command-line
   tool) is not followed until its record says it ended. It draws no bar and no layer.
 - 4.3: with no run alive, a status read that failed says "The page asks again every 30 seconds."

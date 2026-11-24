@@ -5,10 +5,10 @@ The sources of the look in a browser of `../2026-11-23-refresh-experience-design
 nothing here is imported, tested or shipped. No data is in this folder.
 
 The look ran on the real page, the branch's server on a scratch database of the whole universe.
-No refresh ran: the script answers the page's reads of the refresh's state and its start, and
-changes the rows the server sends after a simulated run, so the page has something to mark. The
-meters ran on a page the script serves, which mounts the bundle's `BandMeter` on invented
-figures.
+No refresh ran: the script answers the page's reads of the refresh's state and its start, the
+start with the id the reads of the state carry, so a run the page starts is its own, and changes
+the rows the server sends after a simulated run, so the page has something to mark. The meters
+ran on a page the script serves, which mounts the bundle's `BandMeter` on invented figures.
 
 | File | What it is |
 |---|---|
@@ -17,8 +17,9 @@ figures.
 
 What `look.mjs` checks:
 
-- A price run: the layer up, titled, with no Keep reading, the panel holding the focus with no
-  ring, everything under it inert; a press on the menu, Escape and a hash typed change no view.
+- A price run the page started: the layer up, titled, with no Keep reading, the panel holding the
+  focus with no ring, everything under it inert; a press on the menu, Escape and a hash typed
+  change no view.
   At the end the changed cells hold the tint, the changed prices their arrows and the line its
   count; 3 seconds on no tint and no arrow is left; no column head, cell or row moves as the
   arrows come and go. With and without reduced motion, in both themes.
@@ -26,11 +27,17 @@ What `look.mjs` checks:
   header, the tables fade, the menu answers; the end counts the prices and the values.
 - A revalue of one named company: no layer, no fade, nothing inert; that row's cells tinted and
   no count.
+- A price run of the whole screen the page did not start, an agent's: no layer and nothing
+  inert, the tables faint, the bar in the status line and Cancel in the header; at its end the
+  tint and the count.
 - Statistics: for each grouping, a group's name opens the Screen, which counts the group's
   Companies; the links at rest, under the pointer and faded while a grouping loads.
-- The layer at 1,600 and 375px: the panel inside 16px gutters, its fade out with the scrim, a
+- The layer at 1,600 and 375px: the panel inside 16px gutters; the page under it, which neither
+  moves sideways under the wheel nor draws a scrollbar at 375px, where the status line's run bar
+  is wider than the window; its fade out with the scrim, which takes no pointer as it fades; a
   second lock.
-- The Methodology view, scrolled, under the layer: the wheel and the keys scroll nothing.
+- The Methodology view, scrolled once it has settled, under the layer: the wheel and the keys
+  scroll nothing.
 - The company page's head: the arrow before the price, which does not move as it comes and goes,
   wide and narrow.
 - The tint beside the approved mockup's grey, one picture for each theme, when the mockup's path
@@ -67,5 +74,17 @@ an end of the scale stood on the track's end, its dot 6.5px off the meter: a mar
 scale now never stands nearer an end than the 7px a pinned one takes (Task 2). An arrow taken
 out of the flow by absolute position was tried first and set aside: the arrows of rows far down
 the table stretched the document and drew a scrollbar beside it.
+
+The final review's round of fixes (2026-11-24) ran it again. It gained the agent's whole run, the
+page under the layer at 375px and the layer that takes no pointer as it fades, and its simulated
+runs are the page's own, since the layer now shows for those alone. The check of the page under
+the layer failed once by a pixel: the Methodology view, scrolled as soon as it was tall enough,
+was still reflowing, and the browser's scroll anchoring moved its place by 1px whenever that
+landed. It now waits for the view to settle before it scrolls it, and the place holds exactly.
+All 175 checks passed. Tried with the root's overflow forced visible, the check at 375px fails as
+it should: the page moves 18px sideways and draws a 15px scrollbar. The check that a press as the
+layer fades reaches the page passes even with the layer's pointer forced on, since Chrome
+hit-tests the off layer, which is inert, as taking no pointer; the stylesheet's rule keeps it so
+wherever inert does not.
 
 Where the design and these files disagree, the design is right.

@@ -7,14 +7,15 @@
      node look.mjs <screenshots folder> [<the approved mockup, for the tint's comparison>]
 
    The server is the branch's on the scratch database, at LOOK_BASE (http://127.0.0.1:8499). No
-   real refresh runs: the page's POST /api/refresh is answered here, and GET /api/refresh/current
+   real refresh runs: the page's POST /api/refresh is answered here with the id the stubbed reads
+   of the refresh's state carry, so a run the page starts is its own, and GET /api/refresh/current
    says what the simulated run is doing. The page asks for the state every 30 seconds while no run
-   is alive; a run the page did not start (the named run) is announced by a visibilitychange, on
-   which the page asks at once, as it does when its tab shows again.
+   is alive; a run the page did not start (the named run, the agent's whole run) is announced by a
+   visibilitychange, on which the page asks at once, as it does when its tab shows again.
 
-   LOOK_ONLY names the parts to run, by commas (meters, price, tint, full, named, statistics,
-   layer, under, company); all of them without it. LOOK_CSS is a rule added to every page after
-   its own styles, to try a correction in the browser before it is written. */
+   LOOK_ONLY names the parts to run, by commas (meters, price, tint, full, named, agent,
+   statistics, layer, under, company); all of them without it. LOOK_CSS is a rule added to every
+   page after its own styles, to try a correction in the browser before it is written. */
 import { createRequire } from 'module';
 import fs from 'fs';
 import os from 'os';
@@ -529,6 +530,44 @@ async function namedRun(scheme) {
   await page.context().close();
 }
 
+/* ------------------------------------------------------------------ the agent's whole run */
+
+/* A price refresh of the whole screen the page did not start, an agent's (Claude's ruling at the
+   final review, 2026-11-24): no layer and nothing inert, the tables faint, the bar in the status
+   line and Cancel in the header; at its end the changed cells tinted and the line's count. */
+async function agentRun(scheme) {
+  const tag = 'agent-' + scheme;
+  const page = await open({ scheme });
+  const s = await stub(page);
+  await ready(page);
+  running(s, 'price', null, 'quotes', 300, 1558);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForSelector('#controls .fb-run', { timeout: 5000 });
+  await wait(250);
+  const alive = await page.evaluate(() => ({
+    layer: !!document.querySelector('.app-layer.is-on'),
+    inert: Array.from(document.body.children).filter((c) => c.id !== 'layer')
+      .some((c) => c.inert),
+    faded: document.getElementById('screen').classList.contains('is-recomputing'),
+    cancel: Array.from(document.querySelectorAll('#header button')).some((b) =>
+      b.textContent === 'Cancel')
+  }));
+  check(tag + ': a whole run the page did not start draws no layer and makes nothing inert',
+    !alive.layer && !alive.inert, alive);
+  check(tag + ': the tables fade, the bar in the status line and Cancel in the header',
+    alive.faded && alive.cancel, alive);
+  await shot(page, tag + '-running');
+
+  s.alter = changes(s, 3, 0.012, false);
+  ended(s, PRICE_CALIBRATION);
+  await page.waitForSelector('#screen td.fb-changed', { timeout: 6000 });
+  const end = await endState(page);
+  const want = s.counted.prices.toLocaleString('en-US') + ' prices changed';
+  check(tag + ': its end tints the changed cells and counts the prices',
+    !end.layerOn && end.tinted > 0 && end.line.endsWith(' · ' + want), end.line);
+  await page.context().close();
+}
+
 /* ------------------------------------------------------------------ Statistics */
 
 /* For each grouping, a group's name opens the Screen on its filter and the Screen counts the
@@ -606,7 +645,9 @@ async function statistics(scheme) {
 
 /* ------------------------------------------------------------------ the layer's own look */
 
-/* The layer at `width`: the panel inside the window's gutters; its fade out with the scrim; a
+/* The layer at `width`: the panel inside the window's gutters; the page under it, whose root
+   neither scrolls sideways nor draws a scrollbar, though the status line's run bar is wider than
+   a narrow window (B-305); its fade out with the scrim, which takes no pointer as it fades; a
    second lock, whose panel takes the focus again. */
 async function layerLook(scheme, width, kind) {
   const tag = 'layer-' + kind + '-' + scheme + '-' + width;
@@ -623,6 +664,16 @@ async function layerLook(scheme, width, kind) {
   check(tag + ': the panel stands inside 16px gutters', p.left >= 16 - 0.5 &&
     p.right <= width - 16 + 0.5 && p.top >= 0 && p.bottom <= 700, p);
   check(tag + ': the panel holds the focus', layer.focusPanel);
+  await page.mouse.move(width / 2, 650);
+  for (let i = 0; i < 3; i++) { await page.mouse.wheel(300, 0); await wait(100); }
+  const root = await page.evaluate(() => ({
+    left: document.scrollingElement.scrollLeft,
+    wider: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    scrollbar: window.innerHeight - document.documentElement.clientHeight,
+    overflow: getComputedStyle(document.documentElement).overflowX
+  }));
+  check(tag + ': the page under the layer does not move sideways and draws no scrollbar',
+    root.left === 0 && root.scrollbar === 0, root);
   await shot(page, tag);
 
   ended(s, kind === 'price' ? PRICE_CALIBRATION : FULL_CALIBRATION);
@@ -633,15 +684,18 @@ async function layerLook(scheme, width, kind) {
     const fade = document.getAnimations().find((a) => a.transitionProperty === 'opacity' &&
       a.effect && a.effect.target === layer);
     if (fade) { fade.pause(); fade.currentTime = 75; }
+    const under = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
     return {
       found: !!fade, opacity: Number(getComputedStyle(layer).opacity),
       panel: !!layer.querySelector('.app-layer__panel'),
-      hidden: layer.getAttribute('aria-hidden'), inert: layer.inert
+      hidden: layer.getAttribute('aria-hidden'), inert: layer.inert,
+      pointer: !!under && !layer.contains(under)
     };
   });
   check(tag + ': the panel fades out with the scrim', fading.found && fading.panel &&
     fading.opacity > 0 && fading.opacity < 1 && fading.hidden === 'true' && fading.inert,
     fading);
+  check(tag + ': a press as the layer fades reaches the page under it', fading.pointer, fading);
   await shot(page, tag + '-fading');
   await page.evaluate(() => document.getAnimations().forEach((a) => {
     if (a.transitionProperty) a.finish();
@@ -669,7 +723,18 @@ async function underLayer(scheme) {
   const s = await stub(page);
   await ready(page, '#methodology');
   await page.waitForFunction(() => document.getElementById('methodology').scrollHeight > 2000);
+  /* the view settled first: its fonts in and its height still for half a second, since a late
+     reflow above the scroll place moves it by a pixel (the browser's scroll anchoring) whenever
+     it lands, under the layer or not */
+  await page.evaluate(() => document.fonts.ready.then(() => true));
+  let height = -1;
+  for (let still = 0; still < 3; await wait(200)) {
+    const now = await page.evaluate(() => document.getElementById('methodology').scrollHeight);
+    still = now === height ? still + 1 : 0;
+    height = now;
+  }
   await page.evaluate(() => { document.getElementById('methodology').scrollTop = 1200; });
+  await wait(300);
   running(s, 'price', null, 'quotes', 100, 1558);
   await page.click('button[aria-label="Refresh prices"]');
   await page.waitForSelector('.app-layer.is-on');
@@ -969,6 +1034,10 @@ try {
   if (runs('named')) {
     await namedRun('dark');
     await namedRun('light');
+  }
+  if (runs('agent')) {
+    await agentRun('dark');
+    await agentRun('light');
   }
   if (runs('statistics')) {
     await statistics('dark');
