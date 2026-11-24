@@ -752,8 +752,8 @@
 
   /* Keep reading lifts the lock for the run alive, on this page alone: the run goes on, and the
      page is as under a run today, the run bar in the status line, the tables faint and Cancel in
-     the header. Another run locks the page again, and so does a reload: the choice is the page's
-     own state (4.1). */
+     the header. Another run the page starts locks it again, and so does a reload during this one:
+     the choice is the page's own state, kept nowhere else (4.1). */
   function keepReading() {
     if (state.running) state.kept = state.running.id;
     render();
