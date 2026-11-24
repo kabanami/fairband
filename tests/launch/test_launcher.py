@@ -8,6 +8,7 @@ The server is an ``httpx.MockTransport`` and the program start a double, so no t
 or uses the network. One test starts this Python itself through the default start."""
 
 import json
+import os
 import signal
 import sys
 from collections.abc import Callable, Iterator, Sequence
@@ -367,7 +368,10 @@ def test_a_folder_that_cannot_be_made_is_written_reported_and_held(
     (tmp_path / "file").write_text("not a folder", encoding="utf-8")
     folder = tmp_path / "file" / "fairband-research"
     server.command = (200, {"argv": ARGV, "folder": str(folder)})
-    sentence = f"the folder {folder} cannot be made: [Errno 20] Not a directory: '{folder}'"
+    # The error's text is the system's own: "[Errno 20] Not a directory" on Linux.
+    with pytest.raises(OSError) as caught:
+        os.makedirs(folder, exist_ok=True)
+    sentence = f"the folder {folder} cannot be made: {caught.value}"
     assert _run(http, start, out, hold) == 1
     assert out.getvalue() == _window(sentence)
     assert hold.shown == [_window(sentence)]

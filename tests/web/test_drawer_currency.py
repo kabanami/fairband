@@ -39,6 +39,7 @@ def _call(helper: str, *args: Any) -> Any:
         input=json.dumps(list(args)),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
         timeout=60,
     )

@@ -65,6 +65,7 @@ def _drive(
         input=json.dumps({"store": store, "answers": replies or {}, "steps": steps}),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         timeout=60,
     )

@@ -601,11 +601,15 @@ def test_symbols_are_upper_cased_on_apply() -> None:
 
 
 def test_load_policy_checks_the_file_too(tmp_path: Path) -> None:
-    text = resources.files("fairband.policy").joinpath("fairband-policy-v18.toml").read_text()
+    text = (
+        resources.files("fairband.policy")
+        .joinpath("fairband-policy-v18.toml")
+        .read_text(encoding="utf-8")
+    )
     old = "[values.required_return]\nvalue = 0.09\n"
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
-    copy.write_text(text.replace(old, "[values.required_return]\nvalue = 0.02\n"))
+    copy.write_text(text.replace(old, "[values.required_return]\nvalue = 0.02\n"), encoding="utf-8")
     with pytest.raises(ValueError, match=re.escape("required_return: must be from 4% to 20%")):
         load_policy(copy)
 

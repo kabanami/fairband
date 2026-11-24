@@ -943,7 +943,7 @@ def test_a_rate_older_than_the_bound_is_stale(
     store: Store, clients: Clients, clock: Clock, policy: Policy
 ) -> None:
     """The quote of 2026-11-20 reads the newest close, 2026-11-05's, 15 days before it."""
-    quote = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    quote = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text(encoding="utf-8"))
     stamp = int(datetime(2026, 11, 20, 21, tzinfo=UTC).timestamp())
     conn = _sek_store(store, clients, clock, policy, quote=[{**quote[0], "timestamp": stamp}])
     inputs = build(conn)
@@ -957,7 +957,7 @@ def test_a_period_end_with_no_rate_leaves_the_street_figures_unknown(
     """A history that starts after the oldest trailing quarter's end: the street actuals have no
     rate there, so they are unknown, never a refusal."""
     fixture = FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json"
-    rows = [r for r in json.loads(fixture.read_text()) if r["date"] >= "2026-01-01"]
+    rows = [r for r in json.loads(fixture.read_text(encoding="utf-8")) if r["date"] >= "2026-01-01"]
     router.symbol_bodies[("fx-history", "USDSEK")] = json.dumps(rows).encode()
     inputs = build(_sek_store(store, clients, clock, policy))
     assert inputs.refusal is None and inputs.fx_rate == 10.52
@@ -1408,7 +1408,7 @@ def test_the_ntm_chain_holds_on_a_company_with_duplicate_rows(store: Store) -> N
         annual_estimates=inputs.annual_estimates,
     )
     result = value_company(stored, universe_deciles(), load_policy(), date(2026, 10, 31))
-    golden = json.loads((GOLDEN / "MGCO.json").read_text())
+    golden = json.loads((GOLDEN / "MGCO.json").read_text(encoding="utf-8"))
     assert (result.refusal, result.value) == (None, golden["value"])
 
 
@@ -1471,7 +1471,7 @@ def test_the_reported_quarter_s_duplicate_is_not_an_ntm_quarter(store: Store) ->
     assert 80 <= (ntm[0].period_end - inputs.trailing.period_end).days <= 100
     stored = replace(mgco, quarter_estimates=inputs.quarter_estimates)
     result = value_company(stored, universe_deciles(), load_policy(), date(2026, 10, 31))
-    golden = json.loads((GOLDEN / "MGCO.json").read_text())
+    golden = json.loads((GOLDEN / "MGCO.json").read_text(encoding="utf-8"))
     assert (result.refusal, result.value) == (None, golden["value"])
 
 
@@ -1533,7 +1533,9 @@ def test_inputs_carry_peers_debt_cash_and_the_revenue_analysts(
     )
     assert "debt" not in i.notes and "cash" not in i.notes
     fixture = FIXTURES / "fmp" / "analyst-estimates.annual.ACME.json"
-    [first] = [r for r in json.loads(fixture.read_text()) if r["date"] == "2026-12-31"]
+    [first] = [
+        r for r in json.loads(fixture.read_text(encoding="utf-8")) if r["date"] == "2026-12-31"
+    ]
     assert i.annual_estimates[0].analysts_revenue == first["numAnalystsRevenue"]
     assert [p.symbol for p in i.peers] == ["BOLT"]
     peers = peer_figures(conn, "ACME", DECILES, policy, tax, TODAY)
@@ -1757,13 +1759,13 @@ def test_the_quarterly_sheet_moves_no_fiscal_year_figure(
 
 def _quote(count: float) -> list[dict[str, Any]]:
     """The ACME quote at its price of $50 with a market cap of $50 × ``count``."""
-    (row,) = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    (row,) = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text(encoding="utf-8"))
     return [{**row, "marketCap": row["price"] * count}]
 
 
 def _profile(is_adr: bool) -> list[dict[str, Any]]:
     """The ACME profile with FMP's ADR flag set to ``is_adr``."""
-    (row,) = json.loads((FIXTURES / "fmp" / "profile.ACME.json").read_text())
+    (row,) = json.loads((FIXTURES / "fmp" / "profile.ACME.json").read_text(encoding="utf-8"))
     return [{**row, "isAdr": is_adr}]
 
 

@@ -19,6 +19,7 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 from support.moat import moat_table
+from support.system import needs_linux_file_modes
 
 from fairband import __main__ as cli
 from fairband.config import DEFAULT_PORT, Keys, MissingKey, Settings
@@ -711,6 +712,7 @@ def serve_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[Any]:
     return served
 
 
+@needs_linux_file_modes
 def test_serve_without_an_fmp_key_runs_a_revalue_only(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -720,7 +722,7 @@ def test_serve_without_an_fmp_key_runs_a_revalue_only(
     served = serve_env(monkeypatch, tmp_path)
     keys_file = tmp_path / "config" / "fairband" / "keys.toml"
     keys_file.parent.mkdir(parents=True)
-    keys_file.write_text('[keys]\ngurufocus = "fakegfhalf:fakegfhalf2"\n')
+    keys_file.write_text('[keys]\ngurufocus = "fakegfhalf:fakegfhalf2"\n', encoding="utf-8")
     keys_file.chmod(0o644)
 
     def no_clients(*args: Any) -> Any:

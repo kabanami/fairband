@@ -4,6 +4,7 @@ now, and the suggested window command. Every file lives in a temporary config fo
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -148,6 +149,11 @@ def test_a_window_command_alone_is_ready(tmp_path: Path) -> None:
 
 # The rules of spec 7.1.
 
+# The folder's rule reads a path as the system does, and these values are Linux paths. On
+# Windows "/srv/research" has no drive, so it is not absolute, and "~name" of no user reads as
+# a folder beside the user's own, so it is.
+linux_path = pytest.mark.skipif(sys.platform == "win32", reason="the value is a Linux path")
+
 BROKEN = [
     ("window_command", 'wt.exe "new-tab', "does not split into words: No closing quotation"),
     ("window_command", "wt.exe new-tab \\", "does not split into words: No escaped character"),
@@ -181,7 +187,12 @@ BROKEN = [
     ("claude.folder", "fairband-research", "is not an absolute path"),
     ("claude.folder", "", "is not an absolute path"),
     ("claude.folder", "./research", "is not an absolute path"),
-    ("claude.folder", "~nosuchuser-of-fairband/research", "is not an absolute path"),
+    pytest.param(
+        "claude.folder",
+        "~nosuchuser-of-fairband/research",
+        "is not an absolute path",
+        marks=linux_path,
+    ),
     # A NUL byte breaks one rule of every name, checked before the name's own.
     ("window_command", "wt.exe\x00 -e", "holds a NUL byte"),
     ("claude.command", "-\x00", "holds a NUL byte"),
@@ -225,7 +236,7 @@ KEPT = [
     ("claude.model", "m" * 100),
     ("claude.folder", "~/fairband-research"),
     ("claude.folder", "~"),
-    ("claude.folder", "/srv/research"),
+    pytest.param("claude.folder", "/srv/research", marks=linux_path),
 ]
 
 
@@ -330,7 +341,10 @@ def test_a_folder_in_the_files_place_cannot_be_read(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="the superuser reads a file of any permission")
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="the superuser reads a file of any permission, and so does a user on Windows",
+)
 def test_a_file_without_permission_cannot_be_read(tmp_path: Path) -> None:
     path = _put(tmp_path, EXAMPLE)
     path.chmod(0)
@@ -394,6 +408,7 @@ def test_a_save_writes_the_defaults_too(tmp_path: Path) -> None:
     }
 
 
+@linux_path
 def test_a_save_writes_a_letter_beyond_ascii_as_itself(tmp_path: Path) -> None:
     write_launch_file(tmp_path, {"claude.folder": "/srv/recherche-é"})
     assert '"folder": "/srv/recherche-é"' in (tmp_path / FILE_NAME).read_text(encoding="utf-8")

@@ -499,7 +499,9 @@ def test_the_quarterly_balance_sheet_is_not_required(
 def test_a_pair_history_stores_no_rows_and_is_usable_with_a_close(clock: Clock) -> None:
     """The rates stage's ``fx-history`` (spec 2026-11-10 7.1) is stored whole, as the price
     history is: no rows, its closes left in the payload, usable when it holds a close."""
-    history = json.loads((FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json").read_text())
+    history = json.loads(
+        (FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json").read_text(encoding="utf-8")
+    )
     now = clock()
     assert fetch_module._rows("fx-history", history, "USDSEK", now, now) == ([], [])
     no_close = ([], [{"date": "2026-11-05", "price": 0}], {"symbol": "USDSEK"}, None)
@@ -648,7 +650,7 @@ def test_a_page_call_gives_no_fact_and_no_observation(
     now = clock()
     stored_whole = {**PAGE_FIXTURES, TRANSCRIPT: "earning-call-transcript.ACME.json"}
     for endpoint, name in stored_whole.items():
-        payload = json.loads((FIXTURES / "fmp" / name).read_text())
+        payload = json.loads((FIXTURES / "fmp" / name).read_text(encoding="utf-8"))
         assert payload and fetch_module._rows(endpoint, payload, "ACME", now, now) == ([], [])
         assert fetch_module._rows(endpoint, [], "ACME", now, now) == ([], [])
         for unusable in ({"Error Message": "x"}, None, "167000"):
@@ -930,7 +932,9 @@ def test_the_news_is_stored_under_the_pass_through_s_key(env: Env) -> None:
     assert env.router.calls["news"] == 1
     fetched = passthrough.fetch("news", "ACME", {"limit": "60"})["news"]
     assert fetched.reused and env.router.calls["news"] == 1
-    assert fetched.payload == json.loads((FIXTURES / "fmp" / "news-stock.ACME.json").read_text())
+    assert fetched.payload == json.loads(
+        (FIXTURES / "fmp" / "news-stock.ACME.json").read_text(encoding="utf-8")
+    )
 
     # The other way round: BOLT's news, fetched by the pass-through first, the fetch reuses.
     fresh = passthrough.fetch("news", "BOLT", {"limit": "60"})["news"]
@@ -974,7 +978,7 @@ def test_the_segments_are_stored_under_the_pass_through_s_key(env: Env) -> None:
     assert segment_calls(env) == (1, 1)
     for part in ("product", "geographic"):
         fixture = FIXTURES / "fmp" / f"revenue-{part}-segmentation.ACME.json"
-        assert parts[part].payload == json.loads(fixture.read_text())
+        assert parts[part].payload == json.loads(fixture.read_text(encoding="utf-8"))
 
     # The other way round: BOLT's segments, fetched by the pass-through first, the fetch reuses.
     fresh = passthrough.fetch("segments", "BOLT", {})
@@ -1039,7 +1043,9 @@ def test_the_investor_relations_answers_are_stored_under_the_pass_through_s_keys
     for kind, parts in copies.items():
         fetched = parts[kind]
         assert fetched.reused, kind
-        assert fetched.payload == json.loads((FIXTURES / "fmp" / fixtures[kind]).read_text())
+        assert fetched.payload == json.loads(
+            (FIXTURES / "fmp" / fixtures[kind]).read_text(encoding="utf-8")
+        )
     assert investor_calls(env) == (1, 1, 1)
 
 

@@ -130,6 +130,7 @@ def _trace(
         input=json.dumps(given),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
         timeout=60,
     )
@@ -289,7 +290,7 @@ def test_no_page_draws_a_link_back_to_the_screen() -> None:
     to the view left: the company page draws no link of its own, and the stylesheet keeps no
     rule for one."""
     for script in sorted(STATIC.glob("*.js")):
-        assert "Back to the screen" not in script.read_text(), script.name
+        assert "Back to the screen" not in script.read_text(encoding="utf-8"), script.name
     page = _static_file("index.html")
     assert "__back" not in page
 

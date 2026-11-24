@@ -127,7 +127,7 @@ def _twd(rates: str) -> str:
 
 def test_a_well_formed_table_loads(tmp_path: Path) -> None:
     path = tmp_path / "inflation.toml"
-    path.write_text(_TABLE)
+    path.write_text(_TABLE, encoding="utf-8")
     t = load_inflation_table(path)
     assert t.differential("TWD") == pytest.approx(1.016 / 1.0212 - 1)
     assert t.url == "https://www.imf.org/external/datamapper/api/v1/PCPIPCH"
@@ -150,7 +150,7 @@ def test_a_bad_table_is_refused(tmp_path: Path, text: str, named: str) -> None:
     missing ``[meta]`` field, or no USD row to restate against: each names the currency or the
     field."""
     path = tmp_path / "inflation.toml"
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
     with pytest.raises(ValueError, match=named):
         load_inflation_table(path)
 
@@ -163,7 +163,10 @@ def _datamapper(tmp_path: Path) -> Path:
         "VNM": dict(zip(_YEARS[:4], (4.9, 4.7, 4.6, 4.2), strict=True)) | {"2026": 4.7},
     }
     path = tmp_path / "pcpipch.json"
-    path.write_text(json.dumps({"values": {"PCPIPCH": series}, "api": {"version": "1"}}))
+    path.write_text(
+        json.dumps({"values": {"PCPIPCH": series}, "api": {"version": "1"}}),
+        encoding="utf-8",
+    )
     return path
 
 
@@ -172,7 +175,10 @@ def test_the_script_writes_the_rates_as_fractions(
 ) -> None:
     indicators = tmp_path / "indicators.json"
     indicators.write_text(
-        json.dumps({"indicators": {"PCPIPCH": {"source": "World Economic Outlook (October 2026)"}}})
+        json.dumps(
+            {"indicators": {"PCPIPCH": {"source": "World Economic Outlook (October 2026)"}}}
+        ),
+        encoding="utf-8",
     )
     out = tmp_path / "inflation.toml"
     _script().main(

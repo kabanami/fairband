@@ -109,7 +109,7 @@ def _packaged_with(tmp_path: Path, name: str, value: str) -> Path:
     start = text.index(old) + len(old)
     end = text.index("\n", start)
     copy = tmp_path / "policy.toml"
-    copy.write_text(text[:start] + value + text[end:])
+    copy.write_text(text[:start] + value + text[end:], encoding="utf-8")
     return copy
 
 
@@ -392,7 +392,7 @@ def test_a_malformed_distress_table_is_refused(
     text = _packaged_bytes().decode()
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
-    copy.write_text(text.replace(old, new))
+    copy.write_text(text.replace(old, new), encoding="utf-8")
     with pytest.raises(
         ValueError, match=rf"\[values\.{section}\] is malformed .*{re.escape(message)}"
     ):
@@ -575,7 +575,11 @@ def test_v17_is_v16_with_two_values_in_and_one_out() -> None:
     settings = {s.name for s in SETTINGS}
     assert "one_time_items_share" in settings and "warning_mark_min" not in settings
     assert "nri_flag_share" not in settings
-    text = resources.files("fairband.policy").joinpath("fairband-policy-v17.toml").read_text()
+    text = (
+        resources.files("fairband.policy")
+        .joinpath("fairband-policy-v17.toml")
+        .read_text(encoding="utf-8")
+    )
     assert tomllib.loads(text)["meta"] == {"version": "fairband-policy-v17"}
     assert text.startswith("# Fairband policy v17: every valuation constant the engine reads,")
     assert (
@@ -609,7 +613,11 @@ def test_v18_is_v17_without_the_three_values() -> None:
     assert refresh18["source"] == reworded != refresh17["source"]
     settings = {s.name for s in SETTINGS}
     assert "refresh.gf_reuse_days" not in settings and not settings & V18_DROPPED
-    text = resources.files("fairband.policy").joinpath("fairband-policy-v18.toml").read_text()
+    text = (
+        resources.files("fairband.policy")
+        .joinpath("fairband-policy-v18.toml")
+        .read_text(encoding="utf-8")
+    )
     assert tomllib.loads(text)["meta"] == {"version": "fairband-policy-v18"}
     assert text.startswith("# Fairband policy v18: every valuation constant the engine reads,")
     assert (
@@ -725,7 +733,7 @@ def _history_years(tmp_path: Path, years: int) -> Path:
     old = "\nfx_history_years = 3\n"
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
-    copy.write_text(text.replace(old, f"\nfx_history_years = {years}\n"))
+    copy.write_text(text.replace(old, f"\nfx_history_years = {years}\n"), encoding="utf-8")
     return copy
 
 
@@ -768,7 +776,7 @@ def test_a_driver_range_that_does_not_ascend_is_refused(tmp_path: Path) -> None:
     old = "tax_rate = [0.0, 0.50]"
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
-    copy.write_text(text.replace(old, "tax_rate = [0.50, 0.0]"))
+    copy.write_text(text.replace(old, "tax_rate = [0.50, 0.0]"), encoding="utf-8")
     with pytest.raises(
         ValueError, match=r"\[values\.secondary_driver_ranges\] is malformed .*tax_rate"
     ):
@@ -782,7 +790,7 @@ def test_an_override_range_that_does_not_ascend_is_refused(tmp_path: Path, pair:
     old = '"growth.belief" = [-0.20, 0.60]'
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
-    copy.write_text(text.replace(old, f'"growth.belief" = {pair}'))
+    copy.write_text(text.replace(old, f'"growth.belief" = {pair}'), encoding="utf-8")
     with pytest.raises(
         ValueError, match=r"\[values\.override_ranges\] is malformed .*growth\.belief"
     ):
@@ -794,7 +802,7 @@ def _ranges_written(tmp_path: Path, old: str, new: str) -> Path:
     text = _packaged_bytes().decode()
     assert text.count(old) == 1
     copy = tmp_path / "policy.toml"
-    copy.write_text(text.replace(old, new))
+    copy.write_text(text.replace(old, new), encoding="utf-8")
     return copy
 
 
@@ -1076,7 +1084,9 @@ def test_hash_is_sha256_of_the_file_bytes(tmp_path: Path) -> None:
 def test_missing_value_names_its_section(tmp_path: Path, section: str) -> None:
     text = _packaged_bytes().decode()
     copy = tmp_path / "policy.toml"
-    copy.write_text(text.replace(f"[values.{section}", f"[values.renamed_{section}"))
+    copy.write_text(
+        text.replace(f"[values.{section}", f"[values.renamed_{section}"), encoding="utf-8"
+    )
     with pytest.raises(ValueError, match=rf"\[values\.{section}\]"):
         load_policy(copy)
 

@@ -4026,7 +4026,7 @@ def test_bundle_css_colours_the_five_designations() -> None:
     tokens = (
         resources.files("fairband.web")
         .joinpath("static/design-system/tokens/tokens.css")
-        .read_text()
+        .read_text(encoding="utf-8")
     )
     for token in colours.values():
         # the dark root, the light theme and the light preference
@@ -4104,7 +4104,7 @@ def test_bundle_is_the_november_build() -> None:
     tokens = (
         resources.files("fairband.web")
         .joinpath("static/design-system/tokens/tokens.css")
-        .read_text()
+        .read_text(encoding="utf-8")
     )
     assert "--header-height: 44px;" in tokens
 

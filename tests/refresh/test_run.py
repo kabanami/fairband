@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 from refresh_env import Env, use_cli
+from support.system import needs_linux_file_modes
 from synthetic import bodies, estimates_quarter
 from vendor_double import FMP_KEY
 
@@ -614,6 +615,12 @@ def ctrl_c_twice() -> float:
     return second
 
 
+needs_a_signal_to_the_main_thread = pytest.mark.skipif(
+    not hasattr(signal, "pthread_kill"),
+    reason="the test presses Ctrl-C with pthread_kill, which Windows does not have",
+)
+
+
 def release_fetches(release: threading.Event) -> None:
     """Let the given-up fetch doubles end, and wait for their threads."""
     release.set()
@@ -622,6 +629,7 @@ def release_fetches(release: threading.Event) -> None:
             thread.join(5)
 
 
+@needs_a_signal_to_the_main_thread
 def test_cli_second_ctrl_c_does_not_wait_for_a_blocked_fetch(
     env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -650,6 +658,7 @@ def test_cli_second_ctrl_c_does_not_wait_for_a_blocked_fetch(
     assert all(status == "pending" for _, status, _ in env.items(row.id))
 
 
+@needs_a_signal_to_the_main_thread
 def test_cli_second_ctrl_c_while_the_fetches_keep_writing(
     env: Env, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -718,6 +727,7 @@ def test_cli_refuses_before_building_anything(
     assert not (tmp_path / "data").exists()
 
 
+@needs_linux_file_modes
 @pytest.mark.parametrize(("mode", "warned"), [(0o644, True), (0o600, False)])
 def test_cli_warns_on_a_keys_file_others_can_read(
     mode: int,
@@ -732,7 +742,7 @@ def test_cli_warns_on_a_keys_file_others_can_read(
     fake."""
     keys_file = tmp_path / "config" / "fairband" / "keys.toml"
     keys_file.parent.mkdir(parents=True)
-    keys_file.write_text(f'[keys]\ngurufocus = "{GURUFOCUS_TOKEN}"\n')
+    keys_file.write_text(f'[keys]\ngurufocus = "{GURUFOCUS_TOKEN}"\n', encoding="utf-8")
     keys_file.chmod(mode)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))

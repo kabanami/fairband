@@ -31,7 +31,7 @@ Q3 = {"year": "2026", "quarter": "3"}
 
 
 def _fixture(name: str, fixtures: Path = FIXTURES) -> Any:
-    return json.loads((fixtures / name).read_text())
+    return json.loads((fixtures / name).read_text(encoding="utf-8"))
 
 
 def test_no_passthrough_is_503(client: TestClient) -> None:

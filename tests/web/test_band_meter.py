@@ -57,6 +57,7 @@ def render(props: dict[str, Any]) -> str:
         input=json.dumps(props),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
         timeout=60,
     )

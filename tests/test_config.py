@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from support.system import needs_linux_file_modes
 
 from fairband import __main__ as cli
 from fairband.config import Keys, MissingKey, load_keys, load_settings, require, utcnow
@@ -10,7 +11,7 @@ from fairband.config import Keys, MissingKey, load_keys, load_settings, require,
 
 def _write_keys(home: Path, text: str, again: bool = False) -> None:
     (home / ".config/fairband").mkdir(parents=True, exist_ok=again)
-    (home / ".config/fairband/keys.toml").write_text(text)
+    (home / ".config/fairband/keys.toml").write_text(text, encoding="utf-8")
 
 
 def test_xdg_defaults(tmp_path: Path) -> None:
@@ -56,6 +57,7 @@ def test_defaults_read_process_environment_and_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))  # where Windows reads the home
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setenv("FAIRBAND_FMP_KEY", "env-fmp")
     monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "x"))
@@ -67,7 +69,9 @@ def test_defaults_read_process_environment_and_home(
 
 def test_keys_file_then_env(tmp_path: Path) -> None:
     (tmp_path / ".config/fairband").mkdir(parents=True)
-    (tmp_path / ".config/fairband/keys.toml").write_text('[keys]\nfmp = "file-fmp"\n')
+    (tmp_path / ".config/fairband/keys.toml").write_text(
+        '[keys]\nfmp = "file-fmp"\n', encoding="utf-8"
+    )
     s = load_settings(env={}, home=tmp_path)
     assert load_keys(s, env={}) == Keys(fmp="file-fmp")
     assert load_keys(s, env={"FAIRBAND_FMP_KEY": "env-fmp"}).fmp == "env-fmp"
@@ -109,6 +113,7 @@ def test_bad_keys_file_error_names_path_never_value(
     assert "file-fmp" not in str(e.value) and "4242" not in str(e.value)
 
 
+@needs_linux_file_modes
 @pytest.mark.parametrize(
     "line",
     ['gurufocus = "file-gf"', "gurufocus = 4242", 'gurufocus = " "'],
@@ -128,6 +133,7 @@ def test_a_keys_file_with_a_gurufocus_line_loads(
     _write_keys(tmp_path, f'[keys]\nfmp = "file-fmp"\n{line}\n')
     (tmp_path / ".config/fairband/keys.toml").chmod(0o600)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))  # where Windows reads the home
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.delenv("FAIRBAND_FMP_KEY", raising=False)
     if gurufocus_env is None:

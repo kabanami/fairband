@@ -453,7 +453,7 @@ def test_no_pending_split_changes_nothing() -> None:
 def _quote(price: float, count: float) -> list[dict[str, Any]]:
     """The ACME quote fixture at ``price`` and a market cap of ``price × count``, its timestamp
     (30 Oct 2026) kept."""
-    (row,) = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    (row,) = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text(encoding="utf-8"))
     return [{**row, "price": price, "marketCap": price * count}]
 
 

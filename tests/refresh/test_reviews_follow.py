@@ -146,7 +146,7 @@ def _no_reading(conn: sqlite3.Connection, review_id: int | None) -> bool:
 
 def _quotes(prices: dict[str, float]) -> bytes:
     """ACME's quote fixture for each symbol at its price, stamped a day later."""
-    [row] = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    [row] = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text(encoding="utf-8"))
     later = row["timestamp"] + 86_400
     rows = [row | {"symbol": s, "price": p, "timestamp": later} for s, p in prices.items()]
     return json.dumps(rows).encode()

@@ -553,7 +553,7 @@ def test_a_report_stored_long_ago_is_read_without_a_call(
     400 days before the clock answers the sheet list and the search, its rows' refs naming it,
     and FMP is not asked; a copy stored with an error as long ago is not reused, and FMP is."""
     long_ago = NOW - timedelta(days=400)
-    stored = (FIXTURES / "financial-reports-json.ACME.json").read_text()
+    stored = (FIXTURES / "financial-reports-json.ACME.json").read_text(encoding="utf-8")
     call = {"symbol": "ACME", "year": "2027", "period": "Q1"}
     unread = {"symbol": "ACME", "year": "2026", "period": "FY"}
     body = '{"Error Message": "No Data"}'  # stored with its payload, as the pass-through does

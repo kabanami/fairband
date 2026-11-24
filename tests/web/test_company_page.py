@@ -767,6 +767,7 @@ def test_the_hash_both_ways() -> None:
         [NODE, "-e", source, json.dumps(hashes)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
         timeout=60,
     )

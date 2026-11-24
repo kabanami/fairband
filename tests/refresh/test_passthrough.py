@@ -61,7 +61,7 @@ REPORT = {"year": "2027", "period": "Q1"}
 
 
 def _fixture(name: str, vendor: str = "fmp") -> Any:
-    return json.loads((FIXTURES / vendor / name).read_text())
+    return json.loads((FIXTURES / vendor / name).read_text(encoding="utf-8"))
 
 
 def _passthrough(env: Env) -> Passthrough:

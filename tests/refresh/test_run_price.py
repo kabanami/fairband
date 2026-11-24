@@ -67,7 +67,7 @@ BELIEF = {
 
 def quote_rows(prices: dict[str, float], days: int = 1) -> list[dict[str, Any]]:
     """ACME's quote fixture for each symbol, at its price, stamped ``days`` later."""
-    [row] = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    [row] = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text(encoding="utf-8"))
     later = row["timestamp"] + 86_400 * days
     return [row | {"symbol": s, "price": p, "timestamp": later} for s, p in prices.items()]
 
@@ -283,7 +283,7 @@ def test_a_reprice_with_a_multiple_replaces_the_old_figure(env_valued: Env) -> N
     env = env_valued
     with closing(env.connect()) as conn:
         before = {symbol: multiples_log_for(conn, symbol) for symbol in ADMITTED}
-    [row] = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text())
+    [row] = json.loads((FIXTURES / "fmp" / "quote.ACME.json").read_text(encoding="utf-8"))
     same_day = [row | {"symbol": s, "price": p} for s, p in NEW_PRICES.items()]
     env.router.bodies["batch-quote"] = json.dumps(same_day).encode()
     refresh_id = env.refresh().run("price")
@@ -856,7 +856,9 @@ def test_a_scoped_refresh_of_a_currency_mate_leaves_a_snapshot_reproducing(
     env = env_valued
     for endpoint, body in company("KRON").items():
         env.router.symbol_bodies[(endpoint, "AXLE")] = body.replace(b"KRON", b"AXLE")
-    history = json.loads((FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json").read_text())
+    history = json.loads(
+        (FIXTURES / "fmp" / "historical-price-eod-light.USDSEK.json").read_text(encoding="utf-8")
+    )
     moved = [r | {"price": 10.40} if r["date"] == "2026-10-30" else r for r in history]
     env.router.symbol_bodies[("fx-history", "USDSEK")] = json.dumps(moved).encode()
     valued = env.snapshot("KRON")

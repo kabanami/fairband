@@ -336,11 +336,12 @@ def test_the_system_runner_answers_at_the_commands_exit_not_its_outputs_end() ->
     # The child starts a grandchild that inherits its output and sleeps 5 seconds, writes one line
     # and exits at once, as a window command may leave a program running. The run answers at the
     # child's exit, not when the grandchild lets go of the output; the grandchild ends by itself.
+    # The child writes bytes: a text write on Windows ends the line with two characters.
     sleeper = "import time; time.sleep(5)"
     script = (
         "import os, subprocess, sys; "
         f"subprocess.Popen([sys.executable, '-c', {sleeper!r}]); "
-        "sys.stderr.write('the window opened\\n'); sys.stderr.flush(); os._exit(0)"
+        "sys.stderr.buffer.write(b'the window opened\\n'); sys.stderr.flush(); os._exit(0)"
     )
     started = time.monotonic()
     result = system_opener().run([sys.executable, "-c", script])
@@ -459,6 +460,10 @@ def test_the_launcher_names_no_shell_and_holds_one_exec() -> None:
     assert lines[1:] == ['exec "$1" -P -m fairband launch "$2" "$3"']
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the launcher is a script for bash, and a launch on Windows runs it inside WSL",
+)
 def test_the_launcher_starts_its_first_word_with_the_other_two_whole(tmp_path: Path) -> None:
     # A stand-in for the server's Python that writes the words it gets; bash runs the script as the
     # window does, but not as a login shell, so the test reads no profile.

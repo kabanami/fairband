@@ -14,6 +14,7 @@ def test_cli_version() -> None:
         [sys.executable, "-m", "fairband", "--version"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     assert out.returncode == 0 and "0.1.0" in out.stdout

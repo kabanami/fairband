@@ -89,7 +89,7 @@ def company(symbol: str) -> dict[str, bytes]:
         payloads["income-annual"] = reshaped(payloads["income-annual"], *_SHAPES[symbol])
     answers = {endpoint: json.dumps(payload) for endpoint, payload in payloads.items()}
     for endpoint, fixture in _FIXTURES.items():
-        answers[endpoint] = (FIXTURES / fixture).read_text()
+        answers[endpoint] = (FIXTURES / fixture).read_text(encoding="utf-8")
     return {endpoint: text.replace("ACME", symbol).encode() for endpoint, text in answers.items()}
 
 

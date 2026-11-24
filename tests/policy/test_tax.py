@@ -131,7 +131,8 @@ def test_a_row_source_that_is_not_a_string_is_refused(tmp_path: Path) -> None:
     table = tmp_path / "tax.toml"
     table.write_text(
         '[meta]\nsource = "s"\n\n'
-        '[[rates]]\ncountry = "Taiwan"\nyear = 2024\nrate = 0.2\nsource = 5\n'
+        '[[rates]]\ncountry = "Taiwan"\nyear = 2024\nrate = 0.2\nsource = 5\n',
+        encoding="utf-8",
     )
     with pytest.raises(TypeError, match="Taiwan 2024 source"):
         load_tax_table(table)
@@ -156,7 +157,8 @@ def test_code_for_a_country_without_rates_is_refused(tmp_path: Path) -> None:
     table = tmp_path / "tax.toml"
     table.write_text(
         '[meta]\nsource = "s"\n\n[country_aliases]\nUS = "United Staets"\n\n'
-        '[[rates]]\ncountry = "United States"\nyear = 2022\nrate = 0.25\n'
+        '[[rates]]\ncountry = "United States"\nyear = 2022\nrate = 0.25\n',
+        encoding="utf-8",
     )
     with pytest.raises(ValueError, match="United Staets"):
         load_tax_table(table)
@@ -166,7 +168,8 @@ def test_rate_given_as_a_percentage_is_refused(tmp_path: Path) -> None:
     table = tmp_path / "tax.toml"
     table.write_text(
         '[meta]\nsource = "s"\nurl = "u"\nretrieved = "2026-10-31"\n\n'
-        '[[rates]]\ncountry = "United States"\nyear = 2022\nrate = 25.8\n'
+        '[[rates]]\ncountry = "United States"\nyear = 2022\nrate = 25.8\n',
+        encoding="utf-8",
     )
     with pytest.raises(ValueError, match="United States 2022"):
         load_tax_table(table)

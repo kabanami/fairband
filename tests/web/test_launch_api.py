@@ -125,6 +125,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """The user's home, where ``~`` in the launch file's folder leads."""
     found = tmp_path / "home"
     monkeypatch.setenv("HOME", str(found))
+    monkeypatch.setenv("USERPROFILE", str(found))  # where Windows reads the home
     return found
 
 

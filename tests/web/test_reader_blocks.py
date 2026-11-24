@@ -74,6 +74,7 @@ def _section(parts: list[Any], footnotes: dict[str, int]) -> str:
         input=json.dumps(props),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
         timeout=60,
     )

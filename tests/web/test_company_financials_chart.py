@@ -253,6 +253,7 @@ def _drive(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
         input=json.dumps({"store": None, "steps": steps}),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         timeout=60,
     )

@@ -474,6 +474,7 @@ def _drive(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
         input=json.dumps(steps),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         timeout=60,
     )
@@ -1636,7 +1637,9 @@ def test_the_filings_data_date_is_the_oldest_list_read(observed: str, data: str,
 
 def _scripts_but(*names: str) -> str:
     """Every page script but ``names``, one text."""
-    return "\n".join(p.read_text() for p in sorted(STATIC.glob("*.js")) if p.name not in names)
+    return "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(STATIC.glob("*.js")) if p.name not in names
+    )
 
 
 # ----------------------------------------------------------------------------- the script's rules

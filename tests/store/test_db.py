@@ -157,7 +157,7 @@ def _migrations_dir(tmp_path: Path, extra: dict[str, str]) -> Path:
     folder.mkdir()
     (folder / "001_initial.sql").write_bytes(_packaged_initial())
     for name, text in extra.items():
-        (folder / name).write_text(text)
+        (folder / name).write_text(text, encoding="utf-8")
     return folder
 
 
@@ -893,7 +893,7 @@ def test_mismatch_refuses_before_applying_pending(
     monkeypatch.setattr(db, "_MIGRATIONS", folder)
     migrate(conn)
     (folder / "001_initial.sql").write_bytes(_packaged_initial() + b"\n-- edited\n")
-    (folder / "002_more.sql").write_text("create table more (x integer);\n")
+    (folder / "002_more.sql").write_text("create table more (x integer);\n", encoding="utf-8")
     with pytest.raises(ValueError, match="001_initial.sql"):
         migrate(conn)
     assert applied_versions(conn) == [1]
@@ -959,6 +959,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
             [sys.executable, "-m", "fairband", "migrate"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
             env=env,
         )
