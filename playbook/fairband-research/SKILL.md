@@ -445,15 +445,16 @@ Twelve flags ask for a decision of yours. Read each sentence whole: it names its
   decide through `earnings.sbc` (the second of the two steps below): period-tied for the figure
   the filings show, or lasting at 0 where they show nil too. The note does not show once
   `earnings.sbc` applies. Under an applied `earnings.ntm` the note does not show, and neither
-  stock-pay input is needed: the guided EPS stands in for the analysts' EPS less the charge.
+  stock-pay input moves the value: the guided EPS stands in for the analysts' EPS less the
+  charge.
 - `sbc-basis-uncertain`: on Mature Growth, the engine's test of whether the analysts' EPS leaves
   out stock pay may misread. The sentence gives each reason that holds: a large one-time item
   that may hide the gap, a low tax rate that may close it, or a street EPS so far above GAAP
   that the adjusted figure leaves out far more than stock pay. Read the company's own definition
   of its adjusted EPS in the release, and decide through `earnings.sbc_basis` (the first of the
   two steps below). The note does not show once `earnings.sbc_basis` applies. Under an applied
-  `earnings.ntm` the note does not show, and neither stock-pay input is needed: the guided EPS
-  stands in for the analysts' EPS less the charge.
+  `earnings.ntm` the note does not show, and neither stock-pay input moves the value: the guided
+  EPS stands in for the analysts' EPS less the charge.
 - `thin-ntm`: on Mature Growth, a period the analysts' NTM EPS sums has fewer than `analyst_min`
   EPS analysts (`policy()`), or no count, and is left as it is, so the earnings the value starts
   from rest on thin evidence. Where such a period falls in the last fiscal year the window reaches,
@@ -590,8 +591,9 @@ stock pay out (`intermediates/sbc_basis`: `includes-sbc`, `excludes-sbc` or `unk
    the 8-K, or of the 6-K for a foreign filer). Section 8 says whether it leaves out stock pay,
    citing the passage as a finding. Where the release reads otherwise than the row, or the row
    reads `unknown`, set `earnings.sbc_basis`, `includes` or `excludes`, with that passage as
-   evidence. Under an applied `earnings.ntm` section 8 still states the basis, and the report sets
-   neither stock-pay input, which could not move the value.
+   evidence. Under an applied `earnings.ntm` section 8 still states the basis, and the basis still
+   takes its override where the release reads otherwise than the row: it moves no value there,
+   its bridge line zero, and section 9's forward P/E after stock pay follows it.
 2. Where `stock-pay-missing` shows, read the trailing stock pay in the cash flow statements of the
    trailing periods' filings (`filing_report`), and set `earnings.sbc`, their total in the
    reporting currency, period-tied, with the filings as evidence. Where the filings show nil too,

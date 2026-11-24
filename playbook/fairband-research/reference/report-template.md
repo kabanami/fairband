@@ -242,7 +242,8 @@ worth owning at the prices shown. The kill criteria of section 11 test it.
 - **The stock pay**, on Mature Growth: whether the company's adjusted EPS leaves out stock pay,
   as its own definition in the release says, the passage cited as a finding, and the basis
   override where the row read otherwise. Under an applied `earnings.ntm` still state the basis,
-  and set neither stock-pay input, which could not move the value. Where `stock-pay-missing`
+  and still set the basis override where the row read otherwise: its bridge line is zero, and
+  section 9's forward P/E after stock pay follows it. Where `stock-pay-missing`
   showed, the trailing stock pay from the filings' cash flow statements, cited as its bridge line,
   `review:<id>/bridge/<n>/new`; where the filings show nil too, say so, with the filing cited:
   the company pays no stock, and a lasting `earnings.sbc` of 0 records it.
@@ -299,12 +300,24 @@ The engine or a derivation gives every item. None of them is a target.
   P/E beside it, on the earnings with your one-time items removed: the review's,
   `review:<id>/intermediates/multiples/pe_clean`. Say in one sentence which items you removed.
   Where you set none, give the one trailing P/E and write: "No one-time items were removed from
-  these earnings." Name no second P/E there, and do not say that two figures are equal. Set each
-  against its own history from `multiples_history`: the trailing series' ten-year average,
-  median, high and low (`multiple:<symbol>/pe/avg_10y`, `/median_10y`, `/high_10y`,
-  `/low_10y`), and the forward series' the same way (`multiple:<symbol>/pe_forward/avg_10y`).
-  The forward series is Fairband's own log: say since when it runs (its `since`), and that it
-  is short while it is.
+  these earnings." Name no second P/E there, and do not say that two figures are equal. The
+  forward P/E is the price over the analysts' earnings a share for the next twelve months, as
+  they state them: `/pe_forward` holds no charge for stock pay. On Mature Growth, where the value
+  charges stock pay against those earnings, give a second forward P/E beside it, on the earnings
+  after stock pay: `snapshot:<id>/intermediates/multiples/pe_forward_after_sbc`, under your
+  overrides the review's, `review:<id>/intermediates/multiples/pe_forward_after_sbc`. The charge
+  is the same record's `/intermediates/anchor/sbc_adjustment_per_share`, and it applies where
+  that figure is above zero. Say in one sentence that the analysts' earnings leave out stock pay
+  and that the value rests on the earnings after it. Where the charge is nil, give the one
+  forward P/E and write: "These earnings already count stock pay as a cost.", or, where a
+  lasting `earnings.sbc` of 0 says so, "The company pays no stock." Name no second forward P/E
+  there, and do not say that two figures are equal. On another phase give the one forward P/E:
+  none after stock pay exists there. Set each against its own history from `multiples_history`:
+  the trailing series' ten-year average, median, high and low (`multiple:<symbol>/pe/avg_10y`,
+  `/median_10y`, `/high_10y`, `/low_10y`), and the forward series' the same way
+  (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is Fairband's own log: say since
+  when it runs (its `since`), and that it is short while it is. The log holds the forward P/E
+  alone, so set the second figure against no history.
 - **The phase's multiples**, each from `derive`:
 
 | Phase | Multiples to show |
@@ -631,7 +644,7 @@ figure is a cite.
         {"cite": "18.60x", "ref": "multiple:EXMP/pe/low_10y"},
         ". So the stock trades well above its usual multiple, and below its peak one. The forward P/E, on the analysts' earnings for the next twelve months, is ",
         {"cite": "33.77x", "ref": "snapshot:412/intermediates/multiples/pe_forward"},
-        ". Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. The value assumes growth of ",
+        ". These earnings already count stock pay as a cost. Fairband began logging the forward P/E on 1 Nov 2026, so it has no history yet to set it against. The value assumes growth of ",
         {"cite": "9.0%", "ref": "review:89/bridge/2/new"},
         " a year after the analysts' forecast years, and the forward P/E is read beside that rate. None of these multiples is a target."
       ]

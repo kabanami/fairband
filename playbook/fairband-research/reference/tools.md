@@ -114,8 +114,10 @@ be left out.
 - `price_history(symbol, years?)`: the stored daily closes, oldest first, each with its `close:`
   ref; `years` keeps the latest years only.
 - `multiples_history(symbol, daily?)`: the trailing P/E (`pe`) and the forward P/E (`peForward`,
-  Fairband's own log, kept since `since`) over the ten years on file, the last point of each
-  month; `daily` answers every point, about 2,500 a series, which overflows the host's result.
+  the price over the analysts' EPS for the next twelve months as they state it, with no charge
+  for stock pay, Fairband's own log, kept since `since`) over the ten years on file, the last
+  point of each month; `daily` answers every point, about 2,500 a series, which overflows the
+  host's result.
   Fairband builds the trailing series from FMP's daily closes and quarterly diluted EPS: a day's
   close ÷ the EPS of the four quarters (two half-years for a company that reports twice a year)
   ended by that day, for a company in another currency each period's EPS brought into USD at

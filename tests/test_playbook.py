@@ -331,7 +331,8 @@ NEW_INTERMEDIATES = (
 # Each stock-pay note's entry under a guided anchor (the controller's ruling on the whole-branch
 # review of the research round's plan 1, its Minor 2): the note is silent, the inputs moot.
 GUIDED_STOCK_PAY = (
-    "Under an applied `earnings.ntm` the note does not show, and neither stock-pay input is needed"
+    "Under an applied `earnings.ntm` the note does not show, and neither stock-pay input moves the"
+    " value"
 )
 # The playbook's words of method 1.7, copied from the Words table of the GuruFocus removal's plan
 # 2 (spec 2026-11-19 7.5): step 5 on the one-time items. The words on the trailing P/E are the
@@ -360,6 +361,38 @@ CONFUSING_PE_WORDS = (
     "the two are equal",
     "it differs from the reported P/E under your gap alone",
     "takes no one-time items out of",
+)
+# The template's words on the forward P/E under method 1.10 (the founder's decisions of
+# 2026-11-24): the figure every reader knows, on the analysts' earnings as they state them, and a
+# second one after stock pay only where the value charges it, in the shape of the trailing P/E's
+# two figures.
+FORWARD_PE_WORDS = (
+    (
+        "The forward P/E is the price over the analysts' earnings a share for the next twelve"
+        " months, as they state them: `/pe_forward` holds no charge for stock pay."
+    ),
+    (
+        "On Mature Growth, where the value charges stock pay against those earnings, give a second"
+        " forward P/E beside it, on the earnings after stock pay:"
+        " `snapshot:<id>/intermediates/multiples/pe_forward_after_sbc`, under your overrides the"
+        " review's, `review:<id>/intermediates/multiples/pe_forward_after_sbc`."
+    ),
+    (
+        "The charge is the same record's `/intermediates/anchor/sbc_adjustment_per_share`, and it"
+        " applies where that figure is above zero."
+    ),
+    (
+        "Say in one sentence that the analysts' earnings leave out stock pay and that the value"
+        " rests on the earnings after it."
+    ),
+    (
+        'Where the charge is nil, give the one forward P/E and write: "These earnings already'
+        ' count stock pay as a cost.", or, where a lasting `earnings.sbc` of 0 says so, "The'
+        ' company pays no stock." Name no second forward P/E there, and do not say that two'
+        " figures are equal."
+    ),
+    "On another phase give the one forward P/E: none after stock pay exists there.",
+    "The log holds the forward P/E alone, so set the second figure against no history.",
 )
 # The two codes method 1.7 removes (spec 2026-11-19 7.2), which the playbook names no more.
 REMOVED_CODES = ("large-nri", "consensus-basis-unknown")
@@ -1101,10 +1134,11 @@ def test_the_agent_reads_the_stock_pay_on_mature_growth() -> None:
         "the company's own definition of its adjusted EPS in the earnings release",
         "Section 8 says whether it leaves out stock pay",
         "set `earnings.sbc_basis`, `includes` or `excludes`, with that passage as evidence",
-        # under a guided NTM EPS neither input moves the value, but the basis is still stated
+        # under a guided NTM EPS neither input moves the value, but the basis is still stated,
+        # and still set where the release reads otherwise, for section 9's second forward P/E
         (
-            "Under an applied `earnings.ntm` section 8 still states the basis, and the report sets"
-            " neither stock-pay input"
+            "Under an applied `earnings.ntm` section 8 still states the basis, and the basis still"
+            " takes its override where the release reads otherwise than the row"
         ),
         "Where `stock-pay-missing` shows, read the trailing stock pay in the cash flow statements",
         "set `earnings.sbc`, their total in the reporting currency, period-tied",
@@ -1524,7 +1558,7 @@ def test_the_agent_judges_the_runway_return_and_reads_the_notes() -> None:
         "**The stock pay**, on Mature Growth",
         "whether the company's adjusted EPS leaves out stock pay",
         "the passage cited as a finding",
-        "Under an applied `earnings.ntm` still state the basis, and set neither stock-pay input",
+        "Under an applied `earnings.ntm` still state the basis, and still set the basis override",
         (
             "where the filings show nil too, say so, with the filing cited: the company pays no"
             " stock, and a lasting `earnings.sbc` of 0 records it."
@@ -2504,6 +2538,56 @@ def test_the_template_s_words_state_what_each_figure_is() -> None:
         " Shake-out or Decline, from the signs of the last fiscal year's three cash flows)"
     ) in template
     assert "the life-cycle stage, Introduction" not in template
+
+
+def test_section_9_gives_the_forward_pe_as_stated_and_a_second_one_after_stock_pay() -> None:
+    """Method 1.10 (5.9; the founder's decisions of 2026-11-24): section 9's forward P/E is the
+    one on the analysts' earnings as they state them, and on Mature Growth a second one, after
+    stock pay, stands beside it where the value charges stock pay, cited from the review under the
+    agent's overrides; with no charge the report gives one figure and one plain sentence, as it
+    does for the trailing P/E. The example charges none, so it gives the one figure. Step 8 keeps
+    the basis's override under a guided EPS, where it moves no value, since the second figure
+    follows it; section 8's bullet and the two notes say the same. The tools reference says what
+    the logged forward P/E is."""
+    template = _flat(_read(TEMPLATE))
+    nine = template.split("### Section 9", 1)[1].split("### The charts", 1)[0]
+    for words in FORWARD_PE_WORDS:
+        assert words in nine, words
+    example = _example(_read(TEMPLATE))
+    prices = next(s for s in example["sections"] if s["heading"] == "Price and multiples")
+    refs = [part["ref"] for part in prices["parts"] if not isinstance(part, str)]
+    assert "snapshot:412/intermediates/multiples/pe_forward" in refs
+    assert not any(ref.endswith("/multiples/pe_forward_after_sbc") for ref in refs), refs
+    assert (
+        "The forward P/E, on the analysts' earnings for the next twelve months, is 33.77x. These"
+        " earnings already count stock pay as a cost. Fairband began logging the forward P/E on "
+    ) in _written(prices["parts"])
+    eight = _flat(_steps(_frontmatter(_read(SKILL))[1])[8])
+    assert (
+        "Under an applied `earnings.ntm` section 8 still states the basis, and the basis still"
+        " takes its override where the release reads otherwise than the row: it moves no value"
+        " there, its bridge line zero, and section 9's forward P/E after stock pay follows it."
+    ) in eight
+    assert "the report sets neither stock-pay input" not in eight
+    assert (
+        "Under an applied `earnings.ntm` still state the basis, and still set the basis override"
+        " where the row read otherwise: its bridge line is zero, and section 9's forward P/E after"
+        " stock pay follows it."
+    ) in template
+    skill = _flat(_read(SKILL))
+    assert skill.count(GUIDED_STOCK_PAY) == 2 and "neither stock-pay input is needed" not in skill
+    tools = _flat(_read(TOOLS))
+    assert (
+        "the forward P/E (`peForward`, the price over the analysts' EPS for the next twelve months"
+        " as they state it, with no charge for stock pay, Fairband's own log, kept since `since`)"
+    ) in tools
+    row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
+    cell = row["`snapshot:<id>/intermediates/<path>`"][0]
+    assert (
+        "`multiples/pe_forward_after_sbc`, the price over that EPS less the charge for stock pay,"
+        " `anchor/sbc_adjustment_per_share`; the second follows your `earnings.sbc_basis` and"
+        " `earnings.sbc`, so cite it from the review under them."
+    ) in cell
 
 
 def test_the_template_s_section_8_holds_the_one_time_items() -> None:
