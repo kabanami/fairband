@@ -85,6 +85,44 @@ ln -s <repo>/playbook/fairband-research ~/.claude/skills/fairband-research
 For Codex, add a line to `AGENTS.md` that tells the agent to follow
 `<repo>/playbook/fairband-research/SKILL.md`.
 
+## Claude Code on Windows
+
+The steps above are for a Claude Code that runs on the same system as Fairband: Linux, or Linux
+under WSL. A Claude Code that runs on Windows itself (`claude` in PowerShell or `cmd`) works with
+Fairband in two ways. Both were tested with Claude Code 2.1.178: the playbook's `launch test` and
+calls of the tools, with the playbook in a project's `.claude\skills` folder.
+
+**Fairband in WSL, Claude Code on Windows.** Windows starts the MCP server through `wsl.exe`,
+which reads no profile, so give `uv` by its absolute path in WSL (`which uv`). `<repo>` is the
+path in WSL, and `Ubuntu` is the distribution's name:
+
+```
+claude mcp add --scope user fairband -- wsl.exe -d Ubuntu -e /home/<you>/.local/bin/uv run --directory <repo> fairband mcp
+```
+
+Copy the playbook to the Windows side, from a shell in WSL. The copy does not follow the
+repository, so copy it again after an update of Fairband:
+
+```
+mkdir -p /mnt/c/Users/<you>/.claude/skills
+cp -rL <repo>/playbook/fairband-research /mnt/c/Users/<you>/.claude/skills/
+```
+
+**Fairband on Windows.** `uv run fairband serve` runs on Windows as it does on Linux, and the
+registration is Claude Code's line above with the Windows path of `<repo>`. Link the playbook with
+a junction, in `cmd`:
+
+```
+mklink /J %USERPROFILE%\.claude\skills\fairband-research <repo>\playbook\fairband-research
+```
+
+The keys file and the data are under the user's folder there:
+`%USERPROFILE%\.config\fairband\keys.toml` and `%USERPROFILE%\.local\share\fairband`. Three limits
+hold on Windows itself. The page's button does not open a window (below): the launch runs
+through `bash`, and Fairband refuses the launcher's Windows path. At a start the log says that
+other users can read `keys.toml`: the check reads Linux file modes, which Windows does not keep.
+And a refresh with an FMP key was not run there; the server, the page and the tools were.
+
 ## Opening Claude Code from the page
 
 Once `launch.json` holds a window command, **Request research** in a company's drawer or on its
