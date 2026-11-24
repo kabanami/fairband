@@ -1129,6 +1129,44 @@ def test_cross_check_present_with_a_positive_anchor(
     assert codes(p)[len(p.phase.checks) :][0] == "sbc-basis-unknown"
 
 
+def test_the_forward_eps_takes_no_stock_pay_charge_on_this_route(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Method 5a.10 under 1.10: the forward EPS of this route's multiples is the analysts' as they
+    state it. The stock-pay charge of the cross-check's anchor does not reach it, and the route
+    gives no forward P/E after stock pay, since no agent's input sets the basis here. HGCO with
+    quarters of 0.60 a share, a street EPS 4.00 above GAAP and a trailing stock pay of $20 m,
+    0.15 a share after tax: the test reads excludes-sbc, the cross-check's NTM net income falls
+    below 2.40 × 100 m, and the forward EPS stays 2.40. On the fixture's own $900 m of stock pay,
+    6.75 a share after tax, the test reads the same, the charge is above the analysts' EPS and
+    the cross-check refuses; the forward P/E still stands on 2.40."""
+    hg = high_growth_inputs
+    assert hg.trailing is not None
+    heavy = replace(
+        hg,
+        street_ttm_eps=-4.00,
+        quarter_estimates=tuple(replace(q, eps=0.60) for q in hg.quarter_estimates),
+        annual_estimates=(
+            annual(2027, 250e6, 2.50, 3, 13_000e6, 20),
+            annual(2028, 320e6, 3.20, 3, 16_000e6, 15),
+            annual(2029, 400e6, 4.00, 3, 19_200e6, 12),
+        ),
+    )
+    light = replace(heavy, trailing=replace(hg.trailing, sbc=20e6))
+    r = value_company(light, deciles, policy, TODAY)
+    gr = r.intermediates["growth_route"]
+    assert gr["refusal"] is None and 0 < gr["ntm_net_income"] < 2.40 * 100e6
+    assert r.intermediates["eps"]["forward"] == pytest.approx(2.40)
+    assert r.intermediates["eps"]["forward_after_sbc"] is None
+    assert r.intermediates["multiples"]["pe_forward"] == pytest.approx(150 / 2.40)
+    assert r.intermediates["multiples"]["pe_forward_after_sbc"] is None
+
+    refused = value_company(heavy, deciles, policy, TODAY)
+    assert refused.intermediates["growth_route"] == {"refusal": "no positive forward anchor"}
+    assert refused.intermediates["eps"]["forward"] == pytest.approx(2.40)
+    assert refused.intermediates["multiples"]["pe_forward"] == pytest.approx(150 / 2.40)
+
+
 def test_the_forward_eps_reads_the_corrected_anchor_on_a_thin_window(
     high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

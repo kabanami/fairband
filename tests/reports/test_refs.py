@@ -1704,6 +1704,10 @@ def described(
             "snapshot:{snapshot}/intermediates/multiples/pe_clean",
             "snapshot {snapshot}, the clean P/E, priced 30 Oct 2026",
         ),
+        (  # method 1.10: the forward P/E on the analysts' EPS less the stock-pay charge
+            "snapshot:{snapshot}/intermediates/multiples/pe_forward_after_sbc",
+            "snapshot {snapshot}, the forward P/E after stock pay, priced 30 Oct 2026",
+        ),
         (
             "snapshot:{snapshot}/intermediates/growth_rates/0",  # an intermediate by its path
             "snapshot {snapshot}, the growth rates 0, priced 30 Oct 2026",
@@ -1769,6 +1773,10 @@ def described(
         ("review:{review}/bridge/1/old", "review {review}, bridge line 1 (belief), the old figure"),
         ("review:{review}/bridge/1/new", "review {review}, bridge line 1 (belief), the new figure"),
         ("review:{review}/intermediates/belief/rate", "review {review}, the belief"),
+        (  # the one a report cites, on the basis the agent set (method 5.9)
+            "review:{review}/intermediates/multiples/pe_forward_after_sbc",
+            "review {review}, the forward P/E after stock pay",
+        ),
         (
             "review:{review}/intermediates/implied_growth",
             "review {review}, the growth the price needs",

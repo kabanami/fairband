@@ -205,7 +205,7 @@ DETAIL: dict[str, Any] = {
         "flags": [],
         "refusal": None,
         "policy_version": "16",
-        "method_version": "fairband-mechanical/1.9",
+        "method_version": "fairband-mechanical/1.10",
         "settings_hash": EMPTY_SETTINGS_HASH,
         "deciles_refresh_id": 3,
     },

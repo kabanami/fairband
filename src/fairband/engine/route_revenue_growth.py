@@ -55,7 +55,8 @@ in force), ``balance_sheet`` (the period of the newest balance sheet the three w
 the peers' lowest, median and highest margins (``low``, ``median``, ``high``), each with its own
 terminal return; ``return_on_new_capital`` and
 ``peer_roic_median``; ``failure_probability`` on a Young Growth row only; ``eps`` (the forward EPS
-is the earnings anchor's when it stands), ``epv``, ``dividend_yield``, ``net_buyback_yield``,
+is the analysts' as they state it, the earnings anchor's raw figure, ``_forward_eps``, and there
+is none after stock pay), ``epv``, ``dividend_yield``, ``net_buyback_yield``,
 ``income_basis``, ``price_facts``; ``growth_route``, the Mature Growth route's cross-check as a
 Mature Stable row carries it; at the price, ``implied_growth``, ``implied_margin``, ``multiples``,
 ``growth_share``, ``expected_return`` (its growth term the revenue path's years 2 to H + 1, H the
@@ -123,9 +124,9 @@ too) and the cross-check's implied growth solve to the price less the figure, th
 of the price. The share count that divides the equity is ``Context.shares`` and the rebuild key
 ``shares``, the count in force: the diluted count, an agent's ``shares.diluted`` in place of the
 reported count, plus an agent's ``shares.committed``, written beside it as ``shares_committed``
-under that override (spec 2026-11-14 4). The forward EPS of the multiples is the anchor's on the
-diluted count, ``Context.consensus_shares``, the count the consensus EPS is on, and the
-cross-check reads the two counts as the Mature Growth route does.
+under that override (spec 2026-11-14 4). The forward EPS of the multiples is the anchor's raw
+figure on the diluted count, ``Context.consensus_shares``, the count the consensus EPS is on, and
+the cross-check reads the two counts as the Mature Growth route does.
 """
 
 from collections.abc import Sequence
@@ -134,6 +135,8 @@ from itertools import count
 from typing import Any, Literal
 
 from fairband.engine.anchor import (
+    NO_POSITIVE_ANCHOR,
+    Anchor,
     AnnualEstimate,
     QuarterEstimate,
     base_fiscal_year,
@@ -333,7 +336,7 @@ def value_revenue_growth(c: Context, phase: Phase) -> Valued | Refused:
         annual=i.annual_estimates,
         estimates=i.quarter_estimates,
     )
-    e = eps(t, None, anchor.ntm_eps if anchor.refusal is None else None)  # no gap on this route
+    e = eps(t, None, _forward_eps(anchor), None)  # no gap on this route
     (g2, g3), held = resolved_steps(path)
     im: dict[str, Any] = {
         "ntm_revenue": ntm,
@@ -537,6 +540,16 @@ def revenue_path_for(
         + present(few_analysts(base_year, thin, analysts, policy))
     )
     return path, analysts, flags
+
+
+def _forward_eps(anchor: Anchor) -> float | None:
+    """The forward EPS of this route's multiples (``method.md`` 5a.10): the analysts' NTM EPS as
+    they state it, the anchor's figure before its stock-pay charge, where it is above zero. The
+    charge does not reach it, so it stands too where the charge alone leaves the anchor no
+    positive figure; ``None`` on an incomplete window and on a unit error."""
+    if anchor.refusal not in (None, NO_POSITIVE_ANCHOR) or anchor.ntm_eps_raw <= 0:
+        return None
+    return anchor.ntm_eps_raw
 
 
 def judged_steps(c: Context) -> tuple[float | None, float | None]:

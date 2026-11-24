@@ -314,7 +314,7 @@ def value_decline(c: Context) -> Valued | Refused:
     e = _equity(rebuild, v.firm_value)
     z = None if newest is None else altman_z(newest, policy)
     f = piotroski_f(years[-1], years[-2]) if len(years) >= 2 else None
-    e_ps = eps(t, None, None)  # no gap on this route
+    e_ps = eps(t, None, None, None)  # no gap on this route
     im: dict[str, Any] = {
         **rebuild,
         "moat": moat,

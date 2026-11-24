@@ -8,6 +8,7 @@ from typing import get_args
 
 import pytest
 
+from fairband.engine import METHOD_VERSION
 from fairband.engine.mature_growth import _fade
 from fairband.engine.overrides import OverrideTag, anchor_misfit
 from fairband.engine.review import REVIEW_METHOD
@@ -465,7 +466,7 @@ def test_method_1_8_reads_the_moat_table() -> None:
     the 1.8 row under policy v17, before policy v18's, and neither says a GuruFocus call runs."""
     text = METHOD.read_text(encoding="utf-8")
     assert (
-        "| Method version | `fairband-mechanical/1.9` (`fairband.engine.METHOD_VERSION`) |" in text
+        "| Method version | `fairband-mechanical/1.10` (`fairband.engine.METHOD_VERSION`) |" in text
     )
     two = _section(2)
     assert "GuruFocus `summary` |" not in two
@@ -610,7 +611,7 @@ def test_policy_v18_drops_three_values() -> None:
         "| Policy version | `fairband-policy-v19` (`src/fairband/policy/fairband-policy-v19.toml`) |"
     ) in text
     assert (
-        "| Method version | `fairband-mechanical/1.9` (`fairband.engine.METHOD_VERSION`) |" in text
+        "| Method version | `fairband-mechanical/1.10` (`fairband.engine.METHOD_VERSION`) |" in text
     )
     four = _section(4)
     assert "Every value comes from `fairband-policy-v19.toml`" in four
@@ -2244,3 +2245,111 @@ def test_the_log_s_stance_and_the_tables_three_notes() -> None:
         " spec 2026-11-15 12.1)."
     ) in tables
     assert "two mark a figure that would mislead" not in tables
+
+
+def test_method_1_10_reads_the_forward_pe_on_the_analysts_eps() -> None:
+    """The founder's decision of 2026-11-24, method 1.10: the head names the method; 5.2 says
+    which figure each reading of the anchor takes; 5.9 defines the forward P/E on the analysts'
+    EPS as they state it and the forward P/E after stock pay, Mature Growth's alone; 5a.10 and
+    5a.14 give the revenue-growth route the first and not the second; 14.4 says the stock-pay
+    inputs move the second alone; 16.7 says the log holds the first and how its earlier rows were
+    restated; 11 has the 1.10 row; and the Methodology page's examples stand under 1.10."""
+    assert METHOD_VERSION == "fairband-mechanical/1.10"
+    five = _section(5)
+    anchor = five[five.index("### 5.2") : five.index("### 5.3")]
+    assert (
+        "The unit-error check, the forward P/E after stock pay of 5.9 and the `ntm_eps` and"
+        " `ntm_net_income` DATA entries read raw − adjustment, the consensus as found; the forward"
+        " P/E of 5.9 reads the raw figure, the analysts' EPS as they state it (method 1.10)."
+    ) in anchor
+    multiples = five[five.index("### 5.9") : five.index("### 5.10")]
+    for words in (
+        "- Trailing P/E reported and clean; a P/E exists only for a positive EPS.",
+        (
+            "- The forward P/E = price ÷ the analysts' NTM EPS as they state it, the anchor's raw"
+            " figure (5.2), with no stock-pay adjustment (method 1.10; the founder's decision of"
+            " 2026-11-24)"
+        ),
+        "The forward P/E after stock pay = price ÷ (raw − adjustment)",
+        "where the adjustment is nil it equals the forward P/E",
+        "It is Mature Growth's alone, and it follows the adjustment in force",
+        "So the Screen and the multiples log (16.7) carry the forward P/E",
+        (
+            "The intermediates' `eps` holds the two EPS figures as `forward` and"
+            " `forward_after_sbc`, and `multiples` the two P/Es as `pe_forward` and"
+            " `pe_forward_after_sbc`"
+        ),
+    ):
+        assert words in multiples, words
+    assert "forward P/E on NTM EPS" not in multiples
+    growth = _section_5a()
+    moves = growth[growth.index("### 5a.10") : growth.index("### 5a.11")]
+    for words in (
+        (
+            "the forward P/E on the analysts' NTM EPS as they state it, the raw figure of the"
+            " cross-check's anchor (5.2)"
+        ),
+        'where it refuses "no positive forward anchor" on a raw figure above zero',
+        "no forward P/E after stock pay, since no agent's input sets the basis on this route",
+    ):
+        assert words in moves, words
+    assert "the forward P/E on the anchor's NTM EPS (5.2) when the anchor stands" not in moves
+    recorded = growth[growth.index("### 5a.14") : growth.index("### 5a.15")]
+    assert (
+        "The forward EPS of `eps`, and the forward P/E of `multiples` on it, read the raw figure"
+        " of the anchor of 5.2, and the cross-check's `growth_route` the anchor itself, on either"
+        " source"
+    ) in recorded
+    assert "`forward_after_sbc` and `pe_forward_after_sbc` are null on this route" in recorded
+    reviews = _section(14)
+    reads = reviews[reviews.index("### 14.4") : reviews.index("### 14.5")]
+    for words in (
+        (
+            "Neither stock-pay input moves the forward P/E, which reads the raw figure; the"
+            " forward P/E after stock pay follows the adjustment in force (5.9)."
+        ),
+        (
+            "the anchor's basis and stock pay, and the forward P/E after stock pay (5.9), still"
+            " follow them"
+        ),
+        "and the two forward P/Es of 5.9 do not read the guided figure",
+        (
+            "the unit-error check, the forward P/E after stock pay and the `ntm_eps` and"
+            " `ntm_net_income` DATA entries stay on the consensus as found, and the forward P/E"
+            " on the raw figure"
+        ),
+    ):
+        assert words in reads, words
+    assert "the forward P/E on the consensus as found, still follow them" not in reads
+    sixteen = _section(16)
+    history = sixteen[sixteen.index("### 16.7") : sixteen.index("### 16.8")]
+    for words in (
+        "The log holds the forward P/E alone, never the forward P/E after stock pay.",
+        "`012_forward_pe_as_stated.sql`",
+        "× (raw − adjustment) ÷ raw",
+        "so every point of the series is on one basis",
+    ):
+        assert words in history, words
+    [row] = [x for x in _section(11).splitlines() if x.startswith("| 1.10, policy v19 |")]
+    assert row.startswith(
+        "| 1.10, policy v19 | 2026-11-24 | The forward P/E on the analysts' EPS as they state it"
+    )
+    for words in (
+        "on UBER's row",
+        "the forward P/E after stock pay",
+        "`forward_after_sbc`",
+        "`pe_forward_after_sbc`",
+        "No value a share, no level and no word moves",
+    ):
+        assert words in row, words
+    html = resources.files("fairband.web").joinpath("static", "methodology.html").read_text("utf-8")
+    page = " ".join(html.split())
+    assert "Method 1.10 (24 Nov 2026" in page and "so the figures stand under 1.10" in page
+    assert "no example prints a P/E" in page and "P/E" not in html[html.index("<article") :]
+
+
+def _section_5a() -> str:
+    """The text under the heading ``## 5a.``, to the next top-level heading."""
+    text = METHOD.read_text(encoding="utf-8")
+    start = text.index("\n## 5a. ")
+    return text[start : text.index("\n## ", start + 1)]

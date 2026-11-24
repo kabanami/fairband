@@ -3,7 +3,9 @@ which no vendor on file keeps, so Fairband keeps its own.
 
 A row a company a day, the day the price is of: the price and the reported, clean and forward P/E
 of the engine's intermediates at it, ``NULL`` where the result has none, with the snapshot and the
-refresh that wrote it and the time. The refresh writes one in the transaction of every snapshot it
+refresh that wrote it and the time. The forward P/E is the one on the analysts' EPS as they state
+it, never the one after stock pay (``method.md`` 5.9); migration 012 put the rows of the methods
+before 1.10 on it. The refresh writes one in the transaction of every snapshot it
 values or reprices that carries a price and its date (``log_snapshot``); a result with no price
 writes none. A failure logs nothing: its price is a stored quote or a quote the run fetched, and
 a day without a valued snapshot has no multiples to log. The newest write of a day replaces the

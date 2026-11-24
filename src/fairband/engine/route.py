@@ -124,7 +124,8 @@ business's own values, before any value outside the business is added.
   agent's non-recurring gap a share, ``None`` without one: the engine finds none),
   ``ntm_nri`` (the one-time amount a share taken off year 1, only under an override of it, nil
   under a guided EPS), ``cycle_gap`` (a share, only under an override of it), ``eps`` (reported,
-  clean, forward: the NTM EPS before any one-time amount or cycle gap), ``epv`` (a share),
+  clean, forward: the NTM EPS as the analysts state it, and forward_after_sbc: that EPS less the
+  stock-pay adjustment in force, before any one-time amount or cycle gap), ``epv`` (a share),
   ``dividend_yield``, ``net_buyback_yield``, ``income_basis``, ``price_facts``; at the price,
   ``implied_growth``, ``implied_growth_by_runway``, ``implied_by_roic``, ``multiples``,
   ``growth_share``, ``expected_return``.

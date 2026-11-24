@@ -238,6 +238,16 @@ whose prices stand between 0.60 and 0.70 × their values, read "below" where the
 "well-below" on the Narrow edge of 0.70. No value a share and no level moves. SUCO is unchanged
 byte for byte.
 
+The six valued files re-captured under 1.10 on 2026-11-24 (the founder's decision of 2026-11-24;
+method 5.9), for two new keys: the intermediates' `eps` gains `forward_after_sbc`, the forward
+EPS less the stock-pay adjustment, and `multiples` gains `pe_forward_after_sbc`, the price over
+it. `forward` is now the analysts' EPS as they state it, with no adjustment. MGCO's and FXCO's
+basis test reads includes-sbc, so their adjustment is nil and the second figure equals the first:
+5.90 and 25.42x on MGCO, 47.20 SEK and 8.47x on FXCO, whose `forward` and `pe_forward` are
+unchanged. MSCO, HGCO, YGCO and DCCO have no forward EPS, so both keys are null on them. No other
+key or figure of any golden moves. SUCO, a Start-up row with neither record, is unchanged byte for
+byte.
+
 Run from the repository root:
 
 ```

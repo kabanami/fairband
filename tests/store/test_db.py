@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -20,6 +21,7 @@ from fairband.store.guidance import GuidanceRow, guidance_row
 from fairband.store.inbox import WorkItem, work_item
 from fairband.store.ledger import Writer
 from fairband.store.moat import MoatRow, moat_row
+from fairband.store.multiples import log_multiples, multiples_log_for
 from fairband.store.overrides import drop_override, insert_override, override_row
 from fairband.store.reports import JudgmentRow, judgments_for
 from fairband.store.research import FindingRow, KillCriterionRow, finding_row, kill_criterion_row
@@ -52,6 +54,7 @@ _ALL = [
     "009_launches.sql",
     "010_moat_classes.sql",
     "011_held_reviews.sql",
+    "012_forward_pe_as_stated.sql",
 ]
 # The agents' records (spec 2026-11-06 Tier 2, section 17), each table's columns the record's
 # fields in order, as 005 made them and 006, 007 and 008 changed them: a judgment without its
@@ -166,7 +169,7 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_empty_db_migrates(conn: sqlite3.Connection) -> None:
     assert migrate(conn) == _ALL
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     assert migrate(conn) == []
     names = {r[0] for r in conn.execute("select name from sqlite_master where type='table'")}
     assert _TABLES <= names
@@ -209,7 +212,7 @@ def test_designation_columns_join_a_database_at_001(
         patched.setattr(db, "_MIGRATIONS", _migrations_dir(tmp_path, {}))
         assert migrate(conn) == ["001_initial.sql"]
     assert migrate(conn) == _ALL[1:]
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     columns = {r["name"]: r["type"] for r in conn.execute("pragma table_info(snapshots)")}
     assert (columns["price_to_value"], columns["designation"]) == ("REAL", "TEXT")
     assert (columns["stance5"], columns["stance3"]) == ("TEXT", "TEXT")
@@ -401,7 +404,7 @@ def test_migration_008_gives_a_record_its_currency(
 
     assert migrate(conn) == _ALL[7:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     at = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
     by_agent = {"principal": "agent", "actor": "claude-opus-5-5", "client": "claude-code/2.1"}
     assert finding_row(conn, 1) == FindingRow(
@@ -481,7 +484,7 @@ def test_migration_009_adds_the_launch_record(
 
     assert migrate(conn) == _ALL[8:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     recorded = conn.execute("select filename, checksum from schema_versions where version = 9")
     assert tuple(recorded.fetchone()) == (
         "009_launches.sql",
@@ -580,7 +583,7 @@ def test_migration_010_moves_the_applied_moat_overrides(
     assert migrate(conn) == _ALL[9:]
     finished = datetime.now(UTC)
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     columns = [
         (r["name"], r["type"], r["notnull"], r["pk"])
         for r in conn.execute("pragma table_info(moat_classes)")
@@ -724,9 +727,9 @@ def test_migration_011_marks_the_made_reviews_and_seeds_the_held_ones(
     )
     conn.commit()
 
-    assert migrate(conn) == ["011_held_reviews.sql"]
+    assert migrate(conn) == _ALL[10:]
 
-    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     kinds = {r["id"]: (r["kind"], r["made_id"]) for r in conn.execute("select * from reviews")}
     assert kinds == {
         of_table: ("made", None),
@@ -763,6 +766,99 @@ def test_migration_011_marks_the_made_reviews_and_seeds_the_held_ones(
         None,
         None,
     )
+
+
+def test_migration_012_restates_the_logged_forward_pe_to_the_analysts_eps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    """A database at 011 holds multiples-log rows written under a method before 1.10, whose
+    forward P/E is the price over the anchor's raw NTM EPS less its stock-pay adjustment. 012
+    (method 16.7) puts each on the raw figure, from the ``anchor`` of the row's own snapshot:
+    the logged figure × (raw − adjustment) ÷ raw. ACME's 20.0 on a raw 5.00 less 1.00 reads
+    16.0, and its repriced row's 22.5 reads 18.0. FXCO's row holds a price in US dollars and a
+    snapshot in another currency, and the ratio restates it all the same. NILS's adjustment is
+    nil, so its row keeps its text. A row is blanked where its snapshot cannot say what the raw
+    figure was: GROW's, a revenue-growth snapshot with no anchor; SWAP's and KEPT's, whose
+    snapshot holds no forward P/E, the figure being an earlier write's of the day; DIFF's, whose
+    snapshot holds another figure; GONE's, with no snapshot; NEGS's, whose raw figure is below
+    zero, a loss that has no forward P/E; and JUNK's, whose snapshot's result is not JSON, which
+    stops no migration. A row with no forward P/E has none after, and no other column of any row
+    moves."""
+    folder = _migrations_dir(tmp_path, {})
+    for filename in _ALL[1:11]:
+        (folder / filename).write_bytes(_packaged(filename))
+    with monkeypatch.context() as patched:
+        patched.setattr(db, "_MIGRATIONS", folder)
+        assert migrate(conn) == _ALL[:11]
+    at = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
+    refresh = conn.execute(
+        "insert into refreshes (kind, symbols, status, started_at, policy_version,"
+        " method_version, settings_hash) values ('full', null, 'done', ?, 'p', 'm', 'h')",
+        (at.isoformat(),),
+    ).lastrowid
+
+    def snapshot(symbol: str, intermediates: dict[str, object]) -> int:
+        cursor = conn.execute(
+            "insert into snapshots (symbol, refresh_id, created_at, data_date, valid_until,"
+            " flags, policy_version, method_version, result) values (?, ?, ?, '2026-11-10',"
+            " '2027-02-01', '[]', 'p', 'm', ?)",
+            (symbol, refresh, at.isoformat(), json.dumps({"intermediates": intermediates})),
+        )
+        return int(cursor.lastrowid or 0)
+
+    def anchored(raw: float, adjustment: float, forward_pe: float | None) -> dict[str, object]:
+        """A Mature Growth snapshot's records of a method before 1.10."""
+        found: dict[str, object] = {
+            "anchor": {"ntm_eps_raw": raw, "sbc_adjustment_per_share": adjustment},
+            "eps": {"reported": 4.0, "clean": 4.0, "forward": raw - adjustment},
+        }
+        return found if forward_pe is None else found | {"multiples": {"pe_forward": forward_pe}}
+
+    def log(symbol: str, day: str, price: float, forward: float | None, by: int | None) -> None:
+        log_multiples(conn, symbol, date.fromisoformat(day), price, 30.0, 29.0, forward, by, 1, at)
+
+    fx = 400.0 / 42.48  # a price of USD 50.00 read at 8.0 SEK per USD, over 47.20 less 4.72 SEK
+    plain = 150.0 / 5.9
+    log("ACME", "2026-11-10", 80.0, 20.0, snapshot("ACME", anchored(5.0, 1.0, 20.0)))
+    log("ACME", "2026-11-11", 90.0, 22.5, snapshot("ACME", anchored(5.0, 1.0, 22.5)))
+    log("FXCO", "2026-11-10", 50.0, fx, snapshot("FXCO", anchored(47.2, 4.72, fx)))
+    log("NILS", "2026-11-10", 150.0, plain, snapshot("NILS", anchored(5.9, 0.0, plain)))
+    growth = {"eps": {"forward": 2.214}, "multiples": {"pe_forward": 67.75}}
+    log("GROW", "2026-11-10", 150.0, 67.75, snapshot("GROW", growth))
+    stable = {"eps": {"forward": None}, "multiples": {"pe_forward": None}}
+    log("SWAP", "2026-11-10", 150.0, 17.0, snapshot("SWAP", stable))
+    log("KEPT", "2026-11-10", 80.0, 20.0, snapshot("KEPT", anchored(5.0, 1.0, None)))
+    log("DIFF", "2026-11-10", 80.0, 20.0, snapshot("DIFF", anchored(5.0, 1.0, 21.0)))
+    log("GONE", "2026-11-10", 80.0, 20.0, None)
+    log("LOSS", "2026-11-10", 80.0, None, snapshot("LOSS", anchored(5.0, 1.0, 20.0)))
+    # the analysts expect a loss, and a negative adjustment had lifted the EPS above zero
+    log("NEGS", "2026-11-10", 46.0, 7666.0, snapshot("NEGS", anchored(-0.07, -0.076, 7666.0)))
+    junk = snapshot("JUNK", anchored(5.0, 1.0, 20.0))
+    conn.execute("update snapshots set result = 'not json' where id = ?", (junk,))
+    log("JUNK", "2026-11-10", 80.0, 20.0, junk)
+    conn.commit()
+    before = [tuple(r) for r in conn.execute("select * from multiples_log order by id")]
+
+    assert migrate(conn) == ["012_forward_pe_as_stated.sql"]
+
+    assert applied_versions(conn) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    forward = {
+        (r["symbol"], r["day"]): r["pe_forward"]
+        for r in conn.execute("select symbol, day, pe_forward from multiples_log")
+    }
+    assert float(forward.pop(("ACME", "2026-11-10"))) == 16.0
+    assert float(forward.pop(("ACME", "2026-11-11"))) == 18.0
+    assert float(forward.pop(("FXCO", "2026-11-10"))) == pytest.approx(400.0 / 47.2, rel=1e-15)
+    assert forward.pop(("NILS", "2026-11-10")) == repr(plain)  # the text as it was written
+    assert set(forward.values()) == {None} and len(forward) == 8
+    # the restated rows read through the store as any row does, and nothing else moved
+    assert [r.pe_forward for r in multiples_log_for(conn, "ACME")] == [16.0, 18.0]
+    columns = [r[1] for r in conn.execute("pragma table_info(multiples_log)")]
+    at_forward = columns.index("pe_forward")
+    after = [tuple(r) for r in conn.execute("select * from multiples_log order by id")]
+    assert [r[:at_forward] + r[at_forward + 1 :] for r in after] == [
+        r[:at_forward] + r[at_forward + 1 :] for r in before
+    ]
 
 
 def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
@@ -878,6 +974,7 @@ def test_cli_migrate(tmp_path: Path) -> None:
         "Applied 009_launches.sql",
         "Applied 010_moat_classes.sql",
         "Applied 011_held_reviews.sql",
+        "Applied 012_forward_pe_as_stated.sql",
     ]
     assert (tmp_path / "data" / "fairband.db").is_file()
     second = run()

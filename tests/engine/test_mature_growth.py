@@ -26,7 +26,7 @@ from fairband.engine.mature_growth import (
 )
 from fairband.engine.overrides import Override, OverrideTag, current_reading
 from fairband.engine.review import review_company
-from fairband.engine.route import CompanyInputs, value_company
+from fairband.engine.route import CompanyInputs, reprice, value_company
 from fairband.engine.route_mature_growth import value_mature_growth
 from fairband.engine.route_steps import Context, Valued
 from fairband.policy import Policy
@@ -350,6 +350,29 @@ def test_the_cycle_gap_lowers_the_anchor_and_leaves_the_gap_its_own(
         assert beside.value < alone.value
 
 
+def test_the_forward_eps_is_the_analysts_as_found_and_a_second_one_bears_stock_pay(
+    mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Method 5.9 under 1.10. MGCO at a street trailing EPS of 8.50 reads excludes-sbc, and the
+    anchor takes 0.30 a share of stock pay off the analysts' 5.90. The forward EPS is the
+    analysts' as they state it, 5.90, and the forward P/E the price over it; the forward EPS
+    after stock pay is the 5.60 the value rests on, with its own P/E. A reprice moves both."""
+    charged = value_company(replace(mg_inputs, street_ttm_eps=8.50), deciles, policy, TODAY)
+    im = charged.intermediates
+    assert im["sbc_basis"] == "excludes-sbc"
+    assert im["anchor"]["sbc_adjustment_per_share"] == pytest.approx(0.30)
+    assert im["anchor"]["ntm_eps"] == pytest.approx(5.60)
+    assert im["eps"]["forward"] == pytest.approx(5.90)
+    assert im["eps"]["forward_after_sbc"] == pytest.approx(5.60)
+    assert im["multiples"]["pe_forward"] == pytest.approx(150 / 5.90)
+    assert im["multiples"]["pe_forward_after_sbc"] == pytest.approx(150 / 5.60)
+    # the value's own input is still the analysts' EPS less the charge
+    assert {x.name: x.value for x in charged.inputs}["ntm_eps"] == pytest.approx(5.60)
+    at_170 = reprice(charged, 170.0, date(2026, 11, 2), policy).intermediates["multiples"]
+    assert at_170["pe_forward"] == pytest.approx(170 / 5.90)
+    assert at_170["pe_forward_after_sbc"] == pytest.approx(170 / 5.60)
+
+
 # The NTM earnings override on the Mature Growth route (method.md 14.4): a clear guidance stands in
 # for the consensus NTM EPS the anchor reads, and the cycle gap is still taken off it.
 
@@ -389,6 +412,7 @@ def test_the_ntm_earnings_override_replaces_the_anchor(
     assert anchor["ntm_eps"] == 6.45 and anchor["ntm_eps_raw"] == pytest.approx(5.90)
     assert judged.intermediates["ntm_net_income"] == raised.intermediates["ntm_net_income"]
     assert judged.intermediates["eps"]["forward"] == pytest.approx(5.90)
+    assert judged.intermediates["eps"]["forward_after_sbc"] == pytest.approx(5.90)
     assert judged.intermediates["multiples"] == mechanical.intermediates["multiples"]
     cited = {x.name: x for x in judged.inputs}
     assert "ntm_eps" not in cited and "ntm_eps" in {x.name for x in mechanical.inputs}

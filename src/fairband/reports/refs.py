@@ -435,6 +435,7 @@ _SNAPSHOT_PATH_WORDS = {
     "intermediates/multiples/pe_clean": "the clean P/E",
     "intermediates/multiples/pe_reported": "the reported P/E",
     "intermediates/multiples/pe_forward": "the forward P/E",
+    "intermediates/multiples/pe_forward_after_sbc": "the forward P/E after stock pay",
     "intermediates/roic/aggregate": "the ten-year aggregate ROIC",
     "intermediates/charge/hold_years": "the years the runway return holds",
     "intermediates/runway_return/one_year": "the newest year's marginal return",

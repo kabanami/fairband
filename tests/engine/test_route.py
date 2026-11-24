@@ -209,7 +209,7 @@ def test_mature_growth_end_to_end(
     assert all(i.tag in ("DATA", "RULE") for i in r.inputs)
     assert r.valid_until == mg_inputs.next_earnings
     assert result_from_json(result_to_json(r)) == r
-    assert METHOD_VERSION == "fairband-mechanical/1.9"
+    assert METHOD_VERSION == "fairband-mechanical/1.10"
 
 
 def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy) -> None:
@@ -338,13 +338,20 @@ def test_mature_growth_result(mg_inputs: CompanyInputs, deciles: Deciles, policy
 
     # the engine finds no non-recurring gap: the clean EPS is the reported (spec 2026-11-19 7.1)
     assert im["nri_gap"] is None
-    assert im["eps"] == {"reported": 5.30, "clean": 5.30, "forward": 5.90}
+    # MGCO's analysts count stock pay: the forward EPS after stock pay is the forward EPS
+    assert im["eps"] == {
+        "reported": 5.30,
+        "clean": 5.30,
+        "forward": 5.90,
+        "forward_after_sbc": 5.90,
+    }
     assert im["epv"] == pytest.approx(5.30 / 0.09)
     assert im["growth_share"] == pytest.approx(1 - 5.30 / 0.09 / 150)
     assert im["multiples"] == {
         "pe_reported": pytest.approx(150 / 5.30),
         "pe_clean": pytest.approx(150 / 5.30),
         "pe_forward": pytest.approx(150 / 5.90),
+        "pe_forward_after_sbc": pytest.approx(150 / 5.90),
     }
     assert im["income_basis"] == "flows over market cap"
     assert im["dividend_yield"] == pytest.approx(1_000e6 / 150_000e6)
@@ -1154,8 +1161,14 @@ def test_mature_stable_end_to_end(
     assert ch["return_by_year"][0] == pytest.approx(runway_return + (0.13 - runway_return) / 20)
     assert ch["return_by_year"][-1] == 0.13 and len(ch["return_by_year"]) == 20
     assert im["median_margin"] == pytest.approx(0.20) and im["ttm_margin"] == pytest.approx(0.20)
-    assert im["eps"] == {"reported": 3.40, "clean": 3.40, "forward": None}
+    assert im["eps"] == {
+        "reported": 3.40,
+        "clean": 3.40,
+        "forward": None,
+        "forward_after_sbc": None,
+    }
     assert im["multiples"]["pe_forward"] is None
+    assert im["multiples"]["pe_forward_after_sbc"] is None
     er = im["expected_return"]
     assert er["growth"] == pytest.approx(0.03)
     assert er["income"] == pytest.approx((1_500e6 + 500e6) / 40_000e6)
@@ -1557,7 +1570,12 @@ def test_no_positive_trailing_earnings_keeps_the_cross_check(
     im = r.intermediates
     assert set(im) == REFUSED_STABLE_KEYS
     assert im["e_trailing"] == -500e6 and im["nri_gap"] is None  # no gap (spec 2026-11-19 7.1)
-    assert im["eps"] == {"reported": -0.50, "clean": -0.50, "forward": None}
+    assert im["eps"] == {
+        "reported": -0.50,
+        "clean": -0.50,
+        "forward": None,
+        "forward_after_sbc": None,
+    }
     assert (im["shares"], im["moat"]) == (1_000e6, "Wide")
     gr = im["growth_route"]
     assert set(gr) == CROSS_CHECK_KEYS and gr["refusal"] is None
@@ -3474,7 +3492,7 @@ def test_result_cites_the_settings_hash(
     mg_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:
     r = value_company(mg_inputs, deciles, policy, TODAY)
-    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.9"
+    assert r.settings_hash == EMPTY_SETTINGS_HASH and r.method_version == "fairband-mechanical/1.10"
     custom = apply_overlay(policy, {"required_return": 0.1})
     valued = value_company(mg_inputs, deciles, custom, TODAY)
     assert valued.settings_hash == custom.settings_hash != EMPTY_SETTINGS_HASH

@@ -855,6 +855,7 @@
   "eps": {
    "clean": 0.45,
    "forward": null,
+   "forward_after_sbc": null,
    "reported": 0.45
   },
   "epv": 5.0,
@@ -925,6 +926,7 @@
   "multiples": {
    "pe_clean": 6.666666666666666,
    "pe_forward": null,
+   "pe_forward_after_sbc": null,
    "pe_reported": 6.666666666666666
   },
   "ncav": -200000000.0,

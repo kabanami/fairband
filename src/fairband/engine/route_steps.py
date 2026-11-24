@@ -398,16 +398,33 @@ def business_price(im: dict[str, Any], price: float) -> float:
     return price - outside
 
 
-def eps(t: TrailingFigures, gap: float | None, forward: float | None) -> dict[str, float | None]:
-    """Reported and clean trailing EPS, and the forward EPS. The clean EPS is the reported less
-    ``gap``, an agent's non-recurring gap a share on a mature route, nil without one: the engine
-    finds no gap, so a mechanical row's clean EPS is the reported (spec 2026-11-19 7.1)."""
+def eps(
+    t: TrailingFigures,
+    gap: float | None,
+    forward: float | None,
+    forward_after_sbc: float | None,
+) -> dict[str, float | None]:
+    """Reported and clean trailing EPS, the forward EPS and the forward EPS after stock pay. The
+    clean EPS is the reported less ``gap``, an agent's non-recurring gap a share on a mature
+    route, nil without one: the engine finds no gap, so a mechanical row's clean EPS is the
+    reported (spec 2026-11-19 7.1). ``forward`` is the analysts' NTM EPS as they state it, and
+    ``forward_after_sbc`` that figure less the stock-pay charge in force, the forward EPS itself
+    where the charge is nil; a route that reads no anchor has neither, and the revenue-growth
+    route no second one (``method.md`` 5.9)."""
     clean = None if t.eps_diluted is None else t.eps_diluted - nil(gap)
-    return {"reported": t.eps_diluted, "clean": clean, "forward": forward}
+    return {
+        "reported": t.eps_diluted,
+        "clean": clean,
+        "forward": forward,
+        "forward_after_sbc": forward_after_sbc,
+    }
 
 
 def multiples_at(price: float, e: dict[str, float | None]) -> dict[str, float | None]:
-    return asdict(multiples(price, e["reported"], e["clean"], e["forward"]))
+    """The multiples of the EPS record ``e`` at ``price``. A record stored before method 1.10
+    holds no ``forward_after_sbc`` and has no forward P/E after stock pay."""
+    after = e.get("forward_after_sbc")
+    return asdict(multiples(price, e["reported"], e["clean"], e["forward"], after))
 
 
 def price_facts_for(

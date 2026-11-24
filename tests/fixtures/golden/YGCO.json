@@ -555,6 +555,7 @@
   "eps": {
    "clean": -8.0,
    "forward": null,
+   "forward_after_sbc": null,
    "reported": -8.0
   },
   "epv": -88.88888888888889,
@@ -630,6 +631,7 @@
   "multiples": {
    "pe_clean": null,
    "pe_forward": null,
+   "pe_forward_after_sbc": null,
    "pe_reported": null
   },
   "net_buyback_yield": -0.02,

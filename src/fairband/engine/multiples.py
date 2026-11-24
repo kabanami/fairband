@@ -1,7 +1,9 @@
 """The trailing and forward P/E (method Step 7), EPV and the growth share of price (Step 3).
 
-A P/E exists only for a positive EPS; a missing, zero or negative EPS has none. EPV is clean
-trailing EPS ÷ r, and the growth share is the part of the price EPV does not cover.
+A P/E exists only for a positive EPS; a missing, zero or negative EPS has none. The forward P/E
+is on the analysts' EPS as they state it, and the forward P/E after stock pay on that EPS less the
+stock-pay charge (``method.md`` 5.9). EPV is clean trailing EPS ÷ r, and the growth share is the
+part of the price EPV does not cover.
 """
 
 from dataclasses import dataclass
@@ -9,11 +11,13 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Multiples:
-    """Price over reported trailing, clean trailing and forward EPS; ``None`` where there is none."""
+    """Price over reported trailing, clean trailing and forward EPS, and over the forward EPS
+    after stock pay; ``None`` where there is none."""
 
     pe_reported: float | None
     pe_clean: float | None
     pe_forward: float | None
+    pe_forward_after_sbc: float | None
 
 
 def _pe(price: float, eps: float | None) -> float | None:
@@ -23,10 +27,19 @@ def _pe(price: float, eps: float | None) -> float | None:
 
 
 def multiples(
-    price: float, eps_reported: float | None, eps_clean: float | None, eps_forward: float | None
+    price: float,
+    eps_reported: float | None,
+    eps_clean: float | None,
+    eps_forward: float | None,
+    eps_forward_after_sbc: float | None,
 ) -> Multiples:
-    """The three P/E multiples at ``price``."""
-    return Multiples(_pe(price, eps_reported), _pe(price, eps_clean), _pe(price, eps_forward))
+    """The four P/E multiples at ``price``."""
+    return Multiples(
+        _pe(price, eps_reported),
+        _pe(price, eps_clean),
+        _pe(price, eps_forward),
+        _pe(price, eps_forward_after_sbc),
+    )
 
 
 def epv(eps_clean: float, r: float) -> float:

@@ -280,7 +280,12 @@ def test_the_worked_decline_row_values_at_4_953(
         False,
     ]
     assert im["capex_vs_depreciation"] == {"capex": -30 * M, "depreciation": 40 * M}
-    assert im["eps"] == {"reported": 0.45, "clean": 0.45, "forward": None}
+    assert im["eps"] == {
+        "reported": 0.45,
+        "clean": 0.45,
+        "forward": None,
+        "forward_after_sbc": None,
+    }
     assert im["epv"] == pytest.approx(0.45 / 0.09)
     # $3.00 against $4.9533: 0.606 × the value, above the None row's buy level, 0.60 × the value
     assert (r.price_to_value, r.designation) == (3.0 / r.value, "below")
@@ -291,6 +296,7 @@ def test_the_worked_decline_row_values_at_4_953(
     assert im["implied_decline_rate"] is None
     assert im["multiples"]["pe_reported"] == pytest.approx(3.0 / 0.45)
     assert im["multiples"]["pe_forward"] is None
+    assert im["multiples"]["pe_forward_after_sbc"] is None
     growth = (0.97 * 0.97 * (1 + FADE[0])) ** (1 / 3) - 1
     assert im["expected_return"]["growth"] == pytest.approx(growth, abs=1e-12)
     assert route_codes(r) == []

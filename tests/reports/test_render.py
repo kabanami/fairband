@@ -350,7 +350,7 @@ def test_appendix_a_is_generated_from_the_records(
         " snapshot or on one it reprices"
     )
     assert a["versions"] == {
-        "method": "fairband-mechanical/1.9",
+        "method": "fairband-mechanical/1.10",
         "policy": policy.version,
         "settingsHash": policy.settings_hash,
         "review": "fairband-review/2",

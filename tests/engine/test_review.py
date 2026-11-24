@@ -510,6 +510,38 @@ def test_an_agent_s_basis_moves_the_anchor_by_the_adjustment(
     assert charged.bridge[0].delta is not None and charged.bridge[0].delta < 0
 
 
+def test_an_agent_s_basis_moves_the_forward_multiple_after_stock_pay_alone(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Method 5.9 and 14.4 under 1.10: the forward P/E is on the analysts' EPS as they state it,
+    so no stock-pay input moves it; the forward P/E after stock pay follows the charge in force.
+    On MGCO at a street EPS of 8.50 an agent's ``includes`` lifts the second figure from 150 ÷
+    5.60 to the plain 150 ÷ 5.90; on MGCO as it is an agent's ``excludes`` lowers the EPS behind
+    it to 5.60. A guided EPS moves neither."""
+    inputs = _excluding()
+    mechanical = value_company(inputs, deciles, policy, TODAY)
+    found = mechanical.intermediates["multiples"]
+    assert found["pe_forward"] == pytest.approx(150 / 5.90)
+    assert found["pe_forward_after_sbc"] == pytest.approx(150 / 5.60)
+    includes = [OVERRIDE("earnings.sbc_basis", "includes")]
+    lifted = review_company(inputs, deciles, policy, TODAY, includes, mechanical).result
+    assert lifted.intermediates["eps"]["forward_after_sbc"] == pytest.approx(5.90)
+    assert lifted.intermediates["multiples"]["pe_forward"] == found["pe_forward"]
+    assert lifted.intermediates["multiples"]["pe_forward_after_sbc"] == found["pe_forward"]
+
+    plain = value_company(mature_growth_inputs(), deciles, policy, TODAY)
+    excludes = [OVERRIDE("earnings.sbc_basis", "excludes")]
+    charged = review_company(mature_growth_inputs(), deciles, policy, TODAY, excludes, plain)
+    multiples = charged.result.intermediates["multiples"]
+    assert multiples["pe_forward"] == plain.intermediates["multiples"]["pe_forward"]
+    assert multiples["pe_forward_after_sbc"] == pytest.approx(150 / 5.60)
+
+    guided = [OVERRIDE("earnings.ntm", 6.45), OVERRIDE("earnings.sbc_basis", "excludes", 2)]
+    under = review_company(mature_growth_inputs(), deciles, policy, TODAY, guided, plain).result
+    assert under.intermediates["anchor"]["ntm_eps"] == 6.45
+    assert under.intermediates["multiples"] == multiples
+
+
 def test_an_agent_s_stock_pay_charges_the_anchor_and_settles_the_notes(
     policy: Policy, deciles: Deciles
 ) -> None:

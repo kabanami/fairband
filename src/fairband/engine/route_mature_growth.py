@@ -76,10 +76,12 @@ the count the consensus is on, and which a guided EPS, standing in for the conse
 leaves unread; ``earnings.cycle_gap`` the correction to mid-cycle earnings, which the NTM EPS, the
 consensus's or the guided one, is then taken less, before the positive-anchor refusal
 (``anchor.ntm_anchor``). Nothing else reads the three: the basis test, the clean EPS and EPV read
-the agent's non-recurring gap alone, and the forward EPS of the P/E and the ``ntm_eps`` and
-``ntm_net_income`` data entries are the consensus less the stock-pay adjustment in force
-(``Anchor.ntm_eps_found``), which the two stock-pay inputs move, the ``ntm_eps`` entry giving way to
-the JUDGMENT entry under the guided EPS. ``ntm_nri``, the one-time amount the anchor took off, nil
+the agent's non-recurring gap alone, and the forward EPS after stock pay, with its P/E, and the
+``ntm_eps`` and ``ntm_net_income`` data entries are the consensus less the stock-pay adjustment in
+force (``Anchor.ntm_eps_found``), which the two stock-pay inputs move, the ``ntm_eps`` entry giving
+way to the JUDGMENT entry under the guided EPS. The forward EPS of the forward P/E is the
+consensus as the analysts state it (``Anchor.ntm_eps_raw``), which no input moves (``method.md``
+5.9). ``ntm_nri``, the one-time amount the anchor took off, nil
 under the guided EPS, and ``cycle_gap`` are in the intermediates only under their overrides. The
 cross-check reads the row's moat, returns and two gaps, and the consensus and belief as found: no
 guided EPS, no one-time amount and no agent's revenue step.
@@ -258,7 +260,9 @@ def value_mature_growth(c: Context) -> Valued | Refused:
     by_runway = {key: v + outside for key, v in own_by_runway.items()}
     by_roic = {key: None if v is None else v + outside for key, v in own_by_roic.items()}
     gap: float | None = chosen(c, "earnings.nri_gap", None)  # the engine finds none
-    e = eps(t, gap, anchor.ntm_eps_found)
+    # the forward EPS is the analysts' as they state it; the second bears the stock-pay charge in
+    # force, which an agent's stock pay or basis moves (method 5.9)
+    e = eps(t, gap, anchor.ntm_eps_raw, anchor.ntm_eps_found)
     im: dict[str, Any] = {
         "anchor": {
             "ntm_eps_raw": anchor.ntm_eps_raw,
