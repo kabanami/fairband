@@ -12,10 +12,11 @@
 --
 -- First the rows whose snapshot cannot say what the raw figure was lose their forward P/E; their
 -- price and their trailing multiples stay. These are a revenue-growth row, whose snapshot records
--- no anchor; a row whose snapshot holds no forward P/E, or another one, the logged figure being an
--- earlier write's of the same day; a row whose raw figure is at or below zero, a loss that has no
--- forward P/E; and a row with no snapshot. The company's next valued day logs the figure on the
--- raw EPS. A result that is not JSON reads as one that holds nothing.
+-- no anchor; a row whose anchor records no adjustment; a row whose snapshot holds no forward P/E,
+-- or another one, the logged figure being an earlier write's of the same day; a row whose raw
+-- figure is at or below zero, a loss that has no forward P/E; and a row with no snapshot. The
+-- company's next valued day logs the figure on the raw EPS. A result that is not JSON reads as
+-- one that holds nothing.
 UPDATE multiples_log
 SET pe_forward = NULL
 WHERE pe_forward IS NOT NULL
@@ -26,6 +27,9 @@ WHERE pe_forward IS NOT NULL
       AND json_extract(
             CASE WHEN json_valid(s.result) THEN s.result END,
             '$.intermediates.anchor.ntm_eps_raw') > 0
+      AND json_extract(
+            CASE WHEN json_valid(s.result) THEN s.result END,
+            '$.intermediates.anchor.sbc_adjustment_per_share') IS NOT NULL
       AND abs(
             json_extract(
               CASE WHEN json_valid(s.result) THEN s.result END,
@@ -33,9 +37,11 @@ WHERE pe_forward IS NOT NULL
             - CAST(multiples_log.pe_forward AS REAL))
           <= 1e-9 * abs(CAST(multiples_log.pe_forward AS REAL)));
 
--- Then every row left with a forward P/E has a snapshot that made it. One whose adjustment is nil
--- already holds the price over the raw figure and keeps its text. The others are restated, written
--- with the 17 significant digits that read back as the same number.
+-- Then every row left with a forward P/E has a snapshot that made it, whose result is JSON and
+-- whose anchor holds both figures. One whose adjustment is nil already holds the price over the
+-- raw figure and keeps its text. The others are restated, written with the 17 significant digits
+-- that read back as the same number. The guard on the result stands here too, so that no order
+-- in which the conditions are read can reach a result that is not JSON.
 UPDATE multiples_log
 SET pe_forward = (
     SELECT printf(
@@ -51,4 +57,6 @@ WHERE pe_forward IS NOT NULL
     SELECT 1
     FROM snapshots s
     WHERE s.id = multiples_log.snapshot_id
-      AND json_extract(s.result, '$.intermediates.anchor.sbc_adjustment_per_share') <> 0);
+      AND json_extract(
+            CASE WHEN json_valid(s.result) THEN s.result END,
+            '$.intermediates.anchor.sbc_adjustment_per_share') <> 0);

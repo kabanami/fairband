@@ -44,6 +44,7 @@ from fairband.policy.settings import apply_overlay
 from fairband.store.db import connect
 from fairband.store.ledger import OWNER, Writer
 from fairband.store.moat import moat_row
+from fairband.store.multiples import log_snapshot, multiples_log_for
 from fairband.store.overrides import drop_override, insert_override
 from fairband.store.reports import insert_report
 from fairband.store.reviews import (
@@ -877,6 +878,24 @@ def test_a_mechanical_row_reads_its_levels_on_the_policy_in_force(
     assert _levels(row) == _in_force(value, moat, snapshot.price, changed)
     unpriced = _mechanical(replace(snapshot, price=None), policy)
     assert unpriced == _engines(snapshot) | {"priceToValue": None, "designation": None}
+
+
+def test_the_screen_and_the_log_carry_the_forward_pe_and_never_the_one_after_stock_pay(
+    db_path: Path, policy: Policy, results: dict[str, ValuationResult]
+) -> None:
+    """Method 5.9 under 1.10: where a row's stock-pay adjustment is above zero its two forward
+    P/Es differ. The Screen's Forward P/E column and the multiples log carry the first, the price
+    over the analysts' EPS as they state it."""
+    found = results["AAPL"]
+    two = {**found.intermediates["multiples"], "pe_forward": 25.4, "pe_forward_after_sbc": 26.8}
+    charged = replace(found, intermediates={**found.intermediates, "multiples": two})
+    _snapshot(db_path, charged)
+    snapshot = _newest(db_path, "AAPL")
+    row = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy)
+    assert row["peForward"] == 25.4
+    with closing(connect(db_path)) as conn:
+        log_snapshot(conn, charged, snapshot.id, 1, NOW)
+        assert multiples_log_for(conn, "AAPL")[-1].pe_forward == 25.4
 
 
 def test_a_row_valued_under_an_older_policy_reads_the_policy_in_force(

@@ -2262,6 +2262,11 @@ def test_method_1_10_reads_the_forward_pe_on_the_analysts_eps() -> None:
         " `ntm_net_income` DATA entries read raw − adjustment, the consensus as found; the forward"
         " P/E of 5.9 reads the raw figure, the analysts' EPS as they state it (method 1.10)."
     ) in anchor
+    # the check still reads the figure after stock pay (the whole-branch review's finding 4)
+    assert (
+        "So the forward P/E of a row the check passes can read under the bound, where the"
+        " adjustment alone lifts the figure after stock pay to the bound or above it"
+    ) in anchor
     multiples = five[five.index("### 5.9") : five.index("### 5.10")]
     for words in (
         "- Trailing P/E reported and clean; a P/E exists only for a positive EPS.",
@@ -2273,6 +2278,12 @@ def test_method_1_10_reads_the_forward_pe_on_the_analysts_eps() -> None:
         "The forward P/E after stock pay = price ÷ (raw − adjustment)",
         "where the adjustment is nil it equals the forward P/E",
         "It is Mature Growth's alone, and it follows the adjustment in force",
+        # whatever moves the adjustment in a review moves it (the whole-branch review's finding 2)
+        (
+            "in a review whatever sets the adjustment there, an agent's `earnings.sbc_basis` and"
+            " `earnings.sbc`, its `shares.diluted`, and an `earnings.nri_gap` that changes the"
+            " test's reading (14.4)"
+        ),
         "So the Screen and the multiples log (16.7) carry the forward P/E",
         (
             "The intermediates' `eps` holds the two EPS figures as `forward` and"
@@ -2340,8 +2351,13 @@ def test_method_1_10_reads_the_forward_pe_on_the_analysts_eps() -> None:
         "`forward_after_sbc`",
         "`pe_forward_after_sbc`",
         "No value a share, no level and no word moves",
+        # a held review keeps its method's figures (the whole-branch review's finding 3)
+        "A held review made before 1.10 is carried as made (14.6)",
+        "until the review is made again",
     ):
         assert words in row, words
+    # the row gives Fairband's own figures and no vendor's EPS (the review's finding 11)
+    assert "$4.06" not in row and "$3.20" not in row
     html = resources.files("fairband.web").joinpath("static", "methodology.html").read_text("utf-8")
     page = " ".join(html.split())
     assert "Method 1.10 (24 Nov 2026" in page and "so the figures stand under 1.10" in page

@@ -364,34 +364,45 @@ CONFUSING_PE_WORDS = (
 )
 # The template's words on the forward P/E under method 1.10 (the founder's decisions of
 # 2026-11-24): the figure every reader knows, on the analysts' earnings as they state them, and a
-# second one after stock pay only where the value charges it, in the shape of the trailing P/E's
-# two figures.
+# second one after stock pay only where a charge for stock pay stands, in the shape of the
+# trailing P/E's two figures. Each case has a sentence that is true in it (the whole-branch
+# review's findings 1, 6 and 7): a guided EPS, under which the value does not rest on the second
+# figure's earnings; a charge of nil for either reason; and a stock pay on file that is missing
+# or below zero.
 FORWARD_PE_WORDS = (
     (
         "The forward P/E is the price over the analysts' earnings a share for the next twelve"
-        " months, as they state them: `/pe_forward` holds no charge for stock pay."
+        " months, as they state them: `/pe_forward` holds no charge for stock pay. A Mature"
+        " Stable, a Decline and a Start-up row have none."
     ),
     (
-        "On Mature Growth, where the value charges stock pay against those earnings, give a second"
-        " forward P/E beside it, on the earnings after stock pay:"
+        "On Mature Growth, read the charge for stock pay: the snapshot's"
+        " `/intermediates/anchor/sbc_adjustment_per_share`, under your overrides the review's."
+    ),
+    (
+        "Where it is above zero, the analysts' earnings leave out stock pay: give a second forward"
+        " P/E beside the first, on the earnings after stock pay,"
         " `snapshot:<id>/intermediates/multiples/pe_forward_after_sbc`, under your overrides the"
         " review's, `review:<id>/intermediates/multiples/pe_forward_after_sbc`."
     ),
     (
-        "The charge is the same record's `/intermediates/anchor/sbc_adjustment_per_share`, and it"
-        " applies where that figure is above zero."
+        "Say in one sentence that the analysts' earnings leave out stock pay and that the second"
+        " figure counts it as a cost; where no `earnings.ntm` applies, add that the value rests on"
+        " the earnings after it."
     ),
     (
-        "Say in one sentence that the analysts' earnings leave out stock pay and that the value"
-        " rests on the earnings after it."
+        "Where the charge is not above zero, give the one forward P/E and say in one sentence why"
+        ' no second figure stands beside it, as section 8 found: "These earnings already count'
+        ' stock pay as a cost.", where the analysts\' earnings count it; "The company pays no'
+        ' stock.", where they leave it out and the filings show none; and where neither holds,'
+        " the stock pay on file is missing or below zero, so write that Fairband holds no usable"
+        " stock pay for the company and gives no figure after it."
     ),
+    "Name no second forward P/E there, and do not say that two figures are equal.",
     (
-        'Where the charge is nil, give the one forward P/E and write: "These earnings already'
-        ' count stock pay as a cost.", or, where a lasting `earnings.sbc` of 0 says so, "The'
-        ' company pays no stock." Name no second forward P/E there, and do not say that two'
-        " figures are equal."
+        "On High Growth and Young Growth give the one forward P/E where the row has one: none"
+        " after stock pay exists there."
     ),
-    "On another phase give the one forward P/E: none after stock pay exists there.",
     "The log holds the forward P/E alone, so set the second figure against no history.",
 )
 # The two codes method 1.7 removes (spec 2026-11-19 7.2), which the playbook names no more.
@@ -2583,10 +2594,12 @@ def test_section_9_gives_the_forward_pe_as_stated_and_a_second_one_after_stock_p
     ) in tools
     row = _table(_read(CITATIONS), ("Ref", "The stored value", "Unit"))
     cell = row["`snapshot:<id>/intermediates/<path>`"][0]
+    # whatever moves the charge moves the second figure (the whole-branch review's finding 2)
     assert (
         "`multiples/pe_forward_after_sbc`, the price over that EPS less the charge for stock pay,"
-        " `anchor/sbc_adjustment_per_share`; the second follows your `earnings.sbc_basis` and"
-        " `earnings.sbc`, so cite it from the review under them."
+        " `anchor/sbc_adjustment_per_share`; under any override of yours cite the second from the"
+        " review, since `earnings.sbc_basis`, `earnings.sbc`, `shares.diluted` and an"
+        " `earnings.nri_gap` that changes the basis each move it."
     ) in cell
 
 

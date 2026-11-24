@@ -1167,6 +1167,21 @@ def test_the_forward_eps_takes_no_stock_pay_charge_on_this_route(
     assert refused.intermediates["multiples"]["pe_forward"] == pytest.approx(150 / 2.40)
 
 
+def test_a_unit_error_leaves_this_route_no_forward_eps(
+    high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
+) -> None:
+    """Method 5a.10: HGCO with quarters of 20.00 a share has an NTM EPS of 80.00, so its price of
+    150 is 1.875 times it, under the bound of 2 that reads as a unit error. The cross-check
+    refuses, and the row holds no forward EPS and no forward P/E: a figure whose units are in
+    doubt is not shown."""
+    hg = high_growth_inputs
+    wrong = replace(hg, quarter_estimates=tuple(replace(q, eps=20.0) for q in hg.quarter_estimates))
+    r = value_company(wrong, deciles, policy, TODAY)
+    assert r.intermediates["growth_route"] == {"refusal": "forward P/E below 2: unit error"}
+    assert r.intermediates["eps"]["forward"] is None
+    assert r.intermediates["multiples"]["pe_forward"] is None
+
+
 def test_the_forward_eps_reads_the_corrected_anchor_on_a_thin_window(
     high_growth_inputs: CompanyInputs, deciles: Deciles, policy: Policy
 ) -> None:

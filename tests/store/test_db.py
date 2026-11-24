@@ -781,9 +781,9 @@ def test_migration_012_restates_the_logged_forward_pe_to_the_analysts_eps(
     figure was: GROW's, a revenue-growth snapshot with no anchor; SWAP's and KEPT's, whose
     snapshot holds no forward P/E, the figure being an earlier write's of the day; DIFF's, whose
     snapshot holds another figure; GONE's, with no snapshot; NEGS's, whose raw figure is below
-    zero, a loss that has no forward P/E; and JUNK's, whose snapshot's result is not JSON, which
-    stops no migration. A row with no forward P/E has none after, and no other column of any row
-    moves."""
+    zero, a loss that has no forward P/E; BARE's, whose anchor records no adjustment; and JUNK's,
+    whose snapshot's result is not JSON, which stops no migration. A row with no forward P/E has
+    none after, and no other column of any row moves."""
     folder = _migrations_dir(tmp_path, {})
     for filename in _ALL[1:11]:
         (folder / filename).write_bytes(_packaged(filename))
@@ -833,6 +833,9 @@ def test_migration_012_restates_the_logged_forward_pe_to_the_analysts_eps(
     log("LOSS", "2026-11-10", 80.0, None, snapshot("LOSS", anchored(5.0, 1.0, 20.0)))
     # the analysts expect a loss, and a negative adjustment had lifted the EPS above zero
     log("NEGS", "2026-11-10", 46.0, 7666.0, snapshot("NEGS", anchored(-0.07, -0.076, 7666.0)))
+    # an anchor that records no adjustment cannot say what the raw figure's share was
+    bare = {"anchor": {"ntm_eps_raw": 5.0}, "multiples": {"pe_forward": 20.0}}
+    log("BARE", "2026-11-10", 80.0, 20.0, snapshot("BARE", bare))
     junk = snapshot("JUNK", anchored(5.0, 1.0, 20.0))
     conn.execute("update snapshots set result = 'not json' where id = ?", (junk,))
     log("JUNK", "2026-11-10", 80.0, 20.0, junk)
@@ -850,7 +853,7 @@ def test_migration_012_restates_the_logged_forward_pe_to_the_analysts_eps(
     assert float(forward.pop(("ACME", "2026-11-11"))) == 18.0
     assert float(forward.pop(("FXCO", "2026-11-10"))) == pytest.approx(400.0 / 47.2, rel=1e-15)
     assert forward.pop(("NILS", "2026-11-10")) == repr(plain)  # the text as it was written
-    assert set(forward.values()) == {None} and len(forward) == 8
+    assert set(forward.values()) == {None} and len(forward) == 9
     # the restated rows read through the store as any row does, and nothing else moved
     assert [r.pe_forward for r in multiples_log_for(conn, "ACME")] == [16.0, 18.0]
     columns = [r[1] for r in conn.execute("pragma table_info(multiples_log)")]

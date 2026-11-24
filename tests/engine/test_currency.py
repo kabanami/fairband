@@ -355,6 +355,28 @@ def test_reprice_moves_the_usd_value_with_the_rate(policy: Policy, deciles: Deci
     )
 
 
+def test_a_currency_row_s_two_forward_multiples_read_the_price_in_the_currency(
+    policy: Policy, deciles: Deciles
+) -> None:
+    """Method 5.9 under 1.10 on a company in another currency: FXCO at a street EPS of 68.00 SEK
+    reads excludes-sbc and takes 2.40 SEK a share of stock pay off the analysts' 47.20 SEK. Each
+    forward P/E is the price in the currency, 400.00 SEK, over an EPS in the currency, so neither
+    holds a rate: 400 ÷ 47.20 and 400 ÷ 44.80. A reprice to USD 55.00 at 8.5 SEK per USD reads
+    467.50 SEK over each."""
+    r = value_company(replace(fx_inputs(), street_ttm_eps=68.0), deciles, policy, TODAY)
+    im = r.intermediates
+    assert im["sbc_basis"] == "excludes-sbc"
+    assert im["anchor"]["sbc_adjustment_per_share"] == pytest.approx(2.40)
+    assert im["eps"]["forward"] == pytest.approx(47.20)
+    assert im["eps"]["forward_after_sbc"] == pytest.approx(44.80)
+    assert im["multiples"]["pe_forward"] == pytest.approx(400 / 47.20)
+    assert im["multiples"]["pe_forward_after_sbc"] == pytest.approx(400 / 44.80)
+    day = date(2026, 11, 2)
+    moved = reprice(r, 55.0, day, policy, fx_rate=8.5, fx_date=day, fx_observed_at=NOW)
+    assert moved.intermediates["multiples"]["pe_forward"] == pytest.approx(467.5 / 47.20)
+    assert moved.intermediates["multiples"]["pe_forward_after_sbc"] == pytest.approx(467.5 / 44.80)
+
+
 def _refused_for_its_target_margin() -> CompanyInputs:
     """HGCO with no peers: the revenue-growth refusal that keeps its rebuild keys and the margin
     the price needs."""

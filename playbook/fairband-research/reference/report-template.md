@@ -302,17 +302,23 @@ The engine or a derivation gives every item. None of them is a target.
   Where you set none, give the one trailing P/E and write: "No one-time items were removed from
   these earnings." Name no second P/E there, and do not say that two figures are equal. The
   forward P/E is the price over the analysts' earnings a share for the next twelve months, as
-  they state them: `/pe_forward` holds no charge for stock pay. On Mature Growth, where the value
-  charges stock pay against those earnings, give a second forward P/E beside it, on the earnings
-  after stock pay: `snapshot:<id>/intermediates/multiples/pe_forward_after_sbc`, under your
-  overrides the review's, `review:<id>/intermediates/multiples/pe_forward_after_sbc`. The charge
-  is the same record's `/intermediates/anchor/sbc_adjustment_per_share`, and it applies where
-  that figure is above zero. Say in one sentence that the analysts' earnings leave out stock pay
-  and that the value rests on the earnings after it. Where the charge is nil, give the one
-  forward P/E and write: "These earnings already count stock pay as a cost.", or, where a
-  lasting `earnings.sbc` of 0 says so, "The company pays no stock." Name no second forward P/E
-  there, and do not say that two figures are equal. On another phase give the one forward P/E:
-  none after stock pay exists there. Set each against its own history from `multiples_history`:
+  they state them: `/pe_forward` holds no charge for stock pay. A Mature Stable, a Decline and a
+  Start-up row have none. On Mature Growth, read the charge for stock pay: the snapshot's
+  `/intermediates/anchor/sbc_adjustment_per_share`, under your overrides the review's. Where it
+  is above zero, the analysts' earnings leave out stock pay: give a second forward P/E beside the
+  first, on the earnings after stock pay,
+  `snapshot:<id>/intermediates/multiples/pe_forward_after_sbc`, under your overrides the
+  review's, `review:<id>/intermediates/multiples/pe_forward_after_sbc`. Say in one sentence that
+  the analysts' earnings leave out stock pay and that the second figure counts it as a cost;
+  where no `earnings.ntm` applies, add that the value rests on the earnings after it. Where the
+  charge is not above zero, give the one forward P/E and say in one sentence why no second
+  figure stands beside it, as section 8 found: "These earnings already count stock pay as a
+  cost.", where the analysts' earnings count it; "The company pays no stock.", where they leave
+  it out and the filings show none; and where neither holds, the stock pay on file is missing or
+  below zero, so write that Fairband holds no usable stock pay for the company and gives no
+  figure after it. Name no second forward P/E there, and do not say that two figures are equal.
+  On High Growth and Young Growth give the one forward P/E where the row has one: none after
+  stock pay exists there. Set each against its own history from `multiples_history`:
   the trailing series' ten-year average, median, high and low (`multiple:<symbol>/pe/avg_10y`,
   `/median_10y`, `/high_10y`, `/low_10y`), and the forward series' the same way
   (`multiple:<symbol>/pe_forward/avg_10y`). The forward series is Fairband's own log: say since

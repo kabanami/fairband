@@ -541,6 +541,18 @@ def test_an_agent_s_basis_moves_the_forward_multiple_after_stock_pay_alone(
     assert under.intermediates["anchor"]["ntm_eps"] == 6.45
     assert under.intermediates["multiples"] == multiples
 
+    # an agent's stock pay of $800 m charges 0.60 a share where the stored $400 m charged 0.30:
+    # the second figure follows it and the first stays
+    heavier = [OVERRIDE("earnings.sbc", 800e6)]
+    more = review_company(inputs, deciles, policy, TODAY, heavier, mechanical).result
+    assert more.intermediates["multiples"]["pe_forward"] == found["pe_forward"]
+    assert more.intermediates["multiples"]["pe_forward_after_sbc"] == pytest.approx(150 / 5.30)
+    # a one-time item and a cycle gap lower the earnings the value starts from and neither P/E
+    for tag in ("earnings.ntm_nri", "earnings.cycle_gap"):
+        lowered = review_company(inputs, deciles, policy, TODAY, [OVERRIDE(tag, 1.0)], mechanical)
+        assert lowered.result.intermediates["anchor"]["ntm_eps"] == pytest.approx(4.60)
+        assert lowered.result.intermediates["multiples"] == found
+
 
 def test_an_agent_s_stock_pay_charges_the_anchor_and_settles_the_notes(
     policy: Policy, deciles: Deciles
