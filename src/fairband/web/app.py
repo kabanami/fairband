@@ -434,7 +434,7 @@ def create_app(
         ``page_fmp``); and ``logo`` (B-203), the address of the company's logo read where the
         latest stored profile names a logo, which the heads of the drawer and the company page
         draw, ``None`` without one (``logo_api.logo_route``). And what the figures are in (spec
-        2026-11-10 7.4), which the drawer's head and the Research tab name: ``currency``, the
+        2026-11-10 7.4), which the drawer and the Research tab name: ``currency``, the
         reporting currency the snapshot was valued or refused in (``types.money_of``: USD for a
         USD row, the code for a row refused for its currency); ``isAdr``, the ADR flag as assembly
         reads it, the latest stored profile's, else the universe row's, ``None`` with neither

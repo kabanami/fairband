@@ -83,55 +83,145 @@ def _rule(selector: str) -> str:
     return " ".join(css[ends[0] : css.index("}", ends[0])].split())
 
 
+CURRENCY = "Reports in TWD; an ADR: every per-share figure is per ADS; valued at TWD 32.40 per USD"
+ONE_LINE = ("overflow: hidden;", "text-overflow: ellipsis;", "white-space: nowrap;")
+
+
+def _names(tree: Any) -> list[str]:
+    """The drawer's parts by their own class, in order."""
+    return [part["props"]["className"].split()[-1] for part in tree if part is not None]
+
+
+def _kids(element: dict[str, Any]) -> list[dict[str, Any]]:
+    return [kid for kid in element["props"]["children"] if kid is not None]
+
+
 def test_the_parts_in_order() -> None:
-    """The head, the caption of the sector and the industry, the brief, the value band, then the
-    buttons; in the head the logo, the ticker, the phase badge, the moat stamp, the name and the
-    line that says what the figures are in."""
+    """The head, the caption of the sector and the industry, the brief, the value band, the line
+    that says what the figures are in, then the buttons. The head is three rows: the logo, the
+    ticker and the phase badge; the moat stamp; the name."""
     tree = _drawn(answers.DETAIL)
     assert isinstance(tree, list)
-    parts = [part for part in tree if part is not None]
-    names = ["app-drawer__head", "app-drawer__sector", "app-drawer__brief", "app-drawer__band"]
-    assert [part["props"]["className"].split()[-1] for part in parts] == [
-        *names,
+    assert _names(tree) == [
+        "app-drawer__head",
+        "app-drawer__sector",
+        "app-drawer__brief",
+        "app-drawer__band",
+        "app-drawer__currency",
         "app-drawer__actions",
     ]
-    head = [kid for kid in parts[0]["props"]["children"] if kid is not None]
-    assert parts[0]["type"] == "header"
-    assert [kid.get("type") for kid in head] == ["img", "h2", None, "span", "p", "p"]
-    assert head[0]["props"]["src"] == answers.DETAIL["logo"]
-    assert text(head[1]) == answers.SYMBOL
-    assert head[2]["props"] == {"phase": 4, "size": "sm", "children": []}
-    assert text(head[3]) == "WIDE MOAT"
-    assert text(head[4]) == "Lanternfield Optics Ltd"
-    assert text(head[5]) == (
-        "Reports in TWD; an ADR: every per-share figure is per ADS; valued at TWD 32.40 per USD"
+    head = tree[0]
+    assert head["type"] == "header"
+    first, second, name = _kids(head)
+    assert (first["type"], first["props"]["className"]) == ("div", "app-drawer__id")
+    logo, ticker, badge = _kids(first)
+    assert (logo["type"], logo["props"]["src"]) == ("img", answers.DETAIL["logo"])
+    assert (ticker["type"], text(ticker)) == ("h2", answers.SYMBOL)
+    assert badge["props"] == {"phase": 4, "size": "sm", "children": []}
+    assert (second["type"], second["props"]["className"]) == ("div", "app-drawer__moat")
+    [stamp] = _kids(second)
+    assert text(stamp) == "WIDE MOAT"
+    assert name == {
+        "type": "p",
+        "props": {
+            "className": "body app-drawer__name",
+            "title": "Lanternfield Optics Ltd",
+            "children": ["Lanternfield Optics Ltd"],
+        },
+    }
+
+
+def test_every_part_over_the_band_keeps_its_room() -> None:
+    """The founder, 2026-11-24: the value band and its meter stand at the same place whatever the
+    company. So each part over the band is drawn for every company and has one height: the head's
+    first row the logo's, with or without a logo or a badge; the moat's row the stamp's, with or
+    without the chip, whose model gives way where the row is full; the name one line; the caption
+    one line; the brief six. A company with no name, no sector or no brief has the part, empty,
+    in its room."""
+    assert _rule(".app-drawer__head {") == (
+        "display: flex; flex-direction: column; gap: var(--space-2);"
     )
-    assert head[5]["props"]["className"] == "caption app-muted app-drawer__currency"
+    rows = _rule(".app-drawer__id, .app-drawer__moat {")
+    assert rows == "display: flex; align-items: center; gap: var(--space-2); min-width: 0;"
+    assert _rule(".app-drawer__id {") == "height: 24px;"
+    assert "width: 24px; height: 24px;" in _rule(".app-logo {")  # the row's height is the logo's
+    assert _rule(".app-drawer__moat {") == "height: 18px;"
+    assert _rule(".app-drawer__moat .fb-chip {") == "min-width: 0;"
+    role = _rule(".app-drawer__moat .fb-chip__role {")
+    name = _rule(".app-drawer__name {")
+    sector = _rule(".app-drawer__sector {")
+    for rule in (role, name, sector):
+        for declaration in ONE_LINE:
+            assert declaration in rule, (rule, declaration)
+    assert "min-width: 0;" in role
+    assert "min-height: 1lh;" in name and "min-height: 1lh;" in sector
+    assert "min-height: 6lh;" in _rule(".app-drawer__brief {")
+    bare = answers.detail(company=None, brief=None, logo=None, phase=None)
+    tree = _drawn(bare)
+    assert _names(tree)[:4] == [
+        "app-drawer__head",
+        "app-drawer__sector",
+        "app-drawer__brief",
+        "app-drawer__band",
+    ]
+    first, second, name_part = _kids(tree[0])
+    assert [kid["type"] for kid in _kids(first)] == ["h2"]
+    assert text(_one(second, "app-moat")) == "WIDE MOAT"
+    for part in (name_part, tree[1], tree[2]):
+        assert part["type"] == "p"
+        assert text(part) == ""
+        assert part["props"].get("title") is None
+
+
+def test_the_line_on_what_the_figures_are_in_stands_under_the_band() -> None:
+    """Spec 2026-11-10 7.4, moved by the founder's word of 2026-11-24: the line on the reporting
+    currency, the ADS and the rate takes one line or two, so it stands under the band, where its
+    length moves the buttons alone, on a valued row and on a refused one. A company in USD that
+    is no ADR has none."""
+    for detail in (answers.DETAIL, answers.refused_detail()):
+        tree = _drawn(detail)
+        assert _names(tree)[-3:] == [
+            "app-drawer__band",
+            "app-drawer__currency",
+            "app-drawer__actions",
+        ]
+        line = _one(tree, "app-drawer__currency")
+        assert line["type"] == "p"
+        assert line["props"]["className"] == "caption app-muted app-drawer__currency"
+        assert line["props"]["children"] == [CURRENCY]
+        assert classed(tree[0], "app-drawer__currency") == []  # not in the head
+    assert _rule(".app-drawer__currency {") == "margin: var(--space-3) 0 0;"
+    domestic = answers.detail(currency="USD", isAdr=False, adrRatio=None, fxRate=None)
+    tree = _drawn(domestic)
+    assert classed(tree, "app-drawer__currency") == []
+    assert _names(tree)[-2:] == ["app-drawer__band", "app-drawer__actions"]
 
 
 def test_the_caption_is_the_sector_and_the_industry() -> None:
-    """Joined by a middle dot, as the screen names them; the parts the company has; no caption
-    with neither. The brief is not in it."""
+    """Joined by a middle dot, as the screen names them; the parts the company has, on one line
+    with the whole of it as the hover; empty with neither. The brief is not in it."""
     sector = _one(_drawn(answers.DETAIL), "app-drawer__sector")
     assert sector["type"] == "p"
     assert sector["props"]["className"] == "caption app-muted app-drawer__sector"
     assert text(sector) == "Technology · Semiconductors"
+    assert sector["props"]["title"] == "Technology · Semiconductors"
     company = answers.DETAIL["company"]
     energy = answers.detail(company=company | {"sector": "Energy", "industry": None})
     assert text(_one(_drawn(energy), "app-drawer__sector")) == "Energy"
     for unnamed in (company | {"sector": None, "industry": None}, None):
-        assert classed(_drawn(answers.detail(company=unnamed)), "app-drawer__sector") == []
+        empty = _one(_drawn(answers.detail(company=unnamed)), "app-drawer__sector")
+        assert text(empty) == "" and empty["props"].get("title") is None
 
 
 def test_the_brief_is_whole_and_takes_six_lines_by_the_style() -> None:
     """The whole stored brief, in body text; the style cuts it at six lines with an ellipsis and
     keeps six lines' room for a shorter one (the founder, 2026-11-24), so the value band under it
-    does not move with the brief's length. A company with no stored brief has none."""
+    does not move with the brief's length. A company with no stored brief has the room, empty."""
     brief = _one(_drawn(answers.DETAIL), "app-drawer__brief")
     assert brief["type"] == "p"
     assert brief["props"]["className"] == "body app-drawer__brief"
     assert text(brief) == answers.DETAIL["brief"]
-    assert classed(_drawn(answers.detail(brief=None)), "app-drawer__brief") == []
+    assert text(_one(_drawn(answers.detail(brief=None)), "app-drawer__brief")) == ""
     rule = _rule(".app-drawer__brief {")
     for declaration in (
         "display: -webkit-box;",
@@ -280,10 +370,7 @@ def test_a_refused_row_draws_its_refusal() -> None:
     assert _meters(tree) == []
     assert classed(tree, "app-pairs") == []
     assert text(_one(tree, "app-moat")) == "WIDE MOAT"
-    assert [part["props"]["className"].split()[-1] for part in tree if part is not None][-2:] == [
-        "app-drawer__band",
-        "app-drawer__actions",
-    ]
+    assert _names(tree)[-3:] == ["app-drawer__band", "app-drawer__currency", "app-drawer__actions"]
 
 
 @pytest.mark.parametrize(
@@ -328,18 +415,25 @@ def test_a_reviewed_row_draws_the_review_s_band() -> None:
 
 def _badges(head: dict[str, Any]) -> list[dict[str, Any]]:
     """The head's PhaseBadge elements, undrawn: their props as given."""
-    return [kid for kid in head["props"]["children"] if kid and "phase" in kid["props"]]
+    return [e for e in elements(head["props"]["children"]) if "phase" in e["props"]]
 
 
 def test_the_moat_stamp_follows_the_phase_badge() -> None:
-    """Right after the phase badge, in the stamp's words; a company with no row in the moat table
+    """The phase badge ends the head's first row and the moat stamp starts its second, in the
+    stamp's words, the chip of an agent's class after it; a company with no row in the moat table
     is stamped ``MOAT NOT SET``, and a row with no phase has no badge."""
     for moat, words in (("Wide", "WIDE MOAT"), ("Narrow", "NARROW MOAT"), ("None", "NO MOAT")):
         [head, *_] = _drawn(answers.detail(moat=moat))
-        kids = head["props"]["children"]
-        badge = next(i for i, kid in enumerate(kids) if kid and "phase" in kid["props"])
-        assert kids[badge + 1] == node("moatStamp", [{"moat": moat}])
-        assert text(kids[badge + 1]) == words
+        first, second, _ = _kids(head)
+        assert "phase" in _kids(first)[-1]["props"]
+        [stamp] = _kids(second)
+        assert stamp == node("moatStamp", [{"moat": moat}])
+        assert text(stamp) == words
+    agent = answers.reviewed_detail()
+    [head, *_] = _drawn(agent)
+    stamp, chip = _kids(_kids(head)[1])
+    assert text(stamp) == "NARROW MOAT"
+    assert chip == node("moatChip", [agent])
     [head, *_] = _drawn(answers.unset_detail())
     assert text(_one(head, "app-moat")) == "MOAT NOT SET"
     [head, *_] = _drawn(answers.detail(phase=None))

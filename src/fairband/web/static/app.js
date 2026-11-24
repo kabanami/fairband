@@ -1106,44 +1106,50 @@
   }
 
   /* The drawer under its bar, form A (the company page's design, 11), in this order and nothing
-     else: the head, the logo, the ticker, the phase badge of the detail's phase, the one the
-     screen's row shows, a review's where the review has a value (spec 2026-11-23 refresh
-     experience, 4.4), the moat stamp (moatStamp) and the chip of the owner's or an agent's class
-     (moatChip), with no control (spec 2026-11-19 8.8), the name and, for a company in another
-     currency or an ADR, the line that says what its figures are in (currencyLine, spec 2026-11-10
-     7.4); one caption, the sector and the industry (sectorLine); the company brief whole, which
-     the page's style cuts at six lines and gives six lines' room where it is shorter (the
-     founder, 2026-11-24); the value band, the meter and under it the four levels in
-     the screen's words (levelRows), or where the meter draws no band a refused row's sentence in
-     its place; then Company page, a link to the company page, and Request research with its
-     menu, the server's refusal under it and the open item's line. The rest of what a company has
-     is on its page. */
+     else: the head, three rows, the logo, the ticker and the phase badge of the detail's phase,
+     the one the screen's row shows, a review's where the review has a value (spec 2026-11-23
+     refresh experience, 4.4), then the moat stamp (moatStamp) and the chip of the owner's or an
+     agent's class (moatChip), with no control (spec 2026-11-19 8.8), then the name; one caption,
+     the sector and the industry (sectorLine); the company brief whole, which the page's style
+     cuts at six lines; the value band, the meter and under it the four levels in the screen's
+     words (levelRows), or where the meter draws no band a refused row's sentence in its place;
+     for a company in another currency or an ADR, the line that says what its figures are in
+     (currencyLine, spec 2026-11-10 7.4); then Company page, a link to the company page, and
+     Request research with its menu, the server's refusal under it and the open item's line. The
+     rest of what a company has is on its page.
+     The band and its meter stand at the same place whatever the company (the founder,
+     2026-11-24). So every part over the band is drawn for every company, empty where the company
+     has none, and the page's style gives each one height: the name and the caption one line, a
+     longer one cut with an ellipsis and whole in its hover, the brief six lines. The line on
+     what the figures are in, one line or two, stood in the head and is under the band for that
+     reason. */
   function sections(body) {
     var r = body.result;
     var phase = PHASE_NUMBER[body.phase];
+    var name = (body.company && body.company.name) || null;
     var sector = sectorLine(body.company);
+    var currency = currencyLine(body);
     var rows = levelRows(body);
     var ask = asked(r.symbol);
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
-        logo(body, 'app-drawer__logo'),
-        h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
-        phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,
-        moatStamp(body),
-        moatChip(body),
-        body.company && body.company.name
-          ? h('p', { className: 'body app-drawer__name' }, body.company.name) : null,
-        currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },
-          currencyLine(body)) : null),
-      sector ? h('p', { key: 'sector', className: 'caption app-muted app-drawer__sector' }, sector)
-        : null,
-      body.brief ? h('p', { key: 'brief', className: 'body app-drawer__brief' }, body.brief)
-        : null,
+        h('div', { className: 'app-drawer__id' },
+          logo(body, 'app-drawer__logo'),
+          h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
+          phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null),
+        h('div', { className: 'app-drawer__moat' }, moatStamp(body), moatChip(body)),
+        h('p', { className: 'body app-drawer__name', title: name }, name)),
+      h('p', {
+        key: 'sector', className: 'caption app-muted app-drawer__sector', title: sector || null
+      }, sector),
+      h('p', { key: 'brief', className: 'body app-drawer__brief' }, body.brief),
       rows ? h('section', { key: 'band', className: 'app-drawer__band' }, meter(body),
         pairs(rows.map(function (row) { return [row[0], row[1], true]; })),
         heldPart(body, render, function () { load(); reloadDetail(r.symbol); }))
         : r.refusal ? h('section', { key: 'band', className: 'app-drawer__band' },
           h('p', { className: 'body app-refusal' }, r.refusal)) : null,
+      currency ? h('p', { key: 'currency', className: 'caption app-muted app-drawer__currency' },
+        currency) : null,
       h('div', { key: 'actions', className: 'app-drawer__actions' },
         h(F.Button, { variant: 'primary', href: '#company/' + encodeURIComponent(r.symbol) },
           'Company page'),
@@ -2596,13 +2602,13 @@
     return plain(i.value);
   }
 
-  /* What a company's figures are in (spec 2026-11-10 6.2, 7.4 and 10), the line under the head of
-     the drawer and under the Research tab's bar, the same line in both, from the company read:
-     the reporting currency, that every per-share figure of an ADR is per ADS, and the rate its
-     value was translated at, "Reports in TWD; an ADR: every per-share figure is per ADS; valued
-     at TWD 32.96 per USD". It names no ratio, with one on file or none: the counts the ratio is
-     found from cannot say which way a depositary's ratio runs (spec 2026-11-19 6.2). A company in
-     USD that is no ADR, and has no ratio on file, has none: ''. */
+  /* What a company's figures are in (spec 2026-11-10 6.2, 7.4 and 10), the line under the value
+     band of the drawer and under the Research tab's bar, the same line in both, from the company
+     read: the reporting currency, that every per-share figure of an ADR is per ADS, and the rate
+     its value was translated at, "Reports in TWD; an ADR: every per-share figure is per ADS;
+     valued at TWD 32.96 per USD". It names no ratio, with one on file or none: the counts the
+     ratio is found from cannot say which way a depositary's ratio runs (spec 2026-11-19 6.2). A
+     company in USD that is no ADR, and has no ratio on file, has none: ''. */
   function currencyLine(body) {
     var code = body.currency || 'USD';
     var listed = !!body.isAdr || body.adrRatio != null;

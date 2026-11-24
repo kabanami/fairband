@@ -431,7 +431,22 @@
   .app-drawer__body { padding: var(--space-3) var(--space-4) var(--space-6); }
   /* Loading: the previous company, faded, until the new one lands. No spinner, no motion. */
   .app-drawer__body.is-loading { opacity: 0.5; }
-  .app-drawer__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  /* The drawer's head is three rows of one height each, whatever the company (the founder,
+     2026-11-24), so the value band under it stands at the same place for every company: the
+     logo, the ticker and the phase badge, in the logo's height with or without a logo or a
+     badge; the moat stamp and the chip of whose class it is, in the stamp's height, where the
+     chip's model gives way with an ellipsis if the row is full; then the name on one line, a
+     longer one cut with an ellipsis. The rows do not wrap. */
+  .app-drawer__head { display: flex; flex-direction: column; gap: var(--space-2); }
+  .app-drawer__id, .app-drawer__moat {
+    display: flex; align-items: center; gap: var(--space-2); min-width: 0;
+  }
+  .app-drawer__id { height: 24px; }
+  .app-drawer__moat { height: 18px; }
+  .app-drawer__moat .fb-chip { min-width: 0; }
+  .app-drawer__moat .fb-chip__role {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .app-drawer__ticker { margin: 0; }
   /* The company's logo (B-203). Most of FMP's logos are drawn for a white ground, many dark on
      a clear one, so the tile is white under either theme and reads no theme token; a logo whose
@@ -454,21 +469,29 @@
     white-space: nowrap;
   }
   .app-moat--unset { border-style: dashed; }
-  .app-drawer__name { margin: 0; flex-basis: 100%; color: var(--ink-muted); }
-  .app-drawer__currency { margin: 0; flex-basis: 100%; }
-  /* The drawer's form A (the company page's design, 11): under the head the sector's caption and
-     the company brief in six lines' room whatever its length (the founder, 2026-11-24), a longer
-     one cut there with an ellipsis and a shorter one with clear lines under it, so the value band
-     does not move with the brief's length, the whole of it on the company page;
+  .app-drawer__name {
+    margin: 0; min-height: 1lh; color: var(--ink-muted); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* The drawer's form A (the company page's design, 11): under the head the sector's caption on
+     one line, a longer one cut with an ellipsis, and the company brief in six lines' room
+     whatever its length (the founder, 2026-11-24), a longer one cut there with an ellipsis and a
+     shorter one with clear lines under it, the whole of it on the company page; each has its
+     room with no text too, so the value band does not move with what a company has. Then
      the value band under a rule, the levels clear of the meter's caption, or a refused row's
-     sentence in its place; then Company page and Request research on one line, the server's
+     sentence in its place; the line on what the figures are in, which is one line or two and so
+     stands under the band; then Company page and Request research on one line, the server's
      refusal and the open item's line under them. Request research's box stands from the row's
      right edge and under the row, not from its button (the watchlist page's design, 10): the two
      buttons fill the row, so when the drawer scrolls its scrollbar wraps them and Request research
      drops to the row's left, where a box from the button's right edge would stand past the
      drawer's left edge, which clips it. From the row it lies inside the drawer's width on one
      line or two. */
-  .app-drawer__sector { margin: var(--space-2) 0 0; }
+  .app-drawer__sector {
+    margin: var(--space-2) 0 0; min-height: 1lh; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-drawer__currency { margin: var(--space-3) 0 0; }
   .app-drawer__brief {
     margin: var(--space-1) 0 0; color: var(--ink-muted); display: -webkit-box;
     -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; min-height: 6lh;

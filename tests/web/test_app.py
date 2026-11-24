@@ -1696,19 +1696,23 @@ def test_items_are_named_by_number_and_time() -> None:
 
 def test_the_drawer_s_head_and_appendix_a_say_what_the_figures_are_in() -> None:
     """Spec 2026-11-10 7.4 and 10: the line that names the reporting currency, the ADS and the rate
-    (``currencyLine``, its words in ``tests/web/test_drawer_currency.py``) is in the drawer's head
-    under the company's name, and under the Research tab's bar, the same line, which names no
-    ratio (spec 2026-11-19 6.2; ``tests/web/test_company_research.py``); none on a domestic row.
-    Appendix A's secondary valuation reads its totals and its parts in the currency and names the
-    rate."""
+    (``currencyLine``, its words in ``tests/web/test_drawer_currency.py``) is in the drawer under
+    the value band, before the buttons (the founder, 2026-11-24: it stood in the head, where its
+    one line or two moved the meter), and under the Research tab's bar, the same line, which
+    names no ratio (spec 2026-11-19 6.2; ``tests/web/test_company_research.py``); none on a
+    domestic row. Appendix A's secondary valuation reads its totals and its parts in the currency
+    and names the rate."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
         main,
-        "className: 'body app-drawer__name' }, body.company.name) : null,",
-        "currencyLine(body) ? h('p', { className: 'caption app-muted app-drawer__currency' },",
-        "sector ? h('p', { key: 'sector',",
+        "className: 'body app-drawer__name'",
+        "className: 'caption app-muted app-drawer__sector'",
+        "className: 'app-drawer__band'",
+        "currency ? h('p', { key: 'currency', className: 'caption app-muted app-drawer__currency' },",
+        "className: 'app-drawer__actions'",
     )
+    assert "var currency = currencyLine(body);" in main
     assert "currency: props.detail ? P.currencyLine(props.detail) : ''," in (
         _function(_static_file("company_research.js"), "Research")
     )
@@ -2013,21 +2017,24 @@ def test_the_drawers_order_is_pinned() -> None:
     """The company page's design, 11: the drawer's form A, in this order and nothing else: the
     head, the moat stamp after the phase badge; the caption of the sector and the industry; the
     brief; the value band, the meter and its levels, or a refused row's sentence in its place;
-    then Company page and Request research with its menu and the open item's line
-    (``tests/web/test_drawer_form.py`` reads what it draws). The stance, the report's Summary,
-    Open the report and Details left it. Request research is the drawer's own part, which the
-    company page draws too."""
+    the line on what the figures are in; then Company page and Request research with its menu
+    and the open item's line (``tests/web/test_drawer_form.py`` reads what it draws). The stance,
+    the report's Summary, Open the report and Details left it. Request research is the drawer's
+    own part, which the company page draws too."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
         main,
         "className: 'app-drawer__head'",
-        "phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null,",
-        "moatStamp(body),",
+        "h('div', { className: 'app-drawer__id' },",
+        "phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null),",
+        "h('div', { className: 'app-drawer__moat' }, moatStamp(body), moatChip(body)),",
+        "className: 'body app-drawer__name'",
         "className: 'caption app-muted app-drawer__sector'",
         "className: 'body app-drawer__brief'",
         "rows ? h('section', { key: 'band', className: 'app-drawer__band' }, meter(body),",
         ": r.refusal ? h('section', { key: 'band', className: 'app-drawer__band' },",
+        "className: 'caption app-muted app-drawer__currency'",
         "href: '#company/' + encodeURIComponent(r.symbol)",
         "'Company page'",
         "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)",

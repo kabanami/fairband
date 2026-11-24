@@ -625,7 +625,7 @@ def test_one_box_at_a_time() -> None:
 def test_the_page_s_head_and_the_drawer_s() -> None:
     """On the company page's line, after the phase badge: the stamp, the chip where the class is
     the owner's or an agent's, then the control, which reads the page again after a write. In the
-    drawer's head: the stamp and the chip, and no control."""
+    drawer's head, on the row under the ticker's: the stamp and the chip, and no control."""
     for row in (FILE, OWNER, AGENT, None):
         detail = _detail(row)
         head = node("companyPage.head", [detail, None], COMPANY)
@@ -638,11 +638,12 @@ def test_the_page_s_head_and_the_drawer_s() -> None:
         assert rest == ([chip] if chip else []) + [node("moatControl", [detail])], row
         drawer = node("sections", [detail])
         [top] = classed(drawer, "app-drawer__head")
-        kids = [kid for kid in top["props"]["children"] if kid is not None]
-        badge = next(i for i, kid in enumerate(kids) if "phase" in kid["props"])
-        assert kids[badge + 1] == node("moatStamp", [detail])
-        if chip:
-            assert kids[badge + 2] == chip
+        [first] = classed(top, "app-drawer__id")
+        last = [kid for kid in first["props"]["children"] if kid is not None][-1]
+        assert "phase" in last["props"]
+        [second] = classed(top, "app-drawer__moat")
+        kids = [kid for kid in second["props"]["children"] if kid is not None]
+        assert kids == [node("moatStamp", [detail])] + ([chip] if chip else []), row
         assert classed(drawer, "app-moat-open") == []
     assert "P.moatStamp(d), P.moatChip(d), P.moatControl(d, load))," in _function(
         _static_file("company.js"), "head"
