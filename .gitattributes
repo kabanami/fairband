@@ -1,0 +1,8 @@
+# Git writes every text file with LF line endings on every system. Fairband takes a policy's hash
+# from the file's bytes, and tests compare stored bytes with a file's, so a checkout with CRLF,
+# which Git for Windows makes by default, changes both.
+* text=auto eol=lf
+
+*.gz binary
+*.png binary
+*.woff2 binary
