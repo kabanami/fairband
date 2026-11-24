@@ -8,6 +8,21 @@ The server is a plain MCP server over stdio, so it registers with other MCP host
 way; the registration for Claude Desktop and for Codex is below beside Claude Code's. The playbook
 and the page's launch are built around Claude Code today.
 
+What is tested, with Fairband under WSL:
+
+| Agent | Where it runs | State |
+|---|---|---|
+| Claude Code | WSL | Works, and the page's button opens it |
+| Claude Code | Windows | Works |
+| The Claude app's Code tab | A session in WSL or on Windows | Works, by the launch test |
+| The Claude app's Chat tab | Windows | Works, by the launch test |
+| Codex | Any | Not tested |
+| Any of them | macOS | Not tested |
+
+The launch test is the playbook's own: it shows that the skill is loaded and the tools are
+connected, and it calls no tool. Fairband on Windows itself is tested with Claude Code on Windows
+alone. The sections below hold each setup and its limits.
+
 ## The MCP server
 
 An agent reads and writes Fairband through `fairband mcp`, a stdio server that the agent's host
