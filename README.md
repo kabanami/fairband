@@ -14,7 +14,7 @@ the workbench. It currently only supports Claude Code.
 ```mermaid
 flowchart LR
     you(["You"]) --> pages["Fairband web interface"]
-    agent(["Your agent (Claude Code)"]) -- "55 MCP tools" --> mcp["MCP server"]
+    agent(["Your agent (Claude Code)"]) -- "56 MCP tools" --> mcp["MCP server"]
     pages --> server["Fairband server and valuation engine"]
     mcp --> server
     server -. "starts research session" .-> agent
@@ -33,7 +33,7 @@ Fairband is made up of four parts:
 - **Web interface:** A screener across all companies, a page for each company (overview,
   financials, estimates, investor relations, and research), plus pages for watchlists,
   methodology, settings, and the agent inbox.
-- **MCP server:** Exposes 55 tools so your agent can query stored data, request additional data
+- **MCP server:** Exposes 56 tools so your agent can query stored data, request additional data
   from FMP through the server, and save notes, findings, moat classes, updated valuations, and
   full reports.
 
@@ -122,7 +122,7 @@ agent identity, and connecting other MCP hosts.
 the local HTTP API (`127.0.0.1:8470`), so it doesn't access the database or your FMP key
 directly.
 
-The 55 tools fall into three groups:
+The 56 tools fall into three groups:
 
 - **Stored data reads (26):** Query the screener, valuations, financial statements, quarterly
   figures, estimates, price history, multiples, peers, existing research, policy settings, and
@@ -130,7 +130,7 @@ The 55 tools fall into three groups:
 - **Vendor reads (9):** Fetch transcripts, news, segments, insider trades, and filings from FMP
   through the local server. The data is saved to SQLite so reports can cite it, and anything
   already cached by a recent refresh is reused when available.
-- **Writes (20):** Register agent identity, manage inbox work items, save notes, findings,
+- **Writes (21):** Register agent identity, manage inbox work items, save notes, findings,
   guidance, moat classes, updated valuations, kill criteria, and full reports, or trigger
   refreshes.
 

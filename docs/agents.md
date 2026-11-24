@@ -53,7 +53,7 @@ Identity: the agent's first call is `identify`, with the model identifier it run
 `claude-opus-5-5` or `gpt-5`. Fairband records every write under that name, with the host's name
 and version from the MCP handshake. A write before `identify` is refused.
 
-The tools: 55, listed with their arguments in
+The tools: 56, listed with their arguments in
 `playbook/fairband-research/reference/tools.md`. Twenty-six read the store (the screen, a
 company's snapshot, its statements, its stored quarters, tables, consensus, closes, multiples
 history and peers, the research on file, the policy and the Methodology page). Nine are vendor
@@ -67,12 +67,14 @@ and its newest call's transcript where the store holds no copy of it with words.
 with its default window on the day of the refresh, and `transcript` of that call may answer
 from the refresh's copy within the reuse window, with `reused` true. FMP's error object in
 place of the list of calls is answered as it came, stored as an error and never reused, so the
-next call asks FMP again. Twenty write: the identity, the work inbox, notes, findings,
-guidance records, the moat class, overrides, the secondary valuation, the sensitivity reading,
-derivations, reports, kill criteria, news items and refreshes. The newest is `moat_set`, the
-agent's verdict on the company's moat class, which every review records; before it came
-`quarters`, `filings`, `filing_report` and `filing_search`, and `secondary_valuation` took the
-standard discounted cash flow's `drivers` beside its `parts`.
+next call asks FMP again. Twenty-one write: the identity, the work inbox, notes, findings,
+guidance records, the moat class, overrides, a review made again, the secondary valuation, the
+sensitivity reading, derivations, reports, kill criteria, news items and refreshes. The newest
+is `review_again`, which makes a company's review again on its latest snapshot with no change of
+an input; before it came `moat_set`, the agent's verdict on the company's moat class, which
+every review records, and before that `quarters`, `filings`, `filing_report` and
+`filing_search`, and `secondary_valuation` took the standard discounted cash flow's `drivers`
+beside its `parts`.
 
 The playbook: `playbook/fairband-research/` is a skill that takes the agent through a research
 report, step by step, starting with `identify`. For Claude Code and Claude Desktop, link it under
@@ -122,6 +124,39 @@ hold on Windows itself. The page's button does not open a window (below): the la
 through `bash`, and Fairband refuses the launcher's Windows path. At a start the log says that
 other users can read `keys.toml`: the check reads Linux file modes, which Windows does not keep.
 And a refresh with an FMP key was not run there; the server, the page and the tools were.
+
+### The Claude app
+
+The Claude app's Code tab is Claude Code, and it reads the files the CLI reads. A session in WSL
+uses the setup at the top of this document as it is, and a session on Windows uses the Windows
+setup above. The Chat tab takes three things of its own.
+
+The tools, in `claude_desktop_config.json`. With Fairband in WSL the command is `wsl.exe`:
+
+```json
+{
+  "mcpServers": {
+    "fairband": {
+      "command": "wsl.exe",
+      "args": ["-d", "Ubuntu", "-e", "/home/<you>/.local/bin/uv", "run", "--directory", "<repo>", "fairband", "mcp"]
+    }
+  }
+}
+```
+
+Quit the app before the change: it stays in the system tray when its window closes. An app
+installed from the Microsoft Store keeps the file in a folder under `%LOCALAPPDATA%\Claude-Data`.
+
+The playbook, as a ZIP file with the folder `fairband-research` at its top, uploaded under
+Plugins, then Skills, then Add, then Upload plugin. Upload it again after an update of Fairband.
+
+And the request in a sentence, because the Chat tab has no `/fairband-research` form: "Use the
+fairband-research skill. The request is: launch test".
+
+Tested with version 6.28899.6 of the app and Fairband in WSL: the playbook's `launch test` passed
+in a session of the Code tab in WSL, in one on Windows and in the Chat tab. That test names the
+skill and the tools and calls no tool, and no review was run from the app. The Chat tab's test ran
+with the Windows setup above in place too, so the upload was not tested alone.
 
 ## Opening Claude Code from the page
 
