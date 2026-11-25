@@ -1775,7 +1775,7 @@
   }
 
   /* The company the drawer shows read again in place when a run ends (controls.js), since a run
-     may follow its review, post its expiry item or drop an override (method 14.6). */
+     may follow its review or drop an override (method 14.6). */
   function reloadDrawer() {
     var d = state.drawer;
     if (!d) return;

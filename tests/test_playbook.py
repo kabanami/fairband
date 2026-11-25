@@ -3210,6 +3210,19 @@ def test_the_playbook_s_debt_rows_are_settled() -> None:
     ) in _tool_entry("review_log")
 
 
+def test_an_expiry_item_is_one_fairband_posted_under_a_rule_that_no_longer_runs() -> None:
+    """Spec 2026-11-25 owner's inbox, 9: Fairband posts no work item by itself, so step 2 says an
+    item of origin `expiry` is one it posted under a rule that no longer runs, worked as a
+    valuation review whose step-3 refresh renews the company."""
+    two = _flat(_steps(_frontmatter(_read(SKILL))[1])[2])
+    assert (
+        "An item of origin `expiry` is one Fairband posted itself under a rule that no longer runs."
+        " Work it as a valuation review: step 3's refresh renews the company, as it renews every"
+        " company's."
+    ) in two
+    assert "a company whose validity window has ended" not in two
+
+
 def test_a_launch_test_answers_and_a_named_item_is_claimed_where_it_is_pending() -> None:
     """Spec 2026-11-16 agent launch, 11 and 7.4: before the steps, a part answers the first prompt
     of the Settings page's Test (``TEST_PROMPT``) with the sentence that the skill is loaded and one

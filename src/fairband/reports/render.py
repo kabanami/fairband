@@ -289,8 +289,7 @@ GLOSSARY: dict[str, str] = {
     ),
     "Work item": (
         "A request in the inbox for an agent's research on one company, a valuation review or a "
-        "full report, posted by the owner, an agent or the expiry rule; pending, claimed, done, "
-        "declined or dropped"
+        "full report, posted by the owner or an agent; pending, claimed, done, declined or dropped"
     ),
 }
 # Terms matched by more than their own name.

@@ -2,10 +2,9 @@
 records and the ledger, on the database of ``conftest.py``: AAPL, AAL and HGCO, each with one
 snapshot."""
 
-from collections.abc import Callable
 from contextlib import closing
 from dataclasses import replace
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +17,7 @@ from fairband.policy import Policy, load_policy
 from fairband.store.db import connect
 from fairband.store.ledger import Writer
 from fairband.store.reports import insert_report
-from fairband.store.snapshots import insert_snapshot, latest_snapshot
+from fairband.store.snapshots import insert_snapshot
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, IDENTIFY_FIRST, PRINCIPAL_HEADER
 
 AT = NOW.isoformat()
@@ -582,159 +581,6 @@ def test_every_write_is_a_ledger_row(client: TestClient) -> None:
     assert client.get("/api/ledger", params={"limit": 0}).status_code == 400
 
 
-def test_the_inbox_read_runs_the_expiry_rule(
-    client: TestClient, client_with_clock: Callable[[datetime], TestClient], db_path: Path
-) -> None:
-    with closing(connect(db_path)) as conn:
-        snapshot = latest_snapshot(conn, "AAPL")
-    assert snapshot is not None
-    core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
-    client.put(f"/api/watchlists/{core['id']}/symbols/AAPL", headers=HEADER)
-    assert client.get("/api/inbox").json()["items"] == []  # inside its window
-
-    later = datetime.combine(snapshot.valid_until + timedelta(days=1), time(9, 30), NOW.tzinfo)
-    past = client_with_clock(later)
-    [item] = past.get("/api/inbox").json()["items"]
-    assert (item["symbol"], item["mode"], item["origin"], item["postedBy"]) == (
-        "AAPL",
-        "valuation review",
-        "expiry",
-        "system",
-    )
-    assert (item["expiryValidUntil"], item["snapshotId"], item["state"]) == (
-        snapshot.valid_until.isoformat(),
-        snapshot.id,
-        "pending",
-    )
-    assert past.get("/api/inbox").json()["items"] == [item]  # once per valid_until
-    [posted] = _ledger(past, "AAPL")
-    assert (posted["kind"], posted["principal"], posted["refId"], posted["snapshotId"]) == (
-        "work-item",
-        "system",
-        item["id"],
-        snapshot.id,
-    )
-    assert posted["summary"] == f"valuation review posted: expired {snapshot.valid_until}"
-
-    past.delete(f"/api/watchlists/{core['id']}/symbols/AAPL", headers=HEADER)
-    [dropped] = past.get("/api/inbox").json()["items"]
-    assert (dropped["id"], dropped["state"], dropped["finishedAt"]) == (
-        item["id"],
-        "dropped",
-        later.isoformat(),
-    )
-    newest = _ledger(past, "AAPL")[0]
-    assert (newest["kind"], newest["principal"], newest["summary"]) == (
-        "drop",
-        "system",
-        "dropped: AAPL is on no watchlist",
-    )
-
-
-def test_the_expiry_rule_s_ledger_rows_on_an_inbox_read(
-    client: TestClient, client_with_clock: Callable[[datetime], TestClient], db_path: Path
-) -> None:
-    """B-103 (spec 2026-11-15 12.1, clause 2): the ledger rows on file after an inbox read that
-    posts and drops expiry items, whole, every field: the system's, one a post and one a drop, in
-    the order written, each resting on its company's latest snapshot and naming its item. They are
-    the rows the read wrote when the route wrote them, before the expiry rule wrote its own."""
-    with closing(connect(db_path)) as conn:
-        aapl, hgco = latest_snapshot(conn, "AAPL"), latest_snapshot(conn, "HGCO")
-    assert aapl is not None and hgco is not None
-    core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
-    for symbol in ("HGCO", "AAPL"):
-        client.put(f"/api/watchlists/{core['id']}/symbols/{symbol}", headers=HEADER)
-    ended = max(aapl.valid_until, hgco.valid_until)
-    later = datetime.combine(ended + timedelta(days=1), time(9, 30), NOW.tzinfo)
-    past = client_with_clock(later)
-    items = {i["symbol"]: i["id"] for i in past.get("/api/inbox").json()["items"]}
-    past.delete(f"/api/watchlists/{core['id']}/symbols/HGCO", headers=HEADER)
-    past.get("/api/inbox")
-
-    def row(n: int, kind: str, symbol: str, snapshot_id: int, summary: str) -> dict[str, Any]:
-        return {
-            "id": n,
-            "at": later.isoformat(),
-            "principal": "system",
-            "actor": None,
-            "client": None,
-            "kind": kind,
-            "symbol": symbol,
-            "refTable": "work_items",
-            "refId": items[symbol],
-            "snapshotId": snapshot_id,
-            "workItemId": items[symbol],
-            "summary": summary,
-        }
-
-    posted = "valuation review posted: expired"
-    assert past.get("/api/ledger").json()["entries"] == [
-        row(3, "drop", "HGCO", hgco.id, "dropped: HGCO is on no watchlist"),
-        row(2, "work-item", "HGCO", hgco.id, f"{posted} {hgco.valid_until}"),
-        row(1, "work-item", "AAPL", aapl.id, f"{posted} {aapl.valid_until}"),
-    ]
-    past.get("/api/inbox")  # a read that posts and drops nothing writes no row
-    assert len(past.get("/api/ledger").json()["entries"]) == 3
-
-
-def test_a_declined_item_over_the_api_from_the_owner(
-    client: TestClient, client_with_clock: Callable[[datetime], TestClient], db_path: Path
-) -> None:
-    """The Inbox view's Decline (spec 18.5): the owner declines an open item, pending or claimed,
-    the system's expiry item among them, with a reason kept as written. The item leaves the open
-    items the header counts, the ledger names the owner, and the next read's expiry rule posts no
-    second item for the same window, so the count stays down. A blank reason is refused 400 and a
-    closed item 409, each with the sentence the page shows."""
-    with closing(connect(db_path)) as conn:
-        snapshot = latest_snapshot(conn, "AAPL")
-    assert snapshot is not None
-    core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
-    client.put(f"/api/watchlists/{core['id']}/symbols/AAPL", headers=HEADER)
-    later = datetime.combine(snapshot.valid_until + timedelta(days=1), time(9, 30), NOW.tzinfo)
-    past = client_with_clock(later)
-    [expiry] = past.get("/api/inbox").json()["items"]
-    claimed = _post(past, "/api/inbox", {"symbol": "AAL", "mode": "full report"}, HEADER)
-    past.post("/api/inbox/claim", json={"itemId": claimed["id"]}, headers=AGENT)
-
-    def open_items() -> list[int]:
-        items = past.get("/api/inbox").json()["items"]
-        return [i["id"] for i in items if i["state"] in ("pending", "claimed")]
-
-    assert open_items() == [claimed["id"], expiry["id"]]
-    url = f"/api/inbox/{expiry['id']}"
-    r = past.patch(url, json={"action": "decline", "reason": "  "}, headers=HEADER)
-    assert (r.status_code, r.json()) == (400, {"detail": "a decline needs a reason"})
-    reason = "Held: no new filing since the window"
-    r = past.patch(url, json={"action": "decline", "reason": reason}, headers=HEADER)
-    assert r.status_code == 200, r.text
-    assert (r.json()["state"], r.json()["reason"], r.json()["finishedAt"]) == (
-        "declined",
-        reason,
-        later.isoformat(),
-    )
-    r = past.patch(
-        f"/api/inbox/{claimed['id']}",
-        json={"action": "decline", "reason": "not now"},
-        headers=HEADER,
-    )
-    assert (r.status_code, r.json()["state"], r.json()["claimedBy"]) == (
-        200,
-        "declined",
-        "claude-opus-5-5",
-    )
-    assert open_items() == []
-    assert len(past.get("/api/inbox").json()["items"]) == 2  # no second expiry item
-    r = past.patch(url, json={"action": "decline", "reason": "again"}, headers=HEADER)
-    assert (r.status_code, r.json()) == (409, {"detail": f"work item {expiry['id']} is declined"})
-    [declined] = [e for e in _ledger(past, "AAPL") if e["kind"] == "decline"]
-    assert (declined["principal"], declined["actor"], declined["workItemId"]) == (
-        "owner",
-        None,
-        expiry["id"],
-    )
-    assert declined["summary"] == f"declined: {reason}"
-
-
 def _snapshot_until(db_path: Path, symbol: str, valid_until: date) -> int:
     """A newer snapshot of ``symbol`` under the latest refresh, its window ending ``valid_until``,
     as a price refresh writes one in the same window or a full refresh a new window; its id."""
@@ -746,42 +592,73 @@ def _snapshot_until(db_path: Path, symbol: str, valid_until: date) -> int:
         )
 
 
-def test_a_declined_expiry_item_holds_for_its_window(
-    client: TestClient, client_with_clock: Callable[[datetime], TestClient], db_path: Path
+def test_the_inbox_read_posts_nothing_for_an_expired_watched_company(
+    client: TestClient, db_path: Path
 ) -> None:
-    """Declining an expiry item means something (spec 8, the store's expiry rule): the inbox read
-    again, the same day or a month on, posts no new item while AAPL's latest snapshot carries the
-    window the declined item was posted for, a newer snapshot in that window included; a new
-    snapshot whose window has also ended posts a new one."""
-    with closing(connect(db_path)) as conn:
-        snapshot = latest_snapshot(conn, "AAPL")
-    assert snapshot is not None
-    window = snapshot.valid_until
+    """Spec 2026-11-25 owner's inbox, 8: Fairband posts no work item by itself. AAPL is on a
+    watchlist and its latest snapshot's window ended before the clock's day, and a read of the
+    inbox posts no item and writes no ledger row of the system's."""
+    _snapshot_until(db_path, "AAPL", TODAY - timedelta(days=1))
     core = _post(client, "/api/watchlists", {"name": "Core"}, HEADER)
     client.put(f"/api/watchlists/{core['id']}/symbols/AAPL", headers=HEADER)
-    later = datetime.combine(window + timedelta(days=1), time(9, 30), NOW.tzinfo)
-    past = client_with_clock(later)
-    [expiry] = past.get("/api/inbox").json()["items"]
-    body = {"action": "decline", "reason": "nothing new to read"}
-    assert past.patch(f"/api/inbox/{expiry['id']}", json=body, headers=HEADER).status_code == 200
+    assert client.get("/api/inbox").json()["items"] == []
+    assert [e for e in _ledger(client, "AAPL") if e["principal"] == "system"] == []
 
-    def items(at: TestClient) -> list[tuple[int, str, str | None]]:
-        found = at.get("/api/inbox").json()["items"]
-        return [(i["id"], i["state"], i["expiryValidUntil"]) for i in found]
 
-    declined = [(expiry["id"], "declined", window.isoformat())]
-    assert items(past) == declined  # read again the same day
-    month_on = client_with_clock(later + timedelta(days=30))
-    assert items(month_on) == declined
-    _snapshot_until(db_path, "AAPL", window)  # a newer snapshot in the same window
-    assert items(month_on) == declined
-    new_window = window + timedelta(days=20)  # a new window, ended by the month-on read
-    new_id = _snapshot_until(db_path, "AAPL", new_window)
-    [posted, first] = month_on.get("/api/inbox").json()["items"]
-    assert (first["id"], first["state"]) == (expiry["id"], "declined")
-    assert (posted["state"], posted["origin"], posted["snapshotId"]) == (
-        "pending",
-        "expiry",
-        new_id,
+def test_the_inbox_read_takes_no_write_lock(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-25 owner's inbox, 7: the read writes nothing, so it answers while another
+    connection holds the write lock, as a refresh does all the while it writes."""
+    with closing(connect(db_path)) as other:
+        other.execute("BEGIN IMMEDIATE")
+        try:
+            answer = client.get("/api/inbox")
+        finally:
+            other.rollback()
+    assert answer.status_code == 200
+
+
+def test_a_declined_item_over_the_api_from_the_owner(client: TestClient) -> None:
+    """The Inbox view's Decline (spec 18.5): the owner declines an open item, pending or claimed,
+    with a reason kept as written. The item leaves the open items the header counts and the
+    ledger names the owner. A blank reason is refused 400 and a closed item 409, each with the
+    sentence the page shows."""
+    pending = _post(client, "/api/inbox", {"symbol": "AAPL", "mode": "valuation review"}, HEADER)
+    claimed = _post(client, "/api/inbox", {"symbol": "AAL", "mode": "full report"}, HEADER)
+    client.post("/api/inbox/claim", json={"itemId": claimed["id"]}, headers=AGENT)
+
+    def open_items() -> list[int]:
+        items = client.get("/api/inbox").json()["items"]
+        return [i["id"] for i in items if i["state"] in ("pending", "claimed")]
+
+    assert open_items() == [claimed["id"], pending["id"]]
+    url = f"/api/inbox/{pending['id']}"
+    r = client.patch(url, json={"action": "decline", "reason": "  "}, headers=HEADER)
+    assert (r.status_code, r.json()) == (400, {"detail": "a decline needs a reason"})
+    reason = "Held: no new filing since the window"
+    r = client.patch(url, json={"action": "decline", "reason": reason}, headers=HEADER)
+    assert r.status_code == 200, r.text
+    assert (r.json()["state"], r.json()["reason"], r.json()["finishedAt"]) == (
+        "declined",
+        reason,
+        AT,
     )
-    assert posted["expiryValidUntil"] == new_window.isoformat()
+    r = client.patch(
+        f"/api/inbox/{claimed['id']}",
+        json={"action": "decline", "reason": "not now"},
+        headers=HEADER,
+    )
+    assert (r.status_code, r.json()["state"], r.json()["claimedBy"]) == (
+        200,
+        "declined",
+        "claude-opus-5-5",
+    )
+    assert open_items() == []
+    r = client.patch(url, json={"action": "decline", "reason": "again"}, headers=HEADER)
+    assert (r.status_code, r.json()) == (409, {"detail": f"work item {pending['id']} is declined"})
+    [declined] = [e for e in _ledger(client, "AAPL") if e["kind"] == "decline"]
+    assert (declined["principal"], declined["actor"], declined["workItemId"]) == (
+        "owner",
+        None,
+        pending["id"],
+    )
+    assert declined["summary"] == f"declined: {reason}"

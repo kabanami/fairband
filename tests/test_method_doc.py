@@ -881,20 +881,14 @@ def test_a_secondary_valuation_holds_its_row() -> None:
         assert words in secondary, words
 
 
-def test_the_inbox_reads_the_held_record_s_state() -> None:
-    """Spec 2026-11-23 held reviewed value, 5.10: 14.6 says the inbox's expiry rule reads a
-    watched company's held record in place of its snapshot's window, the two notes, that one
-    item stands for one held record, and that a company on no watchlist gets none."""
-    reviews = _section(14)
-    held = reviews[reviews.index("### 14.6") : reviews.index("### 14.7")]
-    for words in (
-        "The inbox's expiry rule",
-        "in place of its latest snapshot's window (spec 5.10)",
-        '"expired early: override 36 no longer applies"',
-        "One item stands for one held review whatever becomes of it",
-        "a company on no watchlist gets no item",
-    ):
-        assert words in held, words
+def test_the_method_states_no_expiry_rule() -> None:
+    """Spec 2026-11-25 owner's inbox, 8 and 9: the expiry rule left, so the document states it
+    nowhere; 14.6 says Fairband posts no item for an expired value, and the glossary's work item
+    is posted by the owner or an agent, its states the five a stored row can hold."""
+    text = METHOD.read_text(encoding="utf-8")
+    assert "expiry rule" not in text
+    assert "Fairband posts no work item for an expired value" in text
+    assert "posted by the owner or an agent; pending, claimed, done, declined or dropped" in text
 
 
 def test_the_page_s_line_and_the_research_tab_s_list() -> None:

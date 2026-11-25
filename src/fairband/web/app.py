@@ -63,10 +63,10 @@ A write names its writer (spec 2026-11-06 Tier 2, section 7; ``identity``): an a
 ``X-Fairband-Client``, its client's name and version; a request without the principal header is
 the owner's. An agent's write without an actor is a 400, "identify first: the model identifier
 you run as", and any other principal a 400. The agent routes record each write in the ledger
-under its writer; the system's own writes, such as an expiry item posted when the inbox is read,
-are the principal ``system``, which no request can name. The override and review routes
-(``reviews_api``) take an agent's override or drop, an agent's write alone, and recompute the
-company's review over its applied overrides.
+under its writer; the system's own writes, such as an override a refresh drops, are the principal
+``system``, which no request can name. The override and review routes (``reviews_api``) take an
+agent's override or drop, an agent's write alone, and recompute the company's review over its
+applied overrides.
 
 D11, for a server bound to 127.0.0.1: ``TrustedHostMiddleware`` answers 400 to a request whose
 ``Host`` is neither ``127.0.0.1`` nor ``localhost`` (any port), so a page on another name that

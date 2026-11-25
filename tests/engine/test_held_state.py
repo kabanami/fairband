@@ -55,12 +55,6 @@ def test_the_three_reasons_read_as_their_sentences() -> None:
         reading=229.25,
         reading_refusal=None,
         reading_line=None,
-        # the reasons' short forms, as an inbox item's note gives the first (spec 5.10)
-        notes=(
-            "a newer period is on file",
-            "override 36 no longer applies",
-            "computed again, the review gives $229.25",
-        ),
     )
 
 
@@ -145,9 +139,10 @@ def test_a_secondary_valuation_s_state_and_its_two_reasons() -> None:
     }
     assert secondary_state(**facts) == HeldState("current", None, (), None, None, None)
     valued = secondary_state(**facts | {"route_value": 12.5})
-    assert valued.notes == ("the route now values the company",)
-    refused = _state(reading_refusal="no positive trailing earnings")
-    assert refused.notes == ("computed again, the review gives no value",)
+    assert (valued.state, valued.reasons) == (
+        "expired-early",
+        ("The route now values the company, at $12.50.",),
+    )
     assert secondary_state(**facts | {"today": date(2027, 2, 2)}).state == "expired"
     newer = secondary_state(**facts | {"latest_period": date(2026, 12, 26)})
     assert (newer.state, newer.reasons) == (

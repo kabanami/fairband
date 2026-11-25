@@ -31,7 +31,7 @@ from fairband.launch.command import Opener
 from fairband.launch.settings import write_launch_file
 from fairband.policy import Policy
 from fairband.store.db import connect, transaction
-from fairband.store.inbox import complete_item, decline_item, drop_item, post_item, work_item
+from fairband.store.inbox import complete_item, decline_item, post_item, work_item
 from fairband.store.launches import STOPPED, InFlight, State, insert_launch, launch, move_launch
 from fairband.store.ledger import OWNER
 from fairband.web.app import create_app
@@ -622,8 +622,9 @@ def test_a_launch_for_a_finished_item_is_a_409_and_runs_nothing(
             complete_item(conn, item_id, 1, NOW)
         elif state == "declined":
             decline_item(conn, item_id, "no consensus on file", NOW)
-        else:
-            drop_item(conn, item_id, NOW)
+        else:  # a row the expiry rule dropped before it left (spec 2026-11-25 owner's inbox, 8)
+            conn.execute("UPDATE work_items SET state = 'dropped' WHERE id = ?", (item_id,))
+            conn.commit()
     _refused(_launch(served, {"itemId": item_id}), 409, f"item {item_id} is {state}")
     assert runner.ran == [] and _rows(db_path) == []
 

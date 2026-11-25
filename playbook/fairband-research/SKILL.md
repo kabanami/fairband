@@ -79,8 +79,8 @@ that item instead.
 A full report covers the business, the industry and the value. A valuation review re-values the
 company and reuses the newest full report for the business and the industry.
 
-An item of origin `expiry` is a company whose validity window has ended. Step 3's refresh renews
-it, as it renews every company's.
+An item of origin `expiry` is one Fairband posted itself under a rule that no longer runs. Work it
+as a valuation review: step 3's refresh renews the company, as it renews every company's.
 
 ### 3. Read the company
 

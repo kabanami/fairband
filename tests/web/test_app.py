@@ -2260,9 +2260,9 @@ def test_the_meter_says_the_ratio_and_the_values_name_once() -> None:
 
 
 def test_the_drawer_is_read_again_when_a_run_ends() -> None:
-    """A run may follow the drawer's company's review, post its expiry item or drop an override
-    (method 14.6): when a run ends, the drawer's company is read again in place, as the report
-    page is (controls.js's followRuns)."""
+    """A run may follow the drawer's company's review or drop an override (method 14.6): when a
+    run ends, the drawer's company is read again in place, as the report page is (controls.js's
+    followRuns)."""
     _in_order(
         _function(_static_file("controls.js"), "followRuns"), "P.reload(true);", "P.reloadDrawer();"
     )

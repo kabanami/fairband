@@ -1,16 +1,15 @@
 """The agent routes (spec 2026-11-06 Tier 2, sections 7 to 9 and 16): the work inbox, the research
 records and the ledger.
 
-``GET /api/inbox`` runs the expiry rule first (``fairband.store.inbox.post_expiry_items``), as the
-system's write, which writes its own ledger rows, then lists the items newest first, or those in
-``state``, each with ``reportRevision``, the revision of the report a done item was completed
-with (``None`` without a report or its row; 18.5, plan 4), and ``launch``, an open item's newest
-launch as ``GET /api/launches/{id}`` answers it (``launch_api.launch_json``, read at the clock's
-time), ``None`` without one and for an item that is closed. Beside the items it answers
-``launchReady``, whether launching is set up, as the company detail does: the launch file in the
-config folder, read at each request (``launch.settings``). The Inbox view's row draws Open Claude
-Code and the launch's line from the two (B-210). ``POST /api/inbox`` posts an item for
-the company, its origin the writer's principal and its snapshot the company's latest.
+``GET /api/inbox`` writes nothing (spec 2026-11-25 owner's inbox, 8): it lists the items newest
+first, or those in ``state``, each with ``reportRevision``, the revision of the report a done
+item was completed with (``None`` without a report or its row; 18.5, plan 4), and ``launch``, an
+open item's newest launch as ``GET /api/launches/{id}`` answers it (``launch_api.launch_json``,
+read at the clock's time), ``None`` without one and for an item that is closed. Beside the items
+it answers ``launchReady``, whether launching is set up, as the company detail does: the launch
+file in the config folder, read at each request (``launch.settings``). The Inbox view's row draws
+Open Claude Code and the launch's line from the two (B-210). ``POST /api/inbox`` posts an item
+for the company, its origin the writer's principal and its snapshot the company's latest.
 ``POST /api/inbox/claim`` claims the named item, or the oldest pending one when it names none or
 has no body, for the agent; ``PATCH /api/inbox/{id}`` completes it with a published report of its
 company, or declines it with a reason. Each company's notes, findings, kill criteria and news
@@ -59,7 +58,6 @@ from fairband.store.inbox import (
     complete_item,
     decline_item,
     oldest_pending,
-    post_expiry_items,
     post_item,
     work_item,
     work_items,
@@ -230,12 +228,10 @@ def add_agent_routes(
 
     @app.get("/api/inbox")
     def inbox(state: State | None = None) -> dict[str, Any]:
-        """The items, newest first, after the expiry rule has run on the clock's day; the done
-        items' report revisions read in one query, each open item's newest launch in one of its
-        own."""
+        """The items, newest first; the done items' report revisions read in one query, each open
+        item's newest launch in one of its own."""
         at = clock()
         with closing(conn_factory()) as conn:
-            post_expiry_items(conn, at.date(), at)  # its ledger rows written with it
             items = work_items(conn, state)
             found = revisions_by_id(conn, [i.report_id for i in items if i.report_id is not None])
             return {

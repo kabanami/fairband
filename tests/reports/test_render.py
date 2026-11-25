@@ -686,6 +686,15 @@ def test_the_glossary_s_gap_is_the_agent_s() -> None:
     )
 
 
+def test_the_glossary_s_work_item_is_posted_by_the_owner_or_an_agent() -> None:
+    """Spec 2026-11-25 owner's inbox, 9: the expiry rule left, so a work item is posted by the
+    owner or an agent; a stored row may still hold the state dropped."""
+    assert GLOSSARY["Work item"] == (
+        "A request in the inbox for an agent's research on one company, a valuation review or a "
+        "full report, posted by the owner or an agent; pending, claimed, done, declined or dropped"
+    )
+
+
 def test_the_glossary_counts_the_engine_s_quality_warnings() -> None:
     """Spec 2026-11-13 8: ``share-count-gap`` is the twelfth quality warning, and the glossary's
     count is the engine's."""
