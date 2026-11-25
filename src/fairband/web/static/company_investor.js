@@ -10,7 +10,10 @@
    newest. The word is the page's own: it never travels to the server, and a change of it never
    reads the tab again (company.js, load); a press of the switch replaces the hash
    (FairbandPage.show), as a tab's button does. A view with nothing on file draws its sentence,
-   No earnings call on file. or No filing on file.
+   No earnings call on file. or No filing on file. Where the read's callsServed is false (the
+   plan of the server's FMP key serves no earnings call: Premium), a company with no call on
+   file draws Earnings calls need FMP's Ultimate plan. in the first one's place; calls the store
+   holds from another plan's time draw as on any plan.
 
    The Earnings calls view (7.3, 7.4): at its left the list of calls, under one head a fiscal
    year, newest first, the newest five years and Show all <n> calls where there are more, the call
@@ -142,13 +145,18 @@
 
   /* The Earnings calls view on `answer` at the address's word `word` (7.3, 7.4): the list and the
      reader of the call shown, side by side; a company with no call on file draws its sentence
-     and no reader. A word that names no call on file is put right (putRight). A change of call
+     and no reader: where the read's callsServed is false, the plan of the server's key serving
+     no earnings call, the sentence of what they need. A word that names no call on file is put
+     right (putRight). A change of call
      from the one the reader drew last, of the same company, takes the page to its top and
      empties the find box; another company's starts with five fiscal years and an empty box. */
   function calls(answer, word) {
     var list = answer.calls;
     if (word != null && !named(list, word)) putRight(answer.symbol, word);
-    if (!list.length) return none('No earnings call on file.');
+    if (!list.length) {
+      return none(answer.callsServed === false ?
+        'Earnings calls need FMP\'s Ultimate plan.' : 'No earnings call on file.');
+    }
     var call = chosen(list, word);
     var key = keyOf(answer.symbol, call);
     if (held.symbol !== answer.symbol) {

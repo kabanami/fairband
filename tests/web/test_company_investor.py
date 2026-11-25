@@ -48,6 +48,7 @@ SCRIPTS = (STATIC / "company.js", STATIC / "company_investor.js")
 DRIVER = Path(__file__).parent / "investor.mjs"
 TAB = "investor-relations"
 NO_CALL = "No earnings call on file."
+NEEDS_ULTIMATE = "Earnings calls need FMP's Ultimate plan."
 NO_FILING = "No filing on file."
 NO_WORDS = "No transcript on file for this call."
 HEADER = {"X-Fairband-Request": "1"}
@@ -191,6 +192,31 @@ def test_a_company_with_a_profile_and_nothing_else_draws_its_two_sentences() -> 
     [sentence] = classed(filings, "app-ir__none")
     assert sentence["type"] == "p" and sentence["props"]["className"] == "body app-ir__none"
     assert len(filings["props"]["children"]) == 2  # the row and the view's sentence
+
+
+def test_on_a_plan_that_serves_no_earnings_call_the_view_says_what_they_need() -> None:
+    """The read's ``callsServed`` is false where the plan of the server's key serves no earnings
+    call (Premium, ``fairband.plans``). A company with no call on file then draws "Earnings calls
+    need FMP's Ultimate plan." in the place of "No earnings call on file.", alone under the row;
+    the Filings view draws as on any plan. A company whose calls the store holds from another
+    plan's time draws its list and its reader, and no sentence. An answer without the field reads
+    as served."""
+    unserved = answers.profile_only_investor() | {"callsServed": False}
+    for word in (None, "2026Q4"):
+        calls = _draw(unserved, word)
+        assert _sentences(calls) == [NEEDS_ULTIMATE]
+        assert _switch(calls) == [("Earnings calls", "true"), ("Filings", "false")]
+        assert len(calls["props"]["children"]) == 2  # the row and the view's sentence
+    [sentence] = classed(_draw(unserved), "app-ir__none")
+    assert sentence["type"] == "p" and sentence["props"]["className"] == "body app-ir__none"
+    assert _sentences(_draw(unserved, "filings")) == [NO_FILING]
+    held = answers.investor() | {"callsServed": False}
+    tree = _draw(held)
+    assert _sentences(tree) == []
+    assert tree["props"]["children"][1]["props"]["className"] == "app-ir__calls"
+    older = answers.profile_only_investor()
+    del older["callsServed"]
+    assert _sentences(_draw(older)) == [NO_CALL]
 
 
 def test_a_view_with_data_draws_no_sentence() -> None:

@@ -20,6 +20,7 @@ from support.pe_history import report_in
 from vendor_double import FIXTURES, FMP_KEY
 
 from fairband.config import Keys
+from fairband.plans import PREMIUM, ULTIMATE
 from fairband.refresh import passthrough as passthrough_module
 from fairband.refresh.backfill import backfill_statement_facts
 from fairband.refresh.clients import build_clients, build_fmp
@@ -36,6 +37,7 @@ from fairband.refresh.passthrough import (
     PE_RATES,
     PE_YEARS,
     SERIES_KIND,
+    NotServed,
     Passthrough,
     PassthroughBusy,
     filing_report_usable,
@@ -863,3 +865,69 @@ def test_a_call_that_waits_past_the_bound_is_busy(
     fetched = held.passthrough.fetch("transcript", "ACME", {"year": "2025", "quarter": "4"})
     assert fetched["transcript"].reused is False and "2025-Q4" in held.called
     assert not any(f.reused for f in held.passthrough.fetch("pe-history", "ACME", {}).values())
+
+
+# --- the plan the key is on (``fairband.plans``) ------------------------------------------------
+
+EARNINGS_CALLS = "FMP's Premium plan does not serve earnings calls"
+
+
+def _on_premium(env: Env) -> Passthrough:
+    """The pass-through over the same router, its adapter on the Premium plan."""
+    clients = env.clients
+    fmp = Fmp(clients.fmp._http, FMP_KEY, PREMIUM)
+    return Passthrough(fmp, env.connect, env.policy, env.clock, clients.secrets)
+
+
+@pytest.mark.parametrize(("kind", "params"), [("transcript", Q3), ("transcript-dates", {})])
+def test_on_premium_an_earnings_call_is_refused_with_no_call(
+    env: Env, kind: str, params: dict[str, str]
+) -> None:
+    """FMP serves no earnings call on Premium: the kind is refused with the plan's sentence,
+    nothing called and nothing stored, where on Ultimate it is fetched."""
+    passthrough = _on_premium(env)
+    assert passthrough.plan is PREMIUM
+    with pytest.raises(NotServed) as refused:
+        passthrough.fetch(kind, "ACME", params)
+    assert str(refused.value) == EARNINGS_CALLS
+    assert env.router.calls == {}
+    with closing(env.connect()) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM vendor_responses").fetchone()[0] == 0
+    ultimate = _passthrough(env)
+    assert ultimate.plan is ULTIMATE
+    assert ultimate.fetch(kind, "ACME", params)[kind].reused is False
+
+
+def test_on_premium_a_stored_transcript_is_refused_all_the_same(env: Env) -> None:
+    """A copy fetched on Ultimate inside the reuse window: the pass-through on Premium answers
+    the plan's sentence and reads no store, so the kind answers one way on a plan."""
+    _passthrough(env).fetch("transcript", "ACME", Q3)
+    with pytest.raises(NotServed):
+        _on_premium(env).fetch("transcript", "ACME", Q3)
+    assert env.router.calls == {"transcript": 1}
+
+
+def test_on_premium_a_bad_parameter_keeps_its_own_sentence(env: Env) -> None:
+    passthrough = _on_premium(env)
+    with pytest.raises(ValueError, match="a transcript needs year and quarter"):
+        passthrough.fetch("transcript", "ACME", {})
+    with pytest.raises(ValueError, match="unknown vendor kind: calls"):
+        passthrough.fetch("calls", "ACME", {})
+
+
+def test_on_premium_every_other_kind_is_fetched(env: Env) -> None:
+    passthrough = _on_premium(env)
+    asked = {
+        "news": {},
+        "segments": {},
+        "insider-trades": {},
+        "dcf": {},
+        "filings": WINDOW,
+        "filing-reports": {},
+        "filing-report": REPORT,
+        SERIES_KIND: {},
+    }
+    assert set(asked) == {*KINDS, *FILING_KINDS, SERIES_KIND} - {"transcript", "transcript-dates"}
+    for kind, params in asked.items():
+        fetched = passthrough.fetch(kind, "ACME", params)
+        assert fetched and not any(part.reused for part in fetched.values()), kind

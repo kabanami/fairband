@@ -177,6 +177,7 @@ def test_the_tab_s_read_whole(client: TestClient, db_path: Path) -> None:
         "quote": page_fmp.head_quote(pages.QUOTE[0]),
         "nextEarnings": "2027-01-14",
         "calls": page_investor.calls(pages.CALL_DATES, pages.EARNINGS),
+        "callsServed": True,
         "filings": {
             "from": "2025-11-01",
             "to": "2026-11-01",
@@ -336,6 +337,7 @@ def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: 
         "quote": NO_QUOTE,
         "nextEarnings": None,
         "calls": [],
+        "callsServed": True,
         "filings": None,
     }
 
@@ -804,6 +806,51 @@ def test_a_failed_vendor_call_is_a_502_scrubbed(
         status, detail = _refused(response)
         assert status == 502 and detail.startswith(starts), detail
         assert KEY not in response.text
+
+
+# --- the plan the key is on (``fairband.plans``) ----------------------------------------------
+
+EARNINGS_CALLS = "FMP's Premium plan does not serve earnings calls"
+
+
+def test_the_tab_s_read_says_whether_the_plan_serves_earnings_calls(
+    on_premium: TestClient, with_passthrough: TestClient, client: TestClient, db_path: Path
+) -> None:
+    """On Premium a company has no list of calls, and ``callsServed`` is false, so the page can
+    say why. On Ultimate it is true, and without a key too: nothing there says the plan."""
+    _profile(db_path)
+    body = _get(on_premium, TAB)
+    assert (body["calls"], body["callsServed"]) == ([], False)
+    assert _get(with_passthrough, TAB)["callsServed"] is True
+    assert _get(client, TAB)["callsServed"] is True
+
+
+def test_on_premium_the_calls_the_store_holds_are_still_read(
+    on_premium: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """A key that moved from Ultimate to Premium: the store holds a list of calls and a
+    transcript with words. The tab lists the calls and reads that transcript from the store; a
+    call the store holds no words for answers 402 with the plan's sentence, and FMP is never
+    asked."""
+    _profile(db_path)
+    _earnings(db_path)
+    _calls(db_path)
+    _transcript(db_path, pages.TRANSCRIPT, AT - timedelta(days=30))
+    body = _get(on_premium, TAB)
+    assert (len(body["calls"]), body["callsServed"]) == (5, False)
+    assert on_premium.get(VENDOR_READS[0]).status_code == 200  # fiscal 2026 Q3, with words
+    refused = on_premium.get(f"{CALL}?year=2026&quarter=2")
+    assert _refused(refused) == (402, EARNINGS_CALLS)
+    assert vendor.paths == []
+
+
+def test_on_premium_the_filings_read_goes_through_the_pass_through(
+    on_premium: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    _profile(db_path)
+    _answering(vendor, OLDER)
+    assert len(_get(on_premium, FILINGS, to="2025-10-31")["rows"]) == 2
+    assert vendor.paths == [FILING_LIST]
 
 
 # --- the fetch's copies ----------------------------------------------------------------------

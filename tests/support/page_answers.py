@@ -114,6 +114,7 @@ INVESTOR: dict[str, Any] = {
     "quote": page_fmp.head_quote(_ROW),
     "nextEarnings": None if _NEXT is None else _NEXT["day"],
     "calls": page_investor.calls(pages.CALL_DATES, pages.EARNINGS),
+    "callsServed": True,
     "filings": {
         "from": _WINDOW[0].isoformat(),
         "to": _WINDOW[1].isoformat(),
@@ -369,6 +370,7 @@ def profile_only_investor() -> dict[str, Any]:
         "quote": page_fmp.head_quote(None),
         "nextEarnings": None,
         "calls": page_investor.calls(None, None),
+        "callsServed": True,
         "filings": None,
     }
 

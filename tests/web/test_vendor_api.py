@@ -319,6 +319,35 @@ def test_busy_pass_throughs_are_503(
     assert vendor.paths.count("/stable/earning-call-transcript") == 4
 
 
+# --- the plan the key is on (``fairband.plans``) ----------------------------------------------
+
+EARNINGS_CALLS = "FMP's Premium plan does not serve earnings calls"
+
+
+@pytest.mark.parametrize("path", ["transcript/ACME?year=2026&quarter=3", "transcript-dates/acme"])
+def test_on_premium_an_earnings_call_is_a_402_with_no_call(
+    on_premium: TestClient, vendor: Vendor, db_path: Path, path: str
+) -> None:
+    """FMP serves no earnings call on Premium: the two kinds answer 402 with the plan's sentence,
+    which the agents' ``transcript`` and ``transcript_dates`` tools hand on as their refusal;
+    nothing is called and nothing stored."""
+    response = on_premium.get(f"/api/vendor/{path}")
+    assert (response.status_code, response.json()) == (402, {"detail": EARNINGS_CALLS})
+    assert vendor.paths == []
+    with closing(connect(db_path)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM vendor_responses").fetchone()[0] == 0
+
+
+def test_on_premium_the_other_kinds_answer_and_a_bad_parameter_keeps_its_400(
+    on_premium: TestClient, vendor: Vendor
+) -> None:
+    for kind in ("news", "segments", "insider-trades"):
+        assert on_premium.get(f"/api/vendor/{kind}/ACME").status_code == 200, kind
+    bad = on_premium.get("/api/vendor/transcript/ACME", params={"year": "2026"})
+    assert (bad.status_code, bad.json()["detail"]) == (400, "a transcript needs year and quarter")
+    assert "/stable/earning-call-transcript" not in vendor.paths
+
+
 # --- python -m fairband serve ----------------------------------------------------------------
 
 
@@ -379,6 +408,59 @@ def test_serve_paces_the_runs_and_the_pass_through_on_one_limiter(
     # The pass-through's call and the run's screener call, which found no fixture.
     assert limiter.totals().calls == 2
     assert paces == [2850, 600]
+
+
+def test_serve_on_premium_paces_under_the_plans_cap_and_asks_no_earnings_call(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vendor: Vendor
+) -> None:
+    """``serve`` reads the plan with the key (``FAIRBAND_FMP_PLAN``, or the keys file). On Premium
+    its limiter starts at the plan's cap, 712 calls a minute, under the policy's 2,850; a run
+    paces it to its policy held under that cap, so a pace saved under the cap stands and one
+    saved over it does not; and the pass-through refuses an earnings call with no call."""
+    monkeypatch.setenv("FAIRBAND_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("FAIRBAND_FMP_KEY", KEY)
+    monkeypatch.setenv("FAIRBAND_FMP_PLAN", "premium")
+    limiters: list[RateLimiter | None] = []
+    plans: list[str] = []
+    build_clients, build_fmp = cli.build_clients, cli.build_fmp
+
+    def run_clients(keys: Keys, policy: Policy, *, limiter: RateLimiter | None = None) -> Any:
+        plans.append(keys.plan.name)
+        return build_clients(keys, policy, transport=vendor.transport, limiter=limiter)
+
+    def passthrough_client(
+        keys: Keys, policy: Policy, *, limiter: RateLimiter | None = None
+    ) -> Fmp:
+        limiters.append(limiter)
+        return build_fmp(keys, policy, transport=vendor.transport, limiter=limiter)
+
+    paces: list[float] = []
+    answers: list[httpx.Response] = []
+
+    def run_app(app: Any, **kwargs: Any) -> None:
+        with TestClient(app, base_url=HOST, headers=HEADER) as client:
+            answers.append(client.get("/api/vendor/transcript/ACME", params=Q3))
+            [limiter] = limiters
+            assert limiter is not None
+            paces.append(limiter.calls_per_minute)
+            for pace in (600, 5000):
+                with closing(connect(tmp_path / "data" / "fairband.db")) as conn:
+                    write_settings(conn, {"refresh.fmp_calls_per_minute": pace}, None, NOW)
+                answers.append(client.post("/api/refresh", json={"kind": "full"}))
+                _join_runs()
+                paces.append(limiter.calls_per_minute)
+
+    monkeypatch.setattr(cli, "build_clients", run_clients)
+    monkeypatch.setattr(cli, "build_fmp", passthrough_client)
+    monkeypatch.setattr(uvicorn, "run", run_app)
+    assert cli.main(["serve"]) == 0
+    transcript, *started = answers
+    assert (transcript.status_code, transcript.json()) == (402, {"detail": EARNINGS_CALLS})
+    assert [answer.status_code for answer in started] == [200, 200]
+    assert plans == ["premium", "premium"]
+    assert paces == [712, 600, 712]
+    assert "/stable/earning-call-transcript" not in vendor.paths
 
 
 def test_serve_builds_the_pass_through_on_fmp_alone_and_closes_it(

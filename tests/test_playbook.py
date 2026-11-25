@@ -35,8 +35,9 @@ from fairband.launch.command import TEST_PROMPT
 from fairband.launch.settings import DEFAULTS
 from fairband.mcp.client import NOT_RUNNING, FairbandClient
 from fairband.mcp.server import TOOL_NAMES, build_server
+from fairband.plans import PREMIUM
 from fairband.policy import load_policy
-from fairband.refresh.passthrough import BUSY
+from fairband.refresh.passthrough import BUSY, NOT_SERVED
 from fairband.refresh.rates import NO_RATE
 from fairband.refresh.reviews import OFF_ROUTE
 from fairband.reports.charts import BAND_TITLE
@@ -3467,3 +3468,23 @@ def test_the_tools_reference_says_when_a_held_review_has_no_price_needs() -> Non
         "`priceNeeds` is also `null` for a held review whose result holds `held_as_made`" in tools
     )
     assert "make the review again to read it" in tools
+
+
+def test_the_playbook_covers_a_plan_that_serves_no_earnings_call() -> None:
+    """FMP serves the earnings calls on its Ultimate plan alone (``fairband.plans``). On a Premium
+    key the two transcript tools answer the pass-through's sentence as their refusal; step 5 tells
+    the agent to say so and read the press release, as for a call the vendor has no words for,
+    and the tools reference says what the two tools answer. The sentence is the server's."""
+    sentence = NOT_SERVED.format(plan=PREMIUM.label, what="earnings calls")
+    assert sentence == "FMP's Premium plan does not serve earnings calls"
+    five = _flat(_steps(_frontmatter(_read(SKILL))[1])[5])
+    assert (
+        "The owner's FMP plan may serve no earnings call. `transcript_dates` and `transcript`"
+        f' then answer `refused`, "{sentence}". Do not ask again: say in the section that the'
+        " plan serves no transcript, and read the press release as above."
+    ) in five
+    tools = _flat(_read(TOOLS))
+    assert (
+        "Where the owner's key is on the Premium plan, `transcript` and `transcript_dates` answer"
+        f' `refused`, "{sentence}", with `status` 402 and no call to FMP'
+    ) in tools

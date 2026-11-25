@@ -96,6 +96,14 @@ route of the app shares. What is bounded: at most ``PASSTHROUGH_SLOTS`` (four) v
 flight at once; a call that finds every slot taken waits for one at most ``PASSTHROUGH_WAIT_S``
 (ten seconds), holding its request's thread meanwhile, then raises ``PassthroughBusy`` (``BUSY``,
 a 503 on the route), nothing called or stored, and the agent tries again. A reuse takes no slot.
+
+The client is on the plan its key states (``Fmp.plan``, ``fairband.plans``). A kind with an
+endpoint that plan does not serve is refused, ``NotServed``, after its parameters are checked and
+before the store is read: on Premium ``transcript`` and ``transcript-dates``, "FMP's Premium plan
+does not serve earnings calls" (``NOT_SERVED``). Nothing is called and nothing stored, and a
+copy the store holds from another plan's time is not answered here, so a kind answers one way on
+a plan; the company page's own reads still show what the store holds
+(``fairband.web.company_api``).
 """
 
 import json
@@ -108,6 +116,7 @@ from datetime import date, datetime, timedelta
 from functools import partial
 from typing import Any
 
+from fairband.plans import Plan
 from fairband.policy import Policy
 from fairband.refresh.fetch import _years_before, unusable
 from fairband.refresh.rates import pair_of
@@ -148,6 +157,9 @@ NEWS_LIMIT_MAX = 100
 PASSTHROUGH_SLOTS = 4  # vendor calls in flight at once
 PASSTHROUGH_WAIT_S = 10.0  # the longest a call waits for a slot
 BUSY = "the pass-throughs are busy: four calls are in flight, try again"
+NOT_SERVED = "FMP's {plan} plan does not serve {what}"
+# What an endpoint a plan does not serve gives, in the sentence's words (``fairband.plans``).
+_UNSERVED = {"transcript": "earnings calls", "transcript-dates": "earnings calls"}
 FMP = "fmp"  # FMP's name in the store
 _USD = "USD"
 _KIND_LIST = ", ".join(KINDS[:-1]) + f" or {KINDS[-1]}"
@@ -155,6 +167,11 @@ _KIND_LIST = ", ".join(KINDS[:-1]) + f" or {KINDS[-1]}"
 
 class PassthroughBusy(Exception):
     """No slot freed within ``PASSTHROUGH_WAIT_S``: the message is ``BUSY``."""
+
+
+class NotServed(Exception):
+    """The plan of the pass-through's client serves no call of the kind asked: the message is
+    ``NOT_SERVED`` with the plan and what it does not serve."""
 
 
 @dataclass(frozen=True)
@@ -231,15 +248,26 @@ class Passthrough:
         """Close the vendor client."""
         self._fmp.close()
 
+    @property
+    def plan(self) -> Plan:
+        """The plan the vendor client's key is on (``fairband.plans``)."""
+        return self._fmp.plan
+
     def fetch(self, kind: str, symbol: str, params: Mapping[str, str]) -> dict[str, Fetched]:
         """The stored responses that answer ``kind`` for ``symbol`` (the store's exchange form), by
         part: ``product`` and ``geographic`` for ``segments``, ``dcf`` and ``levered`` for
         ``dcf``, ``closes``, ``quarters`` and, in another currency, ``rates`` for
         ``SERIES_KIND``, else the one part named ``kind``. Raises ``ValueError`` on an unknown kind
-        or a missing or bad parameter, before any call, ``PassthroughBusy`` when no slot frees in
-        time, and ``VendorError`` when a call fails."""
+        or a missing or bad parameter, before any call, then ``NotServed`` where the client's plan
+        does not serve one of the kind's endpoints, before the store is read and with no call,
+        ``PassthroughBusy`` when no slot frees in time, and ``VendorError`` when a call fails."""
         with closing(self._conn_factory()) as conn:
             calls = self._calls(conn, kind, symbol, params)
+            plan = self._fmp.plan
+            for call in calls:
+                if not plan.serves(call.endpoint):
+                    what = _UNSERVED.get(call.endpoint, f"its {kind} data")
+                    raise NotServed(NOT_SERVED.format(plan=plan.label, what=what))
             return {call.part: self._fetch(conn, call, symbol) for call in calls}
 
     def _fetch(self, conn: sqlite3.Connection, call: _Call, company: str) -> Fetched:

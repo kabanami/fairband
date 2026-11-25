@@ -20,7 +20,10 @@ them.
 The route may call a vendor, so a request carries ``X-Fairband-Request: 1`` as a write does,
 else 403 before anything else is read (``app``, D11). An unknown kind, a symbol that is not one or
 a missing or bad parameter is a 400 with its sentence; without a pass-through (the server has no
-FMP key) a 503, "no FMP key"; when no slot frees within ten seconds a 503, "the pass-throughs are
+FMP key) a 503, "no FMP key"; a kind the plan of the server's key does not serve
+(``fairband.plans``) a 402 with the plan's sentence, on Premium ``transcript`` and
+``transcript-dates``, "FMP's Premium plan does not serve earnings calls", nothing called and
+nothing stored; when no slot frees within ten seconds a 503, "the pass-throughs are
 busy: four calls are in flight, try again"; a failed vendor call a 502 with the vendor's sentence,
 scrubbed.
 
@@ -34,7 +37,14 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from fairband.policy.settings import exchange_symbol
-from fairband.refresh.passthrough import KINDS, Fetched, Passthrough, PassthroughBusy, unknown_kind
+from fairband.refresh.passthrough import (
+    KINDS,
+    Fetched,
+    NotServed,
+    Passthrough,
+    PassthroughBusy,
+    unknown_kind,
+)
 from fairband.vendors.http import VendorError
 
 NO_FMP_KEY = "no FMP key"
@@ -61,6 +71,8 @@ def add_vendor_routes(app: FastAPI, passthrough: Passthrough | None) -> None:
             parts = passthrough.fetch(kind, exchange_symbol(symbol), params)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
+        except NotServed as exc:
+            raise HTTPException(402, str(exc)) from None
         except PassthroughBusy as exc:
             raise HTTPException(503, str(exc)) from None
         except VendorError as exc:

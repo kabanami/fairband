@@ -11,6 +11,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from fairband.plans import PREMIUM
 from fairband.policy import Policy
 from fairband.refresh.passthrough import Passthrough
 from fairband.store.db import connect
@@ -91,5 +92,15 @@ def with_passthrough(
     tmp_path: Path, db_path: Path, policy: Policy, passthrough: Passthrough
 ) -> Iterator[TestClient]:
     """A pass-through over FMP."""
+    with passthrough_client(tmp_path, db_path, policy, passthrough) as client:
+        yield client
+
+
+@pytest.fixture
+def on_premium(tmp_path: Path, db_path: Path, policy: Policy, fmp: Fmp) -> Iterator[TestClient]:
+    """A pass-through over FMP whose key is on the Premium plan (``fairband.plans``), on the
+    transport and the database of ``with_passthrough``."""
+    premium = Fmp(fmp._http, KEY, PREMIUM)
+    passthrough = Passthrough(premium, lambda: connect(db_path), policy, lambda: NOW, (KEY,))
     with passthrough_client(tmp_path, db_path, policy, passthrough) as client:
         yield client

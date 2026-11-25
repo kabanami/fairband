@@ -118,8 +118,9 @@ def make_refresh(
 ) -> Refresh:
     """The server worker's next run: under the effective policy read now (the file and the stored
     overlay, spec 2026-11-04 8.8), so a setting saved since the last run is this one's, with an
-    FMP client of its own built from that policy (the pace is a setting). Given the server's
-    ``limiter``, which the pass-through shares, the run paces it to that policy and its FMP client
+    FMP client of its own built from that policy (the pace is a setting) on the plan the keys
+    state. Given the server's ``limiter``, which the pass-through shares, the run paces it to that
+    policy under the plan's cap (``Plan.pace``) and its FMP client
     takes its slots from it. Without an FMP key it builds no client and the run refuses every kind
     but a revalue. The run loads ``moat``, the table the server read as it started, the packaged
     file without one. ``Refresh.close`` closes the client. Raises ``ValueError`` when the stored
@@ -128,7 +129,7 @@ def make_refresh(
         policy = effective_policy(conn)
     if keys is not None and keys.fmp is not None:
         if limiter is not None:
-            limiter.set_pace(policy.refresh.fmp_calls_per_minute)
+            limiter.set_pace(keys.plan.pace(policy.refresh.fmp_calls_per_minute))
         fmp, secrets = build_clients(keys, policy, limiter=limiter)
     else:
         fmp, secrets = None, ()
@@ -150,7 +151,8 @@ def _serve(args: argparse.Namespace) -> int:
     One limiter paces every FMP call of both: made at the pace of the effective policy as the
     server starts (the file's, when a stored setting no longer applies, which the worker then
     refuses), paced again by each run to the policy it runs under, and read by the pass-through,
-    whose reuse window is the start's.
+    whose reuse window is the start's. Each pace is held under the cap of the plan the keys state
+    (``fairband.plans``), read once as the server starts, and both clients are on that plan.
     Without an FMP key the worker runs a revalue only and refuses the other kinds, and the
     pass-through route answers 503. With or without one the app fetches a company's logo
     (``vendors.logos.fetch_logo``): FMP's image host takes no key, and the fetch goes through
@@ -174,7 +176,7 @@ def _serve(args: argparse.Namespace) -> int:
         return connect(settings.db_path)
 
     keys = _keys(settings)
-    limiter = RateLimiter(started.refresh.fmp_calls_per_minute, utcnow, time.sleep)
+    limiter = RateLimiter(keys.plan.pace(started.refresh.fmp_calls_per_minute), utcnow, time.sleep)
     passthrough = None
     if keys.fmp is None:
         logger.warning("%s; the server runs a revalue only", MissingKey("fmp"))

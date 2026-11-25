@@ -6,6 +6,12 @@ fresh and stored whole, then a thirty-second, the newest earnings call's transcr
 store holds no copy of it with words. Every call is FMP's (spec 2026-11-19 8.10): the answers of
 the provider ``gf`` a fetch stored before stay in the store, unread.
 
+The counts are those of a key on FMP's Ultimate plan. The fetch asks no endpoint the plan of its
+adapter does not serve (``Fmp.plan``, ``fairband.plans``): on Premium neither the list of earnings
+calls, ``transcript-dates``, nor the newest call's transcript, so thirty calls, and no refusal of
+FMP's is stored. An endpoint left out is neither called, reused nor failed; what the store holds
+of it from another plan's time stays, unread by the fetch.
+
 ``fetch_company`` refuses to run inside a transaction: vendor calls run outside write transactions.
 It takes the endpoints in a fixed order. For each one it:
 
@@ -312,7 +318,8 @@ def filings_window(today: date) -> tuple[date, date]:
 
 def _calls(fmp: Fmp, symbol: str, today: date) -> list[_Call]:
     """The calls for ``symbol`` in fetch order: the fifteen the engine reads, then the company
-    page's sixteen, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``."""
+    page's sixteen, in the order of ``PAGE_ENDPOINTS`` with the params of ``page_params``; less
+    the endpoints the adapter's plan does not serve (``fairband.plans``)."""
     start = _years_before(today, PRICE_YEARS)
 
     def on_fmp(
@@ -349,7 +356,7 @@ def _calls(fmp: Fmp, symbol: str, today: date) -> list[_Call]:
         _FILINGS: partial(fmp.filings, symbol, *filings_window(today)),
     }
     as_reported = {"period": "annual", "limit": str(STATEMENT_YEARS)}
-    return [
+    calls = [
         statement("income", "annual", STATEMENT_YEARS),
         statement("balance", "annual", STATEMENT_YEARS),
         statement("cashflow", "annual", STATEMENT_YEARS),
@@ -376,6 +383,7 @@ def _calls(fmp: Fmp, symbol: str, today: date) -> list[_Call]:
             for endpoint in PAGE_ENDPOINTS
         ),
     ]
+    return [call for call in calls if fmp.plan.serves(call.endpoint)]
 
 
 def _newest_transcript(conn: sqlite3.Connection, fmp: Fmp, symbol: str) -> Iterator[_Call]:
@@ -384,8 +392,11 @@ def _newest_transcript(conn: sqlite3.Connection, fmp: Fmp, symbol: str) -> Itera
     ``transcript-dates`` answer names a call (``newest_call``) and no usable stored ``transcript``
     answer of its fiscal year and quarter, under the pass-through's params, holds words
     (``has_words``). With no reuse window: a call the vendor holds no words for yet is asked again
-    at every fetch, and a call the store holds words for is never asked again. None otherwise. It
-    reads every stored answer as data and raises on none."""
+    at every fetch, and a call the store holds words for is never asked again. None otherwise,
+    and none on a plan that serves no transcript (``fairband.plans``), whatever list the store
+    holds. It reads every stored answer as data and raises on none."""
+    if not fmp.plan.serves(TRANSCRIPT):
+        return
     listed = latest_response(conn, "fmp", _CALL_DATES, symbol, page_params(_CALL_DATES, symbol))
     newest = None if listed is None else newest_call(_parsed(conn, listed.id))
     if newest is None:

@@ -257,6 +257,10 @@ come from `quarters`. The press release is an exhibit of an 8-K, or of a 6-K for
 `filings(symbol, "8-K")` lists the 8-Ks, `filings(symbol, "6-K")` a foreign filer's 6-Ks, and a
 filing's `link` opens its exhibits.
 
+The owner's FMP plan may serve no earnings call. `transcript_dates` and `transcript` then answer
+`refused`, "FMP's Premium plan does not serve earnings calls". Do not ask again: say in the
+section that the plan serves no transcript, and read the press release as above.
+
 Then build the seven parts:
 
 1. **The verdict.** The call's date and quarter. Whether it confirmed, changed or broke the thesis

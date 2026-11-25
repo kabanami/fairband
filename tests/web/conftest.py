@@ -7,7 +7,7 @@ report. And from ``support.vendor``, the vendor double, a ``Passthrough`` over F
 client of an app with that pass-through; a module's own fixture of one of these names (an
 ``fmp``) stands for it in that module."""
 
-from support.vendor import fmp, passthrough, vendor, with_passthrough  # noqa: F401
+from support.vendor import fmp, on_premium, passthrough, vendor, with_passthrough  # noqa: F401
 from support.web_app import (  # noqa: F401
     client,
     client_with_clock,

@@ -194,6 +194,11 @@ and `dcf` answer two of them, `{responses: {product: ..., geographic: ...}}` and
 {dcf: ..., levered: ...}}`. Cite a field of a payload as `response:<responseId>/<json pointer>`,
 such as `response:731/0/revenue`.
 
+FMP serves the earnings calls on its Ultimate plan alone. Where the owner's key is on the Premium
+plan, `transcript` and `transcript_dates` answer `refused`, "FMP's Premium plan does not serve
+earnings calls", with `status` 402 and no call to FMP; every other read here answers as on
+Ultimate (`SKILL.md`, step 5).
+
 - `transcript(symbol, year, quarter)`: the earnings call transcript of one fiscal quarter, the
   quarter 1 to 4. Take the year and the quarter from `transcript_dates`.
 - `news(symbol, limit?)`: recent stock news: 20 items, or `limit` up to 100.

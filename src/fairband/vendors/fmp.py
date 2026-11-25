@@ -105,6 +105,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Literal
 
+from fairband.plans import ULTIMATE, Plan
 from fairband.vendors.http import VendorHttp, VendorResponse
 from fairband.vendors.limiter import RateLimiter
 
@@ -142,11 +143,15 @@ def to_fmp_symbol(symbol: str) -> str:
 
 class Fmp:
     """The FMP stable routes the screen reads, the company page shows and the agent's
-    pass-throughs fetch; every method returns the response as received."""
+    pass-throughs fetch; every method returns the response as received. ``plan`` is the plan the
+    key is on (``fairband.plans``), Ultimate where none is given: the adapter carries it for its
+    callers, the fetch and the pass-throughs, which ask no route the plan does not serve; a
+    method called all the same makes its call."""
 
-    def __init__(self, http: VendorHttp, api_key: str) -> None:
+    def __init__(self, http: VendorHttp, api_key: str, plan: Plan = ULTIMATE) -> None:
         self._http = http
         self._api_key = api_key
+        self.plan = plan
 
     def close(self) -> None:
         """Close the HTTP client."""

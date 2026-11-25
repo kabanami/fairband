@@ -15,6 +15,7 @@ import pytest
 from refresh_env import Env
 from vendor_double import FIXTURES, FMP_KEY, Clients, Clock, Router
 
+from fairband.plans import PREMIUM, ULTIMATE
 from fairband.policy import Policy
 from fairband.refresh import fetch as fetch_module
 from fairband.refresh.fetch import FetchOutcome, fetch_company
@@ -22,6 +23,7 @@ from fairband.refresh.passthrough import Passthrough
 from fairband.store.facts import facts_for
 from fairband.store.observations import observations_for
 from fairband.store.vendor import record_response, response_payload
+from fairband.vendors.fmp import Fmp
 from fairband.vendors.normalize_fmp import price_closes
 from fairband.web import filings_api
 
@@ -1080,3 +1082,58 @@ def test_a_list_of_calls_error_body_is_reused_by_neither(env: Env) -> None:
     again = passthrough.fetch("transcript-dates", "ACME", {})["transcript-dates"]
     assert (again.reused, again.row.error) == (False, ERROR_STORED)
     assert investor_calls(env) == (3, 1, 0)
+
+
+# --- the plan the key is on (``fairband.plans``) ------------------------------------------------
+
+# A fetch's calls on Premium, in order: the listed calls less the list of earnings calls.
+ON_PREMIUM = tuple(endpoint for endpoint in LISTED if endpoint != "transcript-dates")
+
+
+def on_premium(clients: Clients) -> Clients:
+    """``clients`` over the same router, its adapter on the Premium plan."""
+    return Clients(Fmp(clients.fmp._http, FMP_KEY, PREMIUM), clients.secrets)
+
+
+def test_on_premium_the_fetch_asks_no_earnings_call(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """FMP serves no earnings call on Premium, so the fetch asks neither the list of calls nor the
+    newest call's transcript there: thirty calls, the fifteen the engine reads among them, none
+    failed and no refusal stored. A forced fetch asks the same thirty again."""
+    premium = on_premium(clients)
+    outcome = fetch(conn, premium, policy, clock)
+    assert outcome == FetchOutcome("ACME", calls=30, reused=0, failed=(), error=None)
+    assert router.calls == Counter(dict.fromkeys(ON_PREMIUM, 1))
+    assert list(responses(conn)) == list(ON_PREMIUM)
+    assert stored_datasets(conn) == DATASETS  # every dataset the engine reads, as on Ultimate
+    clock.now += timedelta(minutes=30)
+    assert fetch(conn, premium, policy, clock) == FetchOutcome("ACME", 0, 30, (), None)
+    forced = fetch(conn, premium, policy, clock, force=True)
+    assert forced == FetchOutcome("ACME", calls=30, reused=0, failed=(), error=None)
+    assert router.calls == Counter(dict.fromkeys(ON_PREMIUM, 2))
+
+
+def test_on_premium_a_stored_list_of_calls_asks_no_transcript(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """A key that moved from Ultimate to Premium: the store holds a list that names a call, and no
+    transcript of it. The fetch on Premium asks neither, and the stored list stays the newest."""
+    listed = (FIXTURES / "fmp" / PAGE_FIXTURES["transcript-dates"]).read_text(encoding="utf-8")
+    earlier = clock() - timedelta(days=40)
+    record_response(
+        conn, "fmp", "transcript-dates", {"symbol": "ACME"}, "ACME", 200, listed, None, earlier
+    )
+    outcome = fetch(conn, on_premium(clients), policy, clock, force=True)
+    assert outcome == FetchOutcome("ACME", calls=30, reused=0, failed=(), error=None)
+    assert "transcript-dates" not in router.calls and TRANSCRIPT not in router.calls
+    assert responses(conn)["transcript-dates"]["observed_at"] == earlier.isoformat()
+
+
+def test_on_ultimate_the_fetch_is_as_before(
+    conn: sqlite3.Connection, clients: Clients, router: Router, clock: Clock, policy: Policy
+) -> None:
+    """A key that states no plan is on Ultimate: the list of calls and the newest transcript."""
+    assert clients.fmp.plan is ULTIMATE
+    assert fetch(conn, clients, policy, clock).calls == 32
+    assert router.calls["transcript-dates"] == router.calls[TRANSCRIPT] == 1

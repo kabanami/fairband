@@ -2,12 +2,14 @@
 that client, so the client scrubs it from the URL it reports. FMP is the one vendor Fairband calls
 (spec 2026-11-19 8.10). The key here is fake."""
 
+from dataclasses import replace
 from datetime import timedelta
 
 import httpx
 import pytest
 
 from fairband.config import Keys, MissingKey, utcnow
+from fairband.plans import PREMIUM, ULTIMATE
 from fairband.policy import Policy
 from fairband.refresh.clients import build_clients, build_fmp
 from fairband.vendors.limiter import RateLimiter
@@ -59,6 +61,23 @@ def test_a_given_limiter_paces_the_fmp_client(policy: Policy) -> None:
     paced = build_fmp(Keys(FMP_KEY), policy)
     paced.close()
     assert paced.limiter.calls_per_minute == policy.refresh.fmp_calls_per_minute
+
+
+def test_the_client_is_on_the_keys_plan_and_paced_under_its_cap(policy: Policy) -> None:
+    """The plan travels with the key. A client on Premium is paced at the plan's cap, 712 calls a
+    minute, under the policy's 2,850; one on Ultimate, the plan of a key that states none, at the
+    policy's pace as before."""
+    premium = build_fmp(Keys(FMP_KEY, PREMIUM), policy)
+    ultimate, _ = build_clients(Keys(FMP_KEY), policy)
+    for client in (premium, ultimate):
+        client.close()
+    assert premium.plan is PREMIUM and ultimate.plan is ULTIMATE
+    assert premium.limiter.calls_per_minute == 712
+    assert ultimate.limiter.calls_per_minute == 2850
+    slow = replace(policy, refresh=replace(policy.refresh, fmp_calls_per_minute=600))
+    paced = build_fmp(Keys(FMP_KEY, PREMIUM), slow)
+    paced.close()
+    assert paced.limiter.calls_per_minute == 600  # a pace set under the cap stands
 
 
 def test_build_fmp_needs_an_fmp_key(policy: Policy) -> None:

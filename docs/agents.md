@@ -82,7 +82,9 @@ and its newest call's transcript where the store holds no copy of it with words.
 with its default window on the day of the refresh, and `transcript` of that call may answer
 from the refresh's copy within the reuse window, with `reused` true. FMP's error object in
 place of the list of calls is answered as it came, stored as an error and never reused, so the
-next call asks FMP again. Twenty-one write: the identity, the work inbox, notes, findings,
+next call asks FMP again. On a key that states FMP's Premium plan (below), `transcript` and
+`transcript_dates` answer `refused`, "FMP's Premium plan does not serve earnings calls", with no
+call to FMP, and the other seven answer as on Ultimate. Twenty-one write: the identity, the work inbox, notes, findings,
 guidance records, the moat class, overrides, a review made again, the secondary valuation, the
 sensitivity reading, derivations, reports, kill criteria, news items and refreshes. The newest
 is `review_again`, which makes a company's review again on its latest snapshot with no change of
@@ -90,6 +92,24 @@ an input; before it came `moat_set`, the agent's verdict on the company's moat c
 every review records, and before that `quarters`, `filings`, `filing_report` and
 `filing_search`, and `secondary_valuation` took the standard discounted cash flow's `drivers`
 beside its `parts`.
+
+The FMP plan: Fairband runs on FMP's Ultimate plan and on its Premium plan. FMP names a key's
+plan in no answer, so a key on Premium states it beside the key, in
+`~/.config/fairband/keys.toml`:
+
+```toml
+[keys]
+fmp = "your-fmp-key"
+
+[fmp]
+plan = "premium"
+```
+
+A file that states no plan is on Ultimate. On Premium a refresh paces its calls under 712 a
+minute, so a full one takes over an hour, and it asks no earnings call, which FMP serves on
+Ultimate alone: the company page's Investor relations tab says so, and an agent reads the
+earnings press release instead (the playbook's step 5). FMP serves every figure the engine reads
+on both plans, so a company's value is the same on either.
 
 The playbook: `playbook/fairband-research/` is a skill that takes the agent through a research
 report, step by step, starting with `identify`. For Claude Code and Claude Desktop, link it under

@@ -7,6 +7,7 @@ from support.system import needs_linux_file_modes
 
 from fairband import __main__ as cli
 from fairband.config import Keys, MissingKey, load_keys, load_settings, require, utcnow
+from fairband.plans import PREMIUM, ULTIMATE
 
 
 def _write_keys(home: Path, text: str, again: bool = False) -> None:
@@ -150,7 +151,77 @@ def test_a_keys_file_with_a_gurufocus_line_loads(
 def test_keys_repr_hides_values() -> None:
     keys = Keys(fmp="k-fmp")
     assert "k-fmp" not in repr(keys)
-    assert repr(keys) == "Keys(fmp=<set>)" and repr(Keys(fmp=None)) == "Keys(fmp=None)"
+    assert repr(keys) == "Keys(fmp=<set>, plan=ultimate)"
+    assert repr(Keys(fmp=None, plan=PREMIUM)) == "Keys(fmp=None, plan=premium)"
+
+
+# --- the FMP plan, stated beside the key ---------------------------------------------------------
+
+
+def test_a_keys_file_with_no_plan_is_on_ultimate(tmp_path: Path) -> None:
+    """The plan a key is on is stated under ``[fmp]`` in the keys file; a file that states none,
+    every file written before the plans, is on Ultimate, the plan Fairband was built on."""
+    _write_keys(tmp_path, '[keys]\nfmp = "file-fmp"\n')
+    keys = load_keys(load_settings(env={}, home=tmp_path), env={})
+    assert keys.plan is ULTIMATE and keys == Keys(fmp="file-fmp", plan=ULTIMATE)
+    assert load_keys(load_settings(env={}, home=tmp_path / "none"), env={}).plan is ULTIMATE
+
+
+@pytest.mark.parametrize("word", ["premium", " Premium ", "PREMIUM"])
+def test_the_plan_is_read_from_the_keys_file(tmp_path: Path, word: str) -> None:
+    _write_keys(tmp_path, f'[keys]\nfmp = "file-fmp"\n\n[fmp]\nplan = "{word}"\n')
+    keys = load_keys(load_settings(env={}, home=tmp_path), env={})
+    assert keys == Keys(fmp="file-fmp", plan=PREMIUM)
+    assert keys != Keys(fmp="file-fmp")
+
+
+def test_the_environment_overrides_the_files_plan(tmp_path: Path) -> None:
+    _write_keys(tmp_path, '[keys]\nfmp = "file-fmp"\n\n[fmp]\nplan = "premium"\n')
+    s = load_settings(env={}, home=tmp_path)
+    assert load_keys(s, env={"FAIRBAND_FMP_PLAN": "ultimate"}).plan is ULTIMATE
+    assert load_keys(s, env={"FAIRBAND_FMP_PLAN": " "}).plan is PREMIUM  # blank: the file's
+    bare = load_settings(env={}, home=tmp_path / "none")
+    assert load_keys(bare, env={"FAIRBAND_FMP_PLAN": "Premium"}).plan is PREMIUM
+
+
+def test_a_blank_plan_in_the_file_is_no_plan(tmp_path: Path) -> None:
+    _write_keys(tmp_path, '[keys]\nfmp = "file-fmp"\n\n[fmp]\nplan = " "\n')
+    assert load_keys(load_settings(env={}, home=tmp_path), env={}).plan is ULTIMATE
+
+
+@pytest.mark.parametrize(
+    ("text", "error", "rule"),
+    [
+        ('[fmp]\nplan = "starter"\n', ValueError, "fmp.plan must be ultimate or premium"),
+        ("[fmp]\nplan = 4242\n", TypeError, "fmp.plan must be a string"),
+    ],
+    ids=["another-plan", "not-a-string"],
+)
+def test_a_bad_plan_in_the_file_names_the_path_and_the_plans_never_the_value(
+    tmp_path: Path, text: str, error: type[Exception], rule: str
+) -> None:
+    _write_keys(tmp_path, '[keys]\nfmp = "file-fmp"\n\n' + text)
+    s = load_settings(env={}, home=tmp_path)
+    with pytest.raises(error) as e:
+        load_keys(s, env={})
+    assert str(e.value) == f"{s.config_dir / 'keys.toml'}: {rule}"
+    assert "starter" not in str(e.value) and "4242" not in str(e.value)
+    # The environment's plan stands in for the file's, bad or not.
+    assert load_keys(s, env={"FAIRBAND_FMP_PLAN": "premium"}).plan is PREMIUM
+
+
+def test_a_bad_plan_in_the_environment_names_the_variable_never_the_value(tmp_path: Path) -> None:
+    s = load_settings(env={}, home=tmp_path)
+    with pytest.raises(ValueError) as e:
+        load_keys(s, env={"FAIRBAND_FMP_PLAN": "starter"})
+    assert str(e.value) == "FAIRBAND_FMP_PLAN must be ultimate or premium"
+
+
+def test_an_fmp_line_that_is_no_table_states_no_plan(tmp_path: Path) -> None:
+    """A top-level ``fmp`` line, a key put outside ``[keys]`` say, was not read before the plans
+    and is not read now: no plan, no error, and so nothing of its value in any message."""
+    _write_keys(tmp_path, 'fmp = "misplaced-key"\n\n[keys]\nfmp = "file-fmp"\n')
+    assert load_keys(load_settings(env={}, home=tmp_path), env={}) == Keys(fmp="file-fmp")
 
 
 def test_require_returns_the_key() -> None:

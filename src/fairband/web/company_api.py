@@ -47,10 +47,15 @@ Each tab's read answers ``quote``, the head's figures on every tab (``page_fmp.h
   ``ledger`` cuts at the newest twenty. A report of another company is a 404, "report <id> is
   <its symbol>'s, not <symbol>'s"; an id that names none a 404, "no report <id>".
 - ``GET /api/companies/{symbol}/page/investor-relations`` answers ``{symbol, dataDate, quote,
-  nextEarnings, calls, filings}``: ``nextEarnings``, the day of the next earnings date of the
-  earnings (``page_fmp.next_earnings``), else ``null``; ``calls``, every call of the list of calls
+  nextEarnings, calls, callsServed, filings}``: ``nextEarnings``, the day of the next earnings
+  date of the earnings (``page_fmp.next_earnings``), else ``null``; ``calls``, every call of the
+  list of calls
   (``transcript-dates``), newest first, each with its quarter's four figures from the earnings row
-  that is the call's (``page_investor.calls``), empty without a list; ``filings``, ``{from, to,
+  that is the call's (``page_investor.calls``), empty without a list; ``callsServed``, false
+  where the plan of the server's key serves no list of calls (``fairband.plans``: Premium), so
+  the page can say why a company has none, and true on a plan that serves it and on a server
+  with no FMP key, where nothing says the plan; a list the store holds from another plan's time
+  is still answered in ``calls``; ``filings``, ``{from, to,
   rows, truncated, observedDay}`` of the tab's filing list: of the usable stored filing lists
   (``sec-filings``) of a whole window, their params exactly those of the 365 days to their ``to``
   at ``FILINGS_LIMIT`` rows (``fetch.page_params``), that end on or before the clock's day and on
@@ -140,7 +145,9 @@ calendar's first day, ``BAD_TO``; a ``to`` after the clock's day, ``FUTURE_TO``,
 not ended, which the page never asks; each a 400, then the 404 of a company with no stored
 profile.
 Only then, and only where the store cannot answer, the pass-through's failures as the pass-through
-route answers them: without a pass-through (the server has no FMP key) a 503, "no FMP key"; every
+route answers them: without a pass-through (the server has no FMP key) a 503, "no FMP key"; a
+call's transcript on a plan that serves none (``fairband.plans``) a 402 with the plan's sentence,
+"FMP's Premium plan does not serve earnings calls"; every
 slot taken a 503 with its ``BUSY``; a failed vendor call a 502 with the vendor's sentence,
 scrubbed; an answer that is no list, FMP's error object, a 502 with the read's own sentence
 (``NO_TRANSCRIPT``, ``filings_api.NO_LIST``). So a request refused before the store is read calls
@@ -173,7 +180,7 @@ from fairband.refresh.fetch import (
     page_params,
 )
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT, cadence_of, series_for
-from fairband.refresh.passthrough import Passthrough, PassthroughBusy
+from fairband.refresh.passthrough import NotServed, Passthrough, PassthroughBusy
 from fairband.store.currency import reporting_currency
 from fairband.store.ledger import entry_count
 from fairband.store.observations import observations_for
@@ -445,6 +452,7 @@ def add_company_page_routes(
             "quote": page_fmp.head_quote(_payload(quote)),
             "nextEarnings": None if upcoming is None else upcoming["day"],
             "calls": investor.calls(_payload(dates), _payload(earnings)),
+            "callsServed": passthrough is None or passthrough.plan.serves(_CALL_DATES),
             "filings": None if window is None else _filing_list(window),
         }
 
@@ -553,7 +561,8 @@ def _asked(
     """The pass-through's one stored response to ``kind`` for ``symbol``, the store's form: reused
     inside its window, else fetched and stored. Its failures as the pass-through route answers
     them: without a pass-through (the server has no FMP key) a 503, ``NO_FMP_KEY``; a parameter it
-    refuses a 400; every slot taken a 503; a failed call a 502 with the vendor's sentence, which
+    refuses a 400; a kind the plan of the server's key does not serve a 402 with the plan's
+    sentence; every slot taken a 503; a failed call a 502 with the vendor's sentence, which
     the pass-through has scrubbed."""
     if passthrough is None:
         raise HTTPException(503, NO_FMP_KEY)
@@ -561,6 +570,8 @@ def _asked(
         fetched = passthrough.fetch(kind, symbol, params)[kind]
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
+    except NotServed as exc:
+        raise HTTPException(402, str(exc)) from None
     except PassthroughBusy as exc:
         raise HTTPException(503, str(exc)) from None
     except VendorError as exc:
