@@ -37,6 +37,7 @@ SCRIPTS = (
     BUNDLE,
     STATIC / "app.js",
     STATIC / "finder.js",
+    STATIC / "messages.js",
     STATIC / "controls.js",
     STATIC / "company.js",
     STATIC / "company_investor.js",

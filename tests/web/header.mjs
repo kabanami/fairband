@@ -1,23 +1,31 @@
 // The header and the status line under it driven in node (the company page's design, the decision
-// log of 2026-11-17), for tests/web/test_header.py: the bundle, app.js, finder.js and controls.js
-// are loaded in the page's order, with a stub React, a stub ReactDOM whose roots keep what they
-// last drew, the few browser objects the scripts touch (each view's panel one object whose
-// `hidden` controls.js sets, a query that finds no element, as app.js asks for the table's
-// scroller when the Watchlists view turns the table to its list, the hash, the history the views
-// replace, the window's and the document's listeners, each panel's classes, the body's children,
-// main.app-page and the layer's mount as index.html writes them, then the mounts the scripts
-// append, each with the `inert` controls.js sets) and a fetch of the driver's own, answered only
-// when a step answers it. The reads the scripts start as they load stay in flight, so a step can
-// answer the first read of the refresh's state, or the screen's rows
+// log of 2026-11-17), for tests/web/test_header.py and tests/web/test_messages.py: the bundle,
+// app.js, finder.js, messages.js and controls.js are loaded in the page's order, with a stub
+// React, a stub ReactDOM whose roots keep what they last drew, the few browser objects the scripts
+// touch (each view's panel one object whose `hidden` controls.js sets, a query that finds no
+// element, as app.js asks for the table's scroller when the Watchlists view turns the table to its
+// list, the hash, the history the views replace, the window's and the document's listeners, each
+// panel's classes, the body's children, main.app-page and the layer's mount as index.html writes
+// them, then the mounts the scripts append, each with the `inert` controls.js sets; the window's
+// local storage, its location, which is the hash's, its focus and a secure context, as a browser
+// gives http://127.0.0.1, and the browser's Notification, which keeps each notification made and
+// counts the permission's requests) and a fetch of the driver's own, answered only when a step
+// answers it. The reads the scripts start as they load stay in flight, so a step can answer the
+// first read of the refresh's state, the inbox (/api/inbox), or the screen's rows
 // (/api/screen?sort=ticker&dir=asc). app.js's and controls.js's timers are held until a step fires
 // them, and the company page, which has no script here, reads its company's detail as it opens, as
 // company.js's loader does first (/api/companies/<symbol>).
 //
-// The input on stdin is the steps, a JSON list, or an object, {"steps", "storage", "hidden"}:
-// `storage` is the browser tab's session storage as the scripts load, its entries, as a reload
-// finds them, or "throws", where the browser refuses it (a private window, blocked site data);
-// with none it starts empty. With `hidden` true the page loads hidden, as the browser restores a
-// tab in the background. Each step is one object:
+// The input on stdin is the steps, a JSON list, or an object, {"steps", "storage", "hidden",
+// "local", "notification", "secure"}: `storage` is the browser tab's session storage as the
+// scripts load, its entries, as a reload finds them, or "throws", where the browser refuses it (a
+// private window, blocked site data); with none it starts empty. With `hidden` true the page loads
+// hidden, as the browser restores a tab in the background. `local` is the browser's local storage
+// as the scripts load, its entries or "throws", empty with none. `notification` is the
+// notification permission the browser holds, "granted", "default" or "denied", or "throws",
+// granted with a Notification whose constructor throws, as a browser that wants a service worker
+// does; with none, null, the browser has no Notification. With `secure` false the page is not a
+// secure context, as at an address other than 127.0.0.1 or localhost. Each step is one object:
 //   {"do": "show", "view", "section"}            a header view, a link or a hash opens `view`
 //                                                (FairbandPage.show, controls.js)
 //   {"do": "hash", "hash"}                       the browser's Back or Forward, or a link, moves
@@ -58,6 +66,19 @@
 //   {"do": "remove", "name"}                     the control `name` leaves the document (its row
 //                                                narrowed away); holding the focus, it hands it to
 //                                                the body, as the browser does
+//   {"do": "local", "set", "clear"}              the local storage takes the entries `set`, or is
+//                                                emptied (`clear` true), with no event
+//   {"do": "elsewhere", "set"}                   another tab writes the local storage's entries
+//                                                `set`: each is set, then the window's storage
+//                                                listeners run with its key, as the browser runs
+//                                                them in every other tab
+//   {"do": "watch", "on"}                        FairbandPage.messages.watch(on): the Messages tab
+//                                                shows (true) or no longer shows (false)
+//   {"do": "ask", "grant"}                       FairbandPage.messages.ask(), as Turn on
+//                                                notifications calls it; the browser answers the
+//                                                request with `grant`, which the permission takes
+//   {"do": "click", "index"}                     the notification made at `index`, counted from
+//                                                the first the page made, is clicked
 // After each step and the work it sets off, the trace on stdout gains the urls fetched since the
 // step before (the reads the scripts start as they load are not counted), whether a view's panel
 // holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
@@ -84,15 +105,25 @@
 // the focus, "body", "panel" or a control's name, the focus going from a panel to the body as
 // the layer turns inert, as the browser moves it; the place the table's scroller stands at; and
 // the place the table the screen's root last drew is handed (its `top`, null before it draws).
+// Then the owner's messages (spec 2026-11-25 owner's inbox, 7.3 to 7.6): the header's Inbox entry's
+// count (`count`); each notification made since the step before, {title, body, tag} (`notices`);
+// the two lists the local storage keeps, {seen, notified}, each its entry parsed, or null where
+// there is none, or "throws" (`local`); the permission's requests so far (`asks`) and the
+// permission the last ask() resolved with, null before one resolves (`askAnswer`); whether a click
+// on a notification called window.focus in the step (`windowFocused`); the indexes of the
+// notifications closed so far (`closedNotices`); and the ids of the last inbox read's items for
+// which FairbandPage.messages.marked is true, ascending (`unreadMarks`).
 //
-//   node header.mjs <bundle.js> <app.js> <finder.js> <controls.js>  < steps.json  > trace.json
+//   node header.mjs <bundle.js> <app.js> <finder.js> <messages.js> <controls.js>
+//     < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
 
-const [bundle, app, finder, controls] = process.argv.slice(2, 6)
+const [bundle, app, finder, messages, controls] = process.argv.slice(2, 7)
   .map((path) => readFileSync(path, 'utf8'));
 const given = JSON.parse(readFileSync(0, 'utf8'));
-const { steps, storage: stored = {}, hidden = false } = Array.isArray(given)
-  ? { steps: given } : given;
+const {
+  steps, storage: stored = {}, hidden = false, local: kept = {}, notification = null, secure = true,
+} = Array.isArray(given) ? { steps: given } : given;
 const later = globalThis.setTimeout; // the driver's own wait for the work a step sets off
 
 const React = {
@@ -206,15 +237,67 @@ const sessionStorage = {
     delete session.entries[name];
   },
 };
+// The browser's local storage, kept as the session storage is: its entries, as strings, and
+// whether the browser refuses it.
+const localArea = { entries: {}, throws: kept === 'throws' };
+if (!localArea.throws) Object.assign(localArea.entries, kept);
+function localRefused() {
+  if (localArea.throws) throw new Error('the local storage is refused');
+}
+const localStorage = {
+  getItem(name) {
+    localRefused();
+    return name in localArea.entries ? localArea.entries[name] : null;
+  },
+  setItem(name, value) {
+    localRefused();
+    localArea.entries[name] = String(value);
+  },
+  removeItem(name) {
+    localRefused();
+    delete localArea.entries[name];
+  },
+};
+// The browser's notifications: each one made, in order, with its title, its body, its tag, the
+// click handler the page set and whether it was closed; the permission's requests, which the
+// browser answers with the `grant` of the step that asks.
+const made = [];
+let reported = 0; // the notifications the trace has reported
+let asks = 0;
+let grant;
+let windowFocused = false; // a click on a notification called window.focus in the step
+let askAnswer = null; // the permission the last ask() resolved with
+class Notification {
+  constructor(title, options = {}) {
+    if (notification === 'throws') throw new TypeError('Illegal constructor');
+    Object.assign(this, { title, body: options.body, tag: options.tag, onclick: null });
+    this.closed = false;
+    made.push(this);
+  }
+  close() { this.closed = true; }
+  static requestPermission() {
+    asks += 1;
+    Notification.permission = grant;
+    return Promise.resolve(grant);
+  }
+}
+Notification.permission = notification === 'throws' ? 'granted' : notification;
 const listeners = {}; // the window's listeners by event
 const window = {
-  React, ReactDOM, document, fetch, innerWidth: 1600, innerHeight: 1100,
+  React, ReactDOM, document, fetch, location, innerWidth: 1600, innerHeight: 1100,
+  isSecureContext: secure,
   get sessionStorage() {
     refused();
     return sessionStorage;
   },
+  get localStorage() {
+    localRefused();
+    return localStorage;
+  },
+  focus() { windowFocused = true; },
   addEventListener(event, listener) { (listeners[event] = listeners[event] || []).push(listener); },
 };
+if (notification !== null) window.Notification = Notification;
 // app.js's and controls.js's timers, each held until a tick step fires it: { id, run, ms }, in the
 // order set.
 const timers = [];
@@ -237,6 +320,8 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', 'se
 const P = window.FairbandPage;
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   finder)(window, React, ReactDOM, window.Fairband, P, document, fetch);
+new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
+  messages)(window, React, ReactDOM, window.Fairband, P, document, fetch);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   'history', 'location', 'setTimeout', 'clearTimeout', controls)(
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location,
@@ -358,9 +443,23 @@ function key(name) {
   return event.defaultPrevented;
 }
 
+// The items of the last inbox read answered, whose marks the trace reports.
+let inboxItems = [];
+
+// The list `name` the local storage keeps, parsed; its text where it is no JSON; null for none.
+function listed(name) {
+  if (!(name in localArea.entries)) return null;
+  try {
+    return JSON.parse(localArea.entries[name]);
+  } catch (e) {
+    return localArea.entries[name];
+  }
+}
+
 function answered(step) {
   const at = inFlight.findIndex((call) => call.url === step.url);
   if (at === -1) throw new Error('no fetch in flight to ' + step.url);
+  if (step.url === '/api/inbox' && step.status === 200) inboxItems = step.body.items;
   const [call] = inFlight.splice(at, 1);
   call.resolve({
     ok: step.status >= 200 && step.status < 300,
@@ -373,6 +472,7 @@ const trace = [];
 for (const step of steps) {
   let prevented = null;
   closed = 0;
+  windowFocused = false;
   if (step.do === 'show') P.show(step.view, step.section);
   else if (step.do === 'hash') {
     location.hash = step.hash;
@@ -424,6 +524,23 @@ for (const step of steps) {
     const control = onPage[step.name];
     control.isConnected = false;
     if (document.activeElement === control) document.activeElement = document.body;
+  } else if (step.do === 'local') {
+    if (step.set) Object.assign(localArea.entries, step.set);
+    if (step.clear) localArea.entries = {};
+  } else if (step.do === 'elsewhere') {
+    Object.assign(localArea.entries, step.set);
+    for (const key of Object.keys(step.set)) {
+      const event = { key, newValue: step.set[key], storageArea: localStorage };
+      for (const listener of listeners.storage || []) listener(event);
+    }
+  } else if (step.do === 'watch') P.messages.watch(step.on);
+  else if (step.do === 'ask') {
+    grant = step.grant;
+    P.messages.ask().then((answer) => { askAnswer = answer; });
+  } else if (step.do === 'click') {
+    const shown = made[step.index];
+    if (!shown) throw new Error('no notification at ' + step.index);
+    shown.onclick({ target: shown, preventDefault() {} });
   }
   else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
@@ -481,6 +598,17 @@ for (const step of steps) {
     active: document.activeElement.name,
     scrolled: scroller.scrollTop,
     top: drawn ? drawn.props.top : null,
+    count: header.props.views.find((v) => v.id === 'inbox').count,
+    notices: made.slice(reported).map(({ title, body, tag }) => ({ title, body, tag })),
+    local: localArea.throws ? 'throws'
+      : { seen: listed('fairband.inbox.seen'), notified: listed('fairband.inbox.notified') },
+    asks,
+    askAnswer,
+    windowFocused,
+    closedNotices: made.map((n, at) => (n.closed ? at : null)).filter((at) => at !== null),
+    unreadMarks: inboxItems.map((item) => item.id).filter((id) => P.messages.marked(id))
+      .sort((a, b) => a - b),
   });
+  reported = made.length;
 }
 process.stdout.write(JSON.stringify(trace));

@@ -10,7 +10,7 @@ run that ends, whoever started it: it asks the refresh's state every 30 seconds 
 alive, and reads again what a run that ended may have changed; only a run of the whole screen
 fades the panels (4.1 and 4.3), and only such a run that the page started, the reader's own
 press, locks the page under the refresh layer until it ends, or until the reader keeps reading on
-a long run (4.1). The bundle, app.js, finder.js and controls.js run in node
+a long run (4.1). The bundle, app.js, finder.js, messages.js and controls.js run in node
 (``tests/web/header.mjs``) on steps the test gives, and the tests read the trace."""
 
 import json
@@ -126,7 +126,7 @@ def _trace(
     given = {"steps": steps, "storage": {} if storage is None else storage, "hidden": hidden}
     done = subprocess.run(
         [NODE, str(DRIVER), str(BUNDLE)]
-        + [str(STATIC / name) for name in ("app.js", "finder.js", "controls.js")],
+        + [str(STATIC / name) for name in ("app.js", "finder.js", "messages.js", "controls.js")],
         input=json.dumps(given),
         capture_output=True,
         text=True,
@@ -476,8 +476,9 @@ def test_a_run_of_the_whole_screen_fades_the_panels_until_it_ends(kind: str) -> 
 
 
 def test_a_hidden_page_does_not_ask_and_asks_at_once_when_shown() -> None:
-    """4.3: no read while the page is hidden; shown again, it reads at once, the refresh's state
-    and the Inbox's count, and the 30-second cycle runs again from the answer."""
+    """4.3: no read of the refresh's state while the page is hidden (the inbox's read runs on,
+    tests/web/test_messages.py); shown again, it reads at once, the refresh's state and the
+    Inbox's count, and the 30-second cycle runs again from the answer."""
     _, hidden, ticked, shown, landed = _trace(
         [LANDED, _visible(False), TICK, _visible(True), LANDED]
     )
@@ -490,7 +491,7 @@ def test_a_hidden_page_does_not_ask_and_asks_at_once_when_shown() -> None:
 def test_a_page_loaded_hidden_asks_once_at_load() -> None:
     """A page loaded in a hidden tab (a browser restores its background tabs hidden) asks for the
     refresh's state once as it loads, so it knows the run its rows were read under; the later
-    reads wait for it to show (4.3). A run that ends while it is still hidden is followed when it
+    reads of it wait for it to show (4.3). A run that ends while it is still hidden is followed when it
     shows: its rows are read again."""
     landed, ticked, shown, followed = _trace(
         [LANDED, TICK, _visible(True), _idle(_run(67, "price"), RUN_66)], hidden=True

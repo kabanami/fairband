@@ -1,11 +1,12 @@
-/* The page's header, its status line and the Statistics view, loaded after app.js and finder.js.
-   The header is the design system's AppHeader: the six views in the founder's order (Screen,
-   Watchlists, Statistics, Methodology, Settings, Inbox; spec 2026-11-23 refresh experience, 4.6),
-   then in its right slot the finder (finder.js) on every view but the Screen, the refresh controls
-   and the engine stamp; the URL hash names the open view, and on the Watchlists view its list,
-   whose table is the Screen's, shown under the list's head (spec 2026-11-22 7.3). Inbox carries
-   the count of the open work items, read every thirty seconds while the page is shown (spec
-   2026-11-06 Tier 2, 18.5). Under the header, the status line: the running refresh's one run bar
+/* The page's header, its status line and the Statistics view, loaded after app.js, finder.js and
+   messages.js. The header is the design system's AppHeader: the six views in the founder's order
+   (Screen, Watchlists, Statistics, Methodology, Settings, Inbox; spec 2026-11-23 refresh
+   experience, 4.6), then in its right slot the finder (finder.js) on every view but the Screen,
+   the refresh controls and the engine stamp; the URL hash names the open view, and on the
+   Watchlists view its list, whose table is the Screen's, shown under the list's head (spec
+   2026-11-22 7.3). Inbox carries the count of the unread messages, as messages.js counts them on
+   the work items read every thirty seconds, the page hidden or shown (spec 2026-11-25 owner's
+   inbox, 7.5 and 7.7). Under the header, the status line: the running refresh's one run bar
    (the design system's RunProgress), or how the last one ended in one line, its calibration's
    breakdown behind Details ▾ (growth-routes spec 6.1); the company page draws the run bar and a
    notice alone, not the last refresh's line or Details ▾ (the company page's design, the decision
@@ -56,7 +57,6 @@
   var LONG_KINDS = ['full', 'revalue'];
   /* Where the browser tab keeps the id of the run this page started (keepMine). */
   var MINE_KEY = 'fairband.refresh.mine';
-  var OPEN = P.OPEN_STATES;
   var BY = { sector: 'Sector', industry: 'Industry', phase: 'Phase', cap: 'Cap band' };
   var RECOMPUTING = 'is-recomputing';
   var UNCLASSIFIED = 'unclassified'; /* the calibration's name for a company without a phase */
@@ -94,7 +94,7 @@
     notice: null, /* { text, caution }: what the last request came to */
     cancelAsked: false, /* Cancel was accepted: it stays disabled until the run ends */
     detailsOpen: false, /* the last refresh's Details ▾ menu is open */
-    open: 0, /* the open work items, pending and claimed: the Inbox view's count */
+    unread: 0, /* the unread messages: the Inbox entry's count (messages.js) */
     seen: null, /* the id of the newest refresh the rows were read under; null before an answer */
     ended: null, /* { id, kind, status }: the newest whole run the last follow took in, or null */
     changes: null, /* { id, kind, prices, values, fresh }: what the last whole run that ended done
@@ -261,17 +261,16 @@
     render();
   }
 
-  /* The header's Inbox count (spec 2026-11-06 Tier 2, 18.5): the work items read as the page
-     loads and every thirty seconds after, whether a refresh runs or not, on a cycle of their own.
-     Each read takes the write lock on the server, since it runs the expiry rule, and a full
-     refresh writes all the while, so the cycle is slow and pauses while the page is hidden; shown
-     again, the page reads at once. A watched company whose window ended counts on the next read
-     without a reload, as does an item an agent or another view posted. While the Inbox view
-     shows, its table follows each read too (onInbox). A failed read keeps the count it had; the
-     next read comes all the same. */
+  /* The header's Inbox count (spec 2026-11-25 owner's inbox, 7.5 and 7.7): the work items read
+     as the page loads and every thirty seconds after, whether a refresh runs or not, on a cycle
+     of their own, each read handed to messages.js, which counts the unread messages and notifies
+     a new one (countInbox). The read writes nothing on the server, so it runs while the page is
+     hidden too, as slowly as the browser lets a hidden tab's timers run, and a message that ends
+     meanwhile is notified; shown again, the page reads at once. While the Inbox view shows, its
+     table follows each read too (onInbox). A failed read keeps the count it had; the next read
+     comes all the same. */
   function pollInbox() {
     clearTimeout(inboxTimer);
-    if (document.hidden) return;
     var request = ++latestInbox;
     P.getJson('/api/inbox')
       .then(function (body) {
@@ -288,16 +287,22 @@
     if (!document.hidden) pollInbox();
   });
 
-  /* The open items, pending and claimed, among an inbox read's items; the header draws again when
-     the count moves. At 0 the header shows none. */
+  /* An inbox read's items handed to messages.js, which keeps its lists and makes its
+     notifications by them and gives the unread messages, the header's count (7.3 and 7.6). */
   function countInbox(items) {
-    var open = items.filter(function (item) {
-      return OPEN.indexOf(item.state) !== -1;
-    }).length;
-    if (open === state.open) return;
-    state.open = open;
+    setUnread(P.messages.landed(items));
+  }
+
+  /* The header's count is `n` unread messages; the header draws again where it moved. At 0 it
+     shows none. */
+  function setUnread(n) {
+    if (n === state.unread) return;
+    state.unread = n;
     render();
   }
+  /* The count read again where messages.js says it may have moved: another tab's write of its
+     lists, the Messages tab shown, a grant. */
+  P.messages.listen(function () { setUnread(P.messages.unread()); });
 
   /* The Inbox view's own read, after its write, so the count matches the table it draws: a poll
      still in flight, which may predate the write, is dropped, and the next one comes thirty
@@ -652,7 +657,8 @@
     header.render(h(F.AppHeader, {
       views: [{ id: 'screen', label: 'Screen' }, { id: 'watchlists', label: 'Watchlists' },
         { id: 'statistics', label: 'Statistics' }, { id: 'methodology', label: 'Methodology' },
-        { id: 'settings', label: 'Settings' }, { id: 'inbox', label: 'Inbox', count: state.open }],
+        { id: 'settings', label: 'Settings' },
+        { id: 'inbox', label: 'Inbox', count: state.unread }],
       /* the company page is no header view: none is marked while it shows */
       view: state.tab === 'company' ? '' : state.tab,
       onViewChange: show,
@@ -921,12 +927,13 @@
      view's revalue) as the header follows its own: the run bar while it runs, the rows loaded
      again when it ends; `id`, the run its answer gave, is the page's own, which locks the page
      where it is a run of the whole screen, and with none, after a 409, the run is followed with no
-     lock (4.1); countInbox(items) hands the header the Inbox view's own read, so its
-     count follows; the Inbox view sets onInbox(items), which each of the header's own reads
-     calls; onChanged({ prices, values }), which the screen's reload calls as the rows a run's
-     end read land, marked, keeps their count for the status line where the run followed was a
-     run of the whole screen that ended done, fresh for MARK_MS, as the rows' marks are, then
-     drawn once more without its tint (spec 2026-11-23 refresh experience, 4.2). */
+     lock (4.1); countInbox(items) hands the header the Inbox view's own read, which goes to
+     messages.js as the header's own reads do, so its count of the unread messages follows; the
+     Inbox view sets onInbox(items), which each of the header's own reads calls;
+     onChanged({ prices, values }), which the screen's reload calls as the rows a run's end read
+     land, marked, keeps their count for the status line where the run followed was a run of the
+     whole screen that ended done, fresh for MARK_MS, as the rows' marks are, then drawn once more
+     without its tint (spec 2026-11-23 refresh experience, 4.2). */
   P.show = show;
   P.onShow = {};
   P.listId = null;

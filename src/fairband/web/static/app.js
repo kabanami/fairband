@@ -261,8 +261,9 @@
      Tier 2, 18.5), and reloadDrawer, which reads whichever company the drawer shows again when a
      run ends; onList, which turns the one table to the watchlist page's list as that view shows and
      back to the screen as the Screen shows, and selectList, by which the page's head names the list
-     it draws (spec 2026-11-22 7.1). controls.js adds show, onShow, section, running and countInbox,
-     the Inbox view onInbox, and agents.js adds agents, the Settings view's Agents section; a view
+     it draws (spec 2026-11-22 7.1). messages.js adds messages, the owner's messages as the page
+     keeps them; controls.js adds show, onShow, section, running and countInbox, the Inbox view
+     onInbox, and agents.js adds agents, the Settings view's Agents section; a view
      drawn from the rows or the lists sets onRender, which runs after each draw of the screen, so it
      draws again as they load and change (the company page's runs the Watchlists view's, set before
      it, then its own). A report's parts after its sections (report_parts.js, 18.4) draw with this

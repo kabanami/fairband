@@ -12,7 +12,9 @@
 // tests/web/test_company_research*.py; inbox.js, whose root is the stub's, and its row,
 // "inbox.row"; tests/web/test_inbox_launch.py; watchlists.js, which finds no storage, and the
 // list the watchlist page opens on and its head, "lists.opens", "lists.head";
-// tests/web/test_watchlist_page.py).
+// tests/web/test_watchlist_page.py; messages.js, which finds no storage and no Notification, the
+// items that give a message, a message's notification and the browser's permission,
+// "messages.of", "messages.notice", "messages.permission"; tests/web/test_messages.py).
 //
 // A bundle component is named as window names it ("Fairband.HistoryBars") and called with its
 // props, the one argument; the stub's hooks give it its first state, its refs and no effect, its

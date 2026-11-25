@@ -1050,6 +1050,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/design-system/components/bundle.js",
         "/static/app.js",
         "/static/finder.js",
+        "/static/messages.js",
         "/static/controls.js",
         "/static/watchlists.js",
         "/static/inbox.js",
@@ -1092,15 +1093,16 @@ def test_controls_js_mounts_app_header() -> None:
 
 def test_header_has_the_six_views() -> None:
     """Spec 2026-11-06 Tier 2, 18.5: a sixth header view, Inbox, after Settings, its count the
-    open work items; the company page stays a panel no header view names. The views stand in the
-    founder's order, Groups under its name Statistics (spec 2026-11-23 refresh experience, 4.6)."""
+    unread messages (spec 2026-11-25 owner's inbox, 7.5); the company page stays a panel no header
+    view names. The views stand in the founder's order, Groups under its name Statistics (spec
+    2026-11-23 refresh experience, 4.6)."""
     js = _static_file("controls.js")
     assert (
         "views: [{ id: 'screen', label: 'Screen' }, { id: 'watchlists', label: 'Watchlists' },\n"
         "        { id: 'statistics', label: 'Statistics' }, "
         "{ id: 'methodology', label: 'Methodology' },\n"
-        "        { id: 'settings', label: 'Settings' }, "
-        "{ id: 'inbox', label: 'Inbox', count: state.open }],"
+        "        { id: 'settings', label: 'Settings' },\n"
+        "        { id: 'inbox', label: 'Inbox', count: state.unread }],"
     ) in js
     assert "view: state.tab === 'company' ? '' : state.tab," in js
     assert "location.hash" in js and "history.replaceState" in js
@@ -1111,24 +1113,23 @@ def test_header_has_the_six_views() -> None:
 
 
 def test_the_count_follows_the_poll() -> None:
-    """Spec 18.5: the header's Inbox count is the open work items, pending and claimed. The page
-    reads /api/inbox as it loads and every thirty seconds after, whether a refresh runs or not,
-    on a cycle of its own, but not while the page is hidden: each read takes the server's write
-    lock for the expiry rule, and shown again the page reads at once. The read runs the expiry
-    rule, so a watched company whose window ended counts on the next read without a reload. The
-    header draws again only when the count moves; a failed read keeps the count and the next read
-    comes all the same; the Inbox view hands its own reads over, so the count matches the table
-    it shows, and while it shows, its table takes each of the header's reads (onInbox). At 0 the
-    bundle draws no count."""
+    """Spec 2026-11-25 owner's inbox, 7.5 and 7.7: the header's Inbox count is the unread
+    messages, as FairbandPage.messages (messages.js) counts them on each read of the work items
+    and the list of those the owner saw. The page reads /api/inbox as it loads and every thirty
+    seconds after, whether a refresh runs or not, on a cycle of its own, hidden or shown: the read
+    writes nothing on the server, and shown again the page reads at once. The header draws again
+    only when the count moves, at a read and when messages.js says it may have moved (listen); a
+    failed read keeps the count and the next read comes all the same; the Inbox view hands its own
+    reads over, so the count follows the table it shows, and while it shows, its table takes each
+    of the header's reads (onInbox). At 0 the bundle draws no count. The behaviour is
+    tests/web/test_messages.py's."""
     js = _static_file("controls.js")
     assert "var INBOX_MS = 30000;" in js
-    assert "var OPEN = P.OPEN_STATES;" in js
-    assert "open: 0, /* the open work items, pending and claimed: the Inbox view's count */" in js
+    assert "unread: 0, /* the unread messages: the Inbox entry's count (messages.js) */" in js
     read = _function(js, "pollInbox")
     _in_order(
         read,
         "clearTimeout(inboxTimer);",
-        "if (document.hidden) return;",
         "var request = ++latestInbox;",
         "P.getJson('/api/inbox')",
         "if (request !== latestInbox) return;",
@@ -1142,14 +1143,14 @@ def test_the_count_follows_the_poll() -> None:
         "    if (!document.hidden) pollInbox();\n"
         "  });"
     ) in js
-    count = _function(js, "countInbox")
+    assert "setUnread(P.messages.landed(items));" in _function(js, "countInbox")
     _in_order(
-        count,
-        "return OPEN.indexOf(item.state) !== -1;",
-        "if (open === state.open) return;",
-        "state.open = open;",
+        _function(js, "setUnread"),
+        "if (n === state.unread) return;",
+        "state.unread = n;",
         "render();",
     )
+    assert "P.messages.listen(function () { setUnread(P.messages.unread()); });" in js
     # the view's read after its write wins over a poll still in flight, and the cycle goes on
     _in_order(
         _function(js, "inboxRead"),
@@ -1176,9 +1177,10 @@ def test_the_count_follows_the_poll() -> None:
 
 def test_one_copy_of_the_open_states_and_the_refusal() -> None:
     """A work item's open states and a refused write's sentence and its reason are app.js's, on
-    FairbandPage, and the header, the Inbox view, the Watchlists view and the Agents section read
-    them there. The reason is the server's string detail as it arrived, or the status when the
-    server sent none; the sentence is the reason led by the write's head."""
+    FairbandPage, and the Inbox view, the Watchlists view and the Agents section read them there;
+    the header, which counts the unread messages and no longer the open items, keeps no copy. The
+    reason is the server's string detail as it arrived, or the status when the server sent none;
+    the sentence is the reason led by the write's head."""
     app = _static_file("app.js")
     assert "var OPEN_STATES = ['pending', 'claimed'];" in app
     assert "refusal: refusal" in app and "OPEN_STATES: OPEN_STATES" in app
@@ -1194,7 +1196,7 @@ def test_one_copy_of_the_open_states_and_the_refusal() -> None:
         ": 'the server answered ' + r.status;",
     )
     for name, uses in (
-        ("controls.js", ("var OPEN = P.OPEN_STATES;",)),
+        ("controls.js", ()),
         ("inbox.js", ("var OPEN = P.OPEN_STATES;", "var refusal = P.refusal;")),
         ("watchlists.js", ("var refusal = P.refusal;",)),
         ("agents.js", ("P.refusal('Not saved', r)", "P.refusalDetail(r)")),

@@ -1,14 +1,14 @@
 // The company page's loader driven in node (the company page's design, 7.1 and 7.5), for
-// tests/web/test_company_load.py: the bundle, app.js, finder.js, controls.js, company.js and
-// company_investor.js are loaded in the page's order, with a stub React, a stub ReactDOM whose
-// roots keep what they last drew, the few browser objects the scripts touch (each view's panel one
-// object whose `hidden` controls.js sets, the hash, the history the views replace) and a fetch of
-// the driver's own, answered only when a step answers it, so the steps say exactly when each read
-// lands. The reads the header and the screen start as the scripts load are dropped: no step
-// answers them. The tabs' functions are the driver's own, so the trace reads what the page holds:
-// each draws { tab, mark, price }, the mark of the tab's answer it was handed and the price of the
-// detail; the Investor relations tab's adds { id }, the address's word the page handed it (the
-// Investor relations tab's design, 7.1), and draws the tab's own frame and view under it
+// tests/web/test_company_load.py: the bundle, app.js, finder.js, messages.js, controls.js,
+// company.js and company_investor.js are loaded in the page's order, with a stub React, a stub
+// ReactDOM whose roots keep what they last drew, the few browser objects the scripts touch (each
+// view's panel one object whose `hidden` controls.js sets, the hash, the history the views replace)
+// and a fetch of the driver's own, answered only when a step answers it, so the steps say exactly
+// when each read lands. The reads the header and the screen start as the scripts load are dropped:
+// no step answers them. The tabs' functions are the driver's own, so the trace reads what the page
+// holds: each draws { tab, mark, price }, the mark of the tab's answer it was handed and the price
+// of the detail; the Investor relations tab's adds { id }, the address's word the page handed it
+// (the Investor relations tab's design, 7.1), and draws the tab's own frame and view under it
 // (company_investor.js), so a step can press its switch, and its Earnings calls view reads its
 // call's transcript through the driver's fetch, as the page does. An answer that carries `throws`
 // makes the tab's function throw an error of that message, as a fault in a tab's script would.
@@ -52,11 +52,11 @@
 // { changed, the arrow's words or null }, null with no head) and the delays of company.js's
 // pending timers.
 //
-//   node company_load.mjs <bundle.js> <app.js> <finder.js> <controls.js> <company.js>
-//     <company_investor.js>  < steps.json  > trace.json
+//   node company_load.mjs <bundle.js> <app.js> <finder.js> <messages.js> <controls.js>
+//     <company.js> <company_investor.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
 
-const [bundle, app, finder, controls, company, investor] = process.argv.slice(2, 8)
+const [bundle, app, finder, messages, controls, company, investor] = process.argv.slice(2, 9)
   .map((path) => readFileSync(path, 'utf8'));
 const steps = JSON.parse(readFileSync(0, 'utf8'));
 const later = globalThis.setTimeout; // the driver's own wait for the work a step sets off
@@ -132,6 +132,8 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'document', 'fetch', app
 const P = window.FairbandPage;
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   finder)(window, React, ReactDOM, window.Fairband, P, document, fetch);
+new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
+  messages)(window, React, ReactDOM, window.Fairband, P, document, fetch);
 new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
   'history', 'location', controls)(
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location);
