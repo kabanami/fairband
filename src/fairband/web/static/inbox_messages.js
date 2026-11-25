@@ -101,7 +101,8 @@
   }
 
   /* The Summary cell, which wraps: a done message's stance in the Stance column's chip, then
-     "Value $210.87 · price $173.19 on 7 Nov 2026 · valid until 3 Feb 2027", or the refusal's
+     "Reviewed value $210.87 · price $173.19 on 7 Nov 2026 · valid until 3 Feb 2027", or the
+     refusal's
      sentence where the call has no value, or the dash where it has neither, as where the report
      is no longer on file; a declined one's reason as written. */
   function summary(message) {

@@ -35,7 +35,9 @@ CALL: dict[str, Any] = {
     "validUntil": "2027-02-03",
     "refusal": None,
 }
-BODY = "Hold. Value $210.87 against a price of $173.19 on 7 Nov 2026. Valid until 3 Feb 2027."
+BODY = (
+    "Hold. Reviewed value $210.87 against a price of $173.19 on 7 Nov 2026. Valid until 3 Feb 2027."
+)
 
 
 def _item(item_id: int, symbol: str, state: str, at: str | None, **fields: Any) -> dict[str, Any]:
@@ -504,14 +506,14 @@ def test_the_permission_of_a_browser_with_no_notification() -> None:
         pytest.param(_full(QCOM), BODY, id="reviewed"),
         pytest.param(
             _full(QCOM, note="secondary valuation"),
-            "Hold. Value $210.87 (reviewed, secondary valuation) against a price of $173.19 on "
+            "Hold. Reviewed value $210.87 (secondary valuation) against a price of $173.19 on "
             "7 Nov 2026. Valid until 3 Feb 2027.",
             id="secondary",
         ),
         pytest.param(
             _full(QCOM, stance="trim", value=95.1, basis="mechanical"),
-            "Trim. Value $95.10 (mechanical) against a price of $173.19 on 7 Nov 2026. Valid "
-            "until 3 Feb 2027.",
+            "Trim. Mechanical value $95.10 (unchanged) against a price of $173.19 on 7 Nov "
+            "2026. Valid until 3 Feb 2027.",
             id="mechanical",
         ),
         pytest.param(

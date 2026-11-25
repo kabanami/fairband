@@ -66,7 +66,13 @@ def _row(message: dict[str, Any], marked: bool = False) -> Any:
 def test_a_done_row() -> None:
     tree = _row(DONE, True)
     words = text(tree)
-    for part in ("QCOM", "Full report done", "Value $210.87", "price $173.19", "valid until"):
+    for part in (
+        "QCOM",
+        "Full report done",
+        "Reviewed value $210.87",
+        "price $173.19",
+        "valid until",
+    ):
         assert part in words
     [mark] = [e for e in elements(tree) if e["props"].get("aria-label") == "unread"]
     assert mark["props"]["className"] == "app-inbox__new"
@@ -82,16 +88,18 @@ def test_a_done_row() -> None:
 
 def test_a_done_row_s_summary_in_full() -> None:
     """7.4: the value with its price, the price's date and the end of the validity window, in the
-    page's money and date forms; a secondary valuation's note or a mechanical basis stands with
-    the value, as in the notification's words (messages.js) and on the value card."""
+    page's money and date forms, named as the Screen and the value card name it (the founder,
+    2026-11-25): the reviewed value, a secondary valuation's note standing with it, or the
+    mechanical value, unchanged, of a report with no review; as in the notification's words
+    (messages.js)."""
     [summary] = [e for e in elements(_row(DONE)) if e.get("type") == "td"][2:3]
     assert text(summary) == (
-        "hold Value $210.87 · price $173.19 on 7 Nov 2026 · valid until 3 Feb 2027"
+        "hold Reviewed value $210.87 · price $173.19 on 7 Nov 2026 · valid until 3 Feb 2027"
     )
     secondary = text(_row(DONE | {"note": "secondary valuation"}))
-    assert "Value $210.87 (reviewed, secondary valuation) · price" in secondary
+    assert "Reviewed value $210.87 (secondary valuation) · price" in secondary
     mechanical = text(_row(DONE | {"basis": "mechanical"}))
-    assert "Value $210.87 (mechanical) · price" in mechanical
+    assert "Mechanical value $210.87 (unchanged) · price" in mechanical
 
 
 def test_a_read_row_has_no_mark() -> None:

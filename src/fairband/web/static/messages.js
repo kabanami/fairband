@@ -331,19 +331,23 @@
 
   /* A done message's call in the page's money and date forms, in parts that its notification
      (doneBody) and its row in the Messages tab (inbox_messages.js) each join in words of their
-     own, so the two say one thing (7.4 and 7.6): `value`, "Value $210.87", the value's kind after
-     its money where the call holds a secondary valuation's note, (reviewed, secondary
-     valuation), or a mechanical basis, (mechanical), as on the value card; `price`, "$173.19 on 7
-     Nov 2026", without its date where the call has none; `validUntil`, "3 Feb 2027"; with no
+     own, so the two say one thing (7.4 and 7.6): `value`, "Reviewed value $210.87", the value
+     under the name the Screen and the value card give it (the founder, 2026-11-25), with
+     (secondary valuation) after its money where the call holds that note; or "Mechanical value
+     $95.10 (unchanged)" where the report names no review, the agent's research having left the
+     mechanical value as it was; `price`, "$173.19 on 7 Nov 2026", without its date where the
+     call has none; `validUntil`, "3 Feb 2027"; with no
      value, `refusal`, "No value: no positive trailing earnings.". A value shows the price's date
      and the end of the validity window with it, and a message with no value shows no figure:
      each part is null where the call lacks it, the price and the window where it has no value. */
   function parts(m) {
     var valued = m.value != null;
-    var kind = m.note ? ' (' + m.basis + ', ' + m.note + ')'
-      : m.basis === 'mechanical' ? ' (mechanical)' : '';
+    var mechanical = m.basis === 'mechanical';
+    var kind = m.note ? ' (' + m.note + ')' : mechanical ? ' (unchanged)' : '';
     return {
-      value: valued ? 'Value ' + F.formatMoney(m.value) + kind : null,
+      value: valued
+        ? (mechanical ? 'Mechanical value ' : 'Reviewed value ') + F.formatMoney(m.value) + kind
+        : null,
       price: valued && m.price != null
         ? F.formatMoney(m.price) + (m.priceDate ? ' on ' + F.formatDate(m.priceDate) : '') : null,
       validUntil: valued && m.validUntil ? F.formatDate(m.validUntil) : null,

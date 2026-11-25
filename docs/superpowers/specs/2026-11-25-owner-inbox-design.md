@@ -502,3 +502,15 @@ place and its sound, and one real report's message.
   Messages tab, not the report, where the report has no revision on file.
 - 2026-11-25, Claude: `docs/agents.md` also stated the expiry rule and is corrected with the
   build; section 9 did not name it.
+- 2026-11-25, the founder, on the look's screenshot, whose test reports had no review and so
+  read "Value $187.39 (mechanical)": "the agent did a research and also would provide a reviewed
+  value. That is the value that should be in the message and it should be called the fair
+  value." Told that the Screen and the report's page call that number the reviewed value, he
+  ruled: "fine, call it revewied value for consistency". A message names its value "Reviewed
+  value", in the row and in the notification, where 7.4 and 7.6 write "Value". The figure is
+  still `report_call`'s: the reviewed value of a report with a review. On the live store that
+  day, 51 of 56 messages hold a reviewed value, 3 rest on the mechanical value (their reports
+  name no review, the research having changed no input), 1 on a secondary valuation, and 1 has
+  no value. Claude's call for the other two cases: "Reviewed value $210.87 (secondary
+  valuation)", and "Mechanical value $95.10 (unchanged)" for a report with no review, the
+  Screen's own name for that number.
