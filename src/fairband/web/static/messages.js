@@ -272,7 +272,19 @@
   }
 
   function titleOf(symbol, mode, kind) {
-    return symbol + ': ' + mode + ' ' + kind;
+    return symbol + ': ' + ended(mode, kind);
+  }
+
+  /* What ended, in words (7.4 and 7.6): the mode and the kind, "full report done", "valuation
+     review declined", as a notification's title writes it after the symbol; with `lead`, its
+     first letter a capital, "Full report done", as a message's row in the Messages tab starts. */
+  function ended(mode, kind, lead) {
+    var words = mode + ' ' + kind;
+    return lead ? capital(words) : words;
+  }
+
+  function capital(words) {
+    return words.charAt(0).toUpperCase() + words.slice(1);
   }
 
   /* A message's notification (7.6): its title, "QCOM: full report done"; its body, for a done
@@ -291,22 +303,38 @@
   }
 
   /* "Hold. Value $210.87 against a price of $173.19 on 7 Nov 2026. Valid until 3 Feb 2027.", the
-     value's kind after its money where the call holds a secondary valuation's note, (reviewed,
-     secondary valuation), or a mechanical basis, (mechanical), as on the value card; with no
-     value, the stance and the refusal's sentence; with neither, no body. A value shows the
-     price's date and the end of the validity window with it. */
+     call's parts (parts) in the notification's words; with no value, the stance and the refusal's
+     sentence; with neither, no body. */
   function doneBody(m) {
-    var stance = m.stance ? m.stance.charAt(0).toUpperCase() + m.stance.slice(1) + '. ' : '';
-    if (m.value != null) {
-      var kind = m.note ? ' (' + m.basis + ', ' + m.note + ')'
-        : m.basis === 'mechanical' ? ' (mechanical)' : '';
-      var priced = m.price == null ? ''
-        : ' against a price of ' + F.formatMoney(m.price) +
-          (m.priceDate ? ' on ' + F.formatDate(m.priceDate) : '');
-      return stance + 'Value ' + F.formatMoney(m.value) + kind + priced + '.' +
-        (m.validUntil ? ' Valid until ' + F.formatDate(m.validUntil) + '.' : '');
+    var stance = m.stance ? capital(m.stance) + '. ' : '';
+    var said = parts(m);
+    if (said.value) {
+      return stance + said.value + (said.price ? ' against a price of ' + said.price : '') + '.' +
+        (said.validUntil ? ' Valid until ' + said.validUntil + '.' : '');
     }
-    return m.refusal ? stance + 'No value: ' + m.refusal + '.' : '';
+    return said.refusal ? stance + said.refusal : '';
+  }
+
+  /* A done message's call in the page's money and date forms, in parts that its notification
+     (doneBody) and its row in the Messages tab (inbox_messages.js) each join in words of their
+     own, so the two say one thing (7.4 and 7.6): `value`, "Value $210.87", the value's kind after
+     its money where the call holds a secondary valuation's note, (reviewed, secondary
+     valuation), or a mechanical basis, (mechanical), as on the value card; `price`, "$173.19 on 7
+     Nov 2026", without its date where the call has none; `validUntil`, "3 Feb 2027"; with no
+     value, `refusal`, "No value: no positive trailing earnings.". A value shows the price's date
+     and the end of the validity window with it, and a message with no value shows no figure:
+     each part is null where the call lacks it, the price and the window where it has no value. */
+  function parts(m) {
+    var valued = m.value != null;
+    var kind = m.note ? ' (' + m.basis + ', ' + m.note + ')'
+      : m.basis === 'mechanical' ? ' (mechanical)' : '';
+    return {
+      value: valued ? 'Value ' + F.formatMoney(m.value) + kind : null,
+      price: valued && m.price != null
+        ? F.formatMoney(m.price) + (m.priceDate ? ' on ' + F.formatDate(m.priceDate) : '') : null,
+      validUntil: valued && m.validUntil ? F.formatDate(m.validUntil) : null,
+      refusal: !valued && m.refusal ? 'No value: ' + m.refusal + '.' : null
+    };
   }
 
   /* Shows one notification, inside a try: a browser that refuses it (one that wants a service
@@ -326,11 +354,12 @@
   /* What the page uses: of(items), the items that give a message; landed(items), a read of the
      inbox landed, giving the unread count (controls.js); unread(), the count now; watch(on), the
      Messages tab shows or no longer does, and marked(id), whether a row keeps its mark (the Inbox
-     view); notice(message), a message's notification; permission() and ask(), the browser's
-     permission and Turn on notifications' request; listen(fn), called when the count or the
-     permission may have moved. */
+     view); notice(message), a message's notification, and ended(mode, kind, lead) and
+     parts(message), the words a message's notification and its row share (inbox_messages.js);
+     permission() and ask(), the browser's permission and Turn on notifications' request;
+     listen(fn), called when the count or the permission may have moved. */
   P.messages = {
     of: of, landed: landed, unread: unread, watch: watch, marked: marked, notice: notice,
-    permission: permission, ask: ask, listen: listen
+    ended: ended, parts: parts, permission: permission, ask: ask, listen: listen
   };
 })();

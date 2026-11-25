@@ -259,12 +259,13 @@
     justify-content: center; padding: 15vh var(--space-4) var(--space-4);
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
-  /* The Inbox view (spec 2026-11-06 Tier 2, 18.5): one table of the work items, the panel's
-     width, its header cells not sticky. A note and the state word with a declined item's reason
-     under it wrap rather than widen the table; only when even they cannot does the table scroll
-     sideways on its own. An open item's last cell holds Decline; the reason line it opens spans
-     the table under the row, the field, Decline and Cancel in a row, and a refused decline's
-     sentence spans the line under that, in caution. Loading, the items shown stay, faded. */
+  /* The Inbox view's tables (spec 2026-11-06 Tier 2, 18.5; spec 2026-11-25 owner's inbox, 7.4),
+     the work items' and the messages', each the panel's width, its header cells not sticky. A
+     note, the state word with a declined item's reason under it and a message's summary wrap
+     rather than widen the table; only when even they cannot does the table scroll sideways on its
+     own. An open item's last cell holds Decline; the reason line it opens spans the table under
+     the row, the field, Decline and Cancel in a row, and a refused decline's sentence spans the
+     line under that, in caution. Loading, the rows shown stay, faded. */
   .app-inbox { padding: var(--space-2) 0 var(--space-4); }
   .app-inbox__scroll { overflow-x: auto; }
   .app-inbox .fb-table thead th { position: static; }
@@ -279,6 +280,33 @@
   .app-inbox__form .app-field { width: 24rem; }
   .app-inbox .fb-table td.app-inbox__error { white-space: normal; color: var(--caution); }
   .app-inbox.is-loading .fb-table tbody td { color: var(--ink-faint); }
+  /* The Inbox view's two tabs (spec 2026-11-25 owner's inbox, 7.4), drawn as the company page's
+     are, each count after its name in ink-faint; under them the Messages tab's line about the
+     notification, its words and Turn on notifications in a row. A message unread as the tab
+     showed is marked by a small square of ink, a badge's radius on it, in the cell's own padding
+     before the symbol, so the symbols stand aligned, marked or not: never a round dot, which the
+     brand book keeps for a point on a scale. Nothing here moves. */
+  .app-inbox__tabs {
+    display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .app-inbox__tab {
+    appearance: none; margin: 0 0 -1px; padding: var(--space-2) var(--space-3); background: none;
+    border: 0; border-bottom: 2px solid transparent; color: var(--ink-muted); cursor: pointer;
+  }
+  .app-inbox__tab:hover { color: var(--ink); }
+  .app-inbox__tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .app-inbox__tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .app-inbox__n { color: var(--ink-faint); }
+  .app-inbox__notify {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+  .app-inbox__new {
+    display: inline-block; width: var(--space-2); height: var(--space-2);
+    margin: 0 var(--space-1) 0 calc(-1 * (var(--space-2) + var(--space-1)));
+    vertical-align: middle; background: var(--ink); border-radius: var(--radius-sm);
+  }
   /* The Settings view (spec 2026-11-04 8.5): one form, its five groups each a heading over its
      rows. A row is the label and its captions at the left; at the right the fields, right-aligned
      and mono in the control style on surface-sunken, the word changed in accent and Reset beside
@@ -1701,6 +1729,7 @@
 <script src="/static/messages.js"></script>
 <script src="/static/controls.js"></script>
 <script src="/static/watchlists.js"></script>
+<script src="/static/inbox_messages.js"></script>
 <script src="/static/inbox.js"></script>
 <script src="/static/agents.js"></script>
 <script src="/static/settings.js"></script>

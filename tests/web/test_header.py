@@ -332,6 +332,22 @@ def test_the_menu_is_in_the_founders_order() -> None:
     assert (shown["view"], shown["hash"]) == ("statistics", "#statistics")
 
 
+def test_the_inbox_s_address_holds_its_tab() -> None:
+    """Spec 2026-11-25 owner's inbox, 7.4: #inbox/queue opens the Work queue and keeps its address;
+    any other word after #inbox opens Messages and the address reads #inbox, as the Inbox entry
+    does; a view opened from the header writes the tab it names."""
+    trace = _trace(
+        [
+            {"do": "hash", "hash": "#inbox/queue"},
+            {"do": "hash", "hash": "#inbox/zzz"},
+            {"do": "show", "view": "inbox"},
+            {"do": "show", "view": "inbox", "section": "queue"},
+        ]
+    )
+    assert [t["hash"] for t in trace] == ["#inbox/queue", "#inbox", "#inbox", "#inbox/queue"]
+    assert {t["view"] for t in trace} == {"inbox"}
+
+
 def test_the_old_groups_address_opens_statistics() -> None:
     """4.5: a bookmark or a link to #groups opens Statistics, which reads its groups, and the
     address is put right."""

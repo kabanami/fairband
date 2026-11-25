@@ -385,6 +385,20 @@ def test_the_tab_shown_again_sees_the_messages_at_once() -> None:
     assert (shown["count"], shown["local"]["seen"], shown["unreadMarks"]) == (0, [1, 2], [2])
 
 
+def test_a_tab_restored_hidden_sees_nothing() -> None:
+    """7.3: a browser restores a tab at #inbox in the background, so the Messages tab shows
+    (``watch(true)``) while the document is hidden: the owner has seen nothing, and ``seen`` and
+    the count stay; shown again, the read that lands adds the message to ``seen``."""
+    hidden = [_read([QCOM]), TICK, _read([QCOM, MSFT]), _watch(True)]
+    trace = _run(hidden, hidden=True)
+    assert (trace[2]["local"]["seen"], trace[2]["count"]) == ([1], 1)
+    assert (trace[-1]["local"]["seen"], trace[-1]["count"]) == ([1], 1)
+    assert trace[-1]["unreadMarks"] == []
+    shown = _run(hidden + [_visible(True), _read([QCOM, MSFT])], hidden=True)[-1]
+    assert (shown["local"]["seen"], shown["count"]) == ([1, 2], 0)
+    assert shown["unreadMarks"] == [2]
+
+
 def test_the_marks_stay_until_the_tab_changes() -> None:
     """7.3: the Messages tab shown over a read with an unread message: the count goes to none at
     once, and the row keeps its mark until the tab no longer shows."""

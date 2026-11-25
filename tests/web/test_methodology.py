@@ -614,6 +614,13 @@ def test_the_agents_section_reads(client: TestClient) -> None:
         # research is asked for one company at a time; a list has no Request research (spec
         # 2026-11-22 8)
         "Request research in the drawer posts one.",
+        # the Inbox's two tabs (spec 2026-11-25 owner's inbox, 7.4 and 9)
+        "The Inbox has two tabs.",
+        "Messages tells the owner that an agent finished a report or declined a request.",
+        (
+            "Work queue lists the work items (requests for an agent's research on one company)."
+            " Request research in the drawer posts one."
+        ),
         # spec 11 and 13.3, plan 3: the secondary valuation is the fallback only, refused where
         # the route or the review values the company, and no second value weighs on the stance
         # there; a refused row with a valued review weighs the price against the review's levels

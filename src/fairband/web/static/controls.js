@@ -4,9 +4,10 @@
    experience, 4.6), then in its right slot the finder (finder.js) on every view but the Screen,
    the refresh controls and the engine stamp; the URL hash names the open view, and on the
    Watchlists view its list, whose table is the Screen's, shown under the list's head (spec
-   2026-11-22 7.3). Inbox carries the count of the unread messages, as messages.js counts them on
-   the work items read every thirty seconds, the page hidden or shown (spec 2026-11-25 owner's
-   inbox, 7.5 and 7.7). Under the header, the status line: the running refresh's one run bar
+   2026-11-22 7.3), and on the Inbox view its tab, #inbox for Messages and #inbox/queue for the
+   Work queue. Inbox carries the count of the unread messages, as messages.js counts them on the
+   work items read every thirty seconds, the page hidden or shown (spec 2026-11-25 owner's inbox,
+   7.4, 7.5 and 7.7). Under the header, the status line: the running refresh's one run bar
    (the design system's RunProgress), or how the last one ended in one line, its calibration's
    breakdown behind Details ▾ (growth-routes spec 6.1); the company page draws the run bar and a
    notice alone, not the last refresh's line or Details ▾ (the company page's design, the decision
@@ -394,6 +395,11 @@
      table is told which of the two views it draws (P.onList) once the panels show, since it reads
      the Screen's place from the scroller as it turns to the list and a hidden scroller reads
      none; no other view tells it, so it keeps its mode while hidden.
+     The Inbox view takes its tab (keepInboxTab), kept in P.inboxTab for its script: the Work
+     queue, #inbox/queue, or Messages, #inbox, for any other word or none; another tab while it is
+     open runs its loader again, which tells messages.js whether the Messages tab shows. Any
+     other view shown tells messages.js the Messages tab no longer does, so its marks go (spec
+     2026-11-25 owner's inbox, 7.3 and 7.4).
      A view shown closes the watchlist popup and the Notes box (FairbandPage.closePopups), which
      no press closes when the browser's Back or Forward moves the hash. Once a view has opened
      (viewed), fromHash holds the address while the page is locked (spec 2026-11-23 refresh
@@ -405,10 +411,13 @@
     P.section = tab === 'methodology' && section ? section : null;
     var moved = tab === 'company' && keepCompany(section, id, report);
     var listed = tab === 'watchlists' && keepList(section);
+    var turned = tab === 'inbox' && keepInboxTab(section);
     history.replaceState(null, '', tab === 'screen' ? location.pathname
       : '#' + tab + (P.section ? '/' + P.section : '') + (tab === 'company' ? companyPath() : '') +
+        (tab === 'inbox' && P.inboxTab === 'queue' ? '/queue' : '') +
         (tab === 'watchlists' && P.listId != null ? '/' + P.listId : ''));
-    if (!opened && !P.section && !moved && !listed) return;
+    if (!opened && !P.section && !moved && !listed && !turned) return;
+    if (tab !== 'inbox') P.messages.watch(false);
     state.tab = tab;
     state.detailsOpen = false; /* a view opened with no press, by Back or Forward, shuts it too */
     P.closePopups();
@@ -419,6 +428,16 @@
     if (tab === 'statistics') loadGroups();
     if (P.onShow[tab]) P.onShow[tab]();
     render();
+  }
+
+  /* The Inbox's tab a hash names, kept in P.inboxTab: 'queue', the Work queue, for the word
+     queue, else 'messages', the Messages tab (spec 2026-11-25 owner's inbox, 7.4). True when it
+     is not the tab already kept. */
+  function keepInboxTab(word) {
+    var tab = word === 'queue' ? 'queue' : 'messages';
+    var kept = P.inboxTab;
+    P.inboxTab = tab;
+    return kept !== tab;
   }
 
   /* The list a hash names, kept in P.listId: the whole number its word spells, else null, the
@@ -470,6 +489,8 @@
      #statistics, the Statistics view, and #groups, its old address, which a bookmark may still
      name, the hash replaced by the view's (spec 2026-11-23 refresh experience, 4.5);
      #methodology, #settings, #methodology/<section-id>, the Methodology view at that section;
+     #inbox, the Inbox view on its Messages tab, and #inbox/queue, on its Work queue, another word
+     after #inbox put right to #inbox (spec 2026-11-25 owner's inbox, 7.4);
      #company/<symbol>, the company page's Overview, #company/<symbol>/financials, its Financials
      tab, #company/<symbol>/estimates, its Estimates tab, #company/<symbol>/investor-relations,
      its Investor relations tab, #company/<symbol>/investor-relations/2026Q4 on that call and
@@ -922,7 +943,8 @@
      named; company is the company, the tab and the id the company page shows,
      { symbol, tab, id }, the id null but on a report of the Research tab and on a word of the
      Investor relations tab; listId is the list's id the address names, a number or null, which
-     the watchlist page sets too as the reader chooses a list; running() is true
+     the watchlist page sets too as the reader chooses a list; inboxTab is the Inbox view's tab
+     the address names, 'messages' or 'queue'; running() is true
      while a refresh runs; followRefresh(id) follows a refresh another view started (the Settings
      view's revalue) as the header follows its own: the run bar while it runs, the rows loaded
      again when it ends; `id`, the run its answer gave, is the page's own, which locks the page
@@ -937,6 +959,7 @@
   P.show = show;
   P.onShow = {};
   P.listId = null;
+  P.inboxTab = 'messages';
   P.section = null;
   P.company = null;
   P.running = function () { return state.running !== null; };

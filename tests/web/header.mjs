@@ -1,8 +1,11 @@
 // The header and the status line under it driven in node (the company page's design, the decision
-// log of 2026-11-17), for tests/web/test_header.py and tests/web/test_messages.py: the bundle,
-// app.js, finder.js, messages.js and controls.js are loaded in the page's order, with a stub
-// React, a stub ReactDOM whose roots keep what they last drew, the few browser objects the scripts
-// touch (each view's panel one object whose `hidden` controls.js sets, a query that finds no
+// log of 2026-11-17), for tests/web/test_header.py, tests/web/test_messages.py and
+// tests/web/test_inbox_messages_page.py: the bundle, app.js, finder.js, messages.js and
+// controls.js are loaded in the page's order, then the scripts named after them, as index.html
+// loads them (inbox_messages.js and inbox.js, the Inbox view's), with a stub React, a stub
+// ReactDOM whose roots keep what they last drew, the few browser objects the scripts touch (each
+// view's panel one object whose `hidden` controls.js sets, hidden as index.html writes it but the
+// Screen's, a query that finds no
 // element, as app.js asks for the table's scroller when the Watchlists view turns the table to its
 // list, the hash, the history the views replace, the window's and the document's listeners, each
 // panel's classes, the body's children, main.app-page and the layer's mount as index.html writes
@@ -79,6 +82,10 @@
 //                                                request with `grant`, which the permission takes
 //   {"do": "click", "index"}                     the notification made at `index`, counted from
 //                                                the first the page made, is clicked
+//   {"do": "inbox", "name", "grant"}             the Inbox view's control `name` is pressed: a tab
+//                                                by its label, its count left out, or a button by
+//                                                its words; a permission's request it makes is
+//                                                answered with `grant`
 // After each step and the work it sets off, the trace on stdout gains the urls fetched since the
 // step before (the reads the scripts start as they load are not counted), whether a view's panel
 // holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
@@ -112,14 +119,20 @@
 // permission the last ask() resolved with, null before one resolves (`askAnswer`); whether a click
 // on a notification called window.focus in the step (`windowFocused`); the indexes of the
 // notifications closed so far (`closedNotices`); and the ids of the last inbox read's items for
-// which FairbandPage.messages.marked is true, ascending (`unreadMarks`).
+// which FairbandPage.messages.marked is true, ascending (`unreadMarks`). Last, what the Inbox
+// view's root last drew, where inbox.js is loaded (`inbox`; null before it draws): its tabs, each
+// [words, aria-selected]; the tab panel's aria-labelledby (`panel`); the notification's line, its
+// words, or null for none (`line`); the panel's other sentences, each p's words (`sentences`);
+// the Messages tab's rows, each [symbol, whether it holds the unread mark] (`messages`); and the
+// Work queue's rows, each its symbol (`queue`).
 //
-//   node header.mjs <bundle.js> <app.js> <finder.js> <messages.js> <controls.js>
+//   node header.mjs <bundle.js> <app.js> <finder.js> <messages.js> <controls.js> [<script.js> ...]
 //     < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
 
 const [bundle, app, finder, messages, controls] = process.argv.slice(2, 7)
   .map((path) => readFileSync(path, 'utf8'));
+const extras = process.argv.slice(7).map((path) => readFileSync(path, 'utf8'));
 const given = JSON.parse(readFileSync(0, 'utf8'));
 const {
   steps, storage: stored = {}, hidden = false, local: kept = {}, notification = null, secure = true,
@@ -143,9 +156,22 @@ const React = {
   useLayoutEffect() {},
 };
 const roots = []; // every root made, with what it last drew
+// A root keeps what it is handed; the Inbox view's (inbox.js), whose one element is its View,
+// keeps the tree the View gives as it draws (`view`), as React calls it then, so the trace reads
+// what the view last drew and not the state at the trace.
 const ReactDOM = {
   createRoot(mount) {
-    const root = { mount, drawn: null, render(tree) { root.drawn = tree; } };
+    const root = {
+      mount,
+      drawn: null,
+      view: null,
+      render(tree) {
+        root.drawn = tree;
+        if (mount && mount.id === 'inbox' && typeof tree.type === 'function') {
+          root.view = tree.type(tree.props);
+        }
+      },
+    };
     roots.push(root);
     return root;
   },
@@ -164,6 +190,8 @@ function classList() {
   };
 }
 const panels = {}; // the page's elements by id, each made once
+// The views' panels index.html writes hidden: every one but the Screen's.
+const HIDDEN = ['watchlists', 'statistics', 'methodology', 'settings', 'inbox', 'company'];
 const documentListeners = {}; // the document's listeners by event
 const captured = new Set(); // those of them registered for the capture phase
 const scroller = { scrollTop: 0 }; // the table's scroller, .app-main
@@ -181,7 +209,8 @@ const document = {
   },
   createElement() { return { appended: true, inert: false }; },
   getElementById(id) {
-    return panels[id] || (panels[id] = { id, hidden: false, classList: classList() });
+    return panels[id] ||
+      (panels[id] = { id, hidden: HIDDEN.includes(id), classList: classList() });
   },
   querySelector(selector) { return selector === '.app-main' ? scroller : null; },
   addEventListener(event, listener, options) {
@@ -326,6 +355,12 @@ new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'documen
   'history', 'location', 'setTimeout', 'clearTimeout', controls)(
   window, React, ReactDOM, window.Fairband, P, document, fetch, history, location,
   clock.setTimeout, clock.clearTimeout);
+for (const script of extras) {
+  new Function('window', 'React', 'ReactDOM', 'Fairband', 'FairbandPage', 'document', 'fetch',
+    'setTimeout', 'clearTimeout', script)(
+    window, React, ReactDOM, window.Fairband, P, document, fetch, clock.setTimeout,
+    clock.clearTimeout);
+}
 // The view that reads as it opens, the company page, has no script here: its loader reads the
 // detail of the company the address names, which no step answers.
 P.onShow.company = P.onShow.company ||
@@ -443,6 +478,43 @@ function key(name) {
   return event.defaultPrevented;
 }
 
+// The Inbox view's tree as its root last drew it, else null where inbox.js is not loaded or has
+// drawn nothing.
+function inboxTree() {
+  const root = rootOn('inbox');
+  return root ? root.view : null;
+}
+
+// What the Inbox view draws (the trace's `inbox`), else null.
+function inboxView() {
+  const tree = inboxTree();
+  if (!tree) return null;
+  const all = [...elements(tree)];
+  const panel = all.find((e) => e.props.role === 'tabpanel');
+  const inPanel = [...elements(panel)];
+  const line = inPanel.find((e) => hasClass(e, 'app-inbox__notify'));
+  const symbol = (row) => textOf([...elements(row)].find((e) => hasClass(e, 'app-inbox__symbol')));
+  return {
+    tabs: all.filter((e) => e.props.role === 'tab')
+      .map((e) => [textOf(e), e.props['aria-selected']]),
+    panel: panel ? panel.props['aria-labelledby'] : null,
+    line: line ? textOf(line) : null,
+    sentences: inPanel.filter((e) => e.type === 'p' && e !== line).map(textOf),
+    messages: inPanel.filter((e) => e.type === 'tr' && 'data-message' in e.props)
+      .map((row) => [symbol(row), [...elements(row)].some((e) => hasClass(e, 'app-inbox__new'))]),
+    queue: inPanel.filter((e) => e.type === 'tr' && 'data-item' in e.props && !e.props.className)
+      .map(symbol),
+  };
+}
+
+// The Inbox view's control `name`, pressed: a tab by its label, a button by its words.
+function pressInbox(name) {
+  const control = [...elements(inboxTree())].find((e) => typeof e.props.onClick === 'function' &&
+    (e.props.role === 'tab' ? e.props.children[0] === name : textOf(e) === name));
+  if (!control) throw new Error('no control ' + name + ' in the Inbox view');
+  control.props.onClick();
+}
+
 // The items of the last inbox read answered, whose marks the trace reports.
 let inboxItems = [];
 
@@ -541,6 +613,9 @@ for (const step of steps) {
     const shown = made[step.index];
     if (!shown) throw new Error('no notification at ' + step.index);
     shown.onclick({ target: shown, preventDefault() {} });
+  } else if (step.do === 'inbox') {
+    if ('grant' in step) grant = step.grant;
+    pressInbox(step.name);
   }
   else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
@@ -608,6 +683,7 @@ for (const step of steps) {
     closedNotices: made.map((n, at) => (n.closed ? at : null)).filter((at) => at !== null),
     unreadMarks: inboxItems.map((item) => item.id).filter((id) => P.messages.marked(id))
       .sort((a, b) => a - b),
+    inbox: inboxView(),
   });
   reported = made.length;
 }

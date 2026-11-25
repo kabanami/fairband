@@ -1053,6 +1053,7 @@ def test_static_design_system_served_offline(client: TestClient) -> None:
         "/static/messages.js",
         "/static/controls.js",
         "/static/watchlists.js",
+        "/static/inbox_messages.js",
         "/static/inbox.js",
         "/static/agents.js",
         "/static/settings.js",
