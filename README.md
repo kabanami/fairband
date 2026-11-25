@@ -78,8 +78,8 @@ stored data), and inline charts.
 ## Quickstart
 
 Requirements: Python 3.13+, [uv](https://docs.astral.sh/uv/), and a Financial Modeling Prep API
-key. I run Fairband on Linux under WSL with FMP's Ultimate plan; other systems and lower FMP
-tiers haven't been tested.
+key. I run Fairband on Linux under WSL, and it currently supports FMP's Ultimate and Premium
+plans only.
 
 1. Clone the repo and install dependencies:
 
@@ -94,6 +94,14 @@ tiers haven't been tested.
    ```toml
    [keys]
    fmp = "your-fmp-key"
+   ```
+
+   On the Premium plan, also add the lines below. A full refresh then takes about 70 minutes, and
+   earnings call transcripts are not available.
+
+   ```toml
+   [fmp]
+   plan = "premium"
    ```
 
 3. Start the server, then open http://127.0.0.1:8470:
