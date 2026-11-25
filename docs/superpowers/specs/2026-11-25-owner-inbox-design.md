@@ -486,3 +486,19 @@ place and its sound, and one real report's message.
   second address part is new routing.
 - 2026-11-25, Claude: the figures come from a second read, asked for only when a row or a
   notification is drawn, so the 30-second read stays a few plain queries.
+- 2026-11-25, Claude, where the build differs from 7.3: `seen` is written as the union of the
+  stored list and the read's ids, where 7.3 says each later write keeps only the ids the read
+  holds: a second tab's older read would otherwise un-see what the owner saw in the first.
+  `notified` is written as 7.3 says.
+- 2026-11-25, Claude: the unread mark is 8px, where the plan said 6px: a 6px square with the 3px
+  corner is a round dot. Question B-324.
+- 2026-11-25, Claude, where the build differs from 7.2: the page asks for the full read in more
+  cases than its three. A launch's reread and a decline that lands on the Messages tab each ask
+  once more, and a message that lands while the Messages tab shows with the permission granted
+  asks twice. Filed as B-326.
+- 2026-11-25, Claude, where the build differs from 7.6: more than three new messages at once ask
+  for no full read, since the one notification in their place needs no figure.
+- 2026-11-25, Claude, where the build differs from 7.6: a done message's notification opens the
+  Messages tab, not the report, where the report has no revision on file.
+- 2026-11-25, Claude: `docs/agents.md` also stated the expiry rule and is corrected with the
+  build; section 9 did not name it.

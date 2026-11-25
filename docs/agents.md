@@ -201,8 +201,10 @@ the research skill and the work item as its first prompt, `/fairband-research wo
 agent claims the item, and the line under the button follows the launch until it does, or says
 what failed: the window, or Claude Code in it. The menu's box **Open Claude Code**, cleared, posts
 the request without a window. Without a window command the button only posts the work item. A
-pending item's row on the Inbox page has **Open Claude Code** too, for an item that no click made:
-the review Fairband posts when a watched company's window ends, or an item an agent posted.
+pending item's row on the Inbox's Work queue tab has **Open Claude Code** too, for an item whose
+window no click opened: one an agent posted, a request posted with the menu's box cleared, or a
+stored item of origin `expiry`, a review Fairband posted itself when a watched company's window
+ended, from before that rule left. Fairband posts no work item by itself now.
 
 The file is `~/.config/fairband/launch.json`, beside `keys.toml`. The Agents section of the
 Settings page shows what it holds and writes it on Save; its **Test** opens a window in which
