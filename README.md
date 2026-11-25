@@ -32,7 +32,7 @@ Fairband is made up of four parts:
   snapshots, and everything you or your agent writes.
 - **Web interface:** A screener across all companies, a page for each company (overview,
   financials, estimates, investor relations, and research), plus pages for watchlists,
-  methodology, settings, and the agent inbox.
+  methodology, settings, and the inbox.
 - **MCP server:** Exposes 56 tools so your agent can query stored data, request additional data
   from FMP through the server, and save notes, findings, moat classes, updated valuations, and
   full reports.
@@ -74,6 +74,14 @@ stored data), and inline charts.
    valuation alongside the mechanical one.
 4. The agent submits the report; Fairband validates its citations and saves it.
 5. The report appears in the company's **Research** tab along with its expiration date.
+6. The **Messages** tab of the Inbox shows a message for the finished report, and the browser
+   shows a notification.
+
+To turn the notifications on, click **Turn on notifications** once on the Messages tab. They need
+a Fairband tab open in the browser, which can stay in the background. Chrome's Memory Saver can
+put a tab that has been in the background for a long time to sleep, and a sleeping tab shows no
+notification. To prevent this, add the address (`127.0.0.1:8470`) in Chrome under Settings,
+Performance, **Always keep these sites active**.
 
 ## Quickstart
 
