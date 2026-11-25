@@ -1,8 +1,8 @@
 # Fairband
 
 Fairband is a local equity research workbench that pairs a rule-based valuation engine with an MCP
-server for your AI agents. It pulls market data from Financial Modeling Prep using your API key,
-runs mechanical valuations, and gives you a single web interface to screen companies, inspect
+server for your AI agents. It pulls market data from Financial Modeling Prep (FMP) using your API
+key, runs mechanical valuations, and gives you a single web interface to screen companies, inspect
 financials, track watchlists, and read research. Your agent connects over MCP to read that same
 data, challenge the model's assumptions where needed, and write full research reports back into
 the workbench. It currently only supports Claude Code.
@@ -77,9 +77,8 @@ stored data), and inline charts.
 
 ## Quickstart
 
-Requirements: Python 3.13+, [uv](https://docs.astral.sh/uv/), and a Financial Modeling Prep API
-key. I run Fairband on Linux under WSL, and it currently supports FMP's Ultimate and Premium
-plans only.
+Requirements: Python 3.13+, [uv](https://docs.astral.sh/uv/), and an FMP API key. I run Fairband
+on Linux under WSL, and it currently supports FMP's Ultimate and Premium plans only.
 
 1. Clone the repo and install dependencies:
 
