@@ -70,10 +70,12 @@
   /* The inbox, read as the view opens, as its tab changes and after every write. The items shown
      stay, faded, until the read lands, and the latest read wins; its items go to the header's
      count. First the view tells messages.js whether the Messages tab shows (watch), and on that
-     tab it reads the messages too (spec 2026-11-25 owner's inbox, 7.2 and 7.3). */
+     tab it reads the messages too (spec 2026-11-25 owner's inbox, 7.2 and 7.3). A read after a
+     decline that lands once the view is hidden (the owner left it meanwhile) shows no tab: it
+     neither watches nor reads the messages, whatever tab the address last named. */
   function load() {
     var request = ++latest;
-    var messages = P.inboxTab === 'messages';
+    var messages = !panel.hidden && P.inboxTab === 'messages';
     state.loading = true;
     listen();
     P.messages.watch(messages);

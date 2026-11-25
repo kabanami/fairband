@@ -360,6 +360,35 @@ def test_leaving_the_inbox_clears_the_marks() -> None:
     assert trace[-1]["unreadMarks"] == []
 
 
+def test_a_decline_that_lands_after_the_view_is_left_sees_nothing() -> None:
+    """7.3: the owner declines an item on the Work queue, turns to Messages and leaves the Inbox
+    before the decline lands; the view's read after it, made while the view is hidden, neither
+    watches nor reads the messages, so a later message is counted, not seen."""
+    declined = CLAIMED | {"state": "declined", "reason": "no", "declinedBy": "owner"}
+    trace = _view(
+        [
+            _read([QCOM]),
+            _show("queue"),
+            _read([QCOM, CLAIMED]),
+            _press("Decline"),
+            {"do": "inboxField", "name": "Reason for declining AMD", "value": "no"},
+            {"do": "inboxSubmit"},
+            _press("Messages"),
+            {"do": "show", "view": "screen"},
+            {"do": "answer", "url": "/api/inbox/3", "status": 200, "body": declined},
+            _read([QCOM, declined]),
+            _read([QCOM, declined]),
+            TICK,
+            _read([QCOM, declined, MSFT]),
+        ]
+    )
+    assert trace[5]["reads"] == ["/api/inbox/3"]
+    assert trace[6]["hash"] == "#inbox" and trace[7]["hash"] == ""
+    assert [url for step in trace[7:] for url in step["reads"]].count(FULL) == 0
+    assert trace[-1]["local"]["seen"] == [1]
+    assert trace[-1]["count"] == 1 and trace[-1]["unreadMarks"] == []
+
+
 def test_a_message_that_arrives_while_the_tab_shows_is_read_and_marked() -> None:
     """7.2: the cheap read shows a message the tab does not show: the full read is asked for again,
     and the row is drawn marked."""

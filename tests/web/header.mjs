@@ -86,6 +86,10 @@
 //                                                by its label, its count left out, or a button by
 //                                                its words; a permission's request it makes is
 //                                                answered with `grant`
+//   {"do": "inboxField", "name", "value"}        the Inbox view's field named `name` (its
+//                                                accessible name) takes `value`, as typing does
+//   {"do": "inboxSubmit"}                        the Inbox view's form is sent, as Enter in its
+//                                                field sends it (a decline's reason line)
 // After each step and the work it sets off, the trace on stdout gains the urls fetched since the
 // step before (the reads the scripts start as they load are not counted), whether a view's panel
 // holds is-recomputing, the delays of app.js's and controls.js's pending timers, the view the
@@ -515,6 +519,21 @@ function pressInbox(name) {
   control.props.onClick();
 }
 
+// The Inbox view's field named `name` takes `value`.
+function typeInbox(name, value) {
+  const field = [...elements(inboxTree())].find((e) => e.props['aria-label'] === name &&
+    typeof e.props.onChange === 'function');
+  if (!field) throw new Error('no field ' + name + ' in the Inbox view');
+  field.props.onChange({ target: { value } });
+}
+
+// The Inbox view's form, sent.
+function submitInbox() {
+  const form = [...elements(inboxTree())].find((e) => e.type === 'form');
+  if (!form) throw new Error('no form in the Inbox view');
+  form.props.onSubmit({ preventDefault() {} });
+}
+
 // The items of the last inbox read answered, whose marks the trace reports.
 let inboxItems = [];
 
@@ -616,7 +635,8 @@ for (const step of steps) {
   } else if (step.do === 'inbox') {
     if ('grant' in step) grant = step.grant;
     pressInbox(step.name);
-  }
+  } else if (step.do === 'inboxField') typeInbox(step.name, step.value);
+  else if (step.do === 'inboxSubmit') submitInbox();
   else throw new Error('no step ' + step.do);
   await new Promise((done) => later(done, 0));
   const header = rootOn('header').drawn;
