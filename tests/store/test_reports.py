@@ -11,6 +11,7 @@ from fairband.store.ledger import OWNER, Writer
 from fairband.store.overrides import insert_override
 from fairband.store.reports import (
     JudgmentRow,
+    ReportHead,
     ReportRow,
     insert_judgments,
     insert_report,
@@ -18,6 +19,7 @@ from fairband.store.reports import (
     latest_judgments,
     latest_report,
     latest_reports,
+    report_heads,
     report_row,
     reports_for,
     revisions_by_id,
@@ -121,6 +123,25 @@ def test_revisions_by_id_reads_one_query_and_skips_missing_ids(conn: sqlite3.Con
     assert revisions_by_id(conn, [a, b, 999]) == {a: 1, b: 2}
     assert len(statements) == 1
     assert revisions_by_id(conn, []) == {}
+    assert len(statements) == 1  # no ids, no query
+
+
+def test_report_heads_reads_no_sections(conn: sqlite3.Connection) -> None:
+    """Each named report's head, by id, in one query that does not read its sections; an id with
+    no report is left out, and no ids read nothing (spec 2026-11-25 owner's inbox, 7.2: a message
+    names its report by its head)."""
+    _report(conn, "MSFT")  # so a report's id is not its revision
+    a = _report(conn, "AAPL", review_id=7, secondary_id=8)
+    b = _report(conn, "AAPL", "valuation review", writer=OWNER)
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    assert report_heads(conn, [a, b, 999]) == {
+        a: ReportHead(a, "AAPL", 1, "full report", "buy", 4, 7, 8, "agent", "claude-opus-5-5"),
+        b: ReportHead(b, "AAPL", 2, "valuation review", "buy", 4, None, None, "owner", None),
+    }
+    [statement] = statements
+    assert "sections" not in statement and "*" not in statement
+    assert report_heads(conn, []) == {}
     assert len(statements) == 1  # no ids, no query
 
 

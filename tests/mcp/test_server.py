@@ -462,9 +462,10 @@ def test_inbox_list_calls_the_api(api: FairbandClient, client: TestClient) -> No
         ("inbox_list", {"state": "pending"}),
         ("inbox_list", {"state": "done"}),
     )
-    # the list's own fields: the report's revision (18.5, plan 4), the open item's newest launch
-    # and whether launching is set up (B-210)
-    listed = posted | {"reportRevision": None, "launch": None}
+    # the list's own fields: the report's revision (18.5, plan 4), who declined the item (spec
+    # 2026-11-25 owner's inbox, 7.2), the open item's newest launch and whether launching is set
+    # up (B-210)
+    listed = posted | {"reportRevision": None, "declinedBy": None, "launch": None}
     assert every == client.get("/api/inbox").json() == {"launchReady": False, "items": [listed]}
     assert pending == every and done == {"launchReady": False, "items": []}
 

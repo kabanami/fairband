@@ -1,6 +1,6 @@
-"""The work inbox: its items' states (spec 2026-11-06 Tier 2, section 8), and no item Fairband posts
-itself (spec 2026-11-25 owner's inbox, 8), on a database where AAPL and MSFT are valued into 2027
-and both are on the list Core."""
+"""The work inbox: its items' states (spec 2026-11-06 Tier 2, section 8), who declined each, and no
+item Fairband posts itself (spec 2026-11-25 owner's inbox, 7.1 and 8), on a database where AAPL
+and MSFT are valued into 2027 and both are on the list Core."""
 
 import sqlite3
 from collections.abc import Callable
@@ -19,13 +19,14 @@ from fairband.store.inbox import (
     claim_item,
     complete_item,
     decline_item,
+    decliners,
     oldest_pending,
     open_item,
     post_item,
     work_item,
     work_items,
 )
-from fairband.store.ledger import OWNER, Writer
+from fairband.store.ledger import OWNER, Writer, record
 from fairband.store.snapshots import insert_snapshot
 from fairband.store.watchlists import add_symbol, create_watchlist
 
@@ -164,6 +165,26 @@ def test_a_missing_item_and_a_bad_mode(conn: sqlite3.Connection, core: int) -> N
         post_item(conn, "AAPL", "memo", "", 1, "owner", OWNER, NOW)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="^'bad symbol' is not a symbol$"):
         post_item(conn, "bad symbol", "full report", "", None, "owner", OWNER, NOW)
+
+
+def test_decliners_reads_the_newest_decline_of_each_item(conn: sqlite3.Connection) -> None:
+    """Spec 2026-11-25 owner's inbox, 7.1: the writer of each item's decline, by item id, from the
+    newest ledger row of kind ``decline`` that names the item, in one query. A row of another kind
+    and a decline that names no item are not one."""
+
+    def row(kind: str, writer: Writer, item_id: int | None) -> None:
+        table = None if item_id is None else "work_items"
+        record(conn, writer, NOW, kind, "AAPL", table, item_id, work_item_id=item_id, summary=kind)
+
+    row("decline", OWNER, 1)
+    row("decline", AGENT, 1)  # the newer of item 1's two
+    row("decline", OWNER, 2)
+    row("claim", AGENT, 3)
+    row("decline", AGENT, None)
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    assert decliners(conn) == {1: AGENT, 2: OWNER}
+    assert len(statements) == 1
 
 
 def test_fairband_posts_and_drops_no_item_itself() -> None:

@@ -10,7 +10,8 @@ takeover. A company has one open item (pending or claimed) at most: a second pos
 ``ItemOpen``. A write the item's state does not allow raises ``WrongState`` (``"work item 3 is
 done"``); both are ``ValueError``s. A missing item raises ``KeyError(id)``. Each write is one
 transaction; it joins the caller's when there is one, so the caller's ledger row commits with
-it.
+it. Who declined an item is the ledger's (``decliners``; spec 2026-11-25 owner's inbox, 7.1): the
+writer of the newest row of kind ``decline`` that names it.
 
 Fairband posts no item by itself and drops none (spec 2026-11-25 owner's inbox, 8), so a read of
 the inbox writes nothing. A row the expiry rule wrote before it left still reads as stored: its
@@ -157,6 +158,17 @@ def oldest_pending(conn: sqlite3.Connection) -> WorkItem | None:
         "SELECT * FROM work_items WHERE state = 'pending' ORDER BY id LIMIT 1"
     ).fetchone()
     return None if row is None else _item(row)
+
+
+def decliners(conn: sqlite3.Connection) -> dict[int, Writer]:
+    """The writer of each item's decline, by item id, in one query: the newest ledger row of kind
+    ``decline`` that names the item. An item no such row names is left out."""
+    rows = conn.execute(
+        "SELECT work_item_id, principal, actor, client FROM ledger WHERE id IN"
+        " (SELECT MAX(id) FROM ledger WHERE kind = 'decline' AND work_item_id IS NOT NULL"
+        " GROUP BY work_item_id)"
+    )
+    return {r["work_item_id"]: Writer(r["principal"], r["actor"], r["client"]) for r in rows}
 
 
 def _move(

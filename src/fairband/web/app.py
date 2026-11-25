@@ -1,8 +1,9 @@
 """The FastAPI app: the screen page, the static files, the screen's JSON API, the Statistics view's
 read and the groups the Methodology page counts, the refresh routes (spec 6.10), the settings and
 watchlist routes (``settings_api``, ``watchlists_api``), the agent routes of the work inbox, the
-research records and the ledger (``agents_api``), the guidance routes (``guidance_api``), the
-override and review routes (``reviews_api``), the moat class's write (``moat_api``), the
+research records and the ledger (``agents_api``), the owner's read of the messages
+(``inbox_messages``), the guidance routes (``guidance_api``), the override and review routes
+(``reviews_api``), the moat class's write (``moat_api``), the
 sensitivity reading's routes (``sensitivity_api``), the company reads, the Methodology section
 read and the report routes (``reports_api``), the company page's four reads (``company_api``),
 the research read (``research_api``), the multiples history read (``multiples_api``), the band's
@@ -155,6 +156,7 @@ from fairband.web.company_api import add_company_page_routes
 from fairband.web.filings_api import add_filing_routes
 from fairband.web.guidance_api import add_guidance_routes
 from fairband.web.history_api import add_history_routes
+from fairband.web.inbox_messages import add_message_routes
 from fairband.web.launch_api import add_launch_routes, add_launch_settings_routes
 from fairband.web.logo_api import add_logo_routes, logo_route
 from fairband.web.moat_api import add_moat_routes, moat_json
@@ -563,6 +565,7 @@ def create_app(
     add_settings_routes(app, conn_factory, policy, clock)
     add_watchlist_routes(app, conn_factory, clock)
     add_agent_routes(app, conn_factory, clock, settings.config_dir)
+    add_message_routes(app, conn_factory)
     add_guidance_routes(app, conn_factory, policy, taxed, clock)
     add_review_routes(app, conn_factory, policy, taxed, clock)
     add_moat_routes(app, conn_factory, policy, taxed, table, clock)

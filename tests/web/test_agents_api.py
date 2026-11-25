@@ -2,6 +2,7 @@
 records and the ledger, on the database of ``conftest.py``: AAPL, AAL and HGCO, each with one
 snapshot."""
 
+import sqlite3
 from contextlib import closing
 from dataclasses import replace
 from datetime import date, timedelta
@@ -15,9 +16,11 @@ from support.web import HEADER, NOW, TODAY
 from fairband.engine.route import refusal_result, value_company
 from fairband.policy import Policy, load_policy
 from fairband.store.db import connect
-from fairband.store.ledger import Writer
+from fairband.store.inbox import complete_item, post_item
+from fairband.store.ledger import OWNER, Writer
 from fairband.store.reports import insert_report
-from fairband.store.snapshots import insert_snapshot
+from fairband.store.snapshots import insert_snapshot, latest_snapshot
+from fairband.web.agents_api import inbox_items_json
 from fairband.web.identity import ACTOR_HEADER, CLIENT_HEADER, IDENTIFY_FIRST, PRINCIPAL_HEADER
 
 AT = NOW.isoformat()
@@ -71,9 +74,10 @@ def test_post_and_list_inbox(client: TestClient) -> None:
         "expiryReviewId": None,  # the held record an expiry item stands for (spec 2026-11-23
         "expirySecondaryId": None,  # held reviewed value, 5.10); none on an owner's item
     }
-    # the list's own fields: the report's revision (18.5, plan 4) and the open item's newest
-    # launch, with whether launching is set up beside the items (B-210)
-    listed = item | {"reportRevision": None, "launch": None}
+    # the list's own fields: the report's revision (18.5, plan 4), who declined the item (spec
+    # 2026-11-25 owner's inbox, 7.2) and the open item's newest launch, with whether launching is
+    # set up beside the items (B-210)
+    listed = item | {"reportRevision": None, "declinedBy": None, "launch": None}
     assert client.get("/api/inbox").json() == {"launchReady": False, "items": [listed]}
     assert client.get("/api/inbox", params={"state": "pending"}).json()["items"] == [listed]
     assert client.get("/api/inbox", params={"state": "done"}).json()["items"] == []
@@ -120,6 +124,73 @@ def test_the_inbox_names_a_done_items_report_revision(client: TestClient, db_pat
         conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
     [done] = client.get("/api/inbox", params={"state": "done"}).json()["items"]
     assert (done["reportId"], done["reportRevision"]) == (report_id, None)
+
+
+def test_the_inbox_names_who_declined(client: TestClient, db_path: Path) -> None:
+    """Spec 2026-11-25 owner's inbox, 7.2: a declined item names the principal that wrote its
+    decline, read from the ledger; an item not declined names none, and so does a declined one
+    with no ledger row of its decline (MSFT's, declined by SQL)."""
+    for symbol, headers in (("AAPL", HEADER), ("AAL", AGENT)):
+        item = _post(client, "/api/inbox", {"symbol": symbol, "mode": "full report"}, HEADER)
+        move = {"action": "decline", "reason": "not now"}
+        r = client.patch(f"/api/inbox/{item['id']}", json=move, headers=headers)
+        assert r.status_code == 200, r.text
+    _post(client, "/api/inbox", {"symbol": "HGCO", "mode": "full report"}, HEADER)
+    msft = _post(client, "/api/inbox", {"symbol": "MSFT", "mode": "full report"}, HEADER)
+    with closing(connect(db_path)) as conn, conn:
+        conn.execute(
+            "UPDATE work_items SET state = 'declined', reason = 'gone', finished_at = ?"
+            " WHERE id = ?",
+            (AT, msft["id"]),
+        )
+    by = {i["symbol"]: i["declinedBy"] for i in client.get("/api/inbox").json()["items"]}
+    assert by == {"AAPL": "owner", "AAL": "agent", "HGCO": None, "MSFT": None}
+
+
+def _done_item(conn: sqlite3.Connection, symbol: str) -> None:
+    """A done item of ``symbol``, completed with a report on the company's latest snapshot."""
+    snapshot = latest_snapshot(conn, symbol)
+    assert snapshot is not None
+    item_id = post_item(conn, symbol, "full report", "", snapshot.id, "owner", OWNER, NOW)
+    sections = [{"heading": "Summary", "parts": ["Plain words."]}]
+    writer = Writer("agent", "claude-opus-5-5", "claude-code/2.1")
+    report_id = insert_report(
+        conn,
+        symbol,
+        "full report",
+        "hold",
+        sections,
+        None,
+        snapshot.id,
+        None,
+        None,
+        item_id,
+        writer,
+        NOW,
+    )
+    complete_item(conn, item_id, report_id, NOW)
+
+
+def test_the_inbox_read_s_queries_do_not_grow_with_its_items(db_path: Path) -> None:
+    """Spec 2026-11-25 owner's inbox, 4 and 7.2: the read every open tab makes each 30 seconds
+    runs a fixed number of queries whatever the number of done items: the items, their reports'
+    revisions and who declined each, with one done item and with five."""
+
+    def statements(conn: sqlite3.Connection) -> int:
+        seen: list[str] = []
+        conn.set_trace_callback(seen.append)
+        inbox_items_json(conn, None, NOW)
+        conn.set_trace_callback(None)
+        return len(seen)
+
+    with closing(connect(db_path)) as conn:
+        _done_item(conn, "AAPL")
+        before = statements(conn)
+        for symbol in ("AAL", "HGCO", "AAPL", "AAL"):
+            _done_item(conn, symbol)
+        after = statements(conn)
+        assert len(inbox_items_json(conn, None, NOW)) == 5
+    assert after == before == 3
 
 
 def test_an_agent_post_carries_its_actor(client: TestClient) -> None:

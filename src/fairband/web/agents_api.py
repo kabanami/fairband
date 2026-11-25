@@ -3,9 +3,14 @@ records and the ledger.
 
 ``GET /api/inbox`` writes nothing (spec 2026-11-25 owner's inbox, 8): it lists the items newest
 first, or those in ``state``, each with ``reportRevision``, the revision of the report a done
-item was completed with (``None`` without a report or its row; 18.5, plan 4), and ``launch``, an
-open item's newest launch as ``GET /api/launches/{id}`` answers it (``launch_api.launch_json``,
-read at the clock's time), ``None`` without one and for an item that is closed. Beside the items
+item was completed with (``None`` without a report or its row; 18.5, plan 4), ``declinedBy``, the
+principal that wrote a declined item's decline, ``owner`` or ``agent``, from the newest ledger
+row of kind ``decline`` that names it (``None`` for an item not declined or with no such row;
+spec 2026-11-25 owner's inbox, 7.2), and ``launch``, an open item's newest launch as
+``GET /api/launches/{id}`` answers it (``launch_api.launch_json``, read at the clock's time),
+``None`` without one and for an item that is closed. Every open tab makes this read every 30
+seconds, so it runs a fixed number of queries whatever the number of items, beside one for each
+open item's launch, and parses no stored result and no report's sections. Beside the items
 it answers ``launchReady``, whether launching is set up, as the company detail does: the launch
 file in the config folder, read at each request (``launch.settings``). The Inbox view's row draws
 Open Claude Code and the launch's line from the two (B-210). ``POST /api/inbox`` posts an item
@@ -57,13 +62,14 @@ from fairband.store.inbox import (
     claim_item,
     complete_item,
     decline_item,
+    decliners,
     oldest_pending,
     post_item,
     work_item,
     work_items,
 )
 from fairband.store.launches import newest_launch
-from fairband.store.ledger import Writer, entries, record
+from fairband.store.ledger import Principal, Writer, entries, record
 from fairband.store.reports import report_row, revisions_by_id
 from fairband.store.research import (
     AlreadyInState,
@@ -210,6 +216,34 @@ def _refusals(missing: str, symbol: str | None = None) -> Iterator[None]:
         raise HTTPException(404, f"no {missing} {exc.args[0]}{company}") from None
 
 
+def inbox_items_json(
+    conn: sqlite3.Connection, state: State | None, at: datetime
+) -> list[dict[str, Any]]:
+    """The inbox read's items, newest first, or those in ``state``, each with its own fields (the
+    module docstring), the launch read at ``at``: the items, the done items' report revisions and
+    the declines' writers in one query each, and each open item's newest launch in one of its
+    own."""
+    items = work_items(conn, state)
+    found = revisions_by_id(conn, [i.report_id for i in items if i.report_id is not None])
+    declined = decliners(conn)
+    return [
+        record_json(i)
+        | {
+            "reportRevision": None if i.report_id is None else found.get(i.report_id),
+            "declinedBy": _declined_by(i, declined),
+            "launch": _open_launch(conn, i, at),
+        }
+        for i in items
+    ]
+
+
+def _declined_by(item: WorkItem, declined: dict[int, Writer]) -> Principal | None:
+    """The principal that wrote a declined item's decline; ``None`` for an item not declined, and
+    for one whose decline has no ledger row."""
+    writer = declined.get(item.id) if item.state == "declined" else None
+    return None if writer is None else writer.principal
+
+
 def _open_launch(conn: sqlite3.Connection, item: WorkItem, now: datetime) -> dict[str, Any] | None:
     """An open item's newest launch read at ``now``; ``None`` without one, and for an item that
     is closed."""
@@ -228,22 +262,12 @@ def add_agent_routes(
 
     @app.get("/api/inbox")
     def inbox(state: State | None = None) -> dict[str, Any]:
-        """The items, newest first; the done items' report revisions read in one query, each open
-        item's newest launch in one of its own."""
+        """The items, newest first (``inbox_items_json``), and whether launching is set up."""
         at = clock()
         with closing(conn_factory()) as conn:
-            items = work_items(conn, state)
-            found = revisions_by_id(conn, [i.report_id for i in items if i.report_id is not None])
             return {
                 "launchReady": read_launch_file(config_dir).ready,
-                "items": [
-                    record_json(i)
-                    | {
-                        "reportRevision": None if i.report_id is None else found.get(i.report_id),
-                        "launch": _open_launch(conn, i, at),
-                    }
-                    for i in items
-                ],
+                "items": inbox_items_json(conn, state, at),
             }
 
     @app.post("/api/inbox", status_code=201)

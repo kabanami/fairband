@@ -8,7 +8,9 @@ period}``), the full report a valuation review reuses (``None`` for a full repor
 review of a company with none), the snapshot, review and secondary valuation it rests on (the
 last two ``None`` without one), the work item it completes, the writer and the time. The
 appendixes are not stored: ``fairband.reports.render`` generates them from the records at read
-time. The company's report is its latest; the earlier revisions stay, read newest first.
+time. The company's report is its latest; the earlier revisions stay, read newest first. A read
+that needs no text takes a report's head (``report_heads``): what it is, the records it rests on
+and its writer, read without its sections.
 
 A judgment is the record of one of a report's input decisions (spec 12): its kind (``phase``,
 ``moat``, ``belief``, ``roic``, ``target_margin``), the decision in words, and the company's
@@ -51,6 +53,22 @@ class ReportRow:
     actor: str | None
     client: str | None
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class ReportHead:
+    """A report without its text: what it is, the records it rests on and its writer."""
+
+    id: int
+    symbol: str
+    revision: int
+    mode: Mode
+    stance: str
+    snapshot_id: int
+    review_id: int | None
+    secondary_id: int | None
+    principal: Principal
+    actor: str | None
 
 
 @dataclass(frozen=True)
@@ -145,6 +163,21 @@ def revisions_by_id(conn: sqlite3.Connection, ids: Iterable[int]) -> dict[int, i
     return {r["id"]: r["revision"] for r in rows}
 
 
+def report_heads(conn: sqlite3.Connection, ids: Iterable[int]) -> dict[int, ReportHead]:
+    """The head of each of the reports ``ids``, by id, in one query that does not read their
+    sections; an id with no report is left out, and no ids read nothing."""
+    wanted = tuple(ids)
+    if not wanted:
+        return {}
+    marks = ", ".join("?" * len(wanted))
+    rows = conn.execute(
+        "SELECT id, symbol, revision, mode, stance, snapshot_id, review_id, secondary_id,"
+        f" principal, actor FROM reports WHERE id IN ({marks})",
+        wanted,
+    )
+    return {r["id"]: _head(r) for r in rows}
+
+
 def insert_judgments(
     conn: sqlite3.Connection,
     report_id: int,
@@ -204,6 +237,21 @@ def _report(row: sqlite3.Row) -> ReportRow:
         actor=row["actor"],
         client=row["client"],
         created_at=load_stamp(row["created_at"]),
+    )
+
+
+def _head(row: sqlite3.Row) -> ReportHead:
+    return ReportHead(
+        id=row["id"],
+        symbol=row["symbol"],
+        revision=row["revision"],
+        mode=row["mode"],
+        stance=row["stance"],
+        snapshot_id=row["snapshot_id"],
+        review_id=row["review_id"],
+        secondary_id=row["secondary_id"],
+        principal=row["principal"],
+        actor=row["actor"],
     )
 
 
