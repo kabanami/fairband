@@ -422,6 +422,16 @@ def test_another_tab_s_write_moves_the_count() -> None:
     assert (trace[2]["count"], trace[3]["count"]) == (1, 0)
 
 
+def test_a_stale_tab_does_not_unsee_what_another_tab_saw() -> None:
+    """``seen`` is written as the union of the stored list and the read's ids: a tab whose last
+    read is older than another tab's write keeps what the owner saw there, so the message is not
+    unread again and its row takes no mark."""
+    elsewhere = {"do": "elsewhere", "set": {SEEN: "[1, 2]"}}
+    trace = _run([_read([QCOM]), elsewhere, _watch(True), TICK, _read([QCOM, MSFT])])
+    assert trace[2]["local"]["seen"] == [1, 2]
+    assert (trace[-1]["count"], trace[-1]["unreadMarks"]) == (0, [])
+
+
 # ----------------------------------------------------------------------- the read while hidden
 
 

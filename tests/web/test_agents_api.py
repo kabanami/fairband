@@ -690,9 +690,9 @@ def test_the_inbox_read_takes_no_write_lock(client: TestClient, db_path: Path) -
 
 def test_a_declined_item_over_the_api_from_the_owner(client: TestClient) -> None:
     """The Inbox view's Decline (spec 18.5): the owner declines an open item, pending or claimed,
-    with a reason kept as written. The item leaves the open items the header counts and the
-    ledger names the owner. A blank reason is refused 400 and a closed item 409, each with the
-    sentence the page shows."""
+    with a reason kept as written. The item leaves the open items the Work queue tab's label
+    counts and the ledger names the owner. A blank reason is refused 400 and a closed item 409,
+    each with the sentence the page shows."""
     pending = _post(client, "/api/inbox", {"symbol": "AAPL", "mode": "valuation review"}, HEADER)
     claimed = _post(client, "/api/inbox", {"symbol": "AAL", "mode": "full report"}, HEADER)
     client.post("/api/inbox/claim", json={"itemId": claimed["id"]}, headers=AGENT)

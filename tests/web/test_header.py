@@ -507,8 +507,8 @@ def test_a_hidden_page_does_not_ask_and_asks_at_once_when_shown() -> None:
 def test_a_page_loaded_hidden_asks_once_at_load() -> None:
     """A page loaded in a hidden tab (a browser restores its background tabs hidden) asks for the
     refresh's state once as it loads, so it knows the run its rows were read under; the later
-    reads of it wait for it to show (4.3). A run that ends while it is still hidden is followed when it
-    shows: its rows are read again."""
+    reads of it wait for it to show (4.3). A run that ends while it is still hidden is followed
+    when it shows: its rows are read again."""
     landed, ticked, shown, followed = _trace(
         [LANDED, TICK, _visible(True), _idle(_run(67, "price"), RUN_66)], hidden=True
     )

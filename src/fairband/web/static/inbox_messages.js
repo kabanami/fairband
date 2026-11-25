@@ -76,6 +76,8 @@
     return state.loading;
   }
 
+  /* The muted dash of a cell with nothing to show: no author, no summary, no report. The Work
+     queue draws its empty cells the same way (inbox.js), so the two tabs read alike. */
   function none() { return h('span', { className: 'app-muted' }, '—'); }
 
   /* A message's row, `marked` where it keeps its unread mark (7.3 and 7.4). */

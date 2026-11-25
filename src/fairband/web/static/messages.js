@@ -8,10 +8,12 @@
    JSON list of work item ids. A message is unread while its id is not in seen; the header counts
    the unread ones. A list that is missing, or that is no list of ids, is written at the read that
    finds it with every message's id, so the first read after the build, in a new browser or after
-   the site's data was cleared, marks nothing and notifies nothing; each later write keeps only
-   the ids of its read. Where the browser refuses its storage, the lists live in memory for the
-   page's life, by the same rules. Another tab's write of a list reaches this one through the
-   browser's storage event, and the count is read again.
+   the site's data was cleared, marks nothing and notifies nothing; each later write of notified
+   keeps only the ids of its read, and each later write of seen adds the read's ids to the list
+   as the browser keeps it then, so a tab whose read is older than another tab's write takes back
+   nothing the owner saw (see). Where the browser refuses its storage, the lists live in memory
+   for the page's life, by the same rules. Another tab's write of a list reaches this one through
+   the browser's storage event, and the count is read again.
 
    The owner sees the messages while the Messages tab shows (watch) and the document is not
    hidden: a read that lands then, the tab shown over a read that landed, and the browser's tab
@@ -67,6 +69,7 @@
     return isNaN(at) ? -Infinity : at;
   }
 
+  /* A work item's id, which names its message for good (7.3): the lists keep these. */
   function idOf(item) { return item.id; }
 
   /* -------------------------------------------------------------- the lists */
@@ -149,11 +152,15 @@
   }
 
   /* The owner sees the last read's messages (7.3): the ids not in seen join the marks, and seen
-     is written with every id. */
+     is written as the union of the list as the browser keeps it now and every id of the read. A
+     union, not the read's ids alone: another tab may have written seen after this tab's last read
+     landed, and a write of the older read's ids would take back what the owner saw there, its
+     message unread and marked again. */
   function see() {
     var seen = stored(SEEN) || [];
-    without(last, seen).forEach(function (id) { marks[id] = true; });
-    keep(SEEN, last);
+    var fresh = without(last, seen);
+    fresh.forEach(function (id) { marks[id] = true; });
+    keep(SEEN, seen.concat(fresh));
   }
 
   /* Whether the document shows; a browser that cannot say counts as showing. */
@@ -201,6 +208,8 @@
     listeners.push(fn);
   }
 
+  /* Calls each listener (listen), so the header's count and the Inbox view follow a move this
+     script cannot hand them as a read's answer: another tab's write, a tab shown, an ask's end. */
   function changed() {
     listeners.forEach(function (fn) { fn(); });
   }
@@ -271,6 +280,9 @@
     };
   }
 
+  /* A notification's title, the symbol and what ended, "QCOM: full report done" (7.6): one form
+     for the cheap read's item (titled) and the full read's message (notice), so a message's
+     notification is titled alike whichever read made it. */
   function titleOf(symbol, mode, kind) {
     return symbol + ': ' + ended(mode, kind);
   }
@@ -283,6 +295,8 @@
     return lead ? capital(words) : words;
   }
 
+  /* `words` with its first letter a capital, "Hold", "Full report done": the server sends the
+     stance and the mode in lower case, and a sentence or a row's words start with a capital. */
   function capital(words) {
     return words.charAt(0).toUpperCase() + words.slice(1);
   }
