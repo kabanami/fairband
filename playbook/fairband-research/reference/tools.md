@@ -181,11 +181,12 @@ be left out.
 Nine vendor reads the engine does not use: six pass-throughs, all from FMP, then three filing
 reads from FMP. The server fetches each with its own key and stores the response, so a report can
 cite it. It reuses a response stored within the reuse window, a filing report at any age, so a
-repeated call costs no vendor call. A refresh stores five of these
+repeated call costs no vendor call. A refresh stores two of these
 calls' responses for each company under the same keys, so within the reuse window such a call may
-answer from the refresh's copy, `reused` true: `segments`; `news` at a `limit` of 60;
-`transcript_dates`; `filings` with its default window, on the refresh's day; and `transcript` of
-the newest call, where the store held no copy of it with words.
+answer from the refresh's copy, `reused` true: `segments`; and `news` at a `limit` of 60. The
+company page stores three more under the same keys as a reader opens its Investor relations tab:
+`transcript_dates`; `filings` with its default window, on that day; and `transcript` of a call
+the reader opened.
 
 ### The six pass-throughs, all from FMP
 

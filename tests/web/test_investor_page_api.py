@@ -1,15 +1,17 @@
-"""The Investor relations tab's three reads (the Investor relations tab's design, 7.5, 7.6 and 8.2,
-and the company page's design, 10.3), on the database of ``conftest.py``: the tab's read, from the
-store alone, then the read of a call's transcript and the read of a year of filings, which answer
-from the store where it holds a copy that does not change and else through the pass-throughs.
+"""The Investor relations tab's four reads (the Investor relations tab's design, 7.5, 7.6 and 8.2,
+the company page's design, 10.3, and B-252), on the database of ``conftest.py``: the tab's read,
+from the store alone, which says which of its two lists is stale; then the read of the list of
+calls, the read of a call's transcript and the read of a year of filings, which answer from the
+store where it holds a copy that does not change and else through the pass-throughs. No refresh
+stores the tab's answers: the reads do, as a reader opens the tab.
 
-The company is ``page_payloads``' LFOX, its answers stored under the params the refresh and the
-pass-throughs store them with (``fetch.page_params``). ``client`` is an app with no pass-through;
-``with_passthrough`` one whose pass-through asks FMP on the mock transport of ``support.vendor``,
-and which sends the request header on every call. The clock reads ``NOW``, 1 Nov 2026 at 09:30
-UTC, and the pass-throughs' reuse window is 24 hours. The expected figures are the readers'
-(``vendors.page_investor``) on the same payloads, whose own tests read each field: these tests
-check what each read hands each reader. The key is fake."""
+The company is ``page_payloads``' LFOX, its answers stored under the params the pass-throughs
+store them with. ``client`` is an app with no pass-through; ``with_passthrough`` one whose
+pass-through asks FMP on the mock transport of ``support.vendor``, and which sends the request
+header on every call. The clock reads ``NOW``, 1 Nov 2026 at 09:30 UTC, and the reuse window is
+24 hours. The expected figures are the readers' (``vendors.page_investor``) on the same payloads,
+whose own tests read each field: these tests check what each read hands each reader. The key is
+fake."""
 
 import json
 from collections.abc import Callable
@@ -27,7 +29,7 @@ from support.vendor import KEY, Vendor
 from support.web import HEADER, HOST, NOW
 
 from fairband.policy import Policy
-from fairband.refresh.fetch import EARNINGS_ROWS, fetch_company, page_params
+from fairband.refresh.fetch import EARNINGS_ROWS, fetch_company
 from fairband.refresh.passthrough import BUSY, Passthrough, PassthroughBusy
 from fairband.store.db import connect
 from fairband.store.observations import insert_observations
@@ -37,16 +39,19 @@ from fairband.vendors import page_fmp, page_investor
 from fairband.vendors.fmp import FILINGS_LIMIT, Fmp
 from fairband.vendors.http import VendorHttp
 from fairband.vendors.normalize_fmp import quote_observations
+from fairband.web.filings_api import WINDOW_DAYS
 
 SYMBOL = pages.SYMBOL
 DAY = NOW.date()  # 1 Nov 2026, the clock's day
 AT = datetime(2026, 11, 1, 8, 0, tzinfo=UTC)  # 90 minutes before NOW: the refresh's time
 STALE = NOW - timedelta(hours=25)  # past the pass-throughs' reuse window
 TAB = f"/api/companies/{SYMBOL}/page/investor-relations"
+CALLS = f"{TAB}/calls"
 CALL = f"{TAB}/call"
 FILINGS = f"{TAB}/filings"
 Q3 = {"year": "2026", "quarter": "3"}
 LAST_YEAR = date(2025, 10, 31)  # the end of the window before the refresh's
+CALL_LIST = "/stable/earning-call-transcript-dates"
 TRANSCRIPT_PATH = "/stable/earning-call-transcript"
 FILING_LIST = "/stable/sec-filings-search/symbol"
 FIGURES = ("epsReported", "epsEstimate", "revenueReported", "revenueEstimate")
@@ -54,8 +59,10 @@ NO_QUOTE = {"price": None, "change": None, "changePercent": None, "day": None}
 BAD_QUARTER = "quarter must be 1 to 4"
 BAD_TO = "to must be an ISO date from 0002-01-01 on"
 FUTURE_TO = "to must be today or earlier"
-# The two reads that may call a vendor, each for a call or a window the store does not hold.
-VENDOR_READS = (f"{CALL}?year=2026&quarter=3", f"{FILINGS}?to=2025-10-31")
+NO_CALLS = "FMP answered no list of earnings calls for LFOX"
+# The three reads that may call a vendor: the list of calls, and a call and a window the store
+# does not hold.
+VENDOR_READS = (CALLS, f"{CALL}?year=2026&quarter=3", f"{FILINGS}?to=2025-10-31")
 # The filings of the window to 31 Oct 2025, the year before the refresh's.
 OLDER = [
     pages.FILINGS[3] | {"filingDate": "2025-04-29 00:00:00", "acceptedDate": "2025-04-29 16:02:40"},
@@ -98,7 +105,7 @@ def _earnings(db_path: Path, payload: Any = pages.EARNINGS, at: datetime = AT) -
 
 
 def _calls(db_path: Path, payload: Any = pages.CALL_DATES, at: datetime = AT) -> None:
-    _store(db_path, "transcript-dates", page_params("transcript-dates", SYMBOL), payload, at)
+    _store(db_path, "transcript-dates", {"symbol": SYMBOL}, payload, at)
 
 
 def _filings(
@@ -109,9 +116,14 @@ def _filings(
     *,
     error: str | None = None,
 ) -> None:
-    """A filing list of the 365 days to ``end``, stored as the refresh stores the window of its
-    day and the pass-through any window."""
-    params = page_params("sec-filings", SYMBOL, end)
+    """A filing list of the 365 days to ``end``, stored as the ``filings`` pass-through stores a
+    window, and as a refresh before B-252 stored the window of its day."""
+    params = {
+        "symbol": SYMBOL,
+        "from": (end - timedelta(days=365)).isoformat(),
+        "to": end.isoformat(),
+        "limit": str(FILINGS_LIMIT),
+    }
     _store(db_path, "sec-filings", params, payload, at, error=error)
 
 
@@ -161,10 +173,10 @@ def _answering(vendor: Vendor, payload: Any) -> list[dict[str, str]]:
 
 
 def test_the_tab_s_read_whole(client: TestClient, db_path: Path) -> None:
-    """Every answer the tab draws, stored as the refresh stores it: the calls newest first, each
-    with its quarter's four figures where an earnings row is the call's; the refresh's filing list
-    of the 365 days to its day, newest first; the next earnings day and the head's figures. No
-    answer carries a ref or a response id."""
+    """Every answer the tab draws, stored 90 minutes ago: the calls newest first, each with its
+    quarter's four figures where an earnings row is the call's, and the day their list was read;
+    the filing list of the 365 days to today, newest first; the next earnings day and the head's
+    figures. Neither list is stale. No answer carries a ref or a response id."""
     _profile(db_path)
     _quote(db_path)
     _earnings(db_path)
@@ -177,6 +189,8 @@ def test_the_tab_s_read_whole(client: TestClient, db_path: Path) -> None:
         "quote": page_fmp.head_quote(pages.QUOTE[0]),
         "nextEarnings": "2027-01-14",
         "calls": page_investor.calls(pages.CALL_DATES, pages.EARNINGS),
+        "callsDay": "2026-11-01",
+        "callsStale": False,
         "callsServed": True,
         "filings": {
             "from": "2025-11-01",
@@ -185,6 +199,7 @@ def test_the_tab_s_read_whole(client: TestClient, db_path: Path) -> None:
             "truncated": False,
             "observedDay": "2026-11-01",
         },
+        "filingsStale": False,
     }
     calls = body["calls"]
     assert [(call["fiscalYear"], call["quarter"]) for call in calls] == [
@@ -222,7 +237,8 @@ def test_the_tab_s_read_calls_no_vendor_and_needs_no_header(
     with_passthrough: TestClient, vendor: Vendor, db_path: Path
 ) -> None:
     """An app with a pass-through whose every call fails, asked with no request header: the read
-    answers from the store, its lists three days old, and the vendor is never asked."""
+    answers from the store, its lists three days old, each named stale, and the vendor is never
+    asked."""
     vendor.answer = lambda request: httpx.Response(500)
     old = AT - timedelta(days=3)
     _profile(db_path)
@@ -235,6 +251,11 @@ def test_the_tab_s_read_calls_no_vendor_and_needs_no_header(
         5,
         "2026-10-29",
         "2026-10-29",
+    )
+    assert (body["callsDay"], body["callsStale"], body["filingsStale"]) == (
+        "2026-10-29",
+        True,
+        True,
     )
     assert vendor.paths == []
 
@@ -328,8 +349,9 @@ def test_no_whole_window_on_file_is_no_filing_list(client: TestClient, db_path: 
 
 
 def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: Path) -> None:
-    """Review Focus 2: a company fetched before the tab's calls, or whose calls all failed: no
-    call, no filing list, no next day and no data date, and a 200."""
+    """Review Focus 2, and every company whose tab no reader opened yet (B-252): no call, no
+    filing list, each named stale so the page asks for it, no next day and no data date, and a
+    200."""
     _profile(db_path)
     assert _get(client, TAB) == {
         "symbol": SYMBOL,
@@ -337,8 +359,11 @@ def test_a_company_with_a_profile_and_nothing_else(client: TestClient, db_path: 
         "quote": NO_QUOTE,
         "nextEarnings": None,
         "calls": [],
+        "callsDay": None,
+        "callsStale": True,
         "callsServed": True,
         "filings": None,
+        "filingsStale": True,
     }
 
 
@@ -382,50 +407,169 @@ def test_a_list_of_the_vendor_s_limit_is_truncated(client: TestClient, db_path: 
     assert _get(client, TAB)["filings"]["truncated"] is False
 
 
-@pytest.mark.parametrize("older", ["quote", "transcript-dates", "earnings"])
-def test_the_data_date_is_the_oldest_of_the_calls_view_s_answers(
+@pytest.mark.parametrize("older", ["quote", "earnings"])
+def test_the_data_date_is_the_older_of_the_quote_and_the_earnings(
     client: TestClient, db_path: Path, older: str
 ) -> None:
-    """The oldest day among the stored answers of the Earnings calls view (7.6), as the estimates
-    read counts its own: the head's quote, the list of calls and the earnings rows, each in turn
-    stored a day before the rest. The profile's day and the filing list's, older still, do not
-    count; the filing list carries its own day."""
+    """The oldest day among the stored answers the read draws for both views (7.6), as the
+    estimates read counts its own: the head's quote and the earnings rows, each in turn stored a
+    day before the other. The profile's day, the list of calls' and the filing list's, older
+    still, do not count: each list carries its own day, since the page may read a newer one."""
 
     def on(answer: str) -> datetime:
         return datetime(2026, 10, 29 if answer == older else 30, 12, 0, tzinfo=UTC)
 
     _profile(db_path, datetime(2026, 10, 20, tzinfo=UTC))
     _quote(db_path, on("quote"))
-    _calls(db_path, at=on("transcript-dates"))
     _earnings(db_path, at=on("earnings"))
+    _calls(db_path, at=datetime(2026, 10, 22, 12, 0, tzinfo=UTC))
     _filings(db_path, date(2026, 10, 21), at=datetime(2026, 10, 21, tzinfo=UTC))
     body = _get(client, TAB)
     assert (body["dataDate"], body["quote"]["price"]) == ("2026-10-29", 182.4)
-    assert body["filings"]["observedDay"] == "2026-10-21"
+    assert (body["callsDay"], body["filings"]["observedDay"]) == ("2026-10-22", "2026-10-21")
 
 
-def test_a_filing_list_older_than_the_calls_keeps_its_own_day(
+def test_a_list_alone_on_file_carries_its_day_and_sets_no_data_date(
     client: TestClient, db_path: Path
 ) -> None:
-    """The controller's ruling on 7.6: a filing list stored before the list of calls leaves the
-    data date at the calls' day and carries its older day as its own."""
+    """Neither list counts in the data date, whichever is older: with no quote and no earnings
+    on file the read has none, and each list carries the day it was read."""
     _profile(db_path)
     _calls(db_path, at=datetime(2026, 10, 30, 12, 0, tzinfo=UTC))
     _filings(db_path, date(2026, 10, 25), at=datetime(2026, 10, 25, 12, 0, tzinfo=UTC))
     body = _get(client, TAB)
-    assert (body["dataDate"], body["filings"]["observedDay"]) == ("2026-10-30", "2026-10-25")
+    assert body["dataDate"] is None
+    assert (body["callsDay"], body["filings"]["observedDay"]) == ("2026-10-30", "2026-10-25")
 
 
-def test_a_list_of_calls_older_than_the_filings_sets_the_data_date(
+@pytest.mark.parametrize(
+    ("age", "stale"),
+    [
+        (timedelta(hours=23, minutes=59), False),
+        (timedelta(hours=24), True),
+        (timedelta(days=3), True),
+    ],
+)
+def test_a_list_is_stale_from_the_reuse_window_on(
+    client: TestClient, db_path: Path, age: timedelta, stale: bool
+) -> None:
+    """B-252: a stored list draws at once whatever its age, and the read names it stale where it
+    was observed at or before the clock's time less the reuse window, 24 hours, as the overview
+    names its news: the pass-through would not reuse it either, so the page asks for a newer
+    one."""
+    _profile(db_path)
+    at = NOW - age
+    _calls(db_path, at=at)
+    _filings(db_path, at.date(), at=at)
+    body = _get(client, TAB)
+    assert (len(body["calls"]), len(body["filings"]["rows"])) == (5, 5)
+    assert (body["callsStale"], body["filingsStale"]) == (stale, stale)
+
+
+def test_a_list_stored_with_an_error_is_no_list_and_stale(
     client: TestClient, db_path: Path
 ) -> None:
-    """The other way round: the list of calls stored before the filing list gives the data date
-    its older day, and the filing list keeps its newer day as its own."""
+    """FMP's error object, which a pass-through stores with its error an hour ago: no list of
+    calls and no filing list, and each is stale, so the page asks again."""
     _profile(db_path)
-    _calls(db_path, at=datetime(2026, 10, 25, 12, 0, tzinfo=UTC))
-    _filings(db_path, date(2026, 10, 30), at=datetime(2026, 10, 30, 12, 0, tzinfo=UTC))
+    error = {"Error Message": "Limit Reach"}
+    _store(db_path, "transcript-dates", {"symbol": SYMBOL}, error, AT, error="unusable payload")
+    _filings(db_path, DAY, error, error="unusable payload")
     body = _get(client, TAB)
-    assert (body["dataDate"], body["filings"]["observedDay"]) == ("2026-10-25", "2026-10-30")
+    assert (body["calls"], body["callsDay"], body["callsStale"]) == ([], None, True)
+    assert (body["filings"], body["filingsStale"]) == (None, True)
+
+
+def test_a_filing_list_of_a_window_that_ended_before_it_was_read_is_stale(
+    client: TestClient, db_path: Path
+) -> None:
+    """The review's case on B-252: the newest whole window on file is an agent's list of the 365
+    days to 20 Oct 2026, asked an hour ago. It ends latest, so the tab draws it at once; it never
+    held the days since, so it is stale whatever its age, and the page asks for today's window.
+    Before B-252 a refresh's list of its own day stood over it. A list of the window to the day
+    it was read is judged by its age alone."""
+    _profile(db_path)
+    _filings(db_path, date(2026, 10, 20), OLDER)
+    body = _get(client, TAB)
+    assert (body["filings"]["to"], body["filings"]["observedDay"]) == ("2026-10-20", "2026-11-01")
+    assert body["filingsStale"] is True
+    _filings(db_path, DAY)
+    body = _get(client, TAB)
+    assert (body["filings"]["to"], body["filingsStale"]) == ("2026-11-01", False)
+
+
+# --- the list of calls --------------------------------------------------------------------------
+
+
+def test_the_list_of_calls_is_read_through_the_pass_through(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """B-252: a company whose tab nobody opened has no list of calls on file. The read asks the
+    ``transcript-dates`` pass-through, in the store's form of the symbol, and answers the calls
+    newest first, each with its quarter's figures from the stored earnings rows, and the day the
+    list was read. The pass-through keeps the answer: a second read asks nothing, and the tab's
+    read then draws the list from the store, not stale."""
+    _profile(db_path)
+    _earnings(db_path)
+    asked = _answering(vendor, pages.CALL_DATES)
+    first = _get(with_passthrough, "/api/companies/lfox/page/investor-relations/calls")
+    assert first == {
+        "symbol": SYMBOL,
+        "calls": page_investor.calls(pages.CALL_DATES, pages.EARNINGS),
+        "callsDay": "2026-11-01",
+    }
+    assert asked == [{"symbol": SYMBOL}]
+    assert _get(with_passthrough, CALLS) == first
+    assert vendor.paths == [CALL_LIST]
+    tab = _get(with_passthrough, TAB)
+    assert (tab["calls"], tab["callsDay"], tab["callsStale"]) == (
+        first["calls"],
+        "2026-11-01",
+        False,
+    )
+
+
+def test_a_stale_list_of_calls_is_asked_again_and_a_fresh_one_reused(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """The pass-through's window decides: a list stored 25 hours ago is asked again, and its
+    answer, the newer list, stands; inside the window the stored list answers with no call."""
+    _profile(db_path)
+    _calls(db_path, pages.CALL_DATES[1:], at=STALE)
+    _answering(vendor, pages.CALL_DATES)
+    body = _get(with_passthrough, CALLS)
+    assert (len(body["calls"]), body["callsDay"]) == (5, "2026-11-01")
+    assert vendor.paths == [CALL_LIST]
+    _calls(db_path, pages.CALL_DATES[:2], at=NOW)
+    assert len(_get(with_passthrough, CALLS)["calls"]) == 2
+    assert vendor.paths == [CALL_LIST]
+
+
+def test_a_list_of_calls_that_is_no_list_is_a_502(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """FMP's error object, which the pass-through stores with its error: the read fails with its
+    own sentence, as the filings read does, and the next read asks again."""
+    _profile(db_path)
+    _answering(vendor, {"Error Message": "Limit Reach"})
+    for _ in range(2):
+        assert _refused(with_passthrough.get(CALLS)) == (502, NO_CALLS)
+    assert vendor.paths == [CALL_LIST, CALL_LIST]
+
+
+def test_a_company_with_no_call_answers_an_empty_list(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """A company FMP holds no call of answers an empty list, which is a list: kept and reused."""
+    _profile(db_path)
+    _answering(vendor, [])
+    for _ in range(2):
+        assert _get(with_passthrough, CALLS) == {
+            "symbol": SYMBOL,
+            "calls": [],
+            "callsDay": "2026-11-01",
+        }
+    assert vendor.paths == [CALL_LIST]
 
 
 # --- a call's transcript ---------------------------------------------------------------------
@@ -668,6 +812,48 @@ def test_a_window_that_ends_today_goes_through_the_pass_through(
     assert vendor.paths == [FILING_LIST]
 
 
+def test_with_no_to_the_window_ends_on_the_clock_s_day(
+    with_passthrough: TestClient,
+    client_with_clock: Callable[[datetime], TestClient],
+    vendor: Vendor,
+    db_path: Path,
+) -> None:
+    """B-252: the page asks the tab's first window with no ``to``, since the clock's day is the
+    server's to say: the 365 days to it, through the pass-through, which keeps the answer. The
+    tab's read then draws it from the store, not stale, and a day later it is stale."""
+    _profile(db_path)
+    asked = _answering(vendor, pages.FILINGS)
+    first = _get(with_passthrough, FILINGS)
+    assert first == {
+        "from": "2025-11-01",
+        "to": "2026-11-01",
+        "rows": page_investor.filing_rows(pages.FILINGS),
+        "truncated": False,
+        "observedDay": "2026-11-01",
+    }
+    assert asked == [
+        {"symbol": SYMBOL, "from": "2025-11-01", "to": "2026-11-01", "page": "0", "limit": "1000"}
+    ]
+    assert _get(with_passthrough, FILINGS) == first
+    assert vendor.paths == [FILING_LIST]
+    tab = _get(with_passthrough, TAB)
+    assert (tab["filings"], tab["filingsStale"]) == (first, False)
+    tomorrow = _get(client_with_clock(NOW + timedelta(days=1)), TAB)
+    assert (tomorrow["filings"], tomorrow["filingsStale"]) == (first, True)
+
+
+def test_a_window_over_a_leap_day_starts_a_year_and_a_day_before_its_end(
+    with_passthrough: TestClient, vendor: Vendor, db_path: Path
+) -> None:
+    """The window is the 365 days to its last day, as the agents' filing list asks by default
+    (``filings_api.WINDOW_DAYS``), not a calendar year."""
+    assert WINDOW_DAYS == 365
+    _profile(db_path)
+    _answering(vendor, [])
+    body = _get(with_passthrough, FILINGS, to="2024-03-01")
+    assert (body["from"], body["to"]) == ("2023-03-02", "2024-03-01")
+
+
 def test_a_filing_list_that_is_no_list_is_a_502(
     with_passthrough: TestClient, vendor: Vendor, db_path: Path
 ) -> None:
@@ -684,7 +870,7 @@ def test_a_filing_list_that_is_no_list_is_a_502(
 # --- the failures ----------------------------------------------------------------------------
 
 
-def test_the_two_reads_need_the_request_header(
+def test_the_three_reads_need_the_request_header(
     with_passthrough: TestClient, vendor: Vendor, db_path: Path
 ) -> None:
     """D11: each may call a vendor, so without ``X-Fairband-Request: 1`` it is a 403 before
@@ -711,6 +897,7 @@ NOT_WHOLE = "Input should be a valid integer, unable to parse string as an integ
     ("path", "detail"),
     [
         (NOT_A_SYMBOL, "'a b' is not a symbol"),
+        (f"{NOT_A_SYMBOL}/calls", "'a b' is not a symbol"),
         (f"{NOT_A_SYMBOL}/call?year=2026&quarter=3", "'a b' is not a symbol"),
         (f"{CALL}?year=soon&quarter=3", f"year: {NOT_WHOLE}"),
         (f"{CALL}?year=2026&quarter=third", f"quarter: {NOT_WHOLE}"),
@@ -722,7 +909,6 @@ NOT_WHOLE = "Input should be a valid integer, unable to parse string as an integ
         (f"{FILINGS}?to=2025-02-30", BAD_TO),
         (f"{FILINGS}?to=0001-12-31", BAD_TO),  # its window would start before the calendar
         (f"{FILINGS}?to=2026-11-02", FUTURE_TO),  # tomorrow: a window that has not ended
-        (FILINGS, "to: Field required"),
     ],
 )
 def test_a_bad_request_is_a_400_before_the_profile_and_any_call(
@@ -757,18 +943,21 @@ def test_a_company_with_no_profile_is_a_404(with_passthrough: TestClient, vendor
 
 def test_no_fmp_key_only_where_the_store_cannot_answer(client: TestClient, db_path: Path) -> None:
     """An app with no pass-through (the server has no FMP key): a call with words on file and a
-    past window on file are answered; a call with none, a past window not on file and today's
-    window, though the refresh stored it an hour ago, are a 503."""
+    past window on file are answered; a call with none, a past window not on file, and the list
+    of calls and today's window, though the store holds each from an hour ago, are a 503."""
     _profile(db_path)
     _transcript(db_path, pages.TRANSCRIPT, AT - timedelta(days=30))
     _filings(db_path, LAST_YEAR, OLDER)
     _filings(db_path, DAY)
-    for path in (VENDOR_READS[0], f"{FILINGS}?to=2025-10-31"):
+    _calls(db_path)
+    for path in (VENDOR_READS[1], f"{FILINGS}?to=2025-10-31"):
         assert client.get(path, headers=HEADER).status_code == 200, path
     for path in (
+        CALLS,
         f"{CALL}?year=2026&quarter=2",
         f"{FILINGS}?to=2025-10-30",
         f"{FILINGS}?to=2026-11-01",
+        FILINGS,
     ):
         assert _refused(client.get(path, headers=HEADER)) == (503, "no FMP key"), path
 
@@ -799,8 +988,9 @@ def test_a_failed_vendor_call_is_a_502_scrubbed(
     host = "GET https://financialmodelingprep.com"
     window = "from=2024-10-31&to=2025-10-31&page=0&limit=1000"
     for path, starts in (
-        (VENDOR_READS[0], f"{host}{TRANSCRIPT_PATH}?symbol=LFOX&year=2026&quarter=3&apikey=<key>"),
-        (VENDOR_READS[1], f"{host}{FILING_LIST}?symbol=LFOX&{window}&apikey=<key> -> 403"),
+        (VENDOR_READS[0], f"{host}{CALL_LIST}?symbol=LFOX&apikey=<key> -> 403"),
+        (VENDOR_READS[1], f"{host}{TRANSCRIPT_PATH}?symbol=LFOX&year=2026&quarter=3&apikey=<key>"),
+        (VENDOR_READS[2], f"{host}{FILING_LIST}?symbol=LFOX&{window}&apikey=<key> -> 403"),
     ):
         response = with_passthrough.get(path)
         status, detail = _refused(response)
@@ -829,18 +1019,18 @@ def test_on_premium_the_calls_the_store_holds_are_still_read(
     on_premium: TestClient, vendor: Vendor, db_path: Path
 ) -> None:
     """A key that moved from Ultimate to Premium: the store holds a list of calls and a
-    transcript with words. The tab lists the calls and reads that transcript from the store; a
-    call the store holds no words for answers 402 with the plan's sentence, and FMP is never
-    asked."""
+    transcript with words. The tab lists the calls and reads that transcript from the store; the
+    read of the list of calls, and a call the store holds no words for, answer 402 with the
+    plan's sentence, and FMP is never asked."""
     _profile(db_path)
     _earnings(db_path)
     _calls(db_path)
     _transcript(db_path, pages.TRANSCRIPT, AT - timedelta(days=30))
     body = _get(on_premium, TAB)
     assert (len(body["calls"]), body["callsServed"]) == (5, False)
-    assert on_premium.get(VENDOR_READS[0]).status_code == 200  # fiscal 2026 Q3, with words
-    refused = on_premium.get(f"{CALL}?year=2026&quarter=2")
-    assert _refused(refused) == (402, EARNINGS_CALLS)
+    assert on_premium.get(VENDOR_READS[1]).status_code == 200  # fiscal 2026 Q3, with words
+    for path in (CALLS, f"{CALL}?year=2026&quarter=2"):
+        assert _refused(on_premium.get(path)) == (402, EARNINGS_CALLS), path
     assert vendor.paths == []
 
 
@@ -850,19 +1040,21 @@ def test_on_premium_the_filings_read_goes_through_the_pass_through(
     _profile(db_path)
     _answering(vendor, OLDER)
     assert len(_get(on_premium, FILINGS, to="2025-10-31")["rows"]) == 2
-    assert vendor.paths == [FILING_LIST]
+    assert len(_get(on_premium, FILINGS)["rows"]) == 2  # today's window, as the tab opens
+    assert vendor.paths == [FILING_LIST, FILING_LIST]
 
 
-# --- the fetch's copies ----------------------------------------------------------------------
+# --- after a refresh ----------------------------------------------------------------------------
 
 
-def test_the_reads_find_what_the_fetch_stores(
+def test_a_fetch_stores_none_of_the_tab_s_answers_and_its_reads_fetch_each_once(
     db_path: Path, with_passthrough: TestClient, vendor: Vendor, policy: Policy
 ) -> None:
-    """The refresh's fetch of ACME over the fixtures, then the three reads: the list of calls, its
-    figures, the next earnings day and the filing list of the fetch's window are found under the
-    params the fetch stored them with; the newest call's transcript is read from the store, and
-    the window to the fetch's day from the copy the pass-through shares. No vendor is asked."""
+    """B-252, whole: the refresh's fetch of ACME over the fixtures asks no list of calls, no
+    filings and no transcript, so the tab's read finds neither list and names both stale. The
+    three reads then ask FMP once each, as a reader opens the tab, presses Filings and reads the
+    newest call; the pass-throughs keep the answers, a second round asks nothing, and the tab's
+    read draws both lists from the store. The calls' figures are the fetch's earnings rows'."""
     router = Router()
     with (
         VendorHttp(
@@ -876,10 +1068,19 @@ def test_the_reads_find_what_the_fetch_stores(
         closing(connect(db_path)) as conn,
     ):
         fetch_company(conn, Fmp(http, FMP_KEY), "ACME", policy, NOW, [FMP_KEY])
-    assert router.calls["transcript"] == 1
+    assert not [e for e in ("transcript-dates", "sec-filings", "transcript") if router.calls[e]]
     tab = "/api/companies/ACME/page/investor-relations"
-    body = _get(with_passthrough, tab)
-    assert body["calls"][0] == {
+    before = _get(with_passthrough, tab)
+    assert (before["calls"], before["callsStale"]) == ([], True)
+    assert (before["filings"], before["filingsStale"]) == (None, True)
+    assert (before["nextEarnings"], before["dataDate"]) == ("2027-02-04", "2026-11-01")
+
+    for _ in range(2):
+        calls = _get(with_passthrough, f"{tab}/calls")
+        filings = _get(with_passthrough, f"{tab}/filings")
+        call = _get(with_passthrough, f"{tab}/call", **Q3)
+    assert vendor.paths == [CALL_LIST, FILING_LIST, TRANSCRIPT_PATH]
+    assert calls["calls"][0] == {
         "fiscalYear": 2026,
         "quarter": 3,
         "date": "2026-10-28",
@@ -888,19 +1089,14 @@ def test_the_reads_find_what_the_fetch_stores(
         "revenueReported": _usd(300000000),
         "revenueEstimate": _usd(300000000),
     }
-    assert (body["nextEarnings"], body["dataDate"], len(body["calls"])) == (
-        "2027-02-04",
-        "2026-11-01",
-        3,
-    )
-    filings = body["filings"]
+    assert (len(calls["calls"]), calls["callsDay"]) == (3, "2026-11-01")
     assert (filings["from"], filings["to"], len(filings["rows"])) == ("2025-11-01", "2026-11-01", 8)
-    call = _get(with_passthrough, f"{tab}/call", **Q3)
     assert (call["date"], call["turns"][0]["speaker"], call["observedDay"]) == (
         "2026-10-28",
         "Operator",
         "2026-11-01",
     )
-    assert filings["observedDay"] == "2026-11-01"
-    assert _get(with_passthrough, f"{tab}/filings", to="2026-11-01") == filings
-    assert vendor.paths == []
+    after = _get(with_passthrough, tab)
+    assert (after["calls"], after["callsStale"]) == (calls["calls"], False)
+    assert (after["filings"], after["filingsStale"]) == (filings, False)
+    assert vendor.paths == [CALL_LIST, FILING_LIST, TRANSCRIPT_PATH]

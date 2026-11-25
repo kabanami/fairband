@@ -1,8 +1,8 @@
 """The company page's Investor relations tab from FMP's stored answers (the Investor relations tab's
 design, 5, 7.4, 7.5 and 8.2): pure readers, a parsed payload in and plain data out, with no store,
-network or clock, beside the page's others (``page_fmp``, ``page_financials``). The refresh and
-the tab's reads hand them the stored ``transcript``, ``transcript-dates``, ``earnings`` and
-``sec-filings`` answers.
+network or clock, beside the page's others (``page_fmp``, ``page_financials``). The tab's reads
+hand them the stored ``transcript``, ``transcript-dates``, ``earnings`` and ``sec-filings``
+answers.
 
 - A transcript is FMP's one row ``{symbol, period, year, date, content}``, its content plain text.
   Its turns are cut at the speaker's lines (``speaker_turns``), each turn's words broken into
@@ -131,13 +131,6 @@ def transcript(payload: Any) -> dict[str, Any]:
         "turns": [{"speaker": who, "paragraphs": paragraphs(words)} for who, words in turns],
         "questionsAt": questions_at(turns),
     }
-
-
-def newest_call(dates: Any) -> tuple[int, int] | None:
-    """The fiscal year and quarter of the newest call of a ``transcript-dates`` answer: the usable
-    row (``calls``) with the latest ``date``, the first on a tie; ``None`` without one."""
-    newest = max(_calls(dates), key=lambda call: call[0], default=None)
-    return None if newest is None else (newest[1], newest[2])
 
 
 def calls(dates: Any, earnings: Any) -> list[dict[str, Any]]:

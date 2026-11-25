@@ -3,9 +3,10 @@
 import pytest
 
 from fairband.plans import PLANS, PREMIUM, ULTIMATE, plan_named
-from fairband.refresh.fetch import PAGE_ENDPOINTS, REQUIRED, STATEMENT_ENDPOINTS, TRANSCRIPT
+from fairband.refresh.fetch import PAGE_ENDPOINTS, REQUIRED, STATEMENT_ENDPOINTS
 
-CALLS = ("transcript-dates", TRANSCRIPT)  # the list of earnings calls, and a call's transcript
+# The list of earnings calls and a call's transcript, as the pass-throughs store them.
+CALLS = ("transcript-dates", "transcript")
 
 
 def test_the_plans_are_ultimate_and_premium() -> None:
@@ -15,7 +16,7 @@ def test_the_plans_are_ultimate_and_premium() -> None:
 
 def test_ultimate_serves_every_endpoint_and_leaves_the_pace_to_the_setting() -> None:
     assert ULTIMATE.unserved == frozenset()
-    assert all(ULTIMATE.serves(endpoint) for endpoint in (*PAGE_ENDPOINTS, TRANSCRIPT))
+    assert all(ULTIMATE.serves(endpoint) for endpoint in (*PAGE_ENDPOINTS, *CALLS))
     assert ULTIMATE.calls_per_minute is None
     assert (ULTIMATE.pace(2850), ULTIMATE.pace(9000), ULTIMATE.pace(0)) == (2850, 9000, 0)
 
@@ -27,7 +28,8 @@ def test_premium_serves_everything_but_the_earnings_calls() -> None:
     assert not any(PREMIUM.serves(endpoint) for endpoint in CALLS)
     served = (*STATEMENT_ENDPOINTS, *REQUIRED, "estimates-annual", "estimates-quarter", "earnings")
     assert all(PREMIUM.serves(endpoint) for endpoint in served)
-    assert [e for e in PAGE_ENDPOINTS if not PREMIUM.serves(e)] == ["transcript-dates"]
+    # A fetch asks neither of the two (B-252), so Premium serves every page call of one.
+    assert all(PREMIUM.serves(endpoint) for endpoint in PAGE_ENDPOINTS)
 
 
 def test_premium_caps_the_pace_at_750_a_minute_less_5_percent() -> None:

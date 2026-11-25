@@ -22,7 +22,10 @@ a symbol where the plan answers 402 or 403, ``run_price``), ``stock-peers`` and
 history, under the six balance sheets the return on capital needs (``method.md`` 4.5), and
 neither serves the analysts' estimates by quarter, which the NTM anchor reads (5.2).
 
-An endpoint is named as the store names it (``fetch.PAGE_ENDPOINTS``, ``fetch.TRANSCRIPT``).
+An endpoint is named as the store names it (``fetch.PAGE_ENDPOINTS``; the earnings calls' two,
+``transcript-dates`` and ``transcript``, as their pass-throughs store them). A fetch asks
+neither of those two on any plan (``refresh.fetch``): the Investor relations tab and the
+agents' tools ask them, through the pass-throughs, which refuse them on Premium.
 """
 
 from dataclasses import dataclass

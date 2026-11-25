@@ -75,12 +75,12 @@ history and peers, the research on file, the policy and the Methodology page). N
 reads the server fetches with its own key and stores so a report can cite them: `transcript`,
 `news`, `segments`, `insider_trades`, `transcript_dates` and `dcf` from FMP, and the filing reads
 `filings`, `filing_report` and `filing_search` from FMP. A refresh
-stores some of their answers for each company under the keys the tools read: its segments, its
-news at 60 stories, its list of earnings calls, its filings of the 365 days to the refresh's day,
-and its newest call's transcript where the store holds no copy of it with words. So `segments`,
-`news` at a `limit` of 60, `transcript_dates`, `filings`
-with its default window on the day of the refresh, and `transcript` of that call may answer
-from the refresh's copy within the reuse window, with `reused` true. FMP's error object in
+stores two of their answers for each company under the keys the tools read: its segments and its
+news at 60 stories. So `segments` and `news` at a `limit` of 60 may answer from the refresh's
+copy within the reuse window, with `reused` true. A refresh stores no list of earnings calls, no
+filings and no transcript: the company page's Investor relations tab fetches them through the
+same keys as a reader opens it, so `transcript_dates`, `filings` with its default window on
+that day and `transcript` of a call the reader opened may answer from the tab's copy. FMP's error object in
 place of the list of calls is answered as it came, stored as an error and never reused, so the
 next call asks FMP again. On a key that states FMP's Premium plan (below), `transcript` and
 `transcript_dates` answer `refused`, "FMP's Premium plan does not serve earnings calls", with no

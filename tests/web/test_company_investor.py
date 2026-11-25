@@ -13,8 +13,17 @@ the filings the filter keeps, each row its day, its form, the form's plain words
 to the SEC's site, in a box of its own that scrolls sideways; under it the line of the windows
 read and Show older filings, which reads one year more through the filings read with the
 request header and adds its rows under the table's, the windows kept by company for the page's
-life. The data date of the tabs' row is the view's: on Earnings calls the read's alone, on
-Filings the oldest of the read's and the days of the filing lists read.
+life. The data date of the tabs' row is the view's: on Earnings calls the oldest of the read's
+and the list of calls' day, on Filings the oldest of the read's and the days of the filing lists
+read.
+
+No refresh stores the tab's lists (B-252): the tab's read draws what the store holds and names
+each list that is stale, and a view asks for its list as it opens, the list of calls through its
+own read and the filing list through the filings read with no ``to``, each with the request
+header. A list on file draws at once and the newer one takes its place as it lands; a view with
+no list on file draws one sentence in its place while the read is out, "Reading the earnings
+calls." or "Reading the filings.", with no spinner and no bar, and the sentence of a read that
+failed.
 
 company.js and company_investor.js run in node after the bundle and app.js (``support.page``),
 and the tests read the trees their builders return; ``investor.mjs`` drives the view's state, its
@@ -50,6 +59,8 @@ TAB = "investor-relations"
 NO_CALL = "No earnings call on file."
 NEEDS_ULTIMATE = "Earnings calls need FMP's Ultimate plan."
 NO_FILING = "No filing on file."
+READING_CALLS = "Reading the earnings calls."
+READING_FILINGS = "Reading the filings."
 NO_WORDS = "No transcript on file for this call."
 HEADER = {"X-Fairband-Request": "1"}
 
@@ -176,11 +187,32 @@ def test_the_view_is_the_address_s(word: str | None, view: str) -> None:
 # ----------------------------------------------------------------------------------- the views
 
 
-def test_a_company_with_a_profile_and_nothing_else_draws_its_two_sentences() -> None:
-    """Review Focus 2: the read answers ``calls`` empty and ``filings`` null. The Earnings calls
-    view draws "No earnings call on file." and the Filings view "No filing on file.", each alone
-    under the row, and neither throws; no line without a next date."""
-    empty = answers.profile_only_investor()
+def test_a_view_waits_on_a_list_it_has_none_of_with_one_sentence() -> None:
+    """B-252 (the founder, 2026-11-25): a company whose tab no reader opened has no list on
+    file, and the read names each stale, so each view asks for its list as it opens (the reads,
+    in node, below). While the read is out the view draws one plain sentence in the list's
+    place, alone under the row, which draws at once with its switch: no spinner, no bar and no
+    motion, by the brand book and the founder's ruling of 2026-11-23."""
+    unopened = answers.profile_only_investor()
+    for word in (None, "2026Q4"):
+        calls = _draw(unopened, word)
+        assert _sentences(calls) == [READING_CALLS]
+        assert _switch(calls) == [("Earnings calls", "true"), ("Filings", "false")]
+        assert len(calls["props"]["children"]) == 2  # the row and the view's sentence
+    filings = _draw(unopened, "filings")
+    assert _sentences(filings) == [READING_FILINGS]
+    assert _switch(filings) == [("Earnings calls", "false"), ("Filings", "true")]
+    [sentence] = classed(filings, "app-ir__none")
+    assert sentence["type"] == "p" and sentence["props"]["className"] == "body app-ir__none"
+    assert len(filings["props"]["children"]) == 2
+
+
+def test_a_company_with_nothing_on_file_draws_its_two_sentences() -> None:
+    """Review Focus 2: the read answers ``calls`` empty and ``filings`` null, neither stale: a
+    server whose lists were read and hold nothing. The Earnings calls view draws "No earnings
+    call on file." and the Filings view "No filing on file.", each alone under the row, and
+    neither throws; no line without a next date."""
+    empty = answers.profile_only_investor() | {"callsStale": False, "filingsStale": False}
     for word in (None, "2026Q4"):
         calls = _draw(empty, word)
         assert _sentences(calls) == [NO_CALL]
@@ -200,8 +232,8 @@ def test_on_a_plan_that_serves_no_earnings_call_the_view_says_what_they_need() -
     need FMP's Ultimate plan." in the place of "No earnings call on file.", alone under the row;
     the Filings view draws as on any plan. A company whose calls the store holds from another
     plan's time draws its list and its reader, and no sentence. An answer without the field reads
-    as served."""
-    unserved = answers.profile_only_investor() | {"callsServed": False}
+    as served. The view asks for no list of calls there, stale or not (the reads, below)."""
+    unserved = answers.profile_only_investor() | {"callsServed": False, "filingsStale": False}
     for word in (None, "2026Q4"):
         calls = _draw(unserved, word)
         assert _sentences(calls) == [NEEDS_ULTIMATE]
@@ -214,7 +246,7 @@ def test_on_a_plan_that_serves_no_earnings_call_the_view_says_what_they_need() -
     tree = _draw(held)
     assert _sentences(tree) == []
     assert tree["props"]["children"][1]["props"]["className"] == "app-ir__calls"
-    older = answers.profile_only_investor()
+    older = answers.profile_only_investor() | {"callsStale": False}
     del older["callsServed"]
     assert _sentences(_draw(older)) == [NO_CALL]
 
@@ -897,7 +929,7 @@ def test_show_all_draws_every_year() -> None:
     [
         (answers.investor(), "2019Q2"),
         (answers.investor(), "2026Q4"),
-        (answers.profile_only_investor(), "2026Q3"),
+        (answers.profile_only_investor() | {"callsStale": False}, "2026Q3"),
     ],
 )
 def test_a_call_the_company_has_none_of_is_put_right(answer: dict[str, Any], word: str) -> None:
@@ -929,14 +961,14 @@ def test_an_address_the_tab_reads_is_kept(word: str | None) -> None:
         ("2026-10-16", 503, {"detail": "no FMP key"}),
     ],
 )
-def test_the_calls_view_s_data_date_is_the_read_s_alone(
+def test_the_calls_view_s_data_date_does_not_count_the_transcript(
     observed: str, status: int, body: Any
 ) -> None:
-    """The whole-branch review's ruling on 7.6: on the Earnings calls view the data date is the
-    read's ``dataDate`` alone, the head's quote, the list of calls and the earnings rows. The
-    transcript shown does not count, older or newer, with words or without, or failed: a call's
-    words do not age, and the reader carries the call's own date. The page still draws again as
-    it lands, and the date stays."""
+    """The whole-branch review's ruling on 7.6: on the Earnings calls view the data date counts
+    the read's ``dataDate``, the head's quote and the earnings rows, and the list of calls' day.
+    The transcript shown does not count, older or newer, with words or without, or failed: a
+    call's words do not age, and the reader carries the call's own date. The page still draws
+    again as it lands, and the date stays."""
     landed_body = _transcript(observedDay=observed) | (body or {}) if status == 200 else body
     trace = _drive([_shown(), _answer(Q3, landed_body, status), _shown(None, "filings")])
     opened, landed, filings = trace
@@ -953,10 +985,14 @@ OLDER_DATA = "2026-10-30"  # a data date older than LFOX's filing list's day
     [
         (answers.INVESTOR, None, "2026-11-14"),
         (answers.INVESTOR, "2026Q3", "2026-11-14"),
+        (answers.INVESTOR | {"callsDay": OLDER_DATA}, None, OLDER_DATA),
+        (answers.INVESTOR | {"callsDay": "2026-11-20"}, None, "2026-11-14"),
+        (answers.INVESTOR | {"dataDate": None}, None, "2026-11-14"),
+        (answers.INVESTOR | {"dataDate": None, "callsDay": None}, None, None),
         (answers.INVESTOR, "filings", answers.FILINGS_DAY),
+        (answers.INVESTOR | {"callsDay": OLDER_DATA}, "filings", answers.FILINGS_DAY),
         (answers.INVESTOR | {"dataDate": OLDER_DATA}, "filings", OLDER_DATA),
         (answers.INVESTOR | {"filings": None}, "filings", "2026-11-14"),
-        (answers.INVESTOR | {"dataDate": None}, None, None),
         (answers.INVESTOR | {"dataDate": None}, "filings", answers.FILINGS_DAY),
         (answers.profile_only_investor(), None, None),
         (answers.profile_only_investor(), "filings", None),
@@ -964,12 +1000,13 @@ OLDER_DATA = "2026-10-30"  # a data date older than LFOX's filing list's day
 )
 def test_the_data_date_is_the_view_s(answer: dict[str, Any], word: str | None, day: str) -> None:
     """The data date at the row's right end (7.6), the oldest day among the stored answers the
-    view draws: on Earnings calls the read's ``dataDate``, its list of calls, its earnings rows
-    and the head's quote; on Filings the oldest of that ``dataDate``, which counts the head's
-    quote and the earnings rows behind the line of the next earnings report drawn there, and the
-    filing list's day: the list's where the ``dataDate`` is newer, the ``dataDate`` where it is
-    older, and the ``dataDate`` alone without a list. The page asks the tab's script for it
-    (``companyPage.dataDate``), on the answer and the address's word."""
+    view draws. The read's ``dataDate`` counts the head's quote and the earnings rows, which both
+    views draw; each list carries its own day (B-252). On Earnings calls the oldest of the
+    ``dataDate`` and the list of calls' day: the list's where it is older, the ``dataDate``
+    where the list is newer, and the list's alone without a ``dataDate``. On Filings the oldest
+    of the ``dataDate`` and the filing list's day, the same way, and never the list of calls',
+    which the view does not draw. The page asks the tab's script for it
+    (``companyPage.dataDate``), on the answer and the address's word; asking starts no read."""
     assert node(f"companyPage.dataDate.{TAB}", [answer, word], *SCRIPTS) == day
     assert node("investor.dataDate", [answer, word], *SCRIPTS) == day
 
@@ -1274,7 +1311,7 @@ def test_no_filing_list_draws_its_sentence_and_no_button() -> None:
     """Review Focus 2: a company with no filing list on file draws "No filing on file." and no
     button; one whose first window is empty draws the sentence and the button, and no filter,
     table or line."""
-    none = _draw(answers.profile_only_investor(), "filings")
+    none = _draw(answers.profile_only_investor() | {"filingsStale": False}, "filings")
     assert _sentences(none) == [NO_FILING] and _older_button(none) == []
     assert classed(none, "app-ir__filings") == []
     empty = answers.investor()
@@ -1659,6 +1696,323 @@ def test_the_filings_data_date_is_the_oldest_list_read(observed: str, data: str,
     )
     assert trace[0]["asOf"] == min(data, answers.FILINGS_DAY)
     assert trace[-1]["asOf"] == day and trace[-1]["redrawn"] == 1
+
+
+# ------------------------------------------------- the lists, read as a view opens (B-252), in node
+
+CALLS_URL = LFOX + "/page/investor-relations/calls"
+FIRST_WINDOW = LFOX + "/page/investor-relations/filings"  # no ``to``: the clock's day's window
+BUSY = "the pass-throughs are busy: four calls are in flight, try again"
+Q4_CALL = {
+    "fiscalYear": 2026,
+    "quarter": 4,
+    "date": "2027-01-14",
+    "epsReported": None,
+    "epsEstimate": None,
+    "revenueReported": None,
+    "revenueEstimate": None,
+}
+NEW_FILING = _filing("8-K", "2026-11-20", 31)
+
+
+def _unopened(**changes: Any) -> dict[str, Any]:
+    """LFOX's answer where no reader opened its tab yet: no list on file, each stale."""
+    return answers.profile_only_investor() | changes
+
+
+def _stale(**changes: Any) -> dict[str, Any]:
+    """LFOX's answer with both lists on file, each read more than a day ago, so stale."""
+    return answers.investor() | {"callsStale": True, "filingsStale": True} | changes
+
+
+def _calls_read(calls: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The answer of the read of the list of calls: LFOX's five calls unless given, read on 25
+    Nov 2026."""
+    listed = answers.investor()["calls"] if calls is None else calls
+    return {"symbol": "LFOX", "calls": listed, "callsDay": "2026-11-25"}
+
+
+def _first_window(rows: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The filings read's answer for the window to the clock's day, 25 Nov 2026, read that day:
+    LFOX's five filings unless given."""
+    listed = answers.investor()["filings"]["rows"] if rows is None else rows
+    return _window("2025-11-25", "2026-11-25", listed, observedDay="2026-11-25")
+
+
+def _view(name: str) -> dict[str, Any]:
+    """The switch's button ``name`` is pressed."""
+    return {"do": "press", "class": "app-ir__view", "text": name}
+
+
+def _title(tree: Any) -> str:
+    return text(classed(tree, "app-ir__title")[0])
+
+
+def test_the_list_of_calls_is_read_as_the_tab_opens_where_none_is_on_file() -> None:
+    """The founder's ruling of 2026-11-25: no refresh stores a company's list of calls, so the
+    first opening of its tab asks for it, through the list's read with the request header, and
+    draws "Reading the earnings calls." meanwhile. As the list lands the page draws it, the
+    reader opens on the newest call and reads its words, as before, and the data date is the
+    list's day. The page keeps the list with the answer it holds: a press on a row reads that
+    call and no list."""
+    trace = _drive(
+        [
+            _shown(_unopened()),
+            _answer(CALLS_URL, _calls_read()),
+            _answer(Q3, _transcript()),
+            _row("Q216 Jul 2026"),
+        ]
+    )
+    opened, listed, read, picked = trace
+    assert opened["fetched"] == _get(CALLS_URL) and opened["headers"] == [HEADER]
+    assert _sentences(opened["tree"]) == [READING_CALLS]
+    assert classed(opened["tree"], "app-ir__calls") == [] and opened["asOf"] is None
+    assert listed["redrawn"] == 1 and _sentences(listed["tree"]) == []
+    assert _list(listed["tree"]) == LFOX_LIST
+    assert listed["fetched"] == _get(Q3) and listed["headers"] == [HEADER]
+    assert _busy(listed["tree"]) and listed["asOf"] == "2026-11-25"
+    assert read["fetched"] == [] and len(_turns(read["tree"])) == 5
+    assert picked["fetched"] == _get(Q2) and picked["inFlight"] == [Q2]
+
+
+def test_a_stale_list_of_calls_draws_at_once_and_the_newer_one_takes_its_place() -> None:
+    """A list on file draws at once, whatever its age, with the reader on its newest call; where
+    the read names it stale the page asks for a newer one, as the Overview asks for newer news.
+    The newer list takes its place as it lands: a call held since, fiscal 2026 Q4, heads it, and
+    the tab alone, which shows the newest call, moves the reader to it. The data date counts the
+    day of the list drawn."""
+    newer = [Q4_CALL, *answers.investor()["calls"]]
+    trace = _drive([_shown(_stale(callsDay="2026-10-30")), _answer(CALLS_URL, _calls_read(newer))])
+    opened, landed = trace
+    assert opened["fetched"] == _get(CALLS_URL, Q3) and opened["headers"] == [HEADER, HEADER]
+    assert _list(opened["tree"]) == LFOX_LIST and _sentences(opened["tree"]) == []
+    assert _title(opened["tree"]) == "Q3 fiscal 2026 earnings call"
+    assert opened["asOf"] == "2026-10-30"
+    assert landed["redrawn"] == 1 and landed["shows"] == []
+    assert _list(landed["tree"])[0] == (
+        "Fiscal 2026",
+        [
+            ("Q414 Jan 2027", "true"),
+            ("Q315 Oct 2026", None),
+            ("Q216 Jul 2026", None),
+            ("Q116 Apr 2026", None),
+        ],
+    )
+    assert _title(landed["tree"]) == "Q4 fiscal 2026 earnings call"
+    assert landed["fetched"] == _get(_url(2026, 4))
+    assert landed["asOf"] == "2026-11-14"  # the read's, now older than the list's 25 Nov
+
+
+def test_a_list_not_stale_is_not_asked_for() -> None:
+    """Inside the reuse window the tab's read's lists stand: neither view asks for its list."""
+    trace = _drive([_shown(), _view("Filings"), _view("Earnings calls")])
+    assert [step["fetched"] for step in trace] == [_get(Q3), [], []]
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "reason"),
+    [
+        (503, {"detail": "no FMP key"}, "no FMP key"),
+        (502, {"detail": "FMP answered no list of earnings calls for LFOX"}, None),
+        (503, None, "the server answered 503"),
+    ],
+)
+def test_a_list_of_calls_that_cannot_be_read_draws_its_sentence(
+    status: int, body: Any, reason: str | None
+) -> None:
+    """With no list on file, a read the server refuses draws "The earnings calls could not be
+    read: <reason>.", the reason the server's sentence, in the list's place. The page asks no
+    more while it holds that answer of the tab, whatever view it draws; the tab read anew, as the
+    reader comes back to the company, asks again."""
+    reason = reason or body["detail"]
+    trace = _drive(
+        [
+            _shown(_unopened(filingsStale=False)),
+            _answer(CALLS_URL, body, status),
+            _view("Filings"),
+            _view("Earnings calls"),
+            _shown(_unopened(filingsStale=False)),
+        ]
+    )
+    _, failed, away, back, anew = trace
+    sentence = f"The earnings calls could not be read: {reason}."
+    assert failed["redrawn"] == 1 and _sentences(failed["tree"]) == [sentence]
+    assert classed(failed["tree"], "app-ir__calls") == []
+    assert away["fetched"] == [] and back["fetched"] == []
+    assert _sentences(back["tree"]) == [sentence]
+    assert anew["fetched"] == _get(CALLS_URL) and _sentences(anew["tree"]) == [READING_CALLS]
+
+
+def test_a_list_of_calls_that_fails_on_the_network_draws_its_sentence() -> None:
+    fail = {"do": "fail", "url": CALLS_URL, "message": "Failed to fetch"}
+    [_, failed] = _drive([_shown(_unopened()), fail])
+    assert _sentences(failed["tree"]) == ["The earnings calls could not be read: Failed to fetch."]
+
+
+def test_a_newer_list_of_calls_that_cannot_be_read_keeps_the_list_on_file() -> None:
+    """With a list on file, a refused read of the newer one keeps the list and its reader, and
+    one sentence over them says so, as the Overview's news keeps its stories under a note."""
+    trace = _drive([_shown(_stale()), _answer(CALLS_URL, {"detail": BUSY}, 503)])
+    _, failed = trace
+    assert _list(failed["tree"]) == LFOX_LIST
+    assert _title(failed["tree"]) == "Q3 fiscal 2026 earnings call"
+    assert _sentences(failed["tree"]) == [f"The newer earnings calls could not be read: {BUSY}."]
+    assert failed["fetched"] == [] and failed["asOf"] == "2026-11-14"
+    found = list(elements(failed["tree"]))
+    [note] = classed(failed["tree"], "app-ir__none")
+    [block] = classed(failed["tree"], "app-ir__calls")
+    assert found.index(note) < found.index(block)
+
+
+def test_on_a_plan_that_serves_no_earnings_call_no_list_of_calls_is_asked_for() -> None:
+    """The read's ``callsServed`` is false on Premium (``fairband.plans``): the pass-through
+    would refuse the list, so the view asks for none, with no list on file or a stale one."""
+    [none] = _drive([_shown(_unopened(callsServed=False))])
+    assert none["fetched"] == [] and _sentences(none["tree"]) == [NEEDS_ULTIMATE]
+    [held] = _drive([_shown(_stale(callsServed=False))])
+    assert held["fetched"] == _get(Q3) and _list(held["tree"]) == LFOX_LIST
+
+
+def test_a_late_list_of_calls_of_an_answer_no_longer_held_draws_nothing() -> None:
+    """A list's read belongs to the answer of the tab it was asked for. One that lands after the
+    reader went to another company draws nothing; nor does the first of two, where the same
+    company's tab was read anew and asked again: the second's draws."""
+    other = _unopened(symbol="OTHR")
+    theirs = OTHER + "/page/investor-relations/calls"
+    moved = _drive([_shown(_unopened()), _shown(other), _answer(CALLS_URL, _calls_read())])
+    assert moved[1]["fetched"] == _get(theirs) and moved[1]["inFlight"] == [CALLS_URL, theirs]
+    assert moved[2]["redrawn"] == 0 and _sentences(moved[2]["tree"]) == [READING_CALLS]
+    anew = _drive(
+        [
+            _shown(_unopened()),
+            _shown(_unopened()),
+            _answer(CALLS_URL, _calls_read()),
+            _answer(CALLS_URL, _calls_read()),
+        ]
+    )
+    assert anew[1]["inFlight"] == [CALLS_URL, CALLS_URL]
+    assert anew[2]["redrawn"] == 0 and _sentences(anew[2]["tree"]) == [READING_CALLS]
+    assert anew[3]["redrawn"] == 1 and _list(anew[3]["tree"]) == LFOX_LIST
+
+
+@pytest.mark.parametrize(
+    ("answer", "word", "kept"),
+    [
+        (_unopened(), "2026Q2", True),
+        (_unopened(), "2019Q2", False),
+        (_stale(), "2026Q4", True),
+        (_stale(), "2019Q2", False),
+    ],
+)
+def test_an_address_naming_a_call_is_judged_once_the_list_is_read(
+    answer: dict[str, Any], word: str, kept: bool
+) -> None:
+    """An address naming a call (7.1) is put right only against a list that is settled: while a
+    list's read is out the address stays, though the list on file, or none, lacks the call. As
+    the list lands, a call it holds is shown and the address kept; a call it lacks is put right
+    to the tab alone, which shows the newest."""
+    newer = [Q4_CALL, *answers.investor()["calls"]]
+    opened, landed = _drive([_shown(answer, word), _answer(CALLS_URL, _calls_read(newer))])
+    assert opened["shows"] == []
+    assert landed["shows"] == ([] if kept else [["company", "LFOX", TAB, None]])
+    title = (
+        f"Q{word[-1]} fiscal {word[:4]} earnings call" if kept else "Q4 fiscal 2026 earnings call"
+    )
+    assert _title(landed["tree"]) == title
+
+
+def test_the_filing_list_is_read_as_the_filings_view_opens_where_none_is_on_file() -> None:
+    """Each view reads its own list: the Earnings calls view asks for no filing list, so a
+    reader of calls alone costs none. A press of Filings asks for the first window, the filings
+    read with no ``to`` and the request header, and draws "Reading the filings." meanwhile; as
+    it lands the view draws its filters, its table and its line, and the data date is the list's
+    day. The page keeps the list with the answer it holds: the view drawn again asks nothing."""
+    trace = _drive(
+        [
+            _shown(_unopened(callsStale=False)),
+            _view("Filings"),
+            _answer(FIRST_WINDOW, _first_window()),
+            _view("Earnings calls"),
+            _view("Filings"),
+        ]
+    )
+    opened, pressed, landed, back, again = trace
+    assert opened["fetched"] == []
+    assert pressed["fetched"] == _get(FIRST_WINDOW) and pressed["headers"] == [HEADER]
+    assert _sentences(pressed["tree"]) == [READING_FILINGS]
+    assert classed(pressed["tree"], "app-ir__filings") == [] and pressed["asOf"] is None
+    assert landed["redrawn"] == 1 and _sentences(landed["tree"]) == []
+    assert _filed(landed["tree"]) == LFOX_FILED and _filters(landed["tree"]) == LFOX_FILTERS
+    assert _window_line(landed["tree"]) == "Filed from 25 Nov 2025 to 25 Nov 2026."
+    assert landed["asOf"] == "2026-11-25"
+    assert back["fetched"] == [] and back["asOf"] is None
+    assert again["fetched"] == [] and _filed(again["tree"]) == LFOX_FILED
+
+
+def test_a_stale_filing_list_draws_at_once_and_the_newer_one_takes_its_place() -> None:
+    """A filing list on file draws at once on the Filings view, which asks for no list of calls
+    and no call; where the read names it stale the page asks for today's window, and its list
+    takes the first window's place as it lands: a filing of since heads the table, the line
+    reads the newer window, and the data date counts the day of the list drawn. Show older
+    filings waits while the newer window's read is out, its button off and a press reading
+    nothing (the review's case: a window read then would hang under the list on file, and go
+    as the newer one lands); then it reads the year before the newer window."""
+    newer = [NEW_FILING, *answers.investor()["filings"]["rows"]]
+    before = _older_url("2025-11-24")
+    trace = _drive(
+        [
+            _shown(_stale(), "filings"),
+            _older(),
+            _answer(FIRST_WINDOW, _first_window(newer)),
+            _older(),
+        ]
+    )
+    opened, early, landed, older = trace
+    assert opened["fetched"] == _get(FIRST_WINDOW) and opened["headers"] == [HEADER]
+    assert _filed(opened["tree"]) == LFOX_FILED and _sentences(opened["tree"]) == []
+    assert not _faded(opened["tree"]) and opened["asOf"] == answers.FILINGS_DAY
+    assert _older_button(opened["tree"])[0]["props"]["disabled"] is True
+    assert early["fetched"] == [] and early["inFlight"] == [FIRST_WINDOW]
+    assert not _faded(early["tree"])
+    assert landed["redrawn"] == 1
+    assert _older_button(landed["tree"])[0]["props"]["disabled"] is False
+    assert _filed(landed["tree"]) == [
+        ("20 Nov 2026", "8-K", FORMS["8-K"], ["Document", "All files"]),
+        *LFOX_FILED,
+    ]
+    assert _window_line(landed["tree"]) == "Filed from 25 Nov 2025 to 25 Nov 2026."
+    assert landed["asOf"] == "2026-11-14"  # the read's, now older than the list's 25 Nov
+    assert older["fetched"] == _get(before)
+
+
+@pytest.mark.parametrize(
+    ("answer", "kept"),
+    [(_unopened(callsStale=False), False), (_stale(), True)],
+)
+def test_a_filing_list_that_cannot_be_read_draws_its_sentence(
+    answer: dict[str, Any], kept: bool
+) -> None:
+    """With no list on file a refused read draws "The filings could not be read: <reason>." in
+    the list's place; with one on file the table stays, and one sentence over it says the newer
+    list could not be read. The page asks no more while it holds that answer of the tab."""
+    trace = _drive(
+        [
+            _shown(answer, "filings"),
+            _answer(FIRST_WINDOW, {"detail": BUSY}, 503),
+            _view("Earnings calls"),
+            _view("Filings"),
+        ]
+    )
+    _, failed, _, again = trace
+    for step in (failed, again):
+        if kept:
+            assert _filed(step["tree"]) == LFOX_FILED
+            assert _sentences(step["tree"]) == [f"The newer filings could not be read: {BUSY}."]
+            assert _older_button(step["tree"])[0]["props"]["disabled"] is False
+        else:
+            assert classed(step["tree"], "app-ir__filings") == []
+            assert _sentences(step["tree"]) == [f"The filings could not be read: {BUSY}."]
+    assert failed["redrawn"] == 1 and again["fetched"] == []
 
 
 def _scripts_but(*names: str) -> str:

@@ -16,7 +16,6 @@ from fairband.vendors.page_investor import (
     calls,
     filing_rows,
     has_words,
-    newest_call,
     paragraphs,
     questions_at,
     speaker_turns,
@@ -318,7 +317,6 @@ def earned(year: int, period: str, day: str | None, **figures: Any) -> dict[str,
     ],
 )
 def test_a_row_that_is_not_a_call_is_dropped(dropped: Any) -> None:
-    assert newest_call([*DATES, dropped]) == (2026, 3)
     assert [(c["fiscalYear"], c["quarter"]) for c in calls([*DATES, dropped], [])] == [
         (2026, 3),
         (2026, 2),
@@ -326,18 +324,18 @@ def test_a_row_that_is_not_a_call_is_dropped(dropped: Any) -> None:
     ]
 
 
-def test_the_newest_call_is_found_by_its_date_not_its_place() -> None:
-    assert newest_call(DATES) == (2026, 3)
-    assert newest_call([*DATES, {"quarter": 4, "fiscalYear": 2026, "date": "2027-02-03"}]) == (
-        2026,
-        4,
-    )
-    assert newest_call([{"quarter": 4, "fiscalYear": 2026.0, "date": "2027-02-03"}]) == (2026, 4)
+def test_the_newest_call_stands_first_by_its_date_not_its_place() -> None:
+    def first(dates: list[dict[str, Any]]) -> tuple[Any, Any]:
+        newest = calls(dates, [])[0]
+        return newest["fiscalYear"], newest["quarter"]
+
+    assert first(DATES) == (2026, 3)
+    assert first([*DATES, {"quarter": 4, "fiscalYear": 2026, "date": "2027-02-03"}]) == (2026, 4)
+    assert first([{"quarter": 4, "fiscalYear": 2026.0, "date": "2027-02-03"}]) == (2026, 4)
 
 
 @pytest.mark.parametrize("payload", [[], {"Error Message": "x"}, None, [{"quarter": 1}]])
-def test_a_list_with_no_call_has_no_newest_and_no_calls(payload: Any) -> None:
-    assert newest_call(payload) is None
+def test_a_list_with_no_call_has_no_calls(payload: Any) -> None:
     assert calls(payload, [earned(2026, "Q1", "2026-04-29")]) == []
 
 

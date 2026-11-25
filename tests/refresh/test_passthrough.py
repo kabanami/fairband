@@ -740,8 +740,8 @@ def test_a_bad_request_is_a_value_error_before_any_call(
 
 def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     """The worker's client and the pass-through's take their slots from one ``RateLimiter``:
-    ``totals()`` counts both, and the pass-through's call waits behind the worker's. The fetch
-    stores ACME's newest call's transcript, fiscal 2026 Q3, so the pass-through asks Q2."""
+    ``totals()`` counts both, and the pass-through's call, a transcript, which no fetch asks,
+    waits behind the worker's."""
     sleeps: list[float] = []
     pace = env.policy.refresh.fmp_calls_per_minute
     limiter = RateLimiter(pace, env.clock, sleeps.append)
@@ -759,12 +759,12 @@ def test_a_shared_limiter_paces_both_clients(env: Env) -> None:
     finally:
         worker_fmp.close()
         passthrough_fmp.close()
-    # The worker's 31 FMP calls and the newest call's transcript.
-    assert fetched.reused is False and outcome.calls == 32
-    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 32.
+    # The worker's 29 FMP calls, then the pass-through's one.
+    assert fetched.reused is False and outcome.calls == 29
+    # The clock stands still, so the n-th call waits n slots: 0 + 1 + ... + 29.
     interval = limiter.interval.total_seconds()  # 60 / pace, to the microsecond
-    assert limiter.totals() == PaceTotals(33, pytest.approx(528 * interval), 0)
-    assert sleeps[-1] == pytest.approx(32 * interval)
+    assert limiter.totals() == PaceTotals(30, pytest.approx(435 * interval), 0)
+    assert sleeps[-1] == pytest.approx(29 * interval)
 
 
 class Held:

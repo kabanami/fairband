@@ -25,7 +25,7 @@ from datetime import date
 from typing import Any
 
 from fairband.policy.settings import EMPTY_SETTINGS_HASH
-from fairband.refresh.fetch import NEWS_STORIES, STATEMENT_YEARS, filings_window
+from fairband.refresh.fetch import NEWS_STORIES, STATEMENT_YEARS
 from fairband.refresh.inputs_statements import YEAR_END_DRIFT
 from fairband.vendors import page_financials, page_fmp, page_investor
 from fairband.vendors.fmp import StatementKind
@@ -105,8 +105,8 @@ FINANCIALS: dict[str, Any] = {
     ),
 }
 
-FILINGS_DAY = "2026-11-02"  # the day the filing list was stored: a refresh's, which reads it
-_WINDOW = filings_window(date(2026, 11, 1))  # the list's window, the 365 days to 1 Nov 2026
+FILINGS_DAY = "2026-11-02"  # the day the filing list was stored, after its window's last
+_WINDOW = (date(2025, 11, 1), date(2026, 11, 1))  # the list's window, 365 days to 1 Nov 2026
 
 INVESTOR: dict[str, Any] = {
     "symbol": SYMBOL,
@@ -114,6 +114,8 @@ INVESTOR: dict[str, Any] = {
     "quote": page_fmp.head_quote(_ROW),
     "nextEarnings": None if _NEXT is None else _NEXT["day"],
     "calls": page_investor.calls(pages.CALL_DATES, pages.EARNINGS),
+    "callsDay": DATA_DATE,  # the list of calls, read the day of the quote and the earnings
+    "callsStale": False,  # each list read inside the reuse window: the page asks for neither
     "callsServed": True,
     "filings": {
         "from": _WINDOW[0].isoformat(),
@@ -122,6 +124,7 @@ INVESTOR: dict[str, Any] = {
         "truncated": False,
         "observedDay": FILINGS_DAY,
     },
+    "filingsStale": False,
 }
 
 # The company's row of the moat table as the detail serves it (``moat_api.moat_json``): the
@@ -363,15 +366,20 @@ def investor() -> dict[str, Any]:
 
 def profile_only_investor() -> dict[str, Any]:
     """The Investor relations tab's answer of a company with nothing stored but its profile,
-    which that read does not draw: no next date, no call, no filing list and no data date."""
+    which that read does not draw: no next date, no call, no filing list and no data date. So
+    every company whose tab no reader opened yet (B-252): each list is named stale, and the page
+    asks for it."""
     return {
         "symbol": SYMBOL,
         "dataDate": None,
         "quote": page_fmp.head_quote(None),
         "nextEarnings": None,
         "calls": page_investor.calls(None, None),
+        "callsDay": None,
+        "callsStale": True,
         "callsServed": True,
         "filings": None,
+        "filingsStale": True,
     }
 
 

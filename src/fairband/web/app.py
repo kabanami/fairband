@@ -204,6 +204,7 @@ _VENDOR_READS = re.compile(
     r"|/api/companies/[^/]+/filings"
     r"|/api/companies/[^/]+/filing-report"
     r"|/api/companies/[^/]+/filing-report/search"
+    r"|/api/companies/[^/]+/page/investor-relations/calls"
     r"|/api/companies/[^/]+/page/investor-relations/call"
     r"|/api/companies/[^/]+/page/investor-relations/filings"
 )

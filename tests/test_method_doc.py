@@ -15,7 +15,7 @@ from fairband.engine.review import REVIEW_METHOD
 from fairband.engine.secondary import SECONDARY_METHOD
 from fairband.policy import load_policy
 from fairband.policy.moat_rule import CYCLICAL
-from fairband.refresh.fetch import FILINGS_WINDOW_DAYS, PAGE_ENDPOINTS
+from fairband.refresh.fetch import PAGE_ENDPOINTS
 from fairband.reports.check import FAILURES
 from fairband.store.guidance import METRICS
 from fairband.web.reviews_api import DEPENDS_ON_A_FIGURE, FIXED_NUMBERS, NEEDS_A_FIGURE, REDERIVE
@@ -31,40 +31,47 @@ def _section(number: int) -> str:
     return text[start:] if end == -1 else text[start:end]
 
 
-def test_section_10_counts_the_page_s_answers_and_names_the_newest_call_s_transcript() -> None:
-    """Spec 2026-11-18 10: the full refresh's sentence counts the FMP answers only the company
-    page shows (``fetch.PAGE_ENDPOINTS``), names the Investor relations tab's two and says the
-    newest call's transcript is fetched where the store holds none of it with words. 16.8 says
-    the refresh stores the filing list of its window under the agents' key."""
+def test_section_10_counts_the_page_s_answers_and_leaves_the_investor_relations_tab_s() -> None:
+    """B-252: the full refresh's sentence counts the FMP answers only the company page shows
+    (``fetch.PAGE_ENDPOINTS``) and the calls a company costs, and says a refresh fetches none of
+    the Investor relations tab's three, which a reader's opening of the tab or an agent's tool
+    fetches. 16.8 says the same of the filing list."""
     full = next(x for x in _section(10).splitlines() if x.startswith("- **Full refresh**"))
-    assert len(PAGE_ENDPOINTS) == 16 and FILINGS_WINDOW_DAYS == 365
+    assert len(PAGE_ENDPOINTS) == 14
     for words in (
         (
-            "a full or scoped refresh fetches for each company sixteen FMP answers that only the"
+            "a full or scoped refresh fetches for each company fourteen FMP answers that only the"
             " company page shows and the method does not read (`fetch.PAGE_ENDPOINTS`, spec"
-            " 2026-11-16 company page, 10.1, spec 2026-11-17 financials tab, 8.1, and spec"
-            " 2026-11-18 investor relations tab, 8.1), among them its list of earnings calls"
-            " (`transcript-dates`) and its filings of the 365 days to the refresh's day"
-            " (`sec-filings`), each stored under the key of the agents' pass-through for the same"
-            " call"
-        ),
-        (
-            "then the transcript of the newest call on the stored list where the store holds no"
-            " copy of it with words: a copy with words is not fetched again, by a scoped refresh"
-            " either, and a call with none yet is asked again at every refresh, inside the reuse"
-            " window too."
+            " 2026-11-16 company page, 10.1, and spec 2026-11-17 financials tab, 8.1): twenty-nine"
+            " calls a company, on either plan."
         ),
         "None is required, and none gives a fact or an observation.",
+        (
+            "A refresh fetches none of the Investor relations tab's answers (B-252; the founder,"
+            " 2026-11-18 and 2026-11-25: a reader opens a few companies, and a refresh paid for"
+            " all of them): a company's list of earnings calls (`transcript-dates`), its filings"
+            " of the 365 days to the day (`sec-filings`) and a call's transcript are fetched as a"
+            " reader opens the tab, or as an agent's tool asks, through the pass-throughs, each"
+            " kept under its key and reused inside the reuse window; the tab reads a call's"
+            " stored words whatever their age, draws a list on file at once and asks for a newer"
+            " one where it is older than the window. The copies the refreshes before stored stay"
+            " and are still shown."
+        ),
+        (
+            "On a key whose plan is Premium (section 2) the pass-throughs ask neither the list of"
+            " earnings calls nor a transcript, since FMP serves them on Ultimate alone, and what"
+            " the store holds of the two from a time on Ultimate stays and is still shown."
+        ),
     ):
         assert words in full, words
-    assert "fourteen FMP answers" not in full
+    for gone in ("sixteen FMP answers", "thirty calls a company", "newest call on the stored"):
+        assert gone not in full, gone
     filings = _section(16)[_section(16).index("### 16.8") : _section(16).index("### 16.9")]
-    assert "The refresh fetches none of the three; only a request does." not in filings
+    assert "Of the three, a refresh fetches the filing list alone" not in filings
     assert (
-        "Of the three, a refresh fetches the filing list alone, each company's of the 365 days to"
-        " the refresh's day, stored under the same key (section 10), so a request for that"
-        " window, the default on the day of the refresh, reuses it; only a request fetches"
-        " another window or a report."
+        "A refresh fetches none of the three (section 10): only a request does, an agent's or the"
+        " Investor relations tab's, whose first window is the filing list's default, the 365 days"
+        " to the day, so on one day each reuses the other's copy."
     ) in filings
 
 

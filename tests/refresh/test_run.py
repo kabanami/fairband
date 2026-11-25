@@ -90,8 +90,7 @@ def test_scoped_refresh_without_deciles_writes_refusal_snapshots(env: Env) -> No
         QUOTE_DATE,
         None,
     )
-    # ACME's newest call's transcript beside each company's 31; BOLT's list of calls is empty.
-    assert env.router.symbol_calls == Counter({"ACME": 32, "BOLT": 31})
+    assert env.router.symbol_calls == Counter({"ACME": 29, "BOLT": 29})
     with closing(env.connect()) as conn:
         versions = [r[0] for r in conn.execute("SELECT version FROM policy_versions")]
     assert versions == [env.policy.version]
@@ -154,9 +153,9 @@ def test_a_company_without_a_quarterly_balance_sheet_is_valued(env_with_deciles:
 
 
 def test_a_company_whose_page_calls_fail_is_valued(env_with_deciles: Env) -> None:
-    """Spec 2026-11-16 10.1, spec 2026-11-17 8.1 and spec 2026-11-18 8.1: none of the company
-    page's sixteen calls is required. A company whose sixteen calls all fail is fetched with no
-    error, counted fetched, not failed, and valued."""
+    """Spec 2026-11-16 10.1 and spec 2026-11-17 8.1: none of the company page's fourteen calls
+    is required. A company whose fourteen calls all fail is fetched with no error, counted
+    fetched, not failed, and valued."""
     env = env_with_deciles
     page_endpoints = fetch_module.PAGE_ENDPOINTS
     env.router.fail.update(page_endpoints)
@@ -175,9 +174,7 @@ def test_stop_after_first_then_continue(env: Env) -> None:
     started, and no snapshot is written, because a cancel ends the run after the current symbol
     and no later stage runs (a full refresh could not compute deciles from part of the
     universe either). The next run, a scoped refresh, fetches both, ACME's every call again
-    (a full one reuses within the window: ``test_run_full``) but its newest call's transcript,
-    which the store holds with words, and values both. BOLT's list of calls is empty, so it has
-    no transcript to ask."""
+    (a full one reuses within the window: ``test_run_full``), and values both."""
     cancel = threading.Event()
 
     def stop_after_first(progress: Progress) -> None:
@@ -189,13 +186,13 @@ def test_stop_after_first_then_continue(env: Env) -> None:
     assert (row.id, row.status, row.stage, row.message) == (first, "cancelled", "fetch", None)
     assert env.items(first) == [("ACME", "fetched", None), ("BOLT", "pending", None)]
     assert env.snapshots() == []
-    assert env.router.symbol_calls == Counter({"ACME": 32})
+    assert env.router.symbol_calls == Counter({"ACME": 29})
 
     env.router.symbol_calls.clear()
     env.clock.now += timedelta(hours=1)
     second = env.run(["ACME", "BOLT"])
     assert (env.last().id, env.last().status) == (second, "done")
-    assert env.router.symbol_calls == Counter({"ACME": 31, "BOLT": 31})
+    assert env.router.symbol_calls == Counter({"ACME": 29, "BOLT": 29})
     assert env.items(second) == [("ACME", "valued", None), ("BOLT", "valued", None)]
     # both fetched at once: the snapshots follow the order the fetches finished
     assert sorted((symbol, refresh) for symbol, refresh, _ in env.snapshots()) == [
@@ -205,14 +202,13 @@ def test_stop_after_first_then_continue(env: Env) -> None:
 
 
 def test_a_scoped_refresh_fetches_every_call_again(env: Env) -> None:
-    """Within the reuse window too (method 10); a full refresh's reuse is ``test_run_full``'s.
-    The newest call's transcript, stored with words by the first run, is not asked again."""
+    """Within the reuse window too (method 10); a full refresh's reuse is
+    ``test_run_full``'s."""
     first = env.run(["ACME"])
     env.router.calls.clear()
     env.clock.now += timedelta(hours=23)
     second = env.run(["ACME"])
-    assert sum(env.router.calls.values()) == 31  # every call FMP's
-    assert env.router.calls["transcript"] == 0
+    assert sum(env.router.calls.values()) == 29  # every call FMP's
     assert env.last().status == "done"
     assert env.items(second) == [("ACME", "valued", None)]
     assert [refresh for _, refresh, _ in env.snapshots()] == [first, second]
@@ -330,21 +326,20 @@ def test_rate_limit_stops_the_fetch_and_values_what_was_fetched(env: Env) -> Non
         ("BOLT", refresh_id, RATE_LIMITED),
         ("ACME", refresh_id, "no universe deciles yet"),
     ]
-    assert env.router.symbol_calls == Counter({"ACME": 32, "BOLT": 3})  # three tries, then stop
+    assert env.router.symbol_calls == Counter({"ACME": 29, "BOLT": 3})  # three tries, then stop
 
 
 def test_the_fetch_stage_logs_the_fmp_pace(env: Env, caplog: pytest.LogCaptureFixture) -> None:
     """One INFO line at the fetch stage's end gives the FMP limiter's share of the stage: the
-    fixtures' FMP client is not paced, so 31 calls a company, and ACME's newest call's transcript,
-    with no wait and no hold. A second scoped run makes every call again but the transcript, which
-    the store holds with words, and its line counts its own stage only."""
+    fixtures' FMP client is not paced, so 29 calls a company with no wait and no hold. A second
+    scoped run makes every call again, and its line counts its own stage only."""
     with caplog.at_level(logging.INFO, logger="fairband.refresh"):
         env.run(["ACME", "BOLT"])
         env.run(["ACME", "BOLT"])
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("FMP pace")]
     assert lines == [
-        "FMP pace: waited 0.0 s over 63 calls, 0 holds",
-        "FMP pace: waited 0.0 s over 62 calls, 0 holds",
+        "FMP pace: waited 0.0 s over 58 calls, 0 holds",
+        "FMP pace: waited 0.0 s over 58 calls, 0 holds",
     ]
 
 
@@ -372,7 +367,7 @@ def test_second_refresh_refused_while_running(env: Env) -> None:
     first = env.run(["ACME"], then=start_another)
     assert refused == [first]
     assert env.last().id == first and env.last().status == "done"
-    assert env.router.symbol_calls == Counter({"ACME": 32})
+    assert env.router.symbol_calls == Counter({"ACME": 29})
 
 
 def test_run_refuses_before_any_work(env: Env) -> None:

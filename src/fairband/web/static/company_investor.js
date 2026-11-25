@@ -1,7 +1,8 @@
 /* The company page's Investor relations tab (the Investor relations tab's design, 7), loaded after
    company_financials_chart.js: #company/<symbol>/investor-relations, the company's earnings
    calls and its filings, from the tab's read of the store
-   (GET /api/companies/{symbol}/page/investor-relations), which calls no vendor. One block the
+   (GET /api/companies/{symbol}/page/investor-relations), which calls no vendor, and from the
+   lists a view reads as it opens (below). One block the
    page's width (7.2): at its top a row, the switch of the tab's two views, Earnings calls and
    Filings, at its left, drawn as the Financials tab's switch of statements, and at its right
    end the line of the next earnings report, left out where the read holds no coming date;
@@ -14,6 +15,25 @@
    plan of the server's FMP key serves no earnings call: Premium), a company with no call on
    file draws Earnings calls need FMP's Ultimate plan. in the first one's place; calls the store
    holds from another plan's time draw as on any plan.
+
+   The lists, read as a view opens (B-252; the founder, 2026-11-18 and 2026-11-25): no refresh
+   stores a company's list of earnings calls or its filings, so the tab's read answers what the
+   store holds, whatever its age, and names each list that is stale (callsStale, filingsStale):
+   none on file, or one older than the reuse window. A view draws the list on file at once and,
+   where it is stale, asks for a newer one as it first draws on that answer of the tab: the
+   Earnings calls view the list of calls (GET .../investor-relations/calls), unless the plan
+   serves none, and the Filings view the first window (GET .../investor-relations/filings with no
+   to, the server's day), each with the request header, since it may call a vendor. So a reader
+   of the calls alone costs no filing list. The newer list takes the stored one's place as it
+   lands, and the page draws again (companyPage.redraw). A view with no list on file draws one
+   sentence in the list's place while its read is out, Reading the earnings calls. or Reading the
+   filings., with no spinner and no bar (the brand book; the founder's ruling on motion of
+   2026-11-23), then the list, or The earnings calls could not be read: <reason>. (The filings
+   could not be read: <reason>.). Where a list is on file and the newer one cannot be read, the
+   list stays under The newer earnings calls could not be read: <reason>. (The newer filings ...).
+   The reads are kept with the answer of the tab they were asked for (lists): a view drawn again
+   asks nothing, a read that lands for an answer the page no longer holds draws nothing, and the
+   tab read anew, the reader back on the company, asks again.
 
    The Earnings calls view (7.3, 7.4): at its left the list of calls, under one head a fiscal
    year, newest first, the newest five years and Show all <n> calls where there are more, the call
@@ -30,7 +50,8 @@
    it the find box, which marks its words as plain words, whatever the case, from two characters
    on (marked), each a mark element around a text node, and Go to the questions where the server
    found their start. An address naming a call the company has none of shows the newest call, and
-   is put right to the tab alone once drawn, reading nothing of the tab. A change of call takes
+   is put right to the tab alone once drawn, reading nothing of the tab; while the list's read is
+   out the address stays, and is judged on the list that lands. A change of call takes
    the page to its top, as a change of report does on the Research tab, and empties the find box.
 
    The Filings view (7.5): five filters, each with its count, the first pressed as the view opens
@@ -47,8 +68,9 @@
    window no longer shown is kept and draws nothing.
 
    The data date at the tabs' row's right end is the view's (7.6), the oldest day among the
-   stored answers it draws: on Earnings calls the tab's read's alone, the transcript shown not
-   counted; on Filings the oldest of the tab's read's and the filing lists read. company.js asks
+   stored answers it draws: the tab's read's, which counts the head's quote and the earnings
+   rows, and on Earnings calls the day of the list of calls drawn, the transcript shown not
+   counted; on Filings the days of the filing lists read. company.js asks
    this script for it (dataDate) on every draw, so an older window, which draws the page again as
    it lands (companyPage.redraw), moves it with no change to company.js. The tab's function hangs
    on companyPage.draw, its date's on companyPage.dataDate, and the pure pieces on
@@ -89,9 +111,51 @@
      null. */
   var filed = { symbol: null, filter: 0, shown: null, kept: {} };
 
+  /* The lists read as a view opens (B-252), for one answer of the tab: `of`, that answer, and
+     each list's read, null until its view asks for it, { out: true } while it is out, then
+     { answer }, the read's answer, or { failed }, the server's sentence why not. Another answer,
+     another company's or this company's tab read anew, starts them again. */
+  var lists = { of: null, calls: null, filings: null };
+
   /* The view the address's word names: filings for the word filings, else calls, the Earnings
      calls view, on the tab alone or on a call. */
   function view(word) { return word === 'filings' ? 'filings' : 'calls'; }
+
+  /* The lists' reads of `answer`, those kept where the page still holds it; this reads nothing. */
+  function listsOf(answer) {
+    if (lists.of !== answer) lists = { of: answer, calls: null, filings: null };
+    return lists;
+  }
+
+  /* The read of the list `name` (calls, filings) of `answer`, null where none was asked for:
+     started here, through the tab's read of `path` with the request header, where the tab's read
+     names the list stale (`stale`) and this answer asked for none yet. As it lands, its answer
+     or the server's sentence why not is kept with the answer it was asked for, and the page
+     draws again where it still holds that answer. */
+  function listRead(answer, name, stale, path) {
+    var kept = listsOf(answer);
+    if (kept[name] || !stale) return kept[name];
+    kept[name] = { out: true };
+    C.readVendor('/api/companies/' + encodeURIComponent(answer.symbol) + '/page/' + TAB + path)
+      .then(function (got) { return { answer: got }; },
+        function (err) { return { failed: err.message }; })
+      .then(function (got) {
+        kept[name] = got;
+        if (lists === kept) C.redraw();
+      });
+    return kept[name];
+  }
+
+  /* The list a view draws on `answer`: its read's where one landed, a list or null; else `stored`,
+     the tab's read's. */
+  function listed(read, stored) { return read && read.answer ? read.answer : stored; }
+
+  /* The oldest of `days`, ISO days, a missing one aside; null with none. */
+  function oldest(days) {
+    return days.reduce(function (found, day) {
+      return day && (!found || day < found) ? day : found;
+    }, null);
+  }
 
   /* The tab on `answer` at the address's word `word` (7.2): its block, the row of the switch and
      the line, then the view's own; the Filings view says which windows it shows (filed.shown),
@@ -144,18 +208,27 @@
   function chosen(calls, word) { return named(calls, word) || calls[0]; }
 
   /* The Earnings calls view on `answer` at the address's word `word` (7.3, 7.4): the list and the
-     reader of the call shown, side by side; a company with no call on file draws its sentence
-     and no reader: where the read's callsServed is false, the plan of the server's key serving
-     no earnings call, the sentence of what they need. A word that names no call on file is put
-     right (putRight). A change of call
+     reader of the call shown, side by side. The list is the newer one read as the view opened
+     where it landed, else the tab's read's (listRead: asked where that is stale, unless the plan
+     serves no earnings call). A company with no call to draw draws its sentence and no reader:
+     while the list's read is out, Reading the earnings calls.; where it failed, why; where the
+     read's callsServed is false, the plan of the server's key serving no earnings call, the
+     sentence of what they need; else No earnings call on file. A list on file whose newer one
+     could not be read stays, under the sentence that says so. A word that names no call on the
+     list is put right (putRight), but not while the list's read is out. A change of call
      from the one the reader drew last, of the same company, takes the page to its top and
      empties the find box; another company's starts with five fiscal years and an empty box. */
   function calls(answer, word) {
-    var list = answer.calls;
-    if (word != null && !named(list, word)) putRight(answer.symbol, word);
+    var served = answer.callsServed !== false;
+    var read = listRead(answer, 'calls', !!answer.callsStale && served, '/calls');
+    var out = !!(read && read.out);
+    var failed = read && read.failed != null ? read.failed : null;
+    var list = read && read.answer ? read.answer.calls : answer.calls;
+    if (word != null && !out && !named(list, word)) putRight(answer.symbol, word);
     if (!list.length) {
-      return none(answer.callsServed === false ?
-        'Earnings calls need FMP\'s Ultimate plan.' : 'No earnings call on file.');
+      return none(out ? 'Reading the earnings calls.'
+        : failed != null ? 'The earnings calls could not be read: ' + failed + '.'
+          : served ? 'No earnings call on file.' : 'Earnings calls need FMP\'s Ultimate plan.');
     }
     var call = chosen(list, word);
     var key = keyOf(answer.symbol, call);
@@ -168,9 +241,11 @@
       top();
     }
     held.call = key;
-    return h('div', { className: 'app-ir__calls' },
+    var block = h('div', { key: 'calls', className: 'app-ir__calls' },
       callList(answer.symbol, list, call, word),
       reader(call, reading(answer.symbol, call)));
+    return failed == null ? block
+      : [none('The newer earnings calls could not be read: ' + failed + '.', 'newer'), block];
   }
 
   /* An address naming a call the company has none of (7.1) is put right to the tab alone, which
@@ -504,34 +579,51 @@
     return rows.concat(more.filter(function (row) { return !drawn[sameAs(row)]; }));
   }
 
-  /* The Filings view (7.5) on `answer`: a company with no filing list on file draws its sentence
-     and no button. Else the first window and the older ones read after it, their rows one under
+  /* The Filings view (7.5) on `answer`. Its first window is the newer one read as the view
+     opened where it landed, else the tab's read's (listRead: asked where that is stale). A
+     company with no filing list to draw draws its sentence and no button: while the list's read
+     is out, Reading the filings.; where it failed, why; else No filing on file. A list on file
+     whose newer one could not be read stays, under the sentence that says so.
+     Else the first window and the older ones read after it, their rows one under
      the other: the filters, each with its count among them, the table of those the filter
      pressed keeps, in a box of its own that scrolls sideways, and under it the line of the
      windows read, the vendor's cut where the oldest is cut, Show older filings until a window older
      than the first answers no filing, and the sentence of an older window that could not be read.
      A first window with no filing draws its sentence and the button alone. While an older window's
-     read is out the view waits, faded (aria-busy). */
+     read is out the view waits, faded (aria-busy). While the newer first window's read is out
+     Show older filings is off and a press reads nothing: the older windows are kept by the first
+     window's last day, so one read then would go as the newer list lands. */
   function filings(answer) {
-    var list = answer.filings;
+    var read = listRead(answer, 'filings', !!answer.filingsStale, '/filings');
+    var failed = read && read.failed != null ? read.failed : null;
+    var list = listed(read, answer.filings);
     if (filed.symbol !== answer.symbol) {
       filed.symbol = answer.symbol;
       filed.filter = 0;
     }
-    if (!list) return none('No filing on file.');
+    if (!list) {
+      return none(read && read.out ? 'Reading the filings.'
+        : failed != null ? 'The filings could not be read: ' + failed + '.'
+          : 'No filing on file.');
+    }
     var key = keptKey(answer.symbol, list);
     var kept = filed.kept[key] || (filed.kept[key] = { windows: [], out: false, failed: null });
     filed.shown = key;
     var windows = [list].concat(kept.windows);
     var rows = windows.reduce(function (all, w) { return merged(all, w.rows); }, []);
     var more = windows.length === 1 || windows[windows.length - 1].rows.length > 0;
-    var press = function () { older(answer.symbol, key, kept, windows, rows); };
-    return h('div', { className: 'app-ir__filings', 'aria-busy': kept.out ? 'true' : null },
+    var waiting = !!(read && read.out);
+    var press = function () { if (!waiting) older(answer.symbol, key, kept, windows, rows); };
+    var block = h('div', {
+      key: 'filings', className: 'app-ir__filings', 'aria-busy': kept.out ? 'true' : null
+    },
       rows.length ? filters(rows) : none('No filing on file.'),
       rows.length ? h('div', { className: 'app-ir__scroll' }, table(rows)) : null,
-      foot(rows.length ? line(windows) : null, more ? press : null, kept.out),
+      foot(rows.length ? line(windows) : null, more ? press : null, kept.out || waiting),
       kept.failed != null ? none('The older filings could not be read: ' + kept.failed + '.')
         : null);
+    return failed == null ? block
+      : [none('The newer filings could not be read: ' + failed + '.', 'newer'), block];
   }
 
   /* Under the table (7.5): `words`, the line of the windows read, where rows are drawn, then
@@ -617,28 +709,29 @@
     C.redraw();
   }
 
-  function none(text) { return h('p', { className: 'body app-ir__none' }, text); }
+  /* A view's sentence `text`; `key` where it stands in a list beside the view's block. */
+  function none(text, key) { return h('p', { key: key, className: 'body app-ir__none' }, text); }
 
   /* The data date of the view the address's word names (7.6), the oldest day among the stored
-     answers it draws: on the Earnings calls view the read's, which counts the head's quote, the
-     list of calls and the earnings rows, and not the transcript shown, whose words do not age and
-     whose call carries its own date; on the Filings view the oldest day among the read's, for the
-     head's quote and the line of the next earnings report drawn beside the lists, and the filing
-     lists read (filingsDate). */
+     answers it draws: the read's, which counts the head's quote and the earnings rows, drawn on
+     both views, and on the Earnings calls view the day of the list of calls drawn, the newer one
+     read as the view opened where it landed, else the tab's read's, and not the transcript
+     shown, whose words do not age and whose call carries its own date; on the Filings view the
+     days of the filing lists read (filingsDate). It starts no read. */
   function dataDate(answer, word) {
-    return view(word) === 'filings' ? filingsDate(answer) : answer.dataDate;
+    if (view(word) === 'filings') return filingsDate(answer);
+    var read = listsOf(answer).calls;
+    return oldest([answer.dataDate, read && read.answer ? read.answer.callsDay : answer.callsDay]);
   }
 
   /* The Filings view's data date on `answer`: the oldest day among its dataDate and the filing
-     lists read, its first window's and the older windows' read after it; its dataDate without a
-     filing list. */
+     lists read, its first window's, the newer one read as the view opened where it landed, and
+     the older windows' read after it; its dataDate without a filing list. */
   function filingsDate(answer) {
-    var list = answer.filings;
+    var list = listed(listsOf(answer).filings, answer.filings);
     var kept = list ? filed.kept[keptKey(answer.symbol, list)] : null;
-    var lists = list ? [list].concat(kept ? kept.windows : []) : [];
-    return lists.reduce(function (oldest, w) {
-      return w.observedDay && (!oldest || w.observedDay < oldest) ? w.observedDay : oldest;
-    }, answer.dataDate || null);
+    var read = list ? [list].concat(kept ? kept.windows : []) : [];
+    return oldest([answer.dataDate].concat(read.map(function (w) { return w.observedDay; })));
   }
 
   /* What the page and the tests use: the tab's function, draw['investor-relations'](answer,
