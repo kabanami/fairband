@@ -67,7 +67,8 @@ from fairband.reports.charts import (
 from fairband.reports.tables import financial_tables, quarters_table
 from fairband.store.companies import insert_companies
 from fairband.store.db import applied_versions, connect, migrate
-from fairband.store.ledger import Writer
+from fairband.store.ledger import OWNER, Writer
+from fairband.store.moat import set_moat
 from fairband.store.overrides import insert_override
 from fairband.store.refreshes import create_refresh, finish_refresh
 from fairband.store.reviews import insert_review
@@ -287,9 +288,9 @@ def test_screen_rows_and_default_sort(
     for key in ("impliedGrowth", "expectedReturn", "epv", "route"):
         assert aal[key] is None, key
     assert (aal["priceToValue"], aal["designation"]) == (None, None)
-    # refused for its target margin, it keeps the moat class the margin the price needs reads,
-    # which the column shows only on a row with a value, as on the mature routes' refusals
-    assert refused.intermediates["moat"] == "None" and aal["moat"] is None
+    # refused for its target margin, it shows its moat class as a valued row does: the class of
+    # its row of the moat table, which the margin the price needs reads
+    assert refused.intermediates["moat"] == "None" and aal["moat"] == "None"
     assert aal["reviewed"] is None and aal["overrides"] == 0
     assert aal["price"] == 150.0
     assert aal["high52w"] == refused.intermediates["price_facts"]["high_52w"]
@@ -518,6 +519,38 @@ def test_screen_placeholder_row_not_yet_valued(
         "marked": False,
         "expiredEarly": False,
     }
+
+
+def test_the_moat_column_shows_the_moat_tables_class_on_every_row(
+    db_path: Path, policy: Policy, client: TestClient
+) -> None:
+    """The row's ``moat`` is the class of the company's row of the moat table, the class the
+    detail's ``moat`` gives and the drawer stamps: a valued row's and a refused row's alike, so
+    a company whose class is None reads "None" with or without a value. The owner's class shows
+    before any revalue, a company with no row shows none, and a placeholder row shows its
+    class."""
+
+    def shown() -> dict[str, Any]:
+        return {row["ticker"]: row["moat"] for row in _screen(client)["rows"]}
+
+    def stamped(symbol: str) -> Any:
+        return client.get(f"/api/companies/{symbol}").json()["moat"]
+
+    rows = {row["ticker"]: row for row in _screen(client)["rows"]}
+    assert rows["AAL"]["mechanical"] is None and rows["HGCO"]["mechanical"] is not None
+    assert shown() == {"AAPL": "Wide", "AAL": "None", "HGCO": "None"}
+    assert shown() == {symbol: stamped(symbol) for symbol in rows}
+    with closing(connect(db_path)) as conn:
+        set_moat(conn, "AAL", "Narrow", OWNER, None, None, NOW)
+        with conn:
+            conn.execute("DELETE FROM moat_classes WHERE symbol = 'HGCO'")
+    assert shown() == {"AAPL": "Wide", "AAL": "Narrow", "HGCO": None}
+    assert shown() == {symbol: stamped(symbol) for symbol in rows}
+    _universe(db_path, policy, ("NEWC", "New Co", 3_000_000_000, True))
+    with closing(connect(db_path)) as conn:
+        set_moat(conn, "NEWC", "Wide", OWNER, None, None, NOW)
+    [placeholder] = _screen(client)["rows"]
+    assert (placeholder["refusal"], placeholder["moat"]) == ("not yet valued", "Wide")
 
 
 def test_growth_route_value_column(client: TestClient) -> None:

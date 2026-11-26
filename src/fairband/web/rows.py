@@ -468,6 +468,7 @@ def screen_row(
     *,
     mark_min: int,
     policy: Policy,
+    moat: Moat | None,
 ) -> dict[str, Any]:
     """The snapshot as a screen row; the name, sector, industry, cap band and market cap come
     from ``company``, ``None`` without one. ``freshness`` is the validity state on ``today``, aging
@@ -485,9 +486,11 @@ def screen_row(
     policy's ``warning_mark_min``, warnings or more (spec 2026-11-19 7.5). ``phase`` is the
     review's where ``agents`` holds one, else the snapshot's, and ``mechanicalPhase`` the
     snapshot's, each as the menu's number (spec 2026-11-23 refresh experience, 4.4); the route
-    and the columns read from the intermediates stay the snapshot's. The moat shows on
-    a row with a value only: a growth refusal keeps the moat class for the price refresh, not for
-    the screen. ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the price
+    and the columns read from the intermediates stay the snapshot's. The row's ``moat`` is
+    ``moat``, the class of the company's row of the moat table, ``None`` without a row: the class
+    the detail's ``moat`` gives and the drawer stamps, on a valued row and a refused row alike, so
+    a company whose class is None reads "None" with or without a value (the founder, 2026-11-26).
+    ``targetMargin`` is the peers' target and ``impliedMargin`` the margin the price
     needs, a growth row's; a row refused for its target margin has the latter alone.
 
     Every money column is in US dollars, as the value and the price are (spec 2026-11-10 7.4):
@@ -535,7 +538,7 @@ def screen_row(
         "industry": None if company is None else company.industry,
         "capBand": None if company is None else company.cap_band,
         "marketCap": None if market_cap is None else float(market_cap),
-        "moat": None if snapshot.value is None else im.get("moat"),
+        "moat": moat,
         "impliedGrowth": im.get("implied_growth"),
         "expectedReturn": _table(im, "expected_return").get("total"),
         "epv": _in_usd(im.get("epv"), rate),
@@ -615,9 +618,12 @@ def _piotroski_f(im: dict[str, Any]) -> str | None:
     return f"{f['score']} of {f['read']}" if f.get("read") else None
 
 
-def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str, Any]:
+def placeholder_row(
+    company: CompanyRow, watchlists: Sequence[int], moat: Moat | None
+) -> dict[str, Any]:
     """The row of an admitted company with no snapshot yet: its name, sector, industry, cap band
-    and market cap, the refusal "not yet valued", freshness ``current``, its lists, no flag, no
+    and market cap, ``moat``, its class in the moat table as a row with a snapshot shows it
+    (``screen_row``), the refusal "not yet valued", freshness ``current``, its lists, no flag, no
     warning and no mark, no agent's fields (``NO_AGENT_FIELDS``: a report or a review rests on a
     snapshot; ``levels`` and ``held`` are no row keys, and ``flags`` and ``phase`` stand for the
     row's flags and phase, not in them), no early expiry, no phase, shown or mechanical, and
@@ -634,6 +640,7 @@ def placeholder_row(company: CompanyRow, watchlists: Sequence[int]) -> dict[str,
         "industry": company.industry,
         "capBand": company.cap_band,
         "marketCap": None if market_cap is None else float(market_cap),
+        "moat": moat,
         "refusal": NOT_YET_VALUED,
         "watchlists": list(watchlists),
         "flagCount": 0,

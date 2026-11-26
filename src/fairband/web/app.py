@@ -43,9 +43,9 @@ Before any universe exists, every company with a snapshot has its row. The Stati
 and the groups group the same rows. Each row carries the ids of the watchlists the company is on,
 and the agents' fields (``rows.agent_fields``) from the companies' current reviews, newest
 secondary valuations and latest published reports and the snapshots those rest on, with the moat
-table's classes where a company has such a record (``store.moat.moat_classes``): five reads at
-most for all the rows, whatever their number, the fields computed for the companies that have a
-row.
+table's classes (``store.moat.moat_classes``), which every row shows as its moat class and the
+levels of a record with no class of its own are read on: five reads at most for all the rows,
+whatever their number, the fields computed for the companies that have a row.
 
 Each request that reads a policy value reads the effective policy, the file's values with the
 user's settings over them, so a changed setting shows at the next request: the aging fraction of
@@ -334,7 +334,7 @@ def create_app(
             }
             rest_on = {i for s, found in records.items() for i in rested_on(snapshots[s], *found)}
             cited = snapshot_rows(conn, rest_on)
-            classes = moat_classes(conn) if records else {}
+            classes = moat_classes(conn)
             holds = held_rows(conn) if reviews else {}
         agents = {
             symbol: agent_fields(
@@ -362,12 +362,14 @@ def create_app(
                 fields,
                 mark_min=mark_min,
                 policy=read_under,
+                moat=classes.get(snapshot.symbol),
             )
 
         def row(company: CompanyRow) -> dict[str, Any]:
             snapshot = snapshots.get(company.symbol)
             if snapshot is None:
-                return placeholder_row(company, lists.get(company.symbol, []))
+                watchlists = lists.get(company.symbol, [])
+                return placeholder_row(company, watchlists, classes.get(company.symbol))
             return valued(snapshot, company)
 
         if listed:

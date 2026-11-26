@@ -684,7 +684,7 @@ def test_a_refused_rows_secondary_sets_the_levels(
     aal = _rows(client)["AAL"]
     assert _levels(aal) == _record(secondary, value, 150.0, policy, table)
     assert aal["designation"] == secondary.designation == "below"
-    assert (aal["mechanical"], aal["refusal"], aal["moat"]) == (None, refused.refusal, None)
+    assert (aal["mechanical"], aal["refusal"], aal["moat"]) == (None, refused.refusal, table)
     _snapshot(db_path, replace(refused, price=200.0))  # a reprice
     aal = _rows(client)["AAL"]
     assert _levels(aal) == _record(secondary, value, 200.0, policy, table)
@@ -826,7 +826,9 @@ def _in_force(value: float, moat: Moat, price: float | None, policy: Policy) -> 
 
 def _mechanical(snapshot: SnapshotRow, policy: Policy) -> dict[str, Any]:
     return _levels(
-        screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy)
+        screen_row(
+            snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy, moat=None
+        )
     )
 
 
@@ -847,7 +849,9 @@ def test_agent_fields_read_the_policy_and_the_price_they_are_given(
     fields = agent_fields(snapshot, review, None, None, {}, TODAY, changed, None)
     assert fields["levels"] == _in_force(value, moat, 150.0, changed)
     assert fields["levels"]["trimLevel"] == pytest.approx(value * 1.2)
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=changed)
+    row = screen_row(
+        snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=changed, moat=None
+    )
     assert _levels(row) == fields["levels"] and row["mechanical"] == snapshot.value
     assert "levels" not in row
     for price in (None, 0.0):
@@ -871,7 +875,9 @@ def test_a_mechanical_row_reads_its_levels_on_the_policy_in_force(
     assert value is not None and moat is not None
     assert _mechanical(snapshot, policy) == _engines(snapshot)
     changed = apply_overlay(policy, {"trim_multiple": 1.2, "fair_band": [0.95, 1.05]})
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=changed)
+    row = screen_row(
+        snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=changed, moat=None
+    )
     assert row["trimLevel"] == pytest.approx(value * 1.2)
     assert (row["fairLow"], row["fairHigh"]) == pytest.approx((value * 0.95, value * 1.05))
     assert row["fairValue"] == row["mechanical"] == value
@@ -891,7 +897,9 @@ def test_the_screen_and_the_log_carry_the_forward_pe_and_never_the_one_after_sto
     charged = replace(found, intermediates={**found.intermediates, "multiples": two})
     _snapshot(db_path, charged)
     snapshot = _newest(db_path, "AAPL")
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy)
+    row = screen_row(
+        snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy, moat=None
+    )
     assert row["peForward"] == 25.4
     with closing(connect(db_path)) as conn:
         log_snapshot(conn, charged, snapshot.id, 1, NOW)
@@ -989,9 +997,13 @@ def test_a_counting_review_sets_the_rows_flags(
     settled = replace(review, result=replace(review.result, flags=()))
     fields = agent_fields(snapshot, settled, None, None, {}, TODAY, policy, None)
     assert fields["flags"] == ()
-    row = screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy)
+    row = screen_row(
+        snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy, moat=None
+    )
     assert (row["flags"], row["flagCount"]) == ([], 0)
-    kept = screen_row(snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy)
+    kept = screen_row(
+        snapshot, None, TODAY, 0.6667, [], NO_AGENT_FIELDS, mark_min=3, policy=policy, moat=None
+    )
     assert kept["flags"] == [f.word for f in snapshot.result.flags] and kept["flagCount"] == 1
     assert NO_AGENT_FIELDS["flags"] is None
 
@@ -1038,7 +1050,7 @@ def test_a_refused_review_leaves_the_engines_flags(
     engines = ([f.word for f in snapshot.result.flags], flag_count(snapshot.result.flags))
     assert engines[1] == 1
     for row in (
-        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy),
+        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy, moat=None),
         _rows(client)["AAPL"],
     ):
         assert (row["flags"], row["flagCount"]) == engines
@@ -1058,7 +1070,7 @@ def test_a_refused_rows_secondary_leaves_the_engines_flags(
     engines = ([f.word for f in snapshot.result.flags], flag_count(snapshot.result.flags))
     assert (len(engines[0]), engines[1]) == (3, 0)
     for row in (
-        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy),
+        screen_row(snapshot, None, TODAY, 0.6667, [], fields, mark_min=3, policy=policy, moat=None),
         _rows(client)["AAL"],
     ):
         assert (row["flags"], row["flagCount"]) == engines
@@ -1085,7 +1097,9 @@ def test_the_row_reads_the_snapshots_flags_not_the_reviews(
     words = ["heavy capital spending", "negative free cash flow", "new shares issued"]
 
     def row(found: SnapshotRow, fields: Mapping[str, Any], mark_min: int = 3) -> dict[str, Any]:
-        return screen_row(found, None, TODAY, 0.6667, [], fields, mark_min=mark_min, policy=policy)
+        return screen_row(
+            found, None, TODAY, 0.6667, [], fields, mark_min=mark_min, policy=policy, moat=None
+        )
 
     def mark(found: SnapshotRow, fields: Mapping[str, Any], mark_min: int = 3) -> tuple[Any, Any]:
         """The row's ``warnings`` and ``marked``."""
