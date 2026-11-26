@@ -7,7 +7,10 @@ financials, track watchlists, and read research. Your agent connects over MCP to
 data, challenge the model's assumptions where needed, and write full research reports back into
 the workbench. It currently only supports Claude Code.
 
-![A research report in the Research tab of a company page](docs/images/research-report.png)
+https://github.com/user-attachments/assets/87c23d8f-1706-4d6b-95f3-11e7ee9f1d17
+
+A research request on Apple, from the click to the finished report. The agent's 13-minute run is
+shown at high speed.
 
 ## Architecture
 
@@ -60,6 +63,8 @@ clickable rows you can plot on the chart.
 ### Research reports
 Agent-written reports with a section outline, cited numbers (underlined figures link back to
 stored data), and inline charts.
+
+![A research report in the Research tab of a company page](docs/images/research-report.png)
 
 ![Financial section of a research report with charts](docs/images/research-charts.png)
 
