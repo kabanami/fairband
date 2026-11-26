@@ -1,10 +1,13 @@
-"""The drawer's form A (the company page's design, 11): under its bar the head as before, the moat
-stamp after the phase badge, and the chip of the owner's or an agent's class after it (spec
-2026-11-19 8.8); one caption, the sector and the industry; the company's brief in body
-text, cut to six lines by the page's style; the value band, the meter and the four levels in the
-screen's words, or a refused row's sentence where the meter draws no band; then Company page, a
-link to the company page, and Request research. Nothing else: the route's lines, the stance, the
-report's Summary and Details have left it. The mechanical value carries the hover of spec
+"""The drawer's form A (the company page's design, 11), as the founder changed it on 2026-11-26:
+under its bar the head, the logo and the ticker, then the name, with no phase badge, no moat
+stamp and no chip of whose class it is, which the screen's row and the company page show; one
+caption, the sector and the industry; the company's brief in body text, cut to six lines by the
+page's style; the value band, the meter and the four levels in the screen's words, or a refused
+row's sentence where the meter draws no band; the price chart in its compact form; the figures,
+P/E and Forward P/E as the screen's columns give them and the company page's Trading rows, with
+the day of their data; then Company page, a link to the company page, and Request research,
+which stand at the drawer's bottom edge while the rest scrolls. Nothing else: the route's lines,
+the stance, the report's Summary and Details have left it. The mechanical value carries the hover of spec
 2026-11-19 7.5, its warnings and the open company's note: on a row with no review the meter's fair
 value and the Fair value row's figure, which the warnings mark leads where the row is marked; on a
 reviewed row the meter's caption, with no mark; on a refused row nothing. The page's own script
@@ -17,7 +20,7 @@ from typing import Any
 
 import pytest
 from support import page_answers as answers
-from support.page import NODE, classed, elements, node, text
+from support.page import NODE, STATIC, classed, elements, node, text
 from support.web import _static_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -41,11 +44,43 @@ HOVER = (
 )
 # The warnings mark the page hands the bundle, undrawn: its props as given.
 MARK: dict[str, Any] = {"props": {"words": THREE, "children": []}}
+# The scripts whose chart and Trading rows the drawer draws once the company page's Overview
+# answer has landed; without that answer the drawer draws from app.js alone.
+SCRIPTS = (STATIC / "company.js", STATIC / "company_overview.js", STATIC / "company_chart.js")
+# The detail with the multiples the screen's P/E columns read.
+MULTIPLES = {"pe_reported": 14.143, "pe_forward": 19.4289, "pe_clean": 14.143}
 
 
-def _drawn(detail: dict[str, Any]) -> Any:
-    """What ``sections`` draws for ``detail``: the drawer's parts under its bar."""
-    return node("sections", [detail])
+def _drawn(detail: dict[str, Any], page: dict[str, Any] | None = None) -> Any:
+    """What ``sections`` draws for ``detail``: the drawer's parts under its bar, with ``page``,
+    the company page's Overview answer, where it has landed."""
+    if page is None:
+        return node("sections", [detail])
+    return node("sections", [detail, page], *SCRIPTS)
+
+
+def _with_multiples(multiples: dict[str, Any] | None) -> dict[str, Any]:
+    """LFOX with ``multiples`` among its result's intermediates, or with none."""
+    found = answers.detail()
+    if multiples is None:
+        found["result"]["intermediates"].pop("multiples", None)
+    else:
+        found["result"]["intermediates"]["multiples"] = multiples
+    return found
+
+
+def _facts(tree: Any) -> dict[str, list[tuple[str, str]]]:
+    """The drawer's groups of figures by their titles, each its rows' names and figures."""
+    part = _one(tree, "app-drawer__facts")
+    found = {}
+    for group in classed(part, "app-drawer__group"):
+        [title] = classed(group, "app-drawer__grouptitle")
+        [rows] = classed(group, "app-facts")
+        names = [text(e) for e in elements(rows) if e.get("type") == "dt"]
+        figures = [e for e in elements(rows) if e.get("type") == "dd"]
+        assert {e["props"]["className"] for e in figures} == {"figure-sm"}
+        found[text(title)] = list(zip(names, [text(e) for e in figures], strict=True))
+    return found
 
 
 def _one(tree: Any, name: str) -> dict[str, Any]:
@@ -98,9 +133,9 @@ def _kids(element: dict[str, Any]) -> list[dict[str, Any]]:
 
 def test_the_parts_in_order() -> None:
     """The head, the caption of the sector and the industry, the brief, the value band, the line
-    that says what the figures are in, then the buttons. The head is three rows: the logo, the
-    ticker and the phase badge; the moat stamp; the name."""
-    tree = _drawn(answers.DETAIL)
+    that says what the figures are in, the price chart, the figures, then the buttons. The head
+    is two rows: the logo and the ticker; the name."""
+    tree = _drawn(answers.DETAIL, answers.OVERVIEW)
     assert isinstance(tree, list)
     assert _names(tree) == [
         "app-drawer__head",
@@ -108,19 +143,17 @@ def test_the_parts_in_order() -> None:
         "app-drawer__brief",
         "app-drawer__band",
         "app-drawer__currency",
+        "app-drawer__chart",
+        "app-drawer__facts",
         "app-drawer__actions",
     ]
     head = tree[0]
     assert head["type"] == "header"
-    first, second, name = _kids(head)
+    first, name = _kids(head)
     assert (first["type"], first["props"]["className"]) == ("div", "app-drawer__id")
-    logo, ticker, badge = _kids(first)
+    logo, ticker = _kids(first)
     assert (logo["type"], logo["props"]["src"]) == ("img", answers.DETAIL["logo"])
     assert (ticker["type"], text(ticker)) == ("h2", answers.SYMBOL)
-    assert badge["props"] == {"phase": 4, "size": "sm", "children": []}
-    assert (second["type"], second["props"]["className"]) == ("div", "app-drawer__moat")
-    [stamp] = _kids(second)
-    assert text(stamp) == "WIDE MOAT"
     assert name == {
         "type": "p",
         "props": {
@@ -134,26 +167,21 @@ def test_the_parts_in_order() -> None:
 def test_every_part_over_the_band_keeps_its_room() -> None:
     """The founder, 2026-11-24: the value band and its meter stand at the same place whatever the
     company. So each part over the band is drawn for every company and has one height: the head's
-    first row the logo's, with or without a logo or a badge; the moat's row the stamp's, with or
-    without the chip, whose model gives way where the row is full; the name one line; the caption
-    one line; the brief six. A company with no name, no sector or no brief has the part, empty,
-    in its room."""
+    first row the logo's, with or without a logo; the name one line; the caption one line; the
+    brief six. A company with no name, no sector or no brief has the part, empty, in its room."""
     assert _rule(".app-drawer__head {") == (
         "display: flex; flex-direction: column; gap: var(--space-2);"
     )
-    rows = _rule(".app-drawer__id, .app-drawer__moat {")
-    assert rows == "display: flex; align-items: center; gap: var(--space-2); min-width: 0;"
-    assert _rule(".app-drawer__id {") == "height: 24px;"
+    assert _rule(".app-drawer__id {") == (
+        "display: flex; align-items: center; gap: var(--space-2); min-width: 0; height: 24px;"
+    )
     assert "width: 24px; height: 24px;" in _rule(".app-logo {")  # the row's height is the logo's
-    assert _rule(".app-drawer__moat {") == "height: 18px;"
-    assert _rule(".app-drawer__moat .fb-chip {") == "min-width: 0;"
-    role = _rule(".app-drawer__moat .fb-chip__role {")
+    assert "app-drawer__moat" not in _static_file("index.html")
     name = _rule(".app-drawer__name {")
     sector = _rule(".app-drawer__sector {")
-    for rule in (role, name, sector):
+    for rule in (name, sector):
         for declaration in ONE_LINE:
             assert declaration in rule, (rule, declaration)
-    assert "min-width: 0;" in role
     assert "min-height: 1lh;" in name and "min-height: 1lh;" in sector
     assert "min-height: 6lh;" in _rule(".app-drawer__brief {")
     bare = answers.detail(company=None, brief=None, logo=None, phase=None)
@@ -164,9 +192,8 @@ def test_every_part_over_the_band_keeps_its_room() -> None:
         "app-drawer__brief",
         "app-drawer__band",
     ]
-    first, second, name_part = _kids(tree[0])
+    first, name_part = _kids(tree[0])
     assert [kid["type"] for kid in _kids(first)] == ["h2"]
-    assert text(_one(second, "app-moat")) == "WIDE MOAT"
     for part in (name_part, tree[1], tree[2]):
         assert part["type"] == "p"
         assert text(part) == ""
@@ -176,13 +203,14 @@ def test_every_part_over_the_band_keeps_its_room() -> None:
 def test_the_line_on_what_the_figures_are_in_stands_under_the_band() -> None:
     """Spec 2026-11-10 7.4, moved by the founder's word of 2026-11-24: the line on the reporting
     currency, the ADS and the rate takes one line or two, so it stands under the band, where its
-    length moves the buttons alone, on a valued row and on a refused one. A company in USD that
-    is no ADR has none."""
+    length moves no part over it, on a valued row and on a refused one. A company in USD that is
+    no ADR has none."""
     for detail in (answers.DETAIL, answers.refused_detail()):
         tree = _drawn(detail)
-        assert _names(tree)[-3:] == [
+        assert _names(tree)[-4:] == [
             "app-drawer__band",
             "app-drawer__currency",
+            "app-drawer__facts",
             "app-drawer__actions",
         ]
         line = _one(tree, "app-drawer__currency")
@@ -194,7 +222,7 @@ def test_the_line_on_what_the_figures_are_in_stands_under_the_band() -> None:
     domestic = answers.detail(currency="USD", isAdr=False, adrRatio=None, fxRate=None)
     tree = _drawn(domestic)
     assert classed(tree, "app-drawer__currency") == []
-    assert _names(tree)[-2:] == ["app-drawer__band", "app-drawer__actions"]
+    assert _names(tree)[-3:] == ["app-drawer__band", "app-drawer__facts", "app-drawer__actions"]
 
 
 def test_the_caption_is_the_sector_and_the_industry() -> None:
@@ -275,14 +303,26 @@ def test_the_company_page_button_s_address() -> None:
 
 
 def test_request_research_s_box_stands_from_the_row_of_buttons() -> None:
-    """Request research's box stands from the right edge of the row of buttons, under the row,
-    not from its own button (the watchlist page's design, 10). The two buttons fill the row, so
-    when the drawer scrolls, its scrollbar wraps them and Request research drops to the row's
-    left. A box from that button's right edge would then stand past the drawer's left edge,
-    which clips it."""
-    assert "position: relative;" in _rule(".app-drawer__actions {")
+    """Request research's box stands from the right edge of the row of buttons, not from its own
+    button (the watchlist page's design, 10). The two buttons fill the row, so when the drawer
+    scrolls, its scrollbar wraps them and Request research drops to the row's left. A box from
+    that button's right edge would then stand past the drawer's left edge, which clips it. The
+    row stands at the drawer's bottom edge (the founder, 2026-11-26), so the box opens over the
+    row, not under it, a little inside the row's right edge. The two buttons share the row at
+    any width of the body, a scrollbar's width less too: each takes its share, its words
+    centred."""
+    assert "position: sticky;" in _rule(".app-drawer__actions {")
     assert _rule(".app-drawer__actions .app-request {") == "position: static;"
     assert "left: auto; right: 0;" in _rule(".app-request .fb-menu {")
+    assert _rule(".app-drawer__actions .app-request .fb-menu {") == (
+        "top: auto; bottom: calc(100% + var(--space-1)); right: var(--space-2);"
+    )
+    shared = _rule(".app-drawer__actions > .fb-btn, .app-drawer__actions > .app-request {")
+    assert shared == "flex: 1 1 auto;"
+    assert _rule(".app-drawer__actions .fb-btn {") == (
+        "justify-content: center; padding-inline: var(--space-2);"
+    )
+    assert _rule(".app-drawer__actions .app-request > .fb-btn {") == "width: 100%;"
 
 
 def test_request_research_keeps_its_open_item_s_line() -> None:
@@ -350,18 +390,22 @@ def test_what_left_the_drawer_is_not_drawn() -> None:
             "Flags",
             "Policy ",
             "Add a note",
+            "MOAT",
             reviewed["report"]["summary"]["parts"][0],
         ):
             assert gone not in said, (detail["result"]["phase"]["phase"], gone)
         for name in ("app-stance", "fb-stance", "app-disclosure", "app-section", "app-levels"):
             assert classed(tree, name) == [], name
+        for name in ("app-moat", "app-drawer__moat", "fb-chip"):  # the founder, 2026-11-26
+            assert classed(tree, name) == [], name
+        assert [e for e in elements(tree) if "phase" in e["props"]] == []  # no PhaseBadge
+        assert [e for e in elements(tree) if "principal" in e["props"]] == []  # no chip
         assert [e for e in elements(tree) if "sections" in e["props"]] == []  # no ReportReader
         assert [e for e in elements(tree) if "asOf" in e["props"]] == []  # no ValidityWindow
 
 
 def test_a_refused_row_draws_its_refusal() -> None:
-    """In the band's place the refusal's sentence; no meter and no levels. The moat stamp stays:
-    the class is the moat table's, a refused row's too."""
+    """In the band's place the refusal's sentence; no meter and no levels."""
     tree = _drawn(answers.refused_detail())
     band = _one(tree, "app-drawer__band")
     refusal = _one(band, "app-refusal")
@@ -369,8 +413,12 @@ def test_a_refused_row_draws_its_refusal() -> None:
     assert text(refusal) == answers.REFUSAL
     assert _meters(tree) == []
     assert classed(tree, "app-pairs") == []
-    assert text(_one(tree, "app-moat")) == "WIDE MOAT"
-    assert _names(tree)[-3:] == ["app-drawer__band", "app-drawer__currency", "app-drawer__actions"]
+    assert _names(tree)[-4:] == [
+        "app-drawer__band",
+        "app-drawer__currency",
+        "app-drawer__facts",
+        "app-drawer__actions",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -397,8 +445,7 @@ def test_a_refused_row_with_a_band_draws_the_band_and_no_sentence(
 
 
 def test_a_reviewed_row_draws_the_review_s_band() -> None:
-    """The review counts: the meter and the levels are the review's, and the stamp the class of
-    the agent's row its moat override became."""
+    """The review counts: the meter and the levels are the review's."""
     detail = answers.reviewed_detail()
     tree = _drawn(detail)
     [meter] = _meters(tree)
@@ -410,47 +457,179 @@ def test_a_reviewed_row_draws_the_review_s_band() -> None:
         ("Fair band", "$163.80 – $200.20"),
         ("Trim level", "$273.00"),
     ]
-    assert text(_one(tree, "app-moat")) == "NARROW MOAT"
 
 
-def _badges(head: dict[str, Any]) -> list[dict[str, Any]]:
-    """The head's PhaseBadge elements, undrawn: their props as given."""
-    return [e for e in elements(head["props"]["children"]) if "phase" in e["props"]]
+def test_the_head_is_the_logo_the_ticker_and_the_name() -> None:
+    """The founder, 2026-11-26: the drawer's head draws no phase badge, no moat stamp and no chip
+    of whose class it is, whatever the company's phase and class and whoever set the class: the
+    screen's row shows the phase and the class, and the company page all three."""
+    details = [answers.detail(moat=moat) for moat in ("Wide", "Narrow", "None")]
+    details += [answers.reviewed_detail(), answers.unset_detail()]
+    details += [answers.detail(phase="Mature Stable"), answers.detail(phase=None)]
+    for detail in details:
+        [head, *_] = _drawn(detail)
+        first, name = _kids(head)
+        assert [kid["type"] for kid in _kids(first)] == ["img", "h2"]
+        assert name["props"]["className"] == "body app-drawer__name"
+        said = json.dumps(head, ensure_ascii=False)
+        for gone in ("MOAT", "phase", "principal", "app-moat"):
+            assert gone not in said, gone
 
 
-def test_the_moat_stamp_follows_the_phase_badge() -> None:
-    """The phase badge ends the head's first row and the moat stamp starts its second, in the
-    stamp's words, the chip of an agent's class after it; a company with no row in the moat table
-    is stamped ``MOAT NOT SET``, and a row with no phase has no badge."""
-    for moat, words in (("Wide", "WIDE MOAT"), ("Narrow", "NARROW MOAT"), ("None", "NO MOAT")):
-        [head, *_] = _drawn(answers.detail(moat=moat))
-        first, second, _ = _kids(head)
-        assert "phase" in _kids(first)[-1]["props"]
-        [stamp] = _kids(second)
-        assert stamp == node("moatStamp", [{"moat": moat}])
-        assert text(stamp) == words
-    agent = answers.reviewed_detail()
-    [head, *_] = _drawn(agent)
-    stamp, chip = _kids(_kids(head)[1])
-    assert text(stamp) == "NARROW MOAT"
-    assert chip == node("moatChip", [agent])
-    [head, *_] = _drawn(answers.unset_detail())
-    assert text(_one(head, "app-moat")) == "MOAT NOT SET"
-    [head, *_] = _drawn(answers.detail(phase=None))
-    assert _badges(head) == []
-    assert text(_one(head, "app-moat")) == "WIDE MOAT"
+def test_the_chart_is_the_company_page_s_in_its_compact_form() -> None:
+    """Under the band, once the company page's Overview answer has landed: the price chart on
+    the answer's prices, compact, keyed on the company so each company's opens at 1Y with no day
+    picked. Before the answer lands, and where its read failed, the drawer draws no chart."""
+    tree = _drawn(answers.DETAIL, answers.OVERVIEW)
+    part = _one(tree, "app-drawer__chart")
+    assert part["type"] == "section"
+    [chart] = _kids(part)
+    assert chart["props"] == {
+        "key": answers.SYMBOL,
+        "prices": answers.OVERVIEW["prices"],
+        "compact": True,
+        "children": [],
+    }
+    assert (
+        "h(page.companyChart.Chart, { key: r.symbol, prices: answer.prices, compact: true })"
+        in (_static_file("app.js"))
+    )
+    for none in (None, {}):
+        assert classed(node("sections", [answers.DETAIL, none]), "app-drawer__chart") == []
+    refused = _drawn(answers.refused_detail(), answers.OVERVIEW)
+    assert len(classed(refused, "app-drawer__chart")) == 1  # a refused company has prices too
+    rule = _rule(".app-drawer__chart, .app-drawer__facts {")
+    assert rule == (
+        "margin-top: var(--space-4); padding-top: var(--space-4);"
+        " border-top: 1px solid var(--hairline);"
+    )
 
 
-def test_the_badge_draws_the_shown_phase() -> None:
-    """Spec 2026-11-23 refresh experience, 4.4: the head's badge draws the detail's ``phase``, the
-    phase the screen's row shows, a review's where the review has a value, not its result's, the
-    classifier's: Mature Stable over a result of Mature Growth is badge 5; none is no badge."""
-    assert answers.DETAIL["result"]["phase"]["phase"] == "Mature Growth"
-    [head, *_] = _drawn(answers.detail(phase="Mature Stable"))
-    [badge] = _badges(head)
-    assert badge["props"] == {"phase": 5, "size": "sm", "children": []}
-    [head, *_] = _drawn(answers.detail(phase=None))
-    assert _badges(head) == []
+def test_the_figures_are_the_screen_s_multiples_and_the_page_s_trading_rows() -> None:
+    """Under the chart, two groups in the company page's words. Valuation: P/E and Forward P/E,
+    the multiples of the company's result as the screen's columns write them, to one decimal with
+    an x, a dash without one. Trading: the rows of the company page's Price facts, from the same
+    function, so the two views never differ. Under them the day of the answer's data, in the
+    company page's words. No chip, no cite and no vendor's name."""
+    tree = _drawn(_with_multiples(MULTIPLES), answers.OVERVIEW)
+    assert _facts(tree) == {
+        "Valuation": [("P/E", "14.1x"), ("Forward P/E", "19.4x")],
+        "Trading": [
+            tuple(row)
+            for row in node("companyPage.tradingRows", [answers.OVERVIEW["trading"]], *SCRIPTS)
+        ],
+    }
+    assert [name for name, _ in _facts(tree)["Trading"]] == [
+        "Open",
+        "Previous close",
+        "Day range",
+        "52 weeks",
+        "50-day average",
+        "200-day average",
+        "Volume",
+        "Average volume",
+        "Next earnings",
+    ]
+    part = _one(tree, "app-drawer__facts")
+    assert part["type"] == "section"
+    asof = _one(part, "app-drawer__asof")
+    assert asof["props"]["className"] == "caption app-muted app-drawer__asof"
+    assert text(asof) == "data 14 Nov 2026"
+    assert [e for e in elements(part) if "basis" in e["props"] or "principal" in e["props"]] == []
+    for multiples, figures in (
+        (None, ["—", "—"]),
+        ({"pe_reported": None, "pe_forward": 31.25}, ["—", "31.3x"]),
+        ({"pe_reported": -12.34, "pe_forward": None}, ["−12.3x", "—"]),
+    ):
+        valuation = _facts(_drawn(_with_multiples(multiples)))["Valuation"]
+        assert valuation == list(zip(["P/E", "Forward P/E"], figures, strict=True))
+
+
+def test_the_figures_before_the_page_s_answer_lands() -> None:
+    """The multiples are the detail's own, so the Valuation group draws with the detail; the
+    Trading rows and the day of their data wait for the company page's Overview answer, and stay
+    away where its read failed. A refused company has the part too."""
+    for detail in (_with_multiples(MULTIPLES), answers.refused_detail()):
+        tree = _drawn(detail)
+        assert list(_facts(tree)) == ["Valuation"]
+        assert classed(tree, "app-drawer__asof") == []
+    undated = _drawn(answers.DETAIL, answers.OVERVIEW | {"dataDate": None})
+    assert list(_facts(undated)) == ["Valuation", "Trading"]
+    assert classed(undated, "app-drawer__asof") == []
+
+
+def test_the_figures_rows_are_a_name_and_a_figure_at_the_right() -> None:
+    """Each group: its title in label, upper case and faint, then its rows, the name in caption
+    at the left and the figure in figure-sm at the right edge, so a column of figures ends on
+    one line."""
+    assert _rule(".app-drawer__grouptitle {") == (
+        "margin: 0 0 var(--space-1); color: var(--ink-faint); text-transform: uppercase;"
+    )
+    assert _rule(".app-drawer__group + .app-drawer__group {") == "margin-top: var(--space-3);"
+    rows = _rule(".app-facts {")
+    assert "display: grid; grid-template-columns: minmax(0, 1fr) max-content;" in rows
+    assert _rule(".app-facts dt {") == "color: var(--ink-muted);"
+    assert _rule(".app-facts dd {") == "margin: 0; text-align: right; white-space: nowrap;"
+    assert _rule(".app-drawer__asof {") == "margin: var(--space-2) 0 0;"
+    tree = _drawn(_with_multiples(MULTIPLES), answers.OVERVIEW)
+    for title in classed(tree, "app-drawer__grouptitle"):
+        assert (title["type"], title["props"]["className"]) == (
+            "h3",
+            "label app-drawer__grouptitle",
+        )
+    for rows_ in classed(tree, "app-facts"):
+        assert rows_["type"] == "dl"
+        assert {e["props"]["className"] for e in elements(rows_) if e.get("type") == "dt"} == {
+            "caption"
+        }
+
+
+def test_the_buttons_stand_at_the_drawer_s_bottom_edge() -> None:
+    """The founder, 2026-11-26: with the chart and the figures the drawer's parts are longer
+    than most windows, so the buttons, the last of the parts, leave the body and stand at the
+    drawer's bottom edge on its raised surface, over a hairline, while the body scrolls; where
+    the parts are shorter than the drawer the body takes the room left, so the buttons stand at
+    the bottom edge for every company. While the drawer turns to another company the buttons
+    fade as the body does, the row's surface staying whole."""
+    shown = {
+        "symbol": answers.SYMBOL,
+        "body": answers.DETAIL,
+        "page": None,
+        "loading": False,
+        "error": None,
+    }
+    for drawer, loading in ((shown, False), (shown | {"loading": True}, True)):
+        tree = node("drawer", [drawer])
+        bar, body, foot = _kids(tree)
+        assert bar["props"]["className"] == "app-drawer__bar"
+        assert body["props"]["className"] == (
+            "app-drawer__body is-loading" if loading else "app-drawer__body"
+        )
+        assert foot["props"]["className"] == (
+            "app-drawer__actions is-loading" if loading else "app-drawer__actions"
+        )
+        assert classed(body, "app-drawer__actions") == []
+        [parts] = body["props"]["children"]
+        assert _names(parts)[-1] == "app-drawer__facts"
+        assert [text(button) for button in _buttons([foot])] == ["Company page", "Request research"]
+    failed = node("drawer", [shown | {"body": None, "error": "did not load"}])
+    assert [kid["props"]["className"] for kid in _kids(failed)] == [
+        "app-drawer__bar",
+        "app-drawer__body",
+    ]
+    drawer = _rule(".app-drawer {")
+    assert "overflow-y: auto;" in drawer and "display: flex; flex-direction: column;" in drawer
+    assert "flex: 1 0 auto;" in _rule(".app-drawer__body {")
+    foot_rule = _rule(".app-drawer__actions {")
+    for declaration in (
+        "position: sticky;",
+        "bottom: 0;",
+        "background: var(--surface-raised);",
+        "border-top: 1px solid var(--hairline);",
+        "padding: var(--space-3) var(--space-4);",
+    ):
+        assert declaration in foot_rule, declaration
+    assert _rule(".app-drawer__actions.is-loading > * {") == "opacity: 0.5;"
 
 
 def _fair_figure(tree: Any) -> Any:

@@ -495,7 +495,7 @@ def test_the_following_stops_when_the_drawer_closes_or_another_company_shows() -
         _function(script, "open"),
         "if (d && d.symbol === row.ticker && !d.error) return;",
         "if (state.request && state.request.symbol !== row.ticker) stopLaunch(state.request);",
-        "getJson('/api/companies/' + encodeURIComponent(row.ticker))",
+        "readDrawer(row.ticker)",
     )
     load = _code(_function(_static_file("company.js"), "load"))
     _in_order(
@@ -529,11 +529,11 @@ def test_a_view_that_loads_with_a_launch_in_flight_follows_it() -> None:
     landed = _function(script, "landed")
     _in_order(
         landed,
-        "state.drawer = { symbol: symbol, body: body, loading: false, error: null };",
+        "state.drawer = { symbol: symbol, body: body, page: page, loading: false, error: null };",
         "followItem(asked(body.result.symbol), body.item, render, reread(body.result.symbol));",
     )
-    assert "landed(row.ticker, body);" in _function(script, "open")
-    assert "landed(symbol, body);" in _function(script, "reloadDetail")
+    assert "landed(row.ticker, read[0], read[1]);" in _function(script, "open")
+    assert "landed(symbol, read[0], read[1] || d.page);" in _function(script, "reloadDetail")
     assert "return function () { reloadDetail(symbol); };" in _function(script, "reread")
     _in_order(
         _function(_static_file("company.js"), "shown"),

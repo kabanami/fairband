@@ -447,8 +447,11 @@
     outline: 2px solid var(--focus-ring); outline-offset: -2px;
   }
 
+  /* The drawer scrolls as one column: its bar at the top edge, its body, which takes the room
+     its parts leave, and its buttons at the bottom edge (below; the founder, 2026-11-26). */
   .app-drawer {
-    min-height: 0; overflow-y: auto; background: var(--surface-raised);
+    min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
+    background: var(--surface-raised);
     border: 1px solid var(--hairline); border-radius: var(--radius-lg);
   }
   .app-drawer__bar {
@@ -456,24 +459,17 @@
     padding: var(--space-1) var(--space-2); background: var(--surface-raised);
     border-bottom: 1px solid var(--hairline);
   }
-  .app-drawer__body { padding: var(--space-3) var(--space-4) var(--space-6); }
+  .app-drawer__body { flex: 1 0 auto; padding: var(--space-3) var(--space-4) var(--space-4); }
   /* Loading: the previous company, faded, until the new one lands. No spinner, no motion. */
   .app-drawer__body.is-loading { opacity: 0.5; }
-  /* The drawer's head is three rows of one height each, whatever the company (the founder,
+  /* The drawer's head is two rows of one height each, whatever the company (the founder,
      2026-11-24), so the value band under it stands at the same place for every company: the
-     logo, the ticker and the phase badge, in the logo's height with or without a logo or a
-     badge; the moat stamp and the chip of whose class it is, in the stamp's height, where the
-     chip's model gives way with an ellipsis if the row is full; then the name on one line, a
-     longer one cut with an ellipsis. The rows do not wrap. */
+     logo and the ticker, in the logo's height with or without a logo; then the name on one
+     line, a longer one cut with an ellipsis. It draws no phase badge, no moat stamp and no chip
+     (the founder, 2026-11-26). */
   .app-drawer__head { display: flex; flex-direction: column; gap: var(--space-2); }
-  .app-drawer__id, .app-drawer__moat {
-    display: flex; align-items: center; gap: var(--space-2); min-width: 0;
-  }
-  .app-drawer__id { height: 24px; }
-  .app-drawer__moat { height: 18px; }
-  .app-drawer__moat .fb-chip { min-width: 0; }
-  .app-drawer__moat .fb-chip__role {
-    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  .app-drawer__id {
+    display: flex; align-items: center; gap: var(--space-2); min-width: 0; height: 24px;
   }
   .app-drawer__ticker { margin: 0; }
   /* The company's logo (B-203). Most of FMP's logos are drawn for a white ground, many dark on
@@ -540,12 +536,53 @@
   .app-held__detail { margin-top: var(--space-2); }
   .app-held__reason { margin: 0 0 var(--space-1); color: var(--ink-faint); }
   .app-held__detail .app-refusal { margin-bottom: var(--space-2); }
-  .app-drawer__actions {
-    position: relative; display: flex; flex-wrap: wrap; align-items: flex-start;
-    gap: var(--space-2); margin-top: var(--space-4);
+  /* The price chart and the figures under the band (the founder, 2026-11-26), each over a
+     hairline as the band is. The chart is the company page's in its compact form
+     (company_chart.js): its ranges fill the drawer's width in equal parts, and the change over
+     the range stands between them and the plot. */
+  .app-drawer__chart, .app-drawer__facts {
+    margin-top: var(--space-4); padding-top: var(--space-4);
+    border-top: 1px solid var(--hairline);
   }
+  .app-price--compact .app-price__ranges { display: flex; }
+  .app-price--compact .app-price__range { flex: 1 1 0; padding: 4px 0; }
+  .app-price--compact .app-price__move { margin: var(--space-2) 0 var(--space-1); }
+  /* A group of the drawer's figures: its title in label, upper case as the company page's
+     groups are, then a name at the left and its figure at the right edge. */
+  .app-drawer__group + .app-drawer__group { margin-top: var(--space-3); }
+  .app-drawer__grouptitle {
+    margin: 0 0 var(--space-1); color: var(--ink-faint); text-transform: uppercase;
+  }
+  .app-facts {
+    display: grid; grid-template-columns: minmax(0, 1fr) max-content;
+    gap: var(--space-1) var(--space-3); margin: 0; align-items: baseline;
+  }
+  .app-facts dt { color: var(--ink-muted); }
+  .app-facts dd { margin: 0; text-align: right; white-space: nowrap; }
+  .app-drawer__asof { margin: var(--space-2) 0 0; }
+  /* The drawer's buttons stand at its bottom edge on the drawer's surface, over a hairline,
+     while the body scrolls under them (the founder, 2026-11-26): the parts are longer than most
+     windows since the chart and the figures. While the drawer turns to another company what the
+     row holds fades as the body does; the row's surface stays whole, so the body does not show
+     through it. */
+  .app-drawer__actions {
+    position: sticky; bottom: 0; z-index: 3; display: flex; flex-wrap: wrap;
+    align-items: flex-start; gap: var(--space-2); padding: var(--space-3) var(--space-4);
+    background: var(--surface-raised); border-top: 1px solid var(--hairline);
+  }
+  .app-drawer__actions.is-loading > * { opacity: 0.5; }
+  /* The two buttons share one row at any width the drawer's body has, a scrollbar's width less
+     too: each takes its share of the row, its words centred, in less room at its sides. */
+  .app-drawer__actions > .fb-btn, .app-drawer__actions > .app-request { flex: 1 1 auto; }
+  .app-drawer__actions .fb-btn { justify-content: center; padding-inline: var(--space-2); }
+  .app-drawer__actions .app-request > .fb-btn { width: 100%; }
   .app-drawer__actions > p { flex-basis: 100%; margin: 0; }
   .app-drawer__actions .app-request { position: static; }
+  /* Request research's box opens over the row, which stands at the drawer's bottom edge, and a
+     little inside the row's right edge, clear of the drawer's scrollbar. */
+  .app-drawer__actions .app-request .fb-menu {
+    top: auto; bottom: calc(100% + var(--space-1)); right: var(--space-2);
+  }
   .app-pairs {
     display: grid; grid-template-columns: max-content minmax(0, 1fr);
     gap: var(--space-1) var(--space-3); margin: 0; align-items: baseline;

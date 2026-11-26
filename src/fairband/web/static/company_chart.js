@@ -17,7 +17,13 @@
    by zero. The pieces are pure functions of the rows and the width, on
    FairbandPage.companyChart for the Overview, for the Financials tab's chart, which borrows the
    steps, the keys and the ticks' figures, and for the tests, which read them in node; Chart
-   keeps the range, the day picked and the width it measures. */
+   keeps the range, the day picked and the width it measures.
+
+   The drawer draws the chart in its compact form (the founder, 2026-11-26; app.js, sections),
+   `compact` on Chart: no panel and no title, the seven ranges, the change over the range with no
+   newest close over it, which the drawer's meter gives, and the close's plot alone, shorter,
+   with neither plot's name, no volume and three x ticks at most; the line, the scale, the tag,
+   the crosshair and the picked day's box are the page's. */
 (function () {
   'use strict';
 
@@ -43,12 +49,18 @@
   var GAP = 30;
   var VOLUME_HEIGHT = 56;
   var BOTTOM = 22;
-  var HEIGHT = TOP + PRICE_HEIGHT + GAP + VOLUME_HEIGHT + BOTTOM;
+  /* The compact form's frame: the width drawn at before one is measured, the drawer's 288 less
+     its body's padding; the room over the close's plot, which has no name; the plot. It has no
+     volume's plot, so no gap. */
+  var COMPACT_WIDTH = 256;
+  var COMPACT_TOP = 8;
+  var COMPACT_PRICE_HEIGHT = 120;
   var TAG_WIDTH = 50; /* the tag's least width; a longer close widens it */
   var CHAR = 6.6; /* a monospaced 11px character's width, near enough to fit a label */
   var CLEAR = 14; /* a y tick nearer the tag than this is left out */
   var BAR_MAX = 24; /* chart-bar-max */
   var MOST = 7; /* the x ticks drawn at most */
+  var COMPACT_MOST = 3; /* the compact form's */
   var KEYS = { ArrowLeft: true, ArrowRight: true, Home: true, End: true };
 
   function ok(v) { return typeof v === 'number' && isFinite(v); }
@@ -140,10 +152,10 @@
   function decimals(step) { return step >= 1 ? 0 : Math.ceil(-Math.log10(step) - 1e-9); }
 
   /* The x ticks: at each row that opens a month, or a year when `long`, as { i, text }. At most
-     seven: thinned to every second, third, fourth or sixth month, counted from January so that
-     January stays, or to every so many years. The first shown and each January name the year;
-     by year, the year alone. */
-  function xTicks(rows, long) {
+     seven, or `most` where given: thinned to every second, third, fourth or sixth month, counted
+     from January so that January stays, or to every so many years. The first shown and each
+     January name the year; by year, the year alone. */
+  function xTicks(rows, long, most) {
     var found = [];
     for (var i = 1; i < rows.length; i++) {
       var a = rows[i - 1][0];
@@ -152,7 +164,7 @@
         found.push({ i: i, year: Number(b.slice(0, 4)), month: Number(b.slice(5, 7)) });
       }
     }
-    var every = Math.ceil(found.length / MOST);
+    var every = Math.ceil(found.length / (most || MOST));
     while (!long && every < 12 && 12 % every) every++;
     return found.filter(function (tick) {
       return (long ? tick.year : tick.month - 1) % every === 0;
@@ -163,6 +175,21 @@
     });
   }
 
+  /* The ticks of `ticks`, each { x, text, anchor }, that keep clear of each other in a narrow
+     plot, the compact form's: one whose text would start within 6 units of the last kept one's
+     end is left out. A first tick near the left edge is anchored at its start, so "Jan 2026"
+     would run into the next month's name. */
+  function clear(ticks) {
+    var end = -Infinity;
+    return ticks.filter(function (tick) {
+      var wide = tick.text.length * CHAR;
+      var from = tick.x - (tick.anchor === 'start' ? 0 : tick.anchor === 'end' ? wide : wide / 2);
+      if (from < end + 6) return false;
+      end = from + wide;
+      return true;
+    });
+  }
+
   /* The two plots of `rows` at `width` (the width drawn at before one is measured where it is
      none), in the svg's units; null where no row has a close. Each row's x, evenly spaced by
      trading day from the plot's left edge to its right, and the y of its close, null without
@@ -170,12 +197,17 @@
      close's scale in clean steps, a grid line at each and a tick at each the tag leaves clear;
      the volume's bars, one a row with a volume above zero, under the greatest, none wider than
      chart-bar-max nor past the plot's edges; the x ticks, each anchored so that it stays inside
-     the svg. */
-  function geometry(rows, width) {
+     the svg. `compact` is the drawer's form: the close's plot alone in its shorter frame, no bar,
+     the volume's top and height the plot's foot and 0, and three x ticks at most, those that
+     keep clear of each other (clear). */
+  function geometry(rows, width, compact) {
     var closes = priced(rows);
     if (!closes.length) return null;
     var n = rows.length;
-    var W = ok(width) && width > 0 ? width : WIDTH;
+    var W = ok(width) && width > 0 ? width : compact ? COMPACT_WIDTH : WIDTH;
+    var top = compact ? COMPACT_TOP : TOP;
+    var priceHeight = compact ? COMPACT_PRICE_HEIGHT : PRICE_HEIGHT;
+    var volumeHeight = compact ? 0 : VOLUME_HEIGHT;
     var last = closes[closes.length - 1][1];
     var tagText = bare(last, 2);
     var tagWidth = Math.max(TAG_WIDTH, Math.round(tagText.length * CHAR + 10));
@@ -187,9 +219,9 @@
     var y0 = Math.floor(lo / step) * step;
     var y1 = Math.ceil(hi / step) * step;
     if (y1 <= y0) { y0 -= step; y1 += step; }
-    var volumeTop = TOP + PRICE_HEIGHT + GAP;
-    var base = volumeTop + VOLUME_HEIGHT;
-    function y(v) { return TOP + (1 - (v - y0) / (y1 - y0)) * PRICE_HEIGHT; }
+    var volumeTop = top + priceHeight + (compact ? 0 : GAP);
+    var base = volumeTop + volumeHeight;
+    function y(v) { return top + (1 - (v - y0) / (y1 - y0)) * priceHeight; }
     var xs = rows.map(function (row, i) {
       return LEFT + (n > 1 ? i / (n - 1) : 0.5) * plotWidth;
     });
@@ -211,7 +243,9 @@
       grid.push(y(v));
       if (Math.abs(y(v) - lastY) > CLEAR) yTicks.push({ y: y(v), text: bare(v, dp) });
     }
-    var volumes = rows.map(function (row) { return ok(row[2]) && row[2] > 0 ? row[2] : null; });
+    var volumes = rows.map(function (row) {
+      return !compact && ok(row[2]) && row[2] > 0 ? row[2] : null;
+    });
     var shown = volumes.filter(function (volume) { return volume !== null; });
     var volumeMax = shown.length ? Math.max.apply(null, shown) : null;
     var bar = Math.min(BAR_MAX, Math.max(1, plotWidth / n - (n > 260 ? 0 : 2)));
@@ -220,19 +254,20 @@
       if (volume === null) return;
       var from = Math.max(LEFT, xs[i] - bar / 2);
       var to = Math.min(LEFT + plotWidth, xs[i] + bar / 2);
-      var tall = volume / volumeMax * VOLUME_HEIGHT;
+      var tall = volume / volumeMax * volumeHeight;
       bars.push({ i: i, x: from, y: base - tall, width: to - from, height: tall });
     });
     var long = n > 1 && rows[0][0] < monthsBefore(rows[n - 1][0], 24);
-    var ticks = xTicks(rows, long).map(function (tick) {
+    var ticks = xTicks(rows, long, compact ? COMPACT_MOST : MOST).map(function (tick) {
       var x = xs[tick.i];
       var half = tick.text.length * CHAR / 2;
       var anchor = x - half < 0 ? 'start' : x + half > W ? 'end' : 'middle';
       return { i: tick.i, x: x, text: tick.text, anchor: anchor };
     });
+    if (compact) ticks = clear(ticks);
     return {
-      width: W, height: HEIGHT, left: LEFT, top: TOP, plotWidth: plotWidth,
-      priceHeight: PRICE_HEIGHT, volumeTop: volumeTop, volumeHeight: VOLUME_HEIGHT,
+      width: W, height: base + BOTTOM, left: LEFT, top: top, plotWidth: plotWidth,
+      priceHeight: priceHeight, volumeTop: volumeTop, volumeHeight: volumeHeight,
       xs: xs, ys: ys, path: path, last: last, lastX: lastX, lastY: lastY,
       tag: { x: LEFT + plotWidth + 6, width: tagWidth, text: tagText },
       grid: grid, yTicks: yTicks, bars: bars, volumeMax: volumeMax, xTicks: ticks
@@ -264,12 +299,22 @@
   /* The Price block of `prices` at the range `range`, the day `at` of the range picked (null:
      none, and so is a day the range does not hold), drawn at `width`. `on` holds the ref the
      plot's wrapper takes, `range(id)`, called at a range's button, and `pick(i)`, called with the
-     day the pointer or a key picks, null to clear it; none of them is called while it draws. */
-  function block(prices, range, at, width, on) {
+     day the pointer or a key picks, null to clear it; none of them is called while it draws.
+     `compact` draws the drawer's form (the head of this file): the ranges, the change over the
+     range in figure-sm, and the plot. */
+  function block(prices, range, at, width, on, compact) {
     var rows = inRange(prices, range);
-    var g = geometry(rows, width);
+    var g = geometry(rows, width, compact);
     var picked = g && at !== null && at >= 0 && at < rows.length ? at : null;
     var moved = lead(rows, range);
+    if (compact) {
+      return h('div', { className: 'app-price app-price--compact' },
+        ranges(range, on),
+        g ? [
+          moved ? h('p', { key: 'lead', className: 'figure-sm app-price__move' }, moved) : null,
+          plot(rows, g, picked, range, on)
+        ] : h('p', { className: 'body app-note' }, 'No prices on file.'));
+    }
     return C.panel('Price', ranges(range, on), g ? [
       h('div', { key: 'lead', className: 'app-price__lead' },
         h('p', { className: 'figure-lg' }, usd(g.last)),
@@ -292,15 +337,20 @@
 
   /* The plot's wrapper, which takes focus and the keys, and holds the svg of the two plots and,
      with a day picked, its box. The pointer over the svg picks the day nearest it, the svg's
-     width scaled to the units it draws in; leaving the svg or the wrapper's focus clears it. */
+     width scaled to the units it draws in; leaving the svg or the wrapper's focus clears it. A
+     geometry with no volume's plot, the compact form's, draws the close's plot alone, with
+     neither plot's name. */
   function plot(rows, g, at, range, on) {
     var right = g.left + g.plotWidth;
     var base = g.volumeTop + g.volumeHeight;
+    var volume = g.volumeHeight > 0;
     return h('div', {
       key: 'plot', className: 'app-price__plot', ref: on ? on.ref : null, tabIndex: 0,
       role: 'group', 'aria-label': 'Price, ' + words(range),
       onKeyDown: function (event) {
-        if (KEYS[event.key]) event.preventDefault();
+        /* an Escape that clears a picked day is the chart's alone, so in the drawer it does not
+           close the drawer too (app.js); with no day picked it is the view's */
+        if (KEYS[event.key] || (event.key === 'Escape' && at !== null)) event.preventDefault();
         var next = keyed(at, event.key, rows.length);
         if (next !== at) on.pick(next);
       },
@@ -315,7 +365,8 @@
         },
         onMouseLeave: function () { on.pick(null); }
       },
-        h('text', { className: 'app-price__name', x: g.left, y: 10 }, 'Close, USD'),
+        volume ? h('text', { className: 'app-price__name', x: g.left, y: 10 }, 'Close, USD')
+          : null,
         g.grid.map(function (y, k) {
           return h('line', {
             key: 'grid' + k, className: 'app-price__grid', x1: g.left, x2: right, y1: y, y2: y,
@@ -343,11 +394,13 @@
           className: 'app-price__tag', x: g.tag.x + g.tag.width / 2, y: g.lastY + 4,
           textAnchor: 'middle'
         }, g.tag.text),
-        h('text', { className: 'app-price__name', x: g.left, y: g.volumeTop - 8 }, 'Volume'),
-        h('line', {
+        volume ? h('text', {
+          className: 'app-price__name', x: g.left, y: g.volumeTop - 8
+        }, 'Volume') : null,
+        volume ? h('line', {
           className: 'app-price__grid', x1: g.left, x2: right, y1: base, y2: base,
           stroke: 'var(--chart-grid)', strokeWidth: 1
-        }),
+        }) : null,
         g.volumeMax === null ? null : h('text', {
           className: 'app-price__tick app-price__volume', x: right + 8, y: g.volumeTop + 8
         }, C.big(g.volumeMax)),
@@ -390,11 +443,12 @@
   }
 
   /* The chart: the block, keeping its range, 1Y when it opens, the day picked, and the width of
-     the plot's wrapper, measured after each draw and at each resize of the window. */
+     the plot's wrapper, measured after each draw and at each resize of the window. `compact` on
+     its props draws the drawer's form. */
   function Chart(props) {
     var range = React.useState('1Y');
     var at = React.useState(null);
-    var width = React.useState(WIDTH);
+    var width = React.useState(props.compact ? COMPACT_WIDTH : WIDTH);
     var box = React.useRef(null);
     function measure() {
       var found = box.current ? box.current.clientWidth : 0;
@@ -409,7 +463,7 @@
       ref: box,
       range: function (id) { at[1](null); range[1](id); },
       pick: at[1]
-    });
+    }, props.compact);
   }
 
   /* What the Overview and the tests use. */

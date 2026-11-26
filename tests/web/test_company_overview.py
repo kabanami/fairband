@@ -841,6 +841,32 @@ def test_the_three_groups_of_price_facts() -> None:
     assert [e for e in elements(tree) if "basis" in e["props"] or "principal" in e["props"]] == []
 
 
+def test_the_trading_rows_are_one_list_for_the_page_and_the_drawer() -> None:
+    """``tradingRows`` gives the Trading group's names and figures as texts, the list the Price
+    facts block draws and the drawer draws under its chart (the founder, 2026-11-26; app.js,
+    facts), so the two never differ; trading rows with no figure are the nine names, each a
+    dash."""
+    rows = _page("tradingRows", TRADING)
+    assert [tuple(row) for row in rows] == [
+        ("Open", "$180.10"),
+        ("Previous close", "$180.25"),
+        ("Day range", "$355.75 – $360.83"),
+        ("52 weeks", "$121.75 – $201.30"),
+        ("50-day average", "$176.88"),
+        ("200-day average", "$158.42"),
+        ("Volume", "8.1M"),
+        ("Average volume", "9.4M"),
+        ("Next earnings", "4 Feb 2027"),
+    ]
+    tree = _page("priceFacts", answers.OVERVIEW | {"trading": TRADING, "priceChange": CHANGE})
+    [drawn] = _lists(_groups(tree)["Trading"])
+    assert drawn == [tuple(row) for row in rows]
+    bare = _page("tradingRows", dict.fromkeys(TRADING))
+    assert [row[0] for row in bare] == [row[0] for row in rows]
+    assert {row[1] for row in bare} == {"—"}
+    assert "C.group('Trading', tradingRows(t))," in _static_file("company_overview.js")
+
+
 def test_a_range_with_an_end_missing_and_a_change_of_nothing() -> None:
     """A range is the dash where either end is missing; a change that is zero at one decimal
     carries no sign; a missing change or date is the dash."""

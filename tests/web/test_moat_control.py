@@ -439,16 +439,22 @@ def test_the_set_and_the_return() -> None:
 
 def test_a_write_reads_the_drawer_s_company_again() -> None:
     """The drawer outlives the turn to the company page: where it shows the company, a taken set
-    and a taken return read its detail again, so beside the screen's reloaded row it draws the new
-    stamp and chip; a refusal reads nothing, and a drawer that shows another company is left as it
-    is."""
+    and a taken return read it again, its detail and the company page's Overview answer as one
+    (``readDrawer``), so beside the screen's reloaded row it draws the levels of the new class,
+    which sets the buy level; a refusal reads nothing, and a drawer that shows another company
+    is left as it is. The drawer shows the company where its second read is refused."""
     detail = f"/api/companies/{SYMBOL}"
+    overview = f"{detail}/page/overview"
     owner = _detail(OWNER)
+    owner["result"]["levels"]["buy"] = 157.2  # the buy level of the owner's Wide
     other = answers.detail()  # LFOX, the file's Wide
+    elsewhere_detail = f"/api/companies/{answers.SYMBOL}"
+    no_page = {"status": 404, "body": {"detail": "no stored answer"}}
     trace = _drive(
         [
             {"do": "drawer", "symbol": SYMBOL},
             {"do": "read", "url": detail, "body": _detail(FILE)},
+            {"do": "read", "url": overview} | no_page,
             {"do": "open", "detail": _detail(FILE)},
             {"do": "pick", "class": "Wide"},
             {"do": "set"},
@@ -456,46 +462,41 @@ def test_a_write_reads_the_drawer_s_company_again() -> None:
             {"do": "set"},
             {"do": "answer", "status": 200, "body": {"moatClass": OWNER, "snapshot": {}}},
             {"do": "read", "url": detail, "body": owner},
+            {"do": "read", "url": overview} | no_page,
             {"do": "open", "detail": owner},
             {"do": "return"},
             {"do": "answer", "status": 200, "body": {"moatClass": FILE, "snapshot": {}}},
             {"do": "drawer", "symbol": answers.SYMBOL},
-            {"do": "read", "url": f"/api/companies/{answers.SYMBOL}", "body": other},
+            {"do": "read", "url": elsewhere_detail, "body": other},
+            {"do": "read", "url": f"{elsewhere_detail}/page/overview"} | no_page,
             {"do": "open", "detail": owner},
             {"do": "set"},
             {"do": "answer", "status": 200, "body": {"moatClass": OWNER, "snapshot": {}}},
         ]
     )
-    opened, shown = trace[:2]
-    assert [f[:2] for f in opened["fetched"]] == [["GET", detail]]
-    assert shown["drawer"] == {
-        "symbol": SYMBOL,
-        "loading": False,
-        "stamp": "NARROW MOAT",
-        "chip": None,
-    }
-    refused = trace[5]
+    opened, waiting, shown = trace[:3]
+    assert [f[:2] for f in opened["fetched"]] == [["GET", detail], ["GET", overview]]
+    assert waiting["drawer"] == {"symbol": SYMBOL, "loading": True, "buy": None}
+    assert shown["drawer"] == {"symbol": SYMBOL, "loading": False, "buy": "$147.38"}
+    refused = trace[6]
     assert refused["box"]["error"] == "a refresh is running"
     assert (refused["fetched"], refused["afters"]) == ([], 0)
-    taken, landed = trace[7:9]
+    taken, _, landed = trace[8:11]
     assert [f[:2] for f in taken["fetched"]] == [
         ["GET", "/api/screen?sort=ticker&dir=asc"],
         ["GET", detail],
+        ["GET", overview],
     ]
     assert taken["afters"] == 1
-    assert landed["drawer"] == {
-        "symbol": SYMBOL,
-        "loading": False,
-        "stamp": "WIDE MOAT",
-        "chip": "owner",
-    }
-    returned = trace[11]
+    assert landed["drawer"] == {"symbol": SYMBOL, "loading": False, "buy": "$157.20"}
+    returned = trace[13]
     assert [f[:2] for f in returned["fetched"]] == [
         ["GET", "/api/screen?sort=ticker&dir=asc"],
         ["GET", detail],
+        ["GET", overview],
     ]
     # the drawer turned to another company: a write on BF.B leaves it
-    elsewhere = trace[16]
+    elsewhere = trace[19]
     assert elsewhere["drawer"]["symbol"] == answers.SYMBOL
     assert [f[:2] for f in elsewhere["fetched"]] == [["GET", "/api/screen?sort=ticker&dir=asc"]]
     assert elsewhere["afters"] == 3
@@ -625,8 +626,8 @@ def test_one_box_at_a_time() -> None:
 
 def test_the_page_s_head_and_the_drawer_s() -> None:
     """On the company page's line, after the phase badge: the stamp, the chip where the class is
-    the owner's or an agent's, then the control, which reads the page again after a write. In the
-    drawer's head, on the row under the ticker's: the stamp and the chip, and no control."""
+    the owner's or an agent's, then the control, which reads the page again after a write. The
+    drawer's head draws none of the three (the founder, 2026-11-26)."""
     for row in (FILE, OWNER, AGENT, None):
         detail = _detail(row)
         head = node("companyPage.head", [detail, None], COMPANY)
@@ -639,13 +640,9 @@ def test_the_page_s_head_and_the_drawer_s() -> None:
         assert rest == ([chip] if chip else []) + [node("moatControl", [detail])], row
         drawer = node("sections", [detail])
         [top] = classed(drawer, "app-drawer__head")
-        [first] = classed(top, "app-drawer__id")
-        last = [kid for kid in first["props"]["children"] if kid is not None][-1]
-        assert "phase" in last["props"]
-        [second] = classed(top, "app-drawer__moat")
-        kids = [kid for kid in second["props"]["children"] if kid is not None]
-        assert kids == [node("moatStamp", [detail])] + ([chip] if chip else []), row
-        assert classed(drawer, "app-moat-open") == []
+        for name in ("app-moat", "app-drawer__moat", "app-moat-open", "fb-chip"):
+            assert classed(drawer, name) == [], (row, name)
+        assert [e for e in elements(top) if "principal" in e["props"]] == [], row
     assert "P.moatStamp(d), P.moatChip(d), P.moatControl(d, load))," in _function(
         _static_file("company.js"), "head"
     )

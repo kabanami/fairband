@@ -259,17 +259,7 @@
     var c = answer.priceChange;
     return C.panel('Price facts', null,
       h('div', { className: 'app-company__three' },
-        C.group('Trading', [
-          ['Open', C.money(t.open)],
-          ['Previous close', C.money(t.previousClose)],
-          ['Day range', range(t.dayLow, t.dayHigh)],
-          ['52 weeks', range(t.yearLow, t.yearHigh)],
-          ['50-day average', C.money(t.average50)],
-          ['200-day average', C.money(t.average200)],
-          ['Volume', C.big(t.volume)],
-          ['Average volume', C.big(t.averageVolume)],
-          ['Next earnings', C.day(t.nextEarnings)]
-        ]),
+        C.group('Trading', tradingRows(t)),
         C.group('Price change', [
           ['1 day', moved(c.d1)],
           ['5 days', moved(c.d5)],
@@ -284,6 +274,23 @@
           ['5 years', moved(c.y5)],
           ['10 years', moved(c.y10)]
         ])));
+  }
+
+  /* The Trading group's rows of the overview answer's `trading`, each its name and its figure
+     as text: the list the Price facts block draws, and the drawer under its chart (app.js,
+     facts), so the two show the same rows in the same words. */
+  function tradingRows(t) {
+    return [
+      ['Open', C.money(t.open)],
+      ['Previous close', C.money(t.previousClose)],
+      ['Day range', range(t.dayLow, t.dayHigh)],
+      ['52 weeks', range(t.yearLow, t.yearHigh)],
+      ['50-day average', C.money(t.average50)],
+      ['200-day average', C.money(t.average200)],
+      ['Volume', C.big(t.volume)],
+      ['Average volume', C.big(t.averageVolume)],
+      ['Next earnings', C.day(t.nextEarnings)]
+    ];
   }
 
   /* A range of two money figures, low to high: $355.75 – $360.83; the dash where either end is
@@ -338,6 +345,7 @@
   C.value = value;
   C.statistics = statistics;
   C.priceFacts = priceFacts;
+  C.tradingRows = tradingRows;
   C.news = news;
   C.draw.overview = overview;
 })();

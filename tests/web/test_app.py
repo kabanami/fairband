@@ -2050,31 +2050,48 @@ def _in_order(text: str, *parts: str) -> None:
 
 
 def test_the_drawers_order_is_pinned() -> None:
-    """The company page's design, 11: the drawer's form A, in this order and nothing else: the
-    head, the moat stamp after the phase badge; the caption of the sector and the industry; the
-    brief; the value band, the meter and its levels, or a refused row's sentence in its place;
-    the line on what the figures are in; then Company page and Request research with its menu
-    and the open item's line (``tests/web/test_drawer_form.py`` reads what it draws). The stance,
-    the report's Summary, Open the report and Details left it. Request research is the drawer's
-    own part, which the company page draws too."""
+    """The company page's design, 11, as the founder changed it on 2026-11-26: the drawer's form
+    A, in this order and nothing else: the head, the logo, the ticker and the name; the caption
+    of the sector and the industry; the brief; the value band, the meter and its levels, or a
+    refused row's sentence in its place; the line on what the figures are in; the price chart in
+    its compact form; the figures; then Company page and Request research with its menu and the
+    open item's line (``tests/web/test_drawer_form.py`` reads what it draws). The stance, the
+    report's Summary, Open the report and Details left it, and so did the phase badge and the
+    moat stamp. Request research is the drawer's own part, which the company page draws too. The
+    drawer reads the company's detail and the company page's Overview answer as one, both from
+    the store, when a row opens and when its company is read again."""
     script = _static_file("app.js")
     main = _function(script, "sections")
     _in_order(
         main,
         "className: 'app-drawer__head'",
         "h('div', { className: 'app-drawer__id' },",
-        "phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null),",
-        "h('div', { className: 'app-drawer__moat' }, moatStamp(body), moatChip(body)),",
         "className: 'body app-drawer__name'",
         "className: 'caption app-muted app-drawer__sector'",
         "className: 'body app-drawer__brief'",
         "rows ? h('section', { key: 'band', className: 'app-drawer__band' }, meter(body),",
         ": r.refusal ? h('section', { key: 'band', className: 'app-drawer__band' },",
         "className: 'caption app-muted app-drawer__currency'",
+        "answer && answer.prices ? h('section', { key: 'chart', className: 'app-drawer__chart' },",
+        "h(page.companyChart.Chart, { key: r.symbol, prices: answer.prices, compact: true }))",
+        "facts(body, answer),",
         "href: '#company/' + encodeURIComponent(r.symbol)",
         "'Company page'",
         "requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady)",
     )
+    for gone in ("PhaseBadge", "moatStamp", "moatChip", "app-drawer__moat"):
+        assert gone not in main, gone
+    reads = _function(script, "readDrawer")
+    assert "var path = '/api/companies/' + encodeURIComponent(symbol);" in reads
+    assert "getJson(path)," in reads
+    assert "getJson(path + '/page/overview').catch(function () { return null; })" in reads
+    for name, call in (("open", "readDrawer(row.ticker)"), ("reloadDetail", "readDrawer(symbol)")):
+        reader = _function(script, name)
+        assert call in reader and "getJson(" not in reader, name
+    assert "landed(row.ticker, read[0], read[1]);" in _function(script, "open")
+    # a failed second read of a company the drawer already shows keeps its chart and its rows
+    assert "landed(symbol, read[0], read[1] || d.page);" in _function(script, "reloadDetail")
+    assert "content = sections(d.body, d.page, d.loading);" in _function(script, "drawer")
     for gone in ("'Details ▾')", "detailsOpen", "app-stance", "F.ReportReader", "Open the report"):
         assert gone not in script, gone
     ask = _function(script, "requestResearch")

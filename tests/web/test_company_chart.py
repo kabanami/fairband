@@ -562,6 +562,108 @@ def test_the_keys_move_the_crosshair_a_day_at_a_time() -> None:
     body = script[start : script.index("\n  }\n", start)]
     for handler in ("onKeyDown", "onBlur", "onMouseMove", "onMouseLeave", "preventDefault"):
         assert handler in body, handler
+    # an Escape that clears a picked day is the chart's alone: in the drawer, which closes on an
+    # Escape no control has acted on (app.js), it clears the day and leaves the drawer open
+    assert (
+        "if (KEYS[event.key] || (event.key === 'Escape' && at !== null)) event.preventDefault();"
+        in body
+    )
+    assert "if (event.defaultPrevented) return;" in _static_file("app.js")
+
+
+# ------------------------------------------------------------------------------- the compact form
+
+COMPACT = 256  # the width the drawer's chart draws at before it measures one
+
+
+def test_the_compact_geometry_is_one_short_plot_with_no_volume() -> None:
+    """The drawer's form of the chart (the founder, 2026-11-26): the close's plot alone, 120 units
+    high under 8 of room and over the x ticks' 22, so 150 in all where the page's is 376; no
+    volume's bar; three x ticks at most, a narrow plot's room; the tag, the scale's steps and
+    each day's x as the page's form works them out."""
+    rows = _chart("inRange", SERIES, "1Y")
+    full = _chart("geometry", rows, COMPACT)
+    g = _chart("geometry", rows, COMPACT, True)
+    assert (g["width"], g["height"], g["top"], g["priceHeight"]) == (COMPACT, 150, 8, 120)
+    assert (g["volumeHeight"], g["bars"]) == (0, [])
+    assert g["volumeTop"] == 128  # the plot's foot, where the crosshair ends
+    assert 1 <= len(g["xTicks"]) <= 3 < len(full["xTicks"])
+    assert (g["plotWidth"], g["xs"], g["tag"]) == (full["plotWidth"], full["xs"], full["tag"])
+    assert (g["last"], len(g["grid"])) == (full["last"], len(full["grid"]))
+    assert all(8 <= y <= 128 for y in g["ys"])
+    assert (full["height"], full["priceHeight"], full["volumeHeight"]) == (376, 250, 56)
+    for range_id in RANGES:
+        ticks = _chart("geometry", _chart("inRange", SERIES, range_id), COMPACT, True)["xTicks"]
+        assert 1 <= len(ticks) <= 3, range_id
+
+
+def _spans(ticks: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    """Where each x tick's text starts and ends, at 6.6 units a character, by its anchor."""
+    found = []
+    for tick in ticks:
+        wide = len(tick["text"]) * 6.6
+        start = {"start": 0.0, "middle": wide / 2, "end": wide}[tick["anchor"]]
+        found.append((tick["x"] - start, tick["x"] - start + wide))
+    return found
+
+
+def test_the_compact_ticks_keep_clear_of_each_other() -> None:
+    """In the drawer's narrow plot a first tick near the left edge is anchored at its start, so
+    "Jan 2026" ran into "May" (seen on the live page, 2026-11-26). The compact form leaves out a
+    tick whose text would start within 6 units of the last kept one's end, at the drawer's width
+    with a scrollbar and without, in every range; the page's form keeps its ticks."""
+    crowded = 0
+    for width in (239, 256):
+        for range_id in RANGES:
+            rows = _chart("inRange", SERIES, range_id)
+            ticks = _chart("geometry", rows, width, True)["xTicks"]
+            assert ticks, (width, range_id)
+            for (_, end), (start, _) in pairwise(_spans(ticks)):
+                assert start >= end + 6, (width, range_id, ticks)
+            uncut = _chart("xTicks", rows, len(rows) > 520, 3)
+            crowded += len(uncut) > len(ticks)
+    assert crowded  # the series does crowd the narrow plot in some range
+    rows = _chart("inRange", SERIES, "1Y")
+    assert len(_chart("geometry", rows, 239)["xTicks"]) == len(_chart("xTicks", rows, False))
+
+
+def test_the_compact_block_is_the_ranges_the_change_and_the_plot() -> None:
+    """The drawer's block: no panel and no title; the seven ranges; the change over the range in
+    words in figure-sm, with no newest close over it, which the drawer's meter gives; the plot
+    with neither plot's name and no volume, the crosshair to the plot's foot, and the box of a
+    picked day as the page draws it. A company with no price draws the page's sentence."""
+    tree = _chart("block", SERIES, "1Y", 3, COMPACT, None, True)
+    assert (tree["type"], tree["props"]["className"]) == ("div", "app-price app-price--compact")
+    assert classed(tree, "app-company__panel") == [] and _typed(tree, "h2") == []
+    assert classed(tree, "figure-lg") == []
+    [ranges] = classed(tree, "app-price__ranges")
+    assert [text(button) for button in _typed(ranges, "button")] == RANGES
+    [move] = classed(tree, "app-price__move")
+    assert move["props"]["className"] == "figure-sm app-price__move"
+    assert text(move) == _chart("lead", _chart("inRange", SERIES, "1Y"), "1Y")
+    [svg] = _typed(tree, "svg")
+    assert (svg["props"]["viewBox"], svg["props"]["height"]) == (f"0 0 {COMPACT} 150", 150)
+    for gone in ("app-price__name", "app-price__bar", "app-price__volume"):
+        assert classed(tree, gone) == [], gone
+    for kept in ("app-price__line", "app-price__end", "app-price__tagbox", "app-price__tip"):
+        assert len(classed(tree, kept)) == 1, kept
+    [crosshair] = classed(tree, "app-price__crosshair")
+    assert (crosshair["props"]["y1"], crosshair["props"]["y2"]) == (8, 128)
+    empty = _chart("block", [], "1Y", None, COMPACT, None, True)
+    assert empty["props"]["className"] == "app-price app-price--compact"
+    assert text(classed(empty, "app-note")[0]) == "No prices on file."
+    assert _typed(empty, "svg") == []
+
+
+def test_the_compact_chart_opens_at_the_past_year_at_the_drawer_s_width() -> None:
+    """``compact`` on the chart draws the drawer's block, 1Y pressed, at 256 before a width is
+    measured: the drawer's 288 less its body's padding."""
+    tree = _chart("Chart", {"prices": SERIES, "compact": True})
+    assert tree["props"]["className"] == "app-price app-price--compact"
+    pressed = [b["props"]["aria-pressed"] for b in classed(tree, "app-price__range")]
+    assert pressed.index("true") == RANGES.index("1Y") and pressed.count("true") == 1
+    [svg] = _typed(tree, "svg")
+    assert svg["props"]["viewBox"] == "0 0 256 150"
 
 
 def test_the_script_and_the_chart_s_css() -> None:

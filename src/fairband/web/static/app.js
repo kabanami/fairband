@@ -6,17 +6,20 @@
    produced, rounded for display only. Each row's watchlist mark opens a popup that puts the
    company on the reader's lists, from /api/watchlists (spec 2026-11-04 9.4); its ticker is a link
    to the company's page, and its name too (the founder, 2026-11-24), and the rest of the row
-   opens the drawer (the company page's design, 12). The drawer is a short card under its bar,
-   the company, its value and two buttons: Company page, which opens the company's page, and
-   Request research, which posts a research request to the work inbox (the company page's
-   design, 11; spec 2026-11-06 Tier 2, 18.2). Where launching
+   opens the drawer (the company page's design, 12). The drawer is a card under its bar: the
+   company, its value, its price chart and a few of its figures, read with the company page's
+   Overview answer from /api/companies/{symbol}/page/overview (the founder, 2026-11-26), and at
+   its bottom edge two buttons: Company page, which opens the company's page, and Request
+   research, which posts a research request to the work inbox (the company page's design, 11;
+   spec 2026-11-06 Tier 2, 18.2). Where launching
    is set up, a request also opens the window where Claude Code starts, and the line under the
    button follows its launch (spec 2026-11-16 agent launch, 10). At the bar's left, Notes opens a
    box of the company's notes, from /api/companies/{symbol}/notes, which takes a new one (the
-   company page's design, 11.1); the company page's head draws it too. The drawer's head and the
-   company page's stamp the company's moat class, with the chip of the owner's or an agent's
-   class; the company page's head draws the control that opens the moat box, where the owner sets
-   a class or returns to Fairband's (spec 2026-11-19 8.8). The same table and drawer draw the
+   company page's design, 11.1); the company page's head draws it too. The company page's head
+   stamps the company's moat class, with the chip of the owner's or an agent's class, and draws
+   the control that opens the moat box, where the owner sets a class or returns to Fairband's
+   (spec 2026-11-19 8.8); the drawer's head draws neither (the founder, 2026-11-26). The same
+   table and drawer draw the
    watchlist page's one list (spec 2026-11-22 7.1 and 7.2), with a FIND, filters and a sort of
    its own: controls.js says which of the two views shows (onList), watchlists.js which list
    (selectList). The header, the status line and the Statistics view are controls.js, loaded after
@@ -544,23 +547,38 @@
     if (state.request && state.request.symbol !== row.ticker) stopLaunch(state.request);
     if (!d || d.symbol !== row.ticker) notesShown(row.ticker);
     var request = ++latestDetail;
-    state.drawer = { symbol: row.ticker, body: d && d.body, loading: true, error: null };
+    state.drawer = {
+      symbol: row.ticker, body: d && d.body, page: d && d.page, loading: true, error: null
+    };
     render();
-    getJson('/api/companies/' + encodeURIComponent(row.ticker))
-      .then(function (body) {
+    readDrawer(row.ticker)
+      .then(function (read) {
         if (request !== latestDetail) return;
-        landed(row.ticker, body);
+        landed(row.ticker, read[0], read[1]);
         render();
       })
       .catch(function (err) {
         if (request !== latestDetail) return;
         state.drawer = {
-          symbol: row.ticker, body: null, loading: false,
+          symbol: row.ticker, body: null, page: null, loading: false,
           error: 'The detail for ' + row.ticker + ' did not load: ' + err.message +
             '. Open the row again to retry.'
         };
         render();
       });
+  }
+
+  /* The drawer's two reads of a company as one, [detail, page]: its detail, and the company
+     page's Overview answer, whose prices the drawer's chart draws and whose trading rows its
+     figures list (sections; the founder, 2026-11-26). Both are plain GETs from the store alone,
+     so opening a row calls no vendor. A failed second read answers null: the drawer then shows
+     the company with no chart and no trading rows. */
+  function readDrawer(symbol) {
+    var path = '/api/companies/' + encodeURIComponent(symbol);
+    return Promise.all([
+      getJson(path),
+      getJson(path + '/page/overview').catch(function () { return null; })
+    ]);
   }
 
   /* The drawer closes, and its company's request no longer follows its launch. */
@@ -1087,59 +1105,68 @@
 
   /* ------------------------------------------------------------------ the drawer */
 
-  /* The drawer of `d`, { symbol, body, loading, error }. Its bar: Notes for the drawer's company at
-     its left (notesControl, the company page's design, 11.1), with the count of its notes while
-     the drawer holds its detail and none while the drawer turns to it or its read failed, a note
-     taken reading the detail again (reread); Close at its right. Under the bar the company's
-     parts (sections), a failed read's sentence, or the ticker alone while the first read is
-     out. */
+  /* The drawer of `d`, { symbol, body, page, loading, error }. Its bar: Notes for the drawer's
+     company at its left (notesControl, the company page's design, 11.1), with the count of its
+     notes while the drawer holds its detail and none while the drawer turns to it or its read
+     failed, a note taken reading the detail again (reread); Close at its right. Under the bar
+     the company's parts (sections) on its detail and the company page's Overview answer, a
+     failed read's sentence, or the ticker alone while the first read is out. The last of the
+     parts, the buttons, leaves the body and stands at the drawer's bottom edge while the body
+     scrolls (index.html; the founder, 2026-11-26), fading with the body while the drawer turns
+     to another company. */
   function drawer(d) {
     var content;
+    var buttons = null;
     if (d.error) content = note(d.error);
-    else if (d.body) content = sections(d.body);
-    else content = h('h2', { className: 'ticker app-drawer__ticker' }, d.symbol);
+    else if (d.body) {
+      content = sections(d.body, d.page, d.loading);
+      buttons = content.pop();
+    } else content = h('h2', { className: 'ticker app-drawer__ticker' }, d.symbol);
     return h('aside', { className: 'app-drawer', 'aria-label': 'Detail for ' + d.symbol },
       h('div', { className: 'app-drawer__bar' },
         notesControl(d.symbol, d.body && !d.loading ? d.body.noteCount : null,
           reread(d.symbol)),
         h(F.Button, { variant: 'quiet', size: 'sm', onClick: close }, 'Close')),
       h('div', { className: d.loading ? 'app-drawer__body is-loading' : 'app-drawer__body' },
-        content));
+        content),
+      buttons);
   }
 
-  /* The drawer under its bar, form A (the company page's design, 11), in this order and nothing
-     else: the head, three rows, the logo, the ticker and the phase badge of the detail's phase,
-     the one the screen's row shows, a review's where the review has a value (spec 2026-11-23
-     refresh experience, 4.4), then the moat stamp (moatStamp) and the chip of the owner's or an
-     agent's class (moatChip), with no control (spec 2026-11-19 8.8), then the name; one caption,
-     the sector and the industry (sectorLine); the company brief whole, which the page's style
-     cuts at six lines; the value band, the meter and under it the four levels in the screen's
-     words (levelRows), or where the meter draws no band a refused row's sentence in its place;
-     for a company in another currency or an ADR, the line that says what its figures are in
-     (currencyLine, spec 2026-11-10 7.4); then Company page, a link to the company page, and
-     Request research with its menu, the server's refusal under it and the open item's line. The
-     rest of what a company has is on its page.
+  /* The drawer under its bar, form A (the company page's design, 11) as the founder changed it
+     on 2026-11-26, in this order and nothing else: the head, two rows, the logo and the ticker,
+     then the name, with no phase badge, no moat stamp and no chip of whose class it is, which
+     the screen's row and the company page show; one caption, the sector and the industry
+     (sectorLine); the company brief whole, which the page's style cuts at six lines; the value
+     band, the meter and under it the four levels in the screen's words (levelRows), or where
+     the meter draws no band a refused row's sentence in its place; for a company in another
+     currency or an ADR, the line that says what its figures are in (currencyLine, spec
+     2026-11-10 7.4); the company page's price chart in its compact form (company_chart.js), on
+     the prices of `answer`, the company page's Overview answer, keyed on the company so each
+     company's opens at 1Y; the figures (facts); then Company page, a link to the company page,
+     and Request research with its menu, the server's refusal under it and the open item's line,
+     which the drawer stands at its bottom edge (drawer) and which fade, as the body does,
+     while the drawer is `loading` another company. The rest of what a company has is on its
+     page. `answer` is null where the second read failed (readDrawer): the drawer then draws no
+     chart and no trading rows.
      The band and its meter stand at the same place whatever the company (the founder,
      2026-11-24). So every part over the band is drawn for every company, empty where the company
      has none, and the page's style gives each one height: the name and the caption one line, a
      longer one cut with an ellipsis and whole in its hover, the brief six lines. The line on
      what the figures are in, one line or two, stood in the head and is under the band for that
      reason. */
-  function sections(body) {
+  function sections(body, answer, loading) {
     var r = body.result;
-    var phase = PHASE_NUMBER[body.phase];
     var name = (body.company && body.company.name) || null;
     var sector = sectorLine(body.company);
     var currency = currencyLine(body);
     var rows = levelRows(body);
     var ask = asked(r.symbol);
+    var page = window.FairbandPage;
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
         h('div', { className: 'app-drawer__id' },
           logo(body, 'app-drawer__logo'),
-          h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol),
-          phase ? h(F.PhaseBadge, { phase: phase, size: 'sm' }) : null),
-        h('div', { className: 'app-drawer__moat' }, moatStamp(body), moatChip(body)),
+          h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol)),
         h('p', { className: 'body app-drawer__name', title: name }, name)),
       h('p', {
         key: 'sector', className: 'caption app-muted app-drawer__sector', title: sector || null
@@ -1152,11 +1179,59 @@
           h('p', { className: 'body app-refusal' }, r.refusal)) : null,
       currency ? h('p', { key: 'currency', className: 'caption app-muted app-drawer__currency' },
         currency) : null,
-      h('div', { key: 'actions', className: 'app-drawer__actions' },
+      answer && answer.prices ? h('section', { key: 'chart', className: 'app-drawer__chart' },
+        h(page.companyChart.Chart, { key: r.symbol, prices: answer.prices, compact: true }))
+        : null,
+      facts(body, answer),
+      h('div', {
+        key: 'actions', className: 'app-drawer__actions' + (loading ? ' is-loading' : '')
+      },
         h(F.Button, { variant: 'primary', href: '#company/' + encodeURIComponent(r.symbol) },
           'Company page'),
         requestResearch(ask, body.item, render, reread(r.symbol), body.launchReady))
     ];
+  }
+
+  /* The drawer's figures under its chart (the founder, 2026-11-26), two groups in the company
+     page's words. Valuation: P/E and Forward P/E, the multiples of the company's result, the
+     figures the screen's columns of those names show (multipleText). Trading: the rows of the
+     company page's Price facts on `answer`, the company page's Overview answer, from the page's
+     own function (company_overview.js, tradingRows), so the two views show the same rows; and
+     under them the day of the answer's data, in the company page's words. The multiples are the
+     detail's, so Valuation draws without the answer; the Trading rows and the day wait for it.
+     Vendor reference data, shown plain: no chip, no cite and no vendor's name. */
+  function facts(body, answer) {
+    var multiples = (body.result.intermediates || {}).multiples || {};
+    var trading = answer && answer.trading
+      ? window.FairbandPage.companyPage.tradingRows(answer.trading) : null;
+    return h('section', { key: 'facts', className: 'app-drawer__facts' },
+      factGroup('Valuation', [
+        ['P/E', multipleText(multiples.pe_reported)],
+        ['Forward P/E', multipleText(multiples.pe_forward)]
+      ]),
+      trading ? factGroup('Trading', trading) : null,
+      trading && answer.dataDate ? h('p', { className: 'caption app-muted app-drawer__asof' },
+        'data ' + F.formatDate(String(answer.dataDate).slice(0, 10))) : null);
+  }
+
+  /* A group of the drawer's figures: its title in label, then its rows, [name, figure], the
+     name at the left and the figure at the right edge. */
+  function factGroup(title, rows) {
+    return h('div', { key: title, className: 'app-drawer__group' },
+      h('h3', { className: 'label app-drawer__grouptitle' }, title),
+      h('dl', { className: 'app-facts' }, rows.map(function (row) {
+        return h(React.Fragment, { key: row[0] },
+          h('dt', { className: 'caption' }, row[0]),
+          h('dd', { className: 'figure-sm' }, row[1]));
+      })));
+  }
+
+  /* A multiple as the screen's P/E columns write it: 19.4x, to one decimal, a minus (U+2212)
+     below zero; the dash without one. */
+  function multipleText(v) {
+    if (v == null || isNaN(Number(v))) return '—';
+    var text = Math.abs(Number(v)).toFixed(1) + 'x';
+    return Number(v) < 0 && /[1-9]/.test(text) ? '−' + text : text;
   }
 
   /* The meter of a company's detail (spec 2026-11-06 Tier 2, 18.2 and 18.4), as the drawer and
@@ -1746,10 +1821,11 @@
     followLaunch(ask, redraw, after);
   }
 
-  /* The drawer's company read has landed: the drawer shows it, and its request follows the open
-     item's launch (followItem). */
-  function landed(symbol, body) {
-    state.drawer = { symbol: symbol, body: body, loading: false, error: null };
+  /* The drawer's company read has landed (readDrawer), its detail and `page`, the company
+     page's Overview answer, null where that read failed: the drawer shows them, and its request
+     follows the open item's launch (followItem). */
+  function landed(symbol, body, page) {
+    state.drawer = { symbol: symbol, body: body, page: page, loading: false, error: null };
     followItem(asked(body.result.symbol), body.item, render, reread(body.result.symbol));
   }
 
@@ -1759,7 +1835,8 @@
   }
 
   /* The drawer's company read again in place after a write that changes its detail, while the
-     drawer still shows it and nothing else is loading; a failed read leaves what it shows. */
+     drawer still shows it and nothing else is loading; a failed read leaves what it shows, and
+     so does a failed second read: the drawer keeps the chart and the trading rows it had. */
   function reloadDetail(symbol) {
     var d = state.drawer;
     if (!d || d.symbol !== symbol || d.loading) {
@@ -1767,10 +1844,10 @@
       return;
     }
     var request = ++latestDetail;
-    getJson('/api/companies/' + encodeURIComponent(symbol))
-      .then(function (body) {
+    readDrawer(symbol)
+      .then(function (read) {
         if (request !== latestDetail) return;
-        landed(symbol, body);
+        landed(symbol, read[0], read[1] || d.page);
       })
       .catch(function () { /* the drawer keeps what it shows */ })
       .then(render);

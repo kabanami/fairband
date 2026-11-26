@@ -15,8 +15,9 @@
 //   {"do": "return"}                     Use Fairband's class is pressed
 //   {"do": "answer", "status", "body"}   the oldest write in flight answers; a body that is a
 //                                        string is no JSON, as a 500's plain text
-//   {"do": "read", "url", "body"}        the oldest read in flight of `url` answers 200 with
-//                                        `body`; with none in flight, nothing happens
+//   {"do": "read", "url", "body"}        the oldest read in flight of `url` answers 200, or
+//                                        `status` where the step has one, with `body`; with
+//                                        none in flight, nothing happens
 //   {"do": "notes"}                      a Notes control is pressed (openNotes)
 //   {"do": "drawer", "symbol"}           the screen's newest read in flight lands with the row of
 //                                        `symbol` alone, and the row opens its drawer as a click
@@ -26,8 +27,11 @@
 // focus back, whether a Notes box is drawn, the moat box drawn, null for none: the text of its
 // line and of its reason, the classes pressed, the field's text, Set moat class's disabled, the
 // return's words and its disabled (null without one), and the sentence under the buttons; and the
-// drawer, null for none: its company, whether it is loading, its moat stamp's words and its
-// chip's principal (null without one).
+// drawer, null for none: its company, whether it is loading and its Buy level's figure, the
+// level the moat class sets (null without one). The drawer draws no moat stamp (the founder,
+// 2026-11-26), and it opens on two reads, its detail and the company page's Overview answer
+// (readDrawer): a step that answers the second with a refusal leaves the drawer with no chart,
+// which this driver, without the company page's scripts, could not draw.
 //
 //   node moat.mjs <bundle.js> <app.js>  < steps.json  > trace.json
 import { readFileSync } from 'node:fs';
@@ -166,13 +170,14 @@ function drawer() {
   const screen = roots[0].drawn;
   const [aside] = screen ? classed(screen, 'app-drawer') : [];
   if (!aside) return null;
-  const [stamp] = classed(aside, 'app-moat');
-  const [chip] = [...elements(aside)].filter((e) => e.props.principal !== undefined);
+  const [levels] = classed(aside, 'app-pairs');
+  const cells = levels ? [...elements(levels)].filter((e) => e.type === 'dt' || e.type === 'dd')
+    : [];
+  const name = cells.findIndex((e) => e.type === 'dt' && textOf(e) === 'Buy level');
   return {
     symbol: aside.props['aria-label'].replace('Detail for ', ''),
     loading: classed(aside, 'is-loading').length > 0,
-    stamp: stamp ? textOf(stamp) : null,
-    chip: chip ? chip.props.principal : null,
+    buy: name === -1 ? null : textOf(cells[name + 1]),
   };
 }
 
@@ -195,7 +200,7 @@ for (const step of steps) {
   } else if (step.do === 'answer') {
     settle((f) => f.method !== 'GET', step.status, step.body);
   } else if (step.do === 'read') {
-    settle((f) => f.method === 'GET' && f.url === step.url, 200, step.body);
+    settle((f) => f.method === 'GET' && f.url === step.url, step.status || 200, step.body);
   } else if (step.do === 'notes') {
     P.notesControl('BF.B', 0, null).props.onClick({ currentTarget: notesAnchor });
   } else if (step.do === 'drawer') {
