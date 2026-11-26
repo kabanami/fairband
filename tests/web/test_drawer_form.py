@@ -1,9 +1,11 @@
 """The drawer's form A (the company page's design, 11), as the founder changed it on 2026-11-26:
-under its bar the head, the logo and the ticker, then the name, with no phase badge, no moat
-stamp and no chip of whose class it is, which the screen's row and the company page show; one
+under its bar the head, the logo and the ticker, then the name, the ticker and the name each a
+link to the company page, with no phase badge, no moat stamp and no chip of whose class it is,
+which the screen's row and the company page show; one
 caption, the sector and the industry; the company's brief in body text, cut to six lines by the
-page's style; the value band, the meter and the four levels in the screen's words, or a refused
-row's sentence where the meter draws no band; the price chart in its compact form; the figures,
+page's style; the value band, the meter and three levels in the screen's words, the fair value,
+the buy level and the trim level, with no row for the fair band, which the meter names, or a
+refused row's sentence where the meter draws no band; the price chart in its compact form; the figures,
 P/E and Forward P/E as the screen's columns give them and the company page's Trading rows, with
 the day of their data; then Company page, a link to the company page, and Request research,
 which stand at the drawer's bottom edge while the rest scrolls. Nothing else: the route's lines,
@@ -25,7 +27,9 @@ from support.web import _static_file
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
-LEVELS = ["Fair value", "Buy level", "Fair band", "Trim level"]
+# The drawer's levels: the company page's four less the Fair band, whose two ends the meter
+# over the rows names (the founder, 2026-11-26).
+LEVELS = ["Fair value", "Buy level", "Trim level"]
 SECONDARY: dict[str, Any] = {
     "id": 4,
     "form": "parts",
@@ -154,14 +158,9 @@ def test_the_parts_in_order() -> None:
     logo, ticker = _kids(first)
     assert (logo["type"], logo["props"]["src"]) == ("img", answers.DETAIL["logo"])
     assert (ticker["type"], text(ticker)) == ("h2", answers.SYMBOL)
-    assert name == {
-        "type": "p",
-        "props": {
-            "className": "body app-drawer__name",
-            "title": "Lanternfield Optics Ltd",
-            "children": ["Lanternfield Optics Ltd"],
-        },
-    }
+    assert (name["type"], text(name)) == ("p", "Lanternfield Optics Ltd")
+    assert name["props"]["className"] == "body app-drawer__name"
+    assert name["props"]["title"] == "Lanternfield Optics Ltd"
 
 
 def test_every_part_over_the_band_keeps_its_room() -> None:
@@ -264,8 +263,11 @@ def test_the_brief_is_whole_and_takes_six_lines_by_the_style() -> None:
 
 
 def test_the_levels_use_the_screen_s_words() -> None:
-    """Under the meter, as the meter draws it, the four levels in the screen's words, each a
-    figure; no margin of safety, no multiple of the value and no caption of the moat."""
+    """Under the meter, as the meter draws it, three levels in the screen's words, each a
+    figure: the fair value, the buy level and the trim level. The fair band has no row (the
+    founder, 2026-11-26): the meter over the rows names its two ends. The company page's value
+    block keeps the four (``levelRows``). No margin of safety, no multiple of the value and no
+    caption of the moat."""
     tree = _drawn(answers.DETAIL)
     band = _one(tree, "app-drawer__band")
     [meter] = _meters(band)
@@ -273,14 +275,63 @@ def test_the_levels_use_the_screen_s_words() -> None:
     assert _levels(band) == [
         ("Fair value", "$196.50"),
         ("Buy level", "$147.38"),
-        ("Fair band", "$176.85 – $216.15"),
         ("Trim level", "$294.75"),
     ]
+    assert (meter["props"]["low"], meter["props"]["high"]) == (176.85, 216.15)  # the band's ends
+    assert "Fair band" not in json.dumps(tree, ensure_ascii=False)
+    four = node("levelRows", [answers.DETAIL])
+    assert [name for name, _ in four] == ["Fair value", "Buy level", "Fair band", "Trim level"]
     found = list(elements(band))
     assert found.index(meter) < found.index(_one(band, "app-pairs"))
     said = json.dumps(tree, ensure_ascii=False)
     for gone in ("Margin of safety", "× value", "moat's", "margin for no moat", "value less the"):
         assert gone not in said, gone
+
+
+def _links(head: dict[str, Any]) -> list[dict[str, Any]]:
+    return [e for e in elements(head) if e.get("type") == "a"]
+
+
+def test_the_ticker_and_the_name_link_to_the_company_page() -> None:
+    """The founder, 2026-11-26: in the drawer's head the ticker and the company's name are each
+    a link to the company's page, at the address the table's ticker links to and the Company
+    page button opens, the symbol encoded as there; the name's is out of the Tab order, as the
+    table's is, the ticker's link before it being the keyboard's stop. A company with no name
+    has the ticker's link alone, its name's line empty. Each reads as the text it is, an
+    underline on hover and the focus ring on focus, as the table's links do."""
+    for symbol, href in (("BRK.B", "#company/BRK.B"), ("BRK/B", "#company/BRK%2FB")):
+        detail = answers.detail()
+        detail["result"]["symbol"] = symbol
+        [head, *_] = _drawn(detail)
+        first, name = _kids(head)
+        ticker = _kids(first)[-1]
+        assert ticker["type"] == "h2"
+        assert _kids(ticker) == [
+            {
+                "type": "a",
+                "props": {"className": "app-drawer__link", "href": href, "children": [symbol]},
+            }
+        ]
+        assert _kids(name) == [
+            {
+                "type": "a",
+                "props": {
+                    "className": "app-drawer__link",
+                    "href": href,
+                    "tabIndex": -1,
+                    "children": ["Lanternfield Optics Ltd"],
+                },
+            }
+        ]
+        assert [link["props"]["href"] for link in _links(head)] == [href, href]
+        page, _ = _buttons(_drawn(detail))
+        assert page["props"]["href"] == href
+    [head, *_] = _drawn(answers.detail(company=None))
+    assert [text(link) for link in _links(head)] == [answers.SYMBOL]
+    assert "companyHref({ ticker: r.symbol })" in _static_file("app.js")
+    for state in ("", ":hover", ":focus-visible"):  # the look of the table's links
+        assert _rule(f".app-drawer__link{state} {{") == _rule(f".fb-screen__company{state} {{")
+    assert _rule(".app-drawer__link {") == "color: inherit; text-decoration: none;"
 
 
 def test_the_company_page_button_s_address() -> None:
@@ -424,13 +475,13 @@ def test_a_refused_row_draws_its_refusal() -> None:
 @pytest.mark.parametrize(
     ("changes", "value", "band"),
     [
-        ({"review": answers.REVIEW}, 182.0, "$163.80 – $200.20"),
-        ({"secondary": SECONDARY}, 150.0, "$135.00 – $165.00"),
+        ({"review": answers.REVIEW}, 182.0, (163.8, 200.2)),
+        ({"secondary": SECONDARY}, 150.0, (135.0, 165.0)),
     ],
     ids=["review", "secondary"],
 )
 def test_a_refused_row_with_a_band_draws_the_band_and_no_sentence(
-    changes: dict[str, Any], value: float, band: str
+    changes: dict[str, Any], value: float, band: tuple[float, float]
 ) -> None:
     """A refused row whose review or secondary valuation gives a band draws that band and its
     levels, as the meter draws it, and no refusal sentence."""
@@ -440,7 +491,7 @@ def test_a_refused_row_with_a_band_draws_the_band_and_no_sentence(
     assert meter == node("meter", [detail])
     assert meter["props"]["fairValue"] == value
     assert [name for name, _ in _levels(tree)] == LEVELS
-    assert dict(_levels(tree))["Fair band"] == band
+    assert (meter["props"]["low"], meter["props"]["high"]) == band
     assert classed(tree, "app-refusal") == []
 
 
@@ -454,7 +505,6 @@ def test_a_reviewed_row_draws_the_review_s_band() -> None:
     assert _levels(tree) == [
         ("Fair value", "$182.00"),
         ("Buy level", "$145.60"),
-        ("Fair band", "$163.80 – $200.20"),
         ("Trim level", "$273.00"),
     ]
 
@@ -471,6 +521,7 @@ def test_the_head_is_the_logo_the_ticker_and_the_name() -> None:
         first, name = _kids(head)
         assert [kid["type"] for kid in _kids(first)] == ["img", "h2"]
         assert name["props"]["className"] == "body app-drawer__name"
+        assert len(_links(head)) == 2  # the ticker and the name, to the company page
         said = json.dumps(head, ensure_ascii=False)
         for gone in ("MOAT", "phase", "principal", "app-moat"):
             assert gone not in said, gone

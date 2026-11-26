@@ -20,8 +20,9 @@
 
   /* The Overview (8): the grid's two columns, which end on one line (8.7). At the left Company on
      the answer's company, keyed on the company so each company's brief opens closed, Fairband
-     value on the company's detail and Key statistics on the answer, which grows to the row where
-     the right column is the taller. At the right first Price, company_chart.js's chart
+     value on the company's detail and Key statistics on the answer, with the detail's forward
+     P/E, which grows to the row where the right column is the taller. At the right first Price,
+     company_chart.js's chart
      (FairbandPage.companyChart, loaded after this script and read as the tab draws) on the
      answer's prices, keyed on the company so each company's chart opens at 1Y with no day picked;
      then Price facts on the answer; then News, which fills what is left, on the answer's stories
@@ -31,7 +32,7 @@
       h('div', { className: 'app-company__col' },
         h(Company, { key: 'company ' + answer.symbol, company: answer.company }),
         value(detail),
-        statistics(answer)),
+        statistics(answer, detail)),
       h('div', { className: 'app-company__col' },
         h(P.companyChart.Chart, { key: 'price ' + answer.symbol, prices: answer.prices }),
         priceFacts(answer),
@@ -146,9 +147,14 @@
      stacks: Size, Margins and Returns; Valuation and Financial health; the two growth groups,
      the newest fiscal year's named by its year, and Dividends. In three columns a stack each; in
      two (index.html) the third stack's groups go under the first two, Growth beside the yearly
-     rates a share and Dividends under Growth. */
-  function statistics(answer) {
+     rates a share and Dividends under Growth. Valuation's second row is the forward P/E (the
+     founder, 2026-11-26), which FMP's stored answers do not hold: the multiple of the result of
+     `detail`, the company's detail, that the screen's Forward P/E column and the drawer show,
+     the price over the analysts' EPS of the next twelve months; the dash without one. */
+  function statistics(answer, detail) {
     var s = answer.statistics;
+    var result = (detail && detail.result) || {};
+    var multiples = (result.intermediates || {}).multiples || {};
     var size = s.size;
     var m = s.margins;
     var r = s.returns;
@@ -184,6 +190,7 @@
     var second = [
       C.group('Valuation', [
         ['P/E', C.multiple(v.pe)],
+        ['Forward P/E', C.multiple(multiples.pe_forward)],
         ['PEG', C.decimal(v.peg, 2)],
         ['P/B', C.multiple(v.pb)],
         ['P/S', C.multiple(v.ps)],

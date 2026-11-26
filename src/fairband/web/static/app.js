@@ -507,7 +507,8 @@
 
   /* The address a ticker links to (spec 2026-11-16 company page, 12): in the table, on the Screen
      and on the watchlist page (ScreenTable's companyHref), where the company's name links to it
-     too (the founder, 2026-11-24), in the header's finder (finder.js) and
+     too (the founder, 2026-11-24), in the drawer's head, its ticker and its name (the founder,
+     2026-11-26; sections), in the header's finder (finder.js) and
      in the Inbox view's rows (inbox.js); the company's page, the symbol encoded as the drawer's
      Company page encodes it. */
   function companyHref(row) {
@@ -1134,10 +1135,14 @@
 
   /* The drawer under its bar, form A (the company page's design, 11) as the founder changed it
      on 2026-11-26, in this order and nothing else: the head, two rows, the logo and the ticker,
-     then the name, with no phase badge, no moat stamp and no chip of whose class it is, which
-     the screen's row and the company page show; one caption, the sector and the industry
-     (sectorLine); the company brief whole, which the page's style cuts at six lines; the value
-     band, the meter and under it the four levels in the screen's words (levelRows), or where
+     then the name, the ticker and the name each a link to the company page at the address the
+     table's ticker links to (companyHref), the name's out of the Tab order as the table's is,
+     with no phase badge, no moat stamp and no chip of whose class it is, which the screen's row
+     and the company page show; one caption, the sector and the industry (sectorLine); the
+     company brief whole, which the page's style cuts at six lines; the value band, the meter
+     and under it three levels in the screen's words, the fair value, the buy level and the trim
+     level (levelRows less the Fair band's row, whose two ends the meter names; the company page
+     keeps the four), or where
      the meter draws no band a refused row's sentence in its place; for a company in another
      currency or an ADR, the line that says what its figures are in (currencyLine, spec
      2026-11-10 7.4); the company page's price chart in its compact form (company_chart.js), on
@@ -1162,18 +1167,23 @@
     var rows = levelRows(body);
     var ask = asked(r.symbol);
     var page = window.FairbandPage;
+    var href = companyHref({ ticker: r.symbol });
     return [
       h('header', { key: 'head', className: 'app-drawer__head' },
         h('div', { className: 'app-drawer__id' },
           logo(body, 'app-drawer__logo'),
-          h('h2', { className: 'ticker app-drawer__ticker' }, r.symbol)),
-        h('p', { className: 'body app-drawer__name', title: name }, name)),
+          h('h2', { className: 'ticker app-drawer__ticker' },
+            h('a', { className: 'app-drawer__link', href: href }, r.symbol))),
+        h('p', { className: 'body app-drawer__name', title: name },
+          name ? h('a', { className: 'app-drawer__link', href: href, tabIndex: -1 }, name)
+            : null)),
       h('p', {
         key: 'sector', className: 'caption app-muted app-drawer__sector', title: sector || null
       }, sector),
       h('p', { key: 'brief', className: 'body app-drawer__brief' }, body.brief),
       rows ? h('section', { key: 'band', className: 'app-drawer__band' }, meter(body),
-        pairs(rows.map(function (row) { return [row[0], row[1], true]; })),
+        pairs(rows.filter(function (row) { return row[0] !== 'Fair band'; })
+          .map(function (row) { return [row[0], row[1], true]; })),
         heldPart(body, render, function () { load(); reloadDetail(r.symbol); }))
         : r.refusal ? h('section', { key: 'band', className: 'app-drawer__band' },
           h('p', { className: 'body app-refusal' }, r.refusal)) : null,

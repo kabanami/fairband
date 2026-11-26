@@ -563,6 +563,7 @@ ROWS = {
     "Returns": [("ROE", "31.1%"), ("ROA", "20.2%"), ("ROIC", "26.9%"), ("ROCE", "33.4%")],
     "Valuation": [
         ("P/E", "24.6x"),
+        ("Forward P/E", "—"),  # the detail's, and these trees are drawn on the answer alone
         ("PEG", "0.88"),
         ("P/B", "6.7x"),
         ("P/S", "10.4x"),
@@ -651,6 +652,34 @@ def test_the_statistics_groups_rows_and_figures() -> None:
     assert "figure" in _fact(groups["Dividends"], "Yield")["props"]["className"].split()
 
 
+def test_the_forward_pe_is_the_screen_s_after_the_pe() -> None:
+    """The founder, 2026-11-26: Valuation gives the forward P/E in its second row, after the P/E.
+    FMP's stored answers hold none, so the figure is the company's detail's, the multiple of its
+    result that the screen's Forward P/E column and the drawer show: the price over the
+    analysts' EPS of the next twelve months. To one decimal with an x, as the group's multiples
+    are; the dash for a company whose result holds none, and where no detail is given."""
+
+    def forward(detail: dict[str, Any] | None) -> str:
+        args = [answers.OVERVIEW] if detail is None else [answers.OVERVIEW, detail]
+        valuation = _groups(_page("statistics", *args))["Valuation"]
+        [rows] = _lists(valuation)
+        assert [name for name, _ in rows][:3] == ["P/E", "Forward P/E", "PEG"]
+        assert len(rows) == 11
+        return dict(rows)["Forward P/E"]
+
+    detail = answers.detail()
+    detail["result"]["intermediates"]["multiples"] = {"pe_reported": 14.143, "pe_forward": 19.4289}
+    assert forward(detail) == "19.4x"
+    detail["result"]["intermediates"]["multiples"] = {"pe_reported": 14.143, "pe_forward": None}
+    assert forward(detail) == "—"
+    del detail["result"]["intermediates"]["multiples"]
+    assert forward(detail) == "—"
+    assert forward(None) == "—"
+    script = _static_file("company_overview.js")
+    assert "statistics(answer, detail))," in script
+    assert "['Forward P/E', C.multiple(multiples.pe_forward)]," in script
+
+
 def test_the_growth_group_without_a_fiscal_year() -> None:
     titles = list(_groups(_page("statistics", _with(growth={"fiscalYear": None}))))
     assert titles[5] == "Growth, last fiscal year"
@@ -696,7 +725,7 @@ def test_every_figure_missing_draws_the_dash() -> None:
     assert _links(company) == []
     tree = _page("statistics", empty)
     figures = _figures(tree)
-    assert len(figures) == 7 + 5 + 4 + 10 + 7 + 4 + 12 + 5
+    assert len(figures) == 7 + 5 + 4 + 11 + 7 + 4 + 12 + 5
     assert set(figures) == {"—"}
     assert list(_groups(tree))[5] == "Growth, last fiscal year"
     facts = _page("priceFacts", empty)
@@ -764,7 +793,7 @@ def test_the_overview_draws_two_columns_with_three_blocks_in_each() -> None:
     company, value, statistics = left["props"]["children"]
     assert company["props"]["company"] == answers.OVERVIEW["company"]
     assert value == _page("value", answers.DETAIL)
-    assert statistics == _page("statistics", answers.OVERVIEW)
+    assert statistics == _page("statistics", answers.OVERVIEW, answers.DETAIL)
     assert statistics["type"] == "section"
     assert statistics["props"]["className"].split() == ["app-company__panel"]
     chart, facts, news = right["props"]["children"]
