@@ -110,7 +110,7 @@ on Linux under WSL, and it currently supports FMP's Ultimate and Premium plans o
 
    ```toml
    [fmp]
-   plan = "premium"
+   plan = "premium"  # your FMP plan: "premium" or "ultimate" (the default)
    ```
 
 3. Start the server, then open http://127.0.0.1:8470:
