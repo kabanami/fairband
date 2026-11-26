@@ -297,9 +297,13 @@ def test_the_page_draws_again_as_the_rows_and_the_lists_land() -> None:
 def test_the_menus_of_the_head_open_inside_the_page() -> None:
     """Request research's menu opens from its button's right edge, the button standing at the
     page's right; its error and the open item's line take a line of their own under the
-    buttons."""
+    buttons, as wide as the buttons and asking for no width of their own (B-329): a long line
+    wraps under them, and the price and the buttons stay on the name's row."""
     assert "left: auto; right: 0;" in _rule(".app-request .fb-menu {")
-    assert "flex-basis: 100%;" in _rule(".app-company__actions > p {")
+    line = _rule(".app-company__actions > p {")
+    assert "width: 0;" in line
+    assert "min-width: 100%;" in line
+    assert "flex-basis" not in line
 
 
 # ------------------------------------------------------------------------- the tabs and the date

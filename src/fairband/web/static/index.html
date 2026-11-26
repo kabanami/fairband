@@ -717,7 +717,10 @@
     display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
     gap: var(--space-2);
   }
-  .app-company__actions > p { flex-basis: 100%; margin: 0; text-align: right; }
+  /* A line under the buttons, a request's or its refusal: as wide as the buttons, and asking
+     for no width of its own, so a long one wraps under them and the price and the buttons stay
+     on the name's row (B-329). */
+  .app-company__actions > p { width: 0; min-width: 100%; margin: 0; text-align: right; }
   .app-company__tabs {
     display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-1);
     margin-top: var(--space-4); border-bottom: 1px solid var(--hairline);
