@@ -108,9 +108,6 @@ on Linux under WSL, and it currently supports FMP's Ultimate and Premium plans o
    fmp = "your-fmp-key"
    ```
 
-   On the Premium plan, also add the lines below. A full refresh then takes about 70 minutes, and
-   earnings call transcripts are not available.
-
    ```toml
    [fmp]
    plan = "premium"
