@@ -7,7 +7,7 @@ financials, track watchlists, and read research. Your agent connects over MCP to
 data, challenge the model's assumptions where needed, and write full research reports back into
 the workbench. It currently only supports Claude Code.
 
-https://github.com/user-attachments/assets/87c23d8f-1706-4d6b-95f3-11e7ee9f1d17
+https://github.com/user-attachments/assets/e894b36d-a598-47d7-9242-764f652a5092
 
 A research request on Apple, from the click to the finished report. The agent's 13-minute run is
 shown at high speed.
